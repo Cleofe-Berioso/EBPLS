@@ -19,7 +19,7 @@ export default async function AdminLocationsPage() {
     redirect("/login");
   }
 
-  if (session.user.role !== "ADMINISTRATOR") {
+  if (session.user.role !== "BPLO_OFFICE") {
     redirect("/dashboard");
   }
 

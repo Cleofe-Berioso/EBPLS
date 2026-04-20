@@ -31,8 +31,6 @@ export async function GET(
               },
             },
             permit: true,
-            claimReference: true,
-            claimSchedule: { include: { timeSlot: true } },
           },
         }),
       CacheTTL.MEDIUM // 5 min

@@ -14,6 +14,7 @@ import {
   XCircle,
   CalendarCheck,
   AlertCircle,
+  Printer,
 } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -114,11 +115,9 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {role === "APPLICANT"
             ? "Manage your business permit applications and track their status."
-            : role === "STAFF"
+            : role === "BPLO_OFFICE"
             ? "Review applications and manage permit issuances."
-            : role === "REVIEWER"
-            ? "Review and approve or reject permit applications."
-            : "Manage the entire permit system, users, schedules, and reports."}
+            : "Validate payments and manage payment records."}
         </p>
       </div>
 
@@ -186,48 +185,32 @@ export default async function DashboardPage() {
                 description="Check the status of your applications"
                 href="/dashboard/tracking"
               />
-              <QuickAction
-                icon={<CalendarCheck className="h-5 w-5" />}
-                title="Schedule Claiming"
-                description="Book a time slot to claim your permit"
-                href="/dashboard/schedule"
-              />
             </>
           )}
-          {(role === "STAFF" || role === "REVIEWER") && (
+          {role === "BPLO_OFFICE" && (
             <>
               <QuickAction
                 icon={<AlertCircle className="h-5 w-5" />}
-                title="Pending Reviews"
-                description="View applications awaiting review"
+                title="Verify Documents"
+                description="Review submitted documents"
+                href="/dashboard/verify-documents"
+              />
+              <QuickAction
+                icon={<CheckCircle className="h-5 w-5" />}
+                title="Review Queue"
+                description="Review applications awaiting approval"
                 href="/dashboard/review"
               />
               <QuickAction
-                icon={<CalendarCheck className="h-5 w-5" />}
-                title="Today's Claims"
-                description="View claiming schedule for today"
-                href="/dashboard/claims"
-              />
-            </>
-          )}
-          {role === "ADMINISTRATOR" && (
-            <>
-              <QuickAction
-                icon={<AlertCircle className="h-5 w-5" />}
-                title="Pending Reviews"
-                description="View all applications awaiting review"
-                href="/dashboard/review"
-              />
-              <QuickAction
-                icon={<CalendarCheck className="h-5 w-5" />}
-                title="Manage Schedules"
-                description="Configure claiming dates and time slots"
-                href="/dashboard/admin/schedules"
+                icon={<Printer className="h-5 w-5" />}
+                title="Issue Permits"
+                description="Issue permits to approved applications"
+                href="/dashboard/issuance"
               />
               <QuickAction
                 icon={<FileText className="h-5 w-5" />}
-                title="Generate Reports"
-                description="View and export system reports"
+                title="Reports"
+                description="View application and status reports"
                 href="/dashboard/admin/reports"
               />
             </>
@@ -284,7 +267,7 @@ function QuickAction({
         <h3 className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)]">
           {title}
         </h3>
-        <p className="mt-1 text-sm text-[var(--background)]0">{description}</p>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">{description}</p>
       </div>
     </a>
   );

@@ -10,7 +10,8 @@
 import type { NextAuthConfig } from "next-auth";
 
 // Inline Role type to avoid importing @prisma/client in Edge Runtime
-type Role = "ADMINISTRATOR" | "REVIEWER" | "STAFF" | "APPLICANT";
+type Role = "APPLICANT" | "BPLO_OFFICE" | "MTO";
+type AccountStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION";
 
 export const authConfig = {
   providers: [], // Providers are added in auth.ts (Node.js runtime only)
@@ -18,6 +19,7 @@ export const authConfig = {
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as { role: Role }).role;
+        token.status = (user as { status: AccountStatus }).status;
         token.firstName = (user as { firstName: string }).firstName;
         token.lastName = (user as { lastName: string }).lastName;
       }
@@ -27,6 +29,7 @@ export const authConfig = {
       if (token) {
         session.user.id = token.sub!;
         session.user.role = token.role as Role;
+        session.user.status = token.status as AccountStatus;
         session.user.firstName = token.firstName as string;
         session.user.lastName = token.lastName as string;
       }

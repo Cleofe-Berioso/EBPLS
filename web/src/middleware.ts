@@ -87,31 +87,39 @@ export default auth((req) => {
   }
 
   // ── Role-Based Access Control ────────────────────────────────────────
-  // Admin routes
+  // Admin routes (BPLO Office only)
   if (pathname.startsWith("/dashboard/admin") && isLoggedIn) {
     const role = req.auth?.user?.role;
-    if (role !== "ADMINISTRATOR") {
+    if (role !== "BPLO_OFFICE") {
       return NextResponse.redirect(new URL("/dashboard", nextUrl));
     }
   }
 
-  // Review routes
-  if (pathname.startsWith("/dashboard/review") && isLoggedIn) {
+  // Review & verification routes (BPLO Office only)
+  if ((pathname.startsWith("/dashboard/review") || pathname.startsWith("/dashboard/verify-documents")) && isLoggedIn) {
     const role = req.auth?.user?.role;
-    if (role === "APPLICANT") {
+    if (role !== "BPLO_OFFICE") {
       return NextResponse.redirect(new URL("/dashboard", nextUrl));
     }
   }
 
-  // Issuance routes
+  // Issuance routes (BPLO Office only)
   if (pathname.startsWith("/dashboard/issuance") && isLoggedIn) {
     const role = req.auth?.user?.role;
-    if (role !== "STAFF" && role !== "ADMINISTRATOR") {
+    if (role !== "BPLO_OFFICE") {
       return NextResponse.redirect(new URL("/dashboard", nextUrl));
     }
   }
 
-  // Analytics routes — staff+ only
+  // Payment routes (MTO only)
+  if ((pathname.startsWith("/dashboard/payment") || pathname.startsWith("/dashboard/validate") || pathname.startsWith("/dashboard/receipts")) && isLoggedIn) {
+    const role = req.auth?.user?.role;
+    if (role !== "MTO") {
+      return NextResponse.redirect(new URL("/dashboard", nextUrl));
+    }
+  }
+
+  // Analytics routes — BPLO+ only
   if (pathname.startsWith("/api/analytics") && isLoggedIn) {
     const role = req.auth?.user?.role;
     if (role === "APPLICANT") {

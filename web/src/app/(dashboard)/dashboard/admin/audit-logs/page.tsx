@@ -10,7 +10,7 @@ export const metadata = { title: "Audit Logs" };
 export default async function AuditLogsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMINISTRATOR") redirect("/dashboard");
+  if (session.user.role !== "BPLO_OFFICE") redirect("/dashboard");
 
   const logs = await prisma.activityLog.findMany({
     orderBy: { createdAt: "desc" },

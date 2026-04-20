@@ -44,12 +44,6 @@ interface ApplicationDetail {
     amountPaid?: number;
     totalAmount?: number;
   };
-  claimReference?: {
-    id: string;
-    referenceNumber: string;
-    status: string;
-    claimDate?: string;
-  };
 }
 
 export default function ApplicationDetailPage() {
@@ -341,33 +335,6 @@ export default function ApplicationDetailPage() {
                     </div>
                   )}
                 </dl>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Claim Reference */}
-          {application.claimReference && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Claim Slot
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <p className="text-[var(--background)]0">Reference Number</p>
-                    <p className="mt-1 font-mono font-medium">{application.claimReference.referenceNumber}</p>
-                  </div>
-                  {application.claimReference.claimDate && (
-                    <div>
-                      <p className="text-[var(--background)]0">Scheduled</p>
-                      <p className="mt-1 font-medium">{new Date(application.claimReference.claimDate).toLocaleDateString()}</p>
-                    </div>
-                  )}
-                  <p className="text-xs"><StatusBadge status={application.claimReference.status} /></p>
-                </div>
               </CardContent>
             </Card>
           )}

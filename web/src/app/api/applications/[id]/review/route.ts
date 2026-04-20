@@ -130,17 +130,7 @@ export async function POST(
           });
         }
         // Create a closure reference for tracking
-        await prisma.claimReference.create({
-          data: {
-            referenceNumber: generateClaimReference(),
-            applicationId: id,
-            generatedBy: application.applicantId,
-            applicantName: `${application.applicant.firstName} ${application.applicant.lastName}`,
-            businessName: application.businessName,
-            applicationStatus: "APPROVED",
-            status: "GENERATED",
-          },
-        });
+        // (removed - claim references no longer used in 3-role system)
       } else {
         // For NEW/RENEWAL: create a new active permit
         const permitCount = await prisma.permit.count();
@@ -176,17 +166,7 @@ export async function POST(
         });
 
         // Generate claim reference
-        await prisma.claimReference.create({
-          data: {
-            referenceNumber: generateClaimReference(),
-            applicationId: id,
-            generatedBy: application.applicantId,
-            applicantName: `${application.applicant.firstName} ${application.applicant.lastName}`,
-            businessName: application.businessName,
-            applicationStatus: "APPROVED",
-            status: "GENERATED",
-          },
-        });
+        // (removed - claim references no longer used in 3-role system)
       }
     }    // Log activity
     await prisma.activityLog.create({

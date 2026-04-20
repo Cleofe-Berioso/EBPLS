@@ -4,9 +4,6 @@ import {
   loginSchema,
   otpVerificationSchema,
   applicationSchema,
-  createScheduleSchema,
-  reserveSlotSchema,
-  verifyClaimSchema,
   profileUpdateSchema,
 } from "@/lib/validations";
 
@@ -144,68 +141,6 @@ describe("applicationSchema", () => {
 
   it("rejects invalid ZIP code", () => {
     const result = applicationSchema.safeParse({ ...validApp, businessZipCode: "123" });
-    expect(result.success).toBe(false);
-  });
-});
-
-describe("createScheduleSchema", () => {
-  it("accepts valid schedule", () => {
-    const result = createScheduleSchema.safeParse({
-      date: "2026-03-15",
-      timeSlots: [
-        { startTime: "08:00", endTime: "09:00", maxCapacity: 10 },
-      ],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects empty time slots", () => {
-    const result = createScheduleSchema.safeParse({
-      date: "2026-03-15",
-      timeSlots: [],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects invalid date format", () => {
-    const result = createScheduleSchema.safeParse({
-      date: "March 15, 2026",
-      timeSlots: [{ startTime: "08:00", endTime: "09:00", maxCapacity: 10 }],
-    });
-    expect(result.success).toBe(false);
-  });
-});
-
-describe("reserveSlotSchema", () => {
-  it("accepts valid reservation", () => {
-    const result = reserveSlotSchema.safeParse({
-      timeSlotId: "slot123",
-      applicationId: "app123",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects empty timeSlotId", () => {
-    const result = reserveSlotSchema.safeParse({
-      timeSlotId: "",
-      applicationId: "app123",
-    });
-    expect(result.success).toBe(false);
-  });
-});
-
-describe("verifyClaimSchema", () => {
-  it("accepts valid claim reference", () => {
-    const result = verifyClaimSchema.safeParse({
-      referenceNumber: "CLM-20260315-ABC123",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects invalid format", () => {
-    const result = verifyClaimSchema.safeParse({
-      referenceNumber: "INVALID-REF",
-    });
     expect(result.success).toBe(false);
   });
 });

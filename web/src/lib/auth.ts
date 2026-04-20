@@ -8,6 +8,7 @@ import { authConfig } from "@/lib/auth.config";
 declare module "next-auth" {
   interface User {
     role: Role;
+    status: import("@prisma/client").AccountStatus;
     firstName: string;
     lastName: string;
   }
@@ -17,6 +18,7 @@ declare module "next-auth" {
       id: string;
       email: string;
       role: Role;
+      status: import("@prisma/client").AccountStatus;
       firstName: string;
       lastName: string;
       image?: string | null;
@@ -27,6 +29,7 @@ declare module "next-auth" {
 declare module "next-auth" {
   interface JWT {
     role: Role;
+    status: import("@prisma/client").AccountStatus;
     firstName: string;
     lastName: string;
   }
@@ -132,6 +135,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           id: user.id,
           email: user.email,
           role: user.role,
+          status: user.status,
           firstName: user.firstName,
           lastName: user.lastName,
           image: user.avatar,

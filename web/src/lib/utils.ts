@@ -41,12 +41,42 @@ export function generateClaimReference(): string {
 
 /**
  * Format currency (Philippine Peso)
+ * Safely handles Decimal, number, string, and null/undefined values
+ * @param amount - any numeric value (Decimal, number, string)
+ * @returns formatted currency string
  */
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: any): string {
+  if (amount === null || amount === undefined) {
+    return "₱0.00";
+  }
+
+  // Convert Decimal to number safely
+  let numValue: number;
+  if (typeof amount === "string") {
+    numValue = parseFloat(amount);
+  } else if (typeof amount === "number") {
+    numValue = amount;
+  } else if (typeof amount === "object" && amount.toNumber) {
+    // Prisma Decimal type has toNumber() method
+    numValue = amount.toNumber();
+  } else if (typeof amount === "object" && amount.toString) {
+    // Fallback: convert to string then to number
+    numValue = parseFloat(amount.toString());
+  } else {
+    return "₱0.00";
+  }
+
+  // Handle NaN case
+  if (isNaN(numValue)) {
+    return "₱0.00";
+  }
+
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
-  }).format(amount);
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numValue);
 }
 
 /**

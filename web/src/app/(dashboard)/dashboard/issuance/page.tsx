@@ -14,7 +14,7 @@ export default async function IssuancePage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  if (session.user.role !== "STAFF" && session.user.role !== "ADMINISTRATOR") {
+  if (session.user.role !== "BPLO_OFFICE") {
     redirect("/dashboard");
   }
 
@@ -72,7 +72,7 @@ export default async function IssuancePage() {
                 <div key={app.id} className="p-4">
                   <p className="font-semibold text-[var(--accent)] text-sm">{app.applicationNumber}</p>
                   <p className="mt-0.5 font-medium text-[var(--text-primary)]">{app.businessName}</p>
-                  <p className="text-sm text-[var(--background)]0">{app.applicant.firstName} {app.applicant.lastName}</p>
+                  <p className="text-sm text-[var(--text-secondary)]">{app.applicant.firstName} {app.applicant.lastName}</p>
                   {app.approvedAt && <p className="mt-1 text-xs text-[var(--text-muted)]">Approved: {formatDate(app.approvedAt)}</p>}
                   <Link href={`/dashboard/issuance/${app.id}`} className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)]">
                     <Printer className="h-4 w-4" /> Issue Permit
@@ -98,7 +98,7 @@ export default async function IssuancePage() {
                       <td className="px-4 py-3 font-medium">{app.applicationNumber}</td>
                       <td className="px-4 py-3">{app.businessName}</td>
                       <td className="px-4 py-3">{app.applicant.firstName} {app.applicant.lastName}</td>
-                      <td className="px-4 py-3 text-[var(--background)]0">{app.approvedAt ? formatDate(app.approvedAt) : "—"}</td>
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">{app.approvedAt ? formatDate(app.approvedAt) : "—"}</td>
                       <td className="px-4 py-3">
                         <Link href={`/dashboard/issuance/${app.id}`}>
                           <Button size="sm"><Printer className="h-3 w-3" /> Issue Permit</Button>
@@ -120,7 +120,8 @@ export default async function IssuancePage() {
         </h2>
 
         {recentPermits.length === 0 ? (
-          <p className="text-sm text-[var(--background)]0">No permits issued yet.</p>        ) : (
+          <p className="text-sm text-[var(--text-secondary)]">No permits issued yet.</p>
+        ) : (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
             {/* Mobile cards */}
             <div className="divide-y md:hidden">
@@ -130,7 +131,7 @@ export default async function IssuancePage() {
                     <div>
                       <p className="font-semibold text-[var(--accent)] text-sm">{permit.permitNumber}</p>
                       <p className="mt-0.5 font-medium text-[var(--text-primary)]">{permit.businessName}</p>
-                      <p className="text-xs text-[var(--background)]0">{permit.application.applicationNumber}</p>
+                      <p className="text-xs text-[var(--text-secondary)]">{permit.application.applicationNumber}</p>
                     </div>
                     <StatusBadge status={permit.status} />
                   </div>
@@ -156,10 +157,10 @@ export default async function IssuancePage() {
                     <tr key={permit.id} className="hover:bg-[var(--surface-muted)]">
                       <td className="px-4 py-3 font-medium text-[var(--accent)]">{permit.permitNumber}</td>
                       <td className="px-4 py-3">{permit.businessName}</td>
-                      <td className="px-4 py-3 text-[var(--background)]0">{permit.application.applicationNumber}</td>
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">{permit.application.applicationNumber}</td>
                       <td className="px-4 py-3"><StatusBadge status={permit.status} /></td>
-                      <td className="px-4 py-3 text-[var(--background)]0">{formatDate(permit.issueDate)}</td>
-                      <td className="px-4 py-3 text-[var(--background)]0">{formatDate(permit.expiryDate)}</td>
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">{formatDate(permit.issueDate)}</td>
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">{formatDate(permit.expiryDate)}</td>
                     </tr>
                   ))}
                 </tbody>

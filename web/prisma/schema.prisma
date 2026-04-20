@@ -14,9 +14,8 @@ datasource db {
 
 enum Role {
   APPLICANT
-  STAFF
-  REVIEWER
-  ADMINISTRATOR
+  BPLO_OFFICE
+  MTO
 }
 
 enum AccountStatus {
@@ -43,6 +42,7 @@ model User {
   lastLoginAt         DateTime?
   failedLoginAttempts Int           @default(0)
   lockedUntil         DateTime?
+  renewalEligible     Boolean       @default(false)
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -54,11 +54,7 @@ model User {
   sessions          Session[]
   reviewActions     ReviewAction[]
   issuanceActions   PermitIssuance[]  @relation("IssuedByUser")
-  slotReservations  SlotReservation[]
-  claimReferences   ClaimReference[]  @relation("GeneratedClaimReferences")
   payments          Payment[]         @relation("UserPayments")
-  checkInsAsApplicant CheckInRecord[]  @relation("CheckInAsApplicant")
-  checkInsAsStaff    CheckInRecord[]   @relation("CheckInByStaff")
 
   @@index([email])
   @@index([role])
@@ -195,6 +191,11 @@ model Application {
   previousPermitId   String?
   previousPermit     Permit?            @relation("RenewalOfPermit", fields: [previousPermitId], references: [id], onDelete: SetNull)
 
+  // Verification & Payment State
+  documentVerified     Boolean          @default(false)
+  applicationApproved  Boolean          @default(false)
+  paymentConfirmed     Boolean          @default(false)
+
   // Timestamps
   submittedAt        DateTime?
   reviewedAt         DateTime?
@@ -208,8 +209,6 @@ model Application {
   documents          Document[]
   history            ApplicationHistory[]
   reviewActions      ReviewAction[]
-  claimSchedule      SlotReservation?
-  claimReference     ClaimReference?
   permit             Permit?            @relation("PermitApplication")
   payments           Payment[]
   clearances         Clearance[]        @relation("ApplicationClearances")
@@ -307,112 +306,6 @@ model Document {
   @@index([documentType])
   @@index([status])
   @@map("documents")
-}
-
-// ============================================================================
-// MODULE 5: Claim Scheduling Management
-// ============================================================================
-
-model ClaimSchedule {
-  id          String     @id @default(cuid())
-  date        DateTime   @db.Date
-  isBlocked   Boolean    @default(false)
-  blockReason String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  timeSlots   TimeSlot[]
-
-  @@unique([date])
-  @@index([date])
-  @@map("claim_schedules")
-}
-
-model TimeSlot {
-  id           String            @id @default(cuid())
-  scheduleId   String
-  startTime    String
-  endTime      String
-  maxCapacity  Int
-  currentCount Int               @default(0)
-  isActive     Boolean           @default(true)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-
-  schedule     ClaimSchedule     @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  reservations SlotReservation[]
-
-  @@index([scheduleId])
-  @@map("time_slots")
-}
-
-enum ReservationStatus {
-  TEMPORARY
-  CONFIRMED
-  CANCELLED
-  RESCHEDULED
-  COMPLETED
-}
-
-model SlotReservation {
-  id                 String            @id @default(cuid())
-  timeSlotId         String
-  applicationId      String            @unique
-  userId             String
-  status             ReservationStatus @default(TEMPORARY)
-  claimId            String?           @unique
-  temporaryHoldExpiry DateTime?
-  confirmedAt        DateTime?
-  cancelledAt        DateTime?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-
-  timeSlot           TimeSlot          @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
-  application        Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  checkIn            CheckInRecord?    // For IDOR prevention
-
-  @@index([timeSlotId])
-  @@index([userId])
-  @@index([status])
-  @@map("slot_reservations")
-}
-
-// ============================================================================
-// MODULE 6: Claim Reference & Reporting
-// ============================================================================
-
-enum ClaimReferenceStatus {
-  GENERATED
-  VERIFIED
-  CLAIMED
-  EXPIRED
-}
-
-model ClaimReference {
-  id                String               @id @default(cuid())
-  referenceNumber   String               @unique
-  applicationId     String               @unique
-  generatedBy       String
-  applicantName     String
-  businessName      String
-  applicationStatus String
-  claimScheduleDate DateTime?
-  claimScheduleTime String?
-  transactionDetails Json?
-  status            ClaimReferenceStatus @default(GENERATED)
-  verifiedAt        DateTime?
-  claimedAt         DateTime?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-
-  application       Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  generator         User                 @relation("GeneratedClaimReferences", fields: [generatedBy], references: [id], onDelete: Cascade)
-
-  @@index([referenceNumber])
-  @@index([applicationId])
-  @@index([status])
-  @@map("claim_references")
 }
 
 // ============================================================================
@@ -571,32 +464,6 @@ model WebhookLog {
   @@index([status])
   @@index([createdAt])
   @@map("webhook_logs")
-}
-
-// ============================================================================
-// CHECK-IN VERIFICATION (Critical for IDOR Prevention)
-// ============================================================================
-model CheckInRecord {
-  id                  String   @id @default(cuid())
-  reservationId       String   @unique
-  applicantId         String
-  verifiedBy          String?  // Staff ID who verified
-
-  idType              String?  // NATIONAL_ID, PASSPORT, DRIVER_LICENSE, etc.
-  idNumber            String?
-  verificationStatus  String   @default("PENDING")  // PENDING, VERIFIED, REJECTED
-
-  notes               String?
-  createdAt           DateTime @default(now())
-  verifiedAt          DateTime?
-
-  reservation         SlotReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  applicant           User     @relation("CheckInAsApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
-  staff               User?    @relation("CheckInByStaff", fields: [verifiedBy], references: [id], onDelete: SetNull)
-
-  @@index([applicantId])
-  @@index([verificationStatus])
-  @@map("check_in_records")
 }
 
 // ============================================================================

@@ -9,7 +9,7 @@ export async function DELETE(
   const { id } = await params;
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "ADMINISTRATOR") {
+  if (!session?.user || session.user.role !== "BPLO_OFFICE") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

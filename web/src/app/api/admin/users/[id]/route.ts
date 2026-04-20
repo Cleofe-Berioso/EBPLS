@@ -6,7 +6,7 @@ import { z } from "zod";
 import { randomBytes } from "crypto";
 
 const updateUserSchema = z.object({
-  role: z.enum(["APPLICANT", "STAFF", "REVIEWER", "ADMINISTRATOR"]).optional(),
+  role: z.enum(["APPLICANT", "BPLO_OFFICE", "MTO"]).optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING_VERIFICATION"]).optional(),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
@@ -31,7 +31,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMINISTRATOR") {
+  if (!session?.user || session.user.role !== "BPLO_OFFICE") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -65,7 +65,7 @@ export async function PUT(
 ) {
   try {
     const session = await auth();
-    if (!session?.user || session.user.role !== "ADMINISTRATOR") {
+    if (!session?.user || session.user.role !== "BPLO_OFFICE") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

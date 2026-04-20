@@ -207,46 +207,6 @@ export const applicationSchema = z
   });
 
 // ============================================================================
-// Claim Schedule Validations
-// ============================================================================
-
-export const createScheduleSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
-  timeSlots: z
-    .array(
-      z.object({
-        startTime: z
-          .string()
-          .regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
-        endTime: z
-          .string()
-          .regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
-        maxCapacity: z.coerce
-          .number()
-          .int()
-          .positive("Capacity must be a positive number"),
-      })
-    )
-    .min(1, "At least one time slot is required"),
-});
-
-export const reserveSlotSchema = z.object({
-  timeSlotId: z.string().min(1, "Time slot is required"),
-  applicationId: z.string().min(1, "Application is required"),
-});
-
-// ============================================================================
-// Claim Reference Validations
-// ============================================================================
-
-export const verifyClaimSchema = z.object({
-  referenceNumber: z
-    .string()
-    .min(1, "Claim reference number is required")
-    .regex(/^CLM-\d{8}-[A-Z0-9]{6}$/, "Invalid claim reference format"),
-});
-
-// ============================================================================
 // Payment Validations
 // ============================================================================
 
@@ -288,11 +248,11 @@ export const adminCreateUserSchema = z.object({
     .regex(/^(\+63|0)(9\d{9})$/, "Invalid Philippine phone number")
     .optional()
     .or(z.literal("")),
-  role: z.enum(["STAFF", "REVIEWER", "ADMINISTRATOR"]),
+  role: z.enum(["BPLO_OFFICE", "MTO"]),
 });
 
 export const adminUpdateUserSchema = z.object({
-  role: z.enum(["STAFF", "REVIEWER", "ADMINISTRATOR"]).optional(),
+  role: z.enum(["BPLO_OFFICE", "MTO"]).optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING_VERIFICATION"]).optional(),
   resetPassword: z.boolean().optional(),
 });
@@ -307,9 +267,6 @@ export type OtpVerificationInput = z.infer<typeof otpVerificationSchema>;
 export type PasswordResetInput = z.infer<typeof passwordResetSchema>;
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 export type ApplicationInput = z.infer<typeof applicationSchema>;
-export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
-export type ReserveSlotInput = z.infer<typeof reserveSlotSchema>;
-export type VerifyClaimInput = z.infer<typeof verifyClaimSchema>;
 export type PaymentInput = z.infer<typeof paymentSchema>;
 export type ReviewActionInput = z.infer<typeof reviewActionSchema>;
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
@@ -558,21 +515,11 @@ export const permitPrintSchema = z.object({
 // P6: Claims & Reporting Validation
 // ============================================================================
 
-export const checkInSchema = z.object({
-  reservationId: z.string().min(1, "Reservation ID is required"),
-});
-
 export const verifyPermitSchema = z.object({
   reference: z.string().optional(),
   qrCode: z.string().optional(),
 }).refine(data => data.reference || data.qrCode, {
   message: "Either reference or qrCode is required",
-});
-
-export const rescheduleSchema = z.object({
-  reservationId: z.string().min(1, "Reservation ID is required"),
-  newScheduleId: z.string().min(1, "Schedule ID is required"),
-  newSlotId: z.string().min(1, "Slot ID is required"),
 });
 
 export const reportExportSchema = z.object({
@@ -591,12 +538,12 @@ export const businessLocationSchema = z.object({
   applicationId: z.string().cuid("Invalid application ID"),
   latitude: z
     .number()
-    .min(10.3569, "Latitude outside EB Magalona area")
-    .max(10.4569, "Latitude outside EB Magalona area"),
+    .min(10.834893, "Latitude outside EB Magalona area")
+    .max(10.920893, "Latitude outside EB Magalona area"),
   longitude: z
     .number()
-    .min(122.9201, "Longitude outside EB Magalona area")
-    .max(123.0201, "Longitude outside EB Magalona area"),
+    .min(122.935881, "Longitude outside EB Magalona area")
+    .max(123.019881, "Longitude outside EB Magalona area"),
   label: z.string().max(100).optional().nullable(),
   businessType: z.string().max(100).optional().nullable(),
   markerColor: z.string().default("blue"),
@@ -635,9 +582,7 @@ export type ClearanceUpdateInput = z.infer<typeof clearanceUpdateSchema>;
 export type ClearanceOfficeInput = z.infer<typeof clearanceOfficeSchema>;
 export type PermitListInput = z.infer<typeof permitListSchema>;
 export type PermitPrintInput = z.infer<typeof permitPrintSchema>;
-export type CheckInInput = z.infer<typeof checkInSchema>;
 export type VerifyPermitInput = z.infer<typeof verifyPermitSchema>;
-export type RescheduleInput = z.infer<typeof rescheduleSchema>;
 export type ReportExportInput = z.infer<typeof reportExportSchema>;
 export type AnalyticsQueryInput = z.infer<typeof analyticsQuerySchema>;
 export type IssuanceUpdateInput = z.infer<typeof issuanceUpdateSchema>;

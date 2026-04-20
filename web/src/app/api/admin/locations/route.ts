@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 export async function GET(req: Request) {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "ADMINISTRATOR") {
+  if (!session?.user || session.user.role !== "BPLO_OFFICE") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -53,7 +53,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "ADMINISTRATOR") {
+  if (!session?.user || session.user.role !== "BPLO_OFFICE") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

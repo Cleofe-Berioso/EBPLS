@@ -1,8 +1,8 @@
 /**
- * GET /api/public/verify-permit?ref={referenceNumber}
+ * GET /api/public/verify-permit?ref={permitNumber}
  * P6.0 Phase E: Public Permit Verification
  *
- * Allow public lookup of permit validity by claim reference number
+ * Allow public lookup of permit validity by permit number
  * Supports QR code scanning
  */
 
@@ -12,18 +12,18 @@ import prisma from "@/lib/prisma";
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const referenceNumber = searchParams.get("ref");
+    const permitNumber = searchParams.get("ref");
 
-    if (!referenceNumber) {
+    if (!permitNumber) {
       return NextResponse.json(
-        { error: "Reference number is required" },
+        { error: "Permit number is required" },
         { status: 400 }
       );
     }
 
-    // Find claim reference with application and permit
-    const claimReference = await prisma.claimReference.findFirst({
-      where: { referenceNumber },
+    // Find permit by number or reference (permit number validation for public verification)
+    const permit = await prisma.permit.findFirst({
+      where: { permitNumber },
       include: {
         application: {
           select: {
@@ -32,35 +32,21 @@ export async function GET(request: Request) {
             type: true,
             status: true,
           },
-          include: {
-            permit: {
-              select: {
-                id: true,
-                permitNumber: true,
-                status: true,
-                businessName: true,
-                issueDate: true,
-                expiryDate: true,
-              },
-            },
-          },
         },
       },
     });
 
-    if (!claimReference) {
+    if (!permit) {
       return NextResponse.json(
-        { error: "Permit reference not found" },
+        { error: "Permit not found" },
         { status: 404 }
       );
     }
 
     // Check permit validity
     const now = new Date();
-    const permitData = claimReference.application.permit;
-    const expiryDate = new Date(permitData?.expiryDate || now);
-    const isValid =
-      permitData?.status === "ACTIVE" && expiryDate > now;
+    const expiryDate = new Date(permit.expiryDate);
+    const isValid = permit.status === "ACTIVE" && expiryDate > now;
 
     // Calculate days until expiry
     const daysToExpiry = Math.ceil(
@@ -71,22 +57,21 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         verified: true,
-        referenceNumber: claimReference.referenceNumber,
-        status: claimReference.status,
+        permitNumber: permit.permitNumber,
+        status: permit.status,
         permit: {
-          permitNumber: permitData?.permitNumber,
-          businessName: permitData?.businessName,
-          permitStatus: permitData?.status,
+          permitNumber: permit.permitNumber,
+          businessName: permit.businessName,
+          permitStatus: permit.status,
           isValid,
-          issuedDate: permitData?.issueDate?.toISOString(),
-          expiryDate: permitData?.expiryDate?.toISOString(),
+          issuedDate: permit.issueDate?.toISOString(),
+          expiryDate: permit.expiryDate?.toISOString(),
           daysToExpiry: isValid ? daysToExpiry : 0,
         },
         application: {
-          applicationNumber: claimReference.application.applicationNumber,
-          applicationType: claimReference.application.type,
+          applicationNumber: permit.application.applicationNumber,
+          applicationType: permit.application.type,
         },
-        claimedAt: claimReference.claimedAt?.toISOString(),
       },
       { status: 200 }
     );

@@ -1,6 +1,7 @@
 /**
  * Cron Job: Expire Temporary Schedule Holds
- * Run every 5 minutes to release stale TEMPORARY reservations.
+ * DEPRECATED: Removed with claim scheduling system in 3-role refactoring
+ * Kept as no-op for backwards compatibility with Vercel Cron
  *
  * Invoke via:
  *   - Vercel Cron: every 5 minutes via GET /api/cron/expire-holds
@@ -9,10 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { captureException } from "@/lib/monitoring";
-import { cacheDelPattern } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -29,60 +27,15 @@ export async function GET(request: Request) {
   try {
     const now = new Date();
 
-    // Find all expired temporary holds
-    const expired = await prisma.slotReservation.findMany({
-      where: {
-        status: "TEMPORARY",
-        temporaryHoldExpiry: { lt: now },
-      },
-      select: { id: true, timeSlotId: true },
-    });
+    logger.info("[cron/expire-holds] Cron called but feature disabled (claim scheduling removed)");
 
-    if (expired.length === 0) {
-      logger.debug("[cron/expire-holds] No expired temporary holds found");
-      return NextResponse.json({ expired: 0, message: "No expired holds" });
-    }
-
-    logger.info(`[cron/expire-holds] Expiring ${expired.length} temporary holds`);
-
-    // Cancel each expired reservation and decrement slot count in a transaction
-    const results = await prisma.$transaction(
-      expired.map((r: { id: string; timeSlotId: string }) =>
-        prisma.slotReservation.update({
-          where: { id: r.id },
-          data: { status: "CANCELLED" },
-        })
-      )
-    );
-
-    // Decrement currentCount for affected time slots
-    const slotIdSet = new Set<string>();
-    for (const r of expired) {
-      slotIdSet.add(r.timeSlotId);
-    }
-    const slotIds = Array.from(slotIdSet);
-    await Promise.all(
-      slotIds.map((slotId: string) =>
-        prisma.timeSlot.update({
-          where: { id: slotId },
-          data: { currentCount: { decrement: 1 } },
-        }).catch(() => {
-          // Ignore if count is already 0
-        })
-      )
-    );
-
-    // Invalidate schedule cache so fresh availability is shown
-    await cacheDelPattern("schedule:slots:*");
-
-    logger.info(`[cron/expire-holds] Successfully expired ${results.length} holds`);
+    // No-op: claim scheduling system has been removed
     return NextResponse.json({
-      expired: results.length,
-      message: `Expired ${results.length} temporary hold(s)`,
+      expired: 0,
+      message: "Cron job disabled (claim scheduling feature removed)",
       timestamp: now.toISOString(),
     });
   } catch (error) {
-    captureException(error, { route: "GET /api/cron/expire-holds" });
     logger.error("[cron/expire-holds] Error:", error);
     return NextResponse.json({ error: "Failed to expire holds" }, { status: 500 });
   }

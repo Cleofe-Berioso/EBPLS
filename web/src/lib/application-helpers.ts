@@ -862,9 +862,9 @@ export async function generateClearancePackages(
     throw new Error("User not found");
   }
 
-  if (!["REVIEWER", "ADMINISTRATOR"].includes(user.role)) {
+  if (!["BPLO_OFFICE"].includes(user.role)) {
     throw new Error(
-      "Unauthorized: Only REVIEWER and ADMINISTRATOR can generate clearances"
+      "Unauthorized: Only BPLO_OFFICE can generate clearances"
     );
   }
 

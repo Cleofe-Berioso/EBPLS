@@ -15,7 +15,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "STAFF" && session.user.role !== "ADMINISTRATOR") {
+    if (session.user.role !== "BPLO_OFFICE") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

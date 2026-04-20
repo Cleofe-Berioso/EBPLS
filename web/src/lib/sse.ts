@@ -15,15 +15,12 @@ export type SSEEventType =
   | 'document_verified'
   | 'document_uploaded'
   | 'document_rejected'
-  | 'claim_scheduled'
   | 'clearance_initiated'
   | 'clearance_updated'
   | 'permit_issued'
   | 'permit_printed'
   | 'permit_expired'
-  | 'claim_completed'
   | 'payment_initiated'
-  | 'slot_availability_changed'
   | 'notification'
   | 'heartbeat';
 
@@ -158,20 +155,6 @@ export function broadcastDocumentVerified(
       documentName,
       status,
     }, userId)
-  );
-}
-
-export function broadcastSlotAvailabilityChange(
-  scheduleDate: string,
-  timeSlotId: string,
-  remainingSlots: number
-): void {
-  sseBroadcaster.broadcast(
-    createSSEEvent('slot_availability_changed', {
-      scheduleDate,
-      timeSlotId,
-      remainingSlots,
-    })
   );
 }
 
@@ -383,36 +366,6 @@ export function broadcastPermitIssued(
 }
 
 // ============================================================================
-// Claim Events
-// ============================================================================
-
-export function broadcastClaimReleased(
-  userId: string,
-  claimReferenceId: string,
-  referenceNumber: string
-): void {
-  sseBroadcaster.sendToUser(
-    userId,
-    createSSEEvent('notification', {
-      claimReferenceId,
-      referenceNumber,
-      message: `Permit ready for claim - Reference: ${referenceNumber}`,
-      timestamp: new Date().toISOString(),
-    }, userId)
-  );
-}
-
-export function broadcastSlotAvailabilityChanged(scheduleId: string): void {
-  sseBroadcaster.broadcast(
-    createSSEEvent('slot_availability_changed', {
-      scheduleId,
-      message: 'Slot availability has changed',
-      timestamp: new Date().toISOString(),
-    })
-  );
-}
-
-// ============================================================================
 // Phase 5: Permit Issuance Events
 // ============================================================================
 
@@ -441,26 +394,6 @@ export function broadcastPermitExpired(
       permitNumber,
       businessName,
       message: `Permit ${permitNumber} (${businessName}) has expired`,
-      timestamp: new Date().toISOString(),
-    }, userId)
-  );
-}
-
-// ============================================================================
-// Phase 6: Claims Events
-// ============================================================================
-
-export function broadcastClaimCompleted(
-  userId: string,
-  applicantId: string,
-  applicationNumber: string
-): void {
-  sseBroadcaster.sendToUser(
-    userId,
-    createSSEEvent('claim_completed', {
-      applicantId,
-      applicationNumber,
-      message: `Claim for application ${applicationNumber} has been completed`,
       timestamp: new Date().toISOString(),
     }, userId)
   );

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Shield, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Shield, Eye, EyeOff, Loader2, Home } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Suspense } from "react";
 
@@ -162,6 +162,16 @@ function LoginForm() {
               Create an account
             </Link>
           </p>
+
+          <div className="mt-6 border-t border-[var(--border)] pt-6">
+            <Link
+              href="/"
+              className="flex items-center justify-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] transition-colors"
+            >
+              <Home className="h-4 w-4" />
+              Back to Homepage
+            </Link>
+          </div>
         </div>
       </div>
     </div>

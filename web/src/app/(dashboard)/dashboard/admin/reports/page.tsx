@@ -19,7 +19,7 @@ export const metadata = { title: "Reports" };
 export default async function AdminReportsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMINISTRATOR") redirect("/dashboard");
+  if (session.user.role !== "BPLO_OFFICE") redirect("/dashboard");
 
   // Aggregate stats
   const [

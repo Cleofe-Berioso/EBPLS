@@ -20,9 +20,7 @@ export function useSSE(handlers: Partial<Record<SSEEventType | "all", Handler>>)
     const eventTypes: SSEEventType[] = [
       "application_status_changed",
       "document_verified",
-      "claim_scheduled",
       "permit_issued",
-      "slot_availability_changed",
       "notification",
       "heartbeat",
     ];

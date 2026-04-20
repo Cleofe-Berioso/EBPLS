@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   FileText,
-  Clock,
-  CalendarCheck,
   Upload,
   CheckSquare,
   BarChart3,
@@ -14,13 +12,16 @@ import {
   Settings,
   Shield,
   Printer,
-  Tag,
   X,
   ClipboardList,
   ChevronLeft,
   ChevronRight,
   File,
   MapPin,
+  CreditCard,
+  DollarSign,
+  Receipt,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@prisma/client";
@@ -49,83 +50,164 @@ interface NavItem {
   roles: Role[];
 }
 
-// ── APPLICANT ACCOUNT NAVIGATION ──
-const applicantAccountNav: NavItem[] = [
+// ── APPLICANT NAVIGATION ──
+const applicantNav: NavItem[] = [
   {
-    label: "Documents",
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: <LayoutDashboard className="h-5 w-5" />,
+    roles: ["APPLICANT"],
+  },
+  {
+    label: "My Applications",
+    href: "/dashboard/applications",
+    icon: <FileText className="h-5 w-5" />,
+    roles: ["APPLICANT"],
+  },
+  {
+    label: "My Documents",
     href: "/dashboard/documents",
     icon: <File className="h-5 w-5" />,
     roles: ["APPLICANT"],
   },
   {
-    label: "Claim Reference",
-    href: "/dashboard/claim-reference",
-    icon: <Tag className="h-5 w-5" />,
+    label: "Track Status",
+    href: "/dashboard/tracking",
+    icon: <AlertCircle className="h-5 w-5" />,
     roles: ["APPLICANT"],
   },
-  // Staff & Reviewer
   {
-    label: "Review Applications",
-    href: "/dashboard/review",
-    icon: <CheckSquare className="h-5 w-5" />,
-    roles: ["STAFF", "REVIEWER", "ADMINISTRATOR"],
+    label: "Payments",
+    href: "/dashboard/payments",
+    icon: <DollarSign className="h-5 w-5" />,
+    roles: ["APPLICANT"],
   },
   {
-    label: "Verify Documents",
+    label: "My Permit",
+    href: "/dashboard/permits",
+    icon: <Shield className="h-5 w-5" />,
+    roles: ["APPLICANT"],
+  },
+  {
+    label: "Profile",
+    href: "/dashboard/profile",
+    icon: <Users className="h-5 w-5" />,
+    roles: ["APPLICANT"],
+  },
+];
+
+// ── BPLO OFFICE NAVIGATION ──
+const bploNav: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: <LayoutDashboard className="h-5 w-5" />,
+    roles: ["BPLO_OFFICE"],
+  },
+  {
+    label: "Applications",
+    href: "/dashboard/applications",
+    icon: <FileText className="h-5 w-5" />,
+    roles: ["BPLO_OFFICE"],
+  },
+  {
+    label: "Document Verification",
     href: "/dashboard/verify-documents",
-    icon: <Upload className="h-5 w-5" />,
-    roles: ["STAFF", "REVIEWER"],
+    icon: <CheckSquare className="h-5 w-5" />,
+    roles: ["BPLO_OFFICE"],
   },
   {
-    label: "Claims Processing",
-    href: "/dashboard/claims",
-    icon: <Tag className="h-5 w-5" />,
-    roles: ["STAFF", "ADMINISTRATOR"],
+    label: "Review Queue",
+    href: "/dashboard/review",
+    icon: <ClipboardList className="h-5 w-5" />,
+    roles: ["BPLO_OFFICE"],
+  },
+  {
+    label: "Approved Applications",
+    href: "/dashboard/approved-applications",
+    icon: <FileText className="h-5 w-5" />,
+    roles: ["BPLO_OFFICE"],
   },
   {
     label: "Permit Issuance",
     href: "/dashboard/issuance",
     icon: <Printer className="h-5 w-5" />,
-    roles: ["STAFF", "ADMINISTRATOR"],
-  },
-  // Admin
-  {
-    label: "Manage Users",
-    href: "/dashboard/admin/users",
-    icon: <Users className="h-5 w-5" />,
-    roles: ["ADMINISTRATOR"],
-  },
-  {
-    label: "Manage Schedules",
-    href: "/dashboard/admin/schedules",
-    icon: <CalendarCheck className="h-5 w-5" />,
-    roles: ["ADMINISTRATOR"],
-  },
-  {
-    label: "Reports",
-    href: "/dashboard/admin/reports",
-    icon: <BarChart3 className="h-5 w-5" />,
-    roles: ["ADMINISTRATOR"],
-  },
-  {
-    label: "System Settings",
-    href: "/dashboard/admin/settings",
-    icon: <Settings className="h-5 w-5" />,
-    roles: ["ADMINISTRATOR"],
-  },
-  {
-    label: "Audit Logs",
-    href: "/dashboard/admin/audit-logs",
-    icon: <ClipboardList className="h-5 w-5" />,
-    roles: ["ADMINISTRATOR"],
+    roles: ["BPLO_OFFICE"],
   },
   {
     label: "Business Locations",
     href: "/dashboard/admin/locations",
     icon: <MapPin className="h-5 w-5" />,
-    roles: ["ADMINISTRATOR"],
+    roles: ["BPLO_OFFICE"],
+  },
+  {
+    label: "Reports",
+    href: "/dashboard/admin/reports",
+    icon: <BarChart3 className="h-5 w-5" />,
+    roles: ["BPLO_OFFICE"],
+  },
+  {
+    label: "Activity Logs",
+    href: "/dashboard/admin/audit-logs",
+    icon: <ClipboardList className="h-5 w-5" />,
+    roles: ["BPLO_OFFICE"],
+  },
+  {
+    label: "Profile",
+    href: "/dashboard/profile",
+    icon: <Users className="h-5 w-5" />,
+    roles: ["BPLO_OFFICE"],
   },
 ];
+
+// ── MTO NAVIGATION ──
+const mtoNav: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: <LayoutDashboard className="h-5 w-5" />,
+    roles: ["MTO"],
+  },
+  {
+    label: "Payment Queue",
+    href: "/dashboard/payment-queue",
+    icon: <CreditCard className="h-5 w-5" />,
+    roles: ["MTO"],
+  },
+  {
+    label: "Payment Validation",
+    href: "/dashboard/validate-payments",
+    icon: <CheckSquare className="h-5 w-5" />,
+    roles: ["MTO"],
+  },
+  {
+    label: "Receipts",
+    href: "/dashboard/receipts",
+    icon: <Receipt className="h-5 w-5" />,
+    roles: ["MTO"],
+  },
+  {
+    label: "Paid Applications",
+    href: "/dashboard/paid-applications",
+    icon: <FileText className="h-5 w-5" />,
+    roles: ["MTO"],
+  },
+  {
+    label: "Payment Reports",
+    href: "/dashboard/payment-reports",
+    icon: <BarChart3 className="h-5 w-5" />,
+    roles: ["MTO"],
+  },
+  {
+    label: "Profile",
+    href: "/dashboard/profile",
+    icon: <Users className="h-5 w-5" />,
+    roles: ["MTO"],
+  },
+];
+
+// Combine all navigation items
+const allNavItems = [...applicantNav, ...bploNav, ...mtoNav];
 
 function SidebarContent({
   user,
@@ -139,14 +221,13 @@ function SidebarContent({
   onToggleCollapse?: () => void;
 }) {
   const pathname = usePathname();
-  const filteredItems = applicantAccountNav.filter((item) => item.roles.includes(user.role));
+  const filteredItems = allNavItems.filter((item) => item.roles.includes(user.role));
 
   // Map role to display label
   const roleLabel = {
     APPLICANT: "Business Owner",
-    STAFF: "BPLO Staff",
-    REVIEWER: "Reviewer",
-    ADMINISTRATOR: "Administrator",
+    BPLO_OFFICE: "BPLO Office",
+    MTO: "MTO Staff",
   }[user.role] || user.role;
 
   return (
@@ -252,7 +333,7 @@ function SidebarContent({
                 {user.firstName} {user.lastName}
               </p>
               <p className="truncate text-xs text-gray-500 dark:text-gray-400 capitalize">
-                {user.role.toLowerCase().replace("_", " ")}
+                {user.role === 'BPLO_OFFICE' ? 'BPLO Office' : user.role === 'MTO' ? 'MTO Staff' : user.role.toLowerCase().replace("_", " ")}
               </p>
             </div>
           </div>

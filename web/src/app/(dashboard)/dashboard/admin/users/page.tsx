@@ -8,7 +8,7 @@ export const metadata = { title: "Manage Users" };
 export default async function AdminUsersPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMINISTRATOR") redirect("/dashboard");
+  if (session.user.role !== "BPLO_OFFICE") redirect("/dashboard");
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({

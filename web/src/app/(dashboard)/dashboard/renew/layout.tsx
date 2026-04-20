@@ -19,6 +19,11 @@ export default async function RenewalLayout({
     redirect("/login");
   }
 
+  // Account status check - must be ACTIVE
+  if (session.user.status !== "ACTIVE") {
+    redirect("/dashboard");
+  }
+
   // Only APPLICANT role can access renewal portal
   if (session.user.role !== "APPLICANT") {
     redirect("/dashboard");

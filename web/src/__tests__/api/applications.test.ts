@@ -198,7 +198,7 @@ describe("POST /api/applications (CREATE)", () => {
   });
 
   it("should reject unauthorized (non-APPLICANT role)", async () => {
-    const session = { user: { id: "staff-1", role: "STAFF" } };
+    const session = { user: { id: "staff-1", role: "BPLO_OFFICE" } };
     (auth as any).mockResolvedValue(session);
 
     (canCreateApplication as any).mockResolvedValue({
@@ -352,7 +352,7 @@ describe("GET /api/applications (LIST)", () => {
   });
 
   it("should list all applications if role=STAFF", async () => {
-    const session = { user: { id: "staff-1", role: "STAFF" } };
+    const session = { user: { id: "staff-1", role: "BPLO_OFFICE" } };
     (auth as any).mockResolvedValue(session);
 
     const mockApps = [

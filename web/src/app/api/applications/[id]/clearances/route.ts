@@ -122,14 +122,13 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only REVIEWER or ADMINISTRATOR can initiate clearances (after document verification)
+    // Only BPLO_OFFICE can initiate clearances (after document verification)
     if (
-      session.user.role !== "REVIEWER" &&
-      session.user.role !== "ADMINISTRATOR"
+      session.user.role !== "BPLO_OFFICE"
     ) {
       return NextResponse.json(
         {
-          error: "Only reviewers can initiate clearance workflow",
+          error: "Only BPLO office can initiate clearance workflow",
         },
         { status: 403 }
       );

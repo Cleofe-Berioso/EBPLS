@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     }
 
     // Only REVIEWER and ADMIN can access analytics
-    if (!['REVIEWER', 'ADMINISTRATOR'].includes(session.user.role!)) {
+    if (!["BPLO_OFFICE"].includes(session.user.role!)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -99,56 +99,6 @@ export async function GET(request: Request) {
       },
     });
 
-    // Get claim statistics
-    const totalClaims = await prisma.slotReservation.count({
-      where: {
-        createdAt: { gte: start, lte: end },
-      },
-    });
-
-    // Get claims by status
-    const claimsByStatus = await prisma.slotReservation.groupBy({
-      by: ['status'],
-      where: {
-        createdAt: { gte: start, lte: end },
-      },
-      _count: true,
-    });
-
-    // Get average processing time (from submission to ENDORSED status)
-    const processingTimes = await prisma.application.findMany({
-      where: {
-        status: 'ENDORSED',
-        createdAt: { gte: start, lte: end },
-      },
-      select: { createdAt: true, updatedAt: true },
-    });
-
-    const avgProcessingDays =
-      processingTimes.length > 0
-        ? processingTimes.reduce((sum, app) => {
-            const days =
-              (app.updatedAt.getTime() - app.createdAt.getTime()) /
-              (1000 * 60 * 60 * 24);
-            return sum + days;
-          }, 0) / processingTimes.length
-        : 0;
-
-    // Get approval rate
-    const totalReviewed = applicationsByStatus.reduce((sum, stat) => {
-      if (['APPROVED', 'REJECTED', 'ENDORSED'].includes(stat.status)) {
-        return sum + stat._count;
-      }
-      return sum;
-    }, 0);
-
-    const approvalRate =
-      totalReviewed > 0
-        ? ((applicationsByStatus.find((s) => s.status === 'ENDORSED')?._count || 0) /
-            totalReviewed) *
-          100
-        : 0;
-
     // Format response
     return NextResponse.json({
       period: {
@@ -163,8 +113,6 @@ export async function GET(request: Request) {
         byStatus: Object.fromEntries(
           applicationsByStatus.map((s) => [s.status, s._count])
         ),
-        avgProcessingDays: Math.round(avgProcessingDays * 100) / 100,
-        approvalRate: Math.round(approvalRate * 100) / 100,
       },
       payments: {
         total: totalPayments,
@@ -179,12 +127,6 @@ export async function GET(request: Request) {
           permitsByStatus.map((s) => [s.status, s._count])
         ),
         expiringIn30Days: expiringPermits,
-      },
-      claims: {
-        total: totalClaims,
-        byStatus: Object.fromEntries(
-          claimsByStatus.map((s) => [s.status, s._count])
-        ),
       },
     });
   } catch (error) {

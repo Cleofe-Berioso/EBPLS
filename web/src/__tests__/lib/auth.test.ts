@@ -289,7 +289,7 @@ describe("Authentication Logic", () => {
       };
 
       expect(user).toHaveProperty("role");
-      expect(["APPLICANT", "STAFF", "REVIEWER", "ADMINISTRATOR"]).toContain(
+      expect(["APPLICANT", "BPLO_OFFICE", "BPLO_OFFICE", "BPLO_OFFICE"]).toContain(
         user.role
       );
     });

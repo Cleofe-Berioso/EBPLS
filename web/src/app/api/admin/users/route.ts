@@ -9,14 +9,14 @@ const createUserSchema = z.object({
   email: z.string().email(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  role: z.enum(["STAFF", "REVIEWER", "ADMINISTRATOR"]),
+  role: z.enum(["BPLO_OFFICE", "MTO"]),
   phone: z.string().optional(),
 });
 
 export async function GET(req: Request) {
   try {
     const session = await auth();
-    if (!session?.user || session.user.role !== "ADMINISTRATOR") {
+    if (!session?.user || session.user.role !== "BPLO_OFFICE") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
             ],
           }
         : {}),
-      ...(role ? { role: role as "APPLICANT" | "STAFF" | "REVIEWER" | "ADMINISTRATOR" } : {}),
+      ...(role ? { role: role as "APPLICANT" | "BPLO_OFFICE" | "MTO" } : {}),
       ...(status ? { status: status as "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION" } : {}),
     };
 
@@ -70,7 +70,7 @@ export async function GET(req: Request) {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || session.user.role !== "ADMINISTRATOR") {
+    if (!session?.user || session.user.role !== "BPLO_OFFICE") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

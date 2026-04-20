@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DEFAULT_MAP_CENTER } from "@/lib/locations";
 import { BusinessMap } from "./business-map";
 
 // Define types directly to avoid Prisma import issues
@@ -43,8 +44,8 @@ export function AdminLocationsClient({
 
   const [formData, setFormData] = useState({
     applicationId: "",
-    latitude: "10.4069",
-    longitude: "122.9701",
+    latitude: DEFAULT_MAP_CENTER[0].toString(),
+    longitude: DEFAULT_MAP_CENTER[1].toString(),
     label: "",
     businessType: "",
     markerColor: "blue",
@@ -92,8 +93,8 @@ export function AdminLocationsClient({
       toast.success("Location added successfully");
       setFormData({
         applicationId: "",
-        latitude: "10.4069",
-        longitude: "122.9701",
+        latitude: DEFAULT_MAP_CENTER[0].toString(),
+        longitude: DEFAULT_MAP_CENTER[1].toString(),
         label: "",
         businessType: "",
         markerColor: "blue",
@@ -173,7 +174,7 @@ export function AdminLocationsClient({
                 <label className="text-sm font-medium">Latitude *</label>
                 <Input
                   type="number"
-                  placeholder="10.4069"
+                  placeholder="10.8779"
                   step="0.0001"
                   value={formData.latitude}
                   onChange={(e) =>
@@ -181,13 +182,13 @@ export function AdminLocationsClient({
                   }
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">10.3569–10.4569</p>
+                <p className="text-xs text-gray-500 mt-1">10.8349–10.9209</p>
               </div>
               <div>
                 <label className="text-sm font-medium">Longitude *</label>
                 <Input
                   type="number"
-                  placeholder="122.9701"
+                  placeholder="122.9779"
                   step="0.0001"
                   value={formData.longitude}
                   onChange={(e) =>
@@ -195,7 +196,7 @@ export function AdminLocationsClient({
                   }
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">122.9201–123.0201</p>
+                <p className="text-xs text-gray-500 mt-1">122.9359–123.0199</p>
               </div>
             </div>
 

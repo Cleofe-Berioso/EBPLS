@@ -18,7 +18,7 @@ export async function GET() {
     const userId = session.user.id;
 
     // Gather all personal data
-    const [user, applications, documents, activityLogs, claimReferences] = await Promise.all([
+    const [user, applications, documents, activityLogs] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -59,9 +59,6 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
         take: 100,
       }),
-      prisma.claimReference.findMany({
-        where: { application: { applicantId: userId } },
-      }),
     ]);
 
     const exportData = {
@@ -69,7 +66,6 @@ export async function GET() {
       dataSubject: user,
       applications,
       documents,
-      claimReferences,
       activityLogs,
       notice: 'This data export is provided in compliance with Republic Act No. 10173 (Data Privacy Act of 2012). For questions, contact our Data Protection Officer.',
     };
