@@ -8,9 +8,9 @@ import { Shield, Mail, Loader2 } from "lucide-react";
 function VerifyOtpForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const userId = params.get("userId") ?? "";
-  const email = params.get("email") ?? "";
-  const type = params.get("type") ?? "EMAIL_VERIFICATION";
+  const userId = params?.get("userId") ?? "";
+  const email = params?.get("email") ?? "";
+  const type = params?.get("type") ?? "EMAIL_VERIFICATION";
 
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);

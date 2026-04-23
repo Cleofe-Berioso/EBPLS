@@ -1,8 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { useTheme } from "next-themes";
-import { LogOut, Menu, User, ChevronDown, Sun, Moon } from "lucide-react";
+import { LogOut, Menu, User, ChevronDown } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 
@@ -19,7 +19,6 @@ interface HeaderProps {
 
 export function DashboardHeader({ user, onMenuClick }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const { theme, setTheme } = useTheme();
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -40,20 +39,8 @@ export function DashboardHeader({ user, onMenuClick }: HeaderProps) {
         <h2 className="text-base font-semibold text-gray-900 sm:text-lg lg:hidden">
           Business Permit System
         </h2>
-      </div>      <div className="flex items-center gap-2 sm:gap-4">
-        {/* Dark mode toggle */}
-        <button
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="rounded-lg p-2 text-gray-500 hover:bg-[var(--surface-muted)] dark:text-gray-400 dark:hover:bg-gray-700"
-          aria-label="Toggle dark mode"
-        >
-          {theme === "dark" ? (
-            <Sun className="h-5 w-5" />
-          ) : (
-            <Moon className="h-5 w-5" />
-          )}
-        </button>
-
+      </div>
+      <div className="flex items-center gap-2 sm:gap-4">
         {/* Notifications — live bell with SSE */}
         <NotificationBell />
 
@@ -86,13 +73,13 @@ export function DashboardHeader({ user, onMenuClick }: HeaderProps) {
                 onClick={() => setShowUserMenu(false)}
               />
               <div className="absolute right-0 z-50 mt-2 w-56 rounded-lg border bg-[var(--surface)] py-2 shadow-lg">
-                <a
+                <Link
                   href="/dashboard/profile"
                   className="flex items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
                 >
                   <User className="h-4 w-4" />
                   My Profile
-                </a>
+                </Link>
                 <hr className="my-1" />
                 <button
                   onClick={handleLogout}

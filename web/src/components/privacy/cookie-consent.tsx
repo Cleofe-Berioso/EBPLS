@@ -94,7 +94,7 @@ export function CookieConsent() {
                   <div>
                     <span className="font-medium text-gray-900">Functional Cookies</span>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Remember your preferences (language, theme) for a better experience.
+                      Remember your preferences, such as language, for a better experience.
                     </p>
                   </div>
                 </label>

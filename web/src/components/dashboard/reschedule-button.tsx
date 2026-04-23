@@ -97,22 +97,22 @@ export function RescheduleButton({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-gray-800">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
             {/* Header */}
-            <div className="flex items-center justify-between border-b p-4 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="text-lg font-semibold text-gray-900">
                 Reschedule Claiming Appointment
               </h2>
               <button
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm text-gray-600">
                 Select a new date and time for picking up the permit for{" "}
                 <strong>{applicationNumber}</strong>.
               </p>
@@ -131,7 +131,7 @@ export function RescheduleButton({
                 <>
                   {/* Date selection */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
                       Select Date
                     </label>
                     <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
@@ -169,7 +169,7 @@ export function RescheduleButton({
                   {/* Time slot selection */}
                   {selectedDate && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
                         Select Time Slot
                       </label>
                       {availableSlots && availableSlots.length > 0 ? (
@@ -203,7 +203,7 @@ export function RescheduleButton({
             </div>
 
             {/* Footer */}
-            <div className="flex gap-3 border-t p-4 dark:border-gray-700">
+            <div className="flex gap-3 border-t p-4">
               <Button
                 variant="outline"
                 className="flex-1"

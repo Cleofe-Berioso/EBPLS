@@ -220,7 +220,7 @@ function SidebarContent({
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const filteredItems = allNavItems.filter((item) => item.roles.includes(user.role));
 
   // Map role to display label
@@ -231,10 +231,10 @@ function SidebarContent({
   }[user.role] || user.role;
 
   return (
-    <div className="flex h-full flex-col bg-[#1a2035]">
+    <div className="flex h-full flex-col bg-[var(--surface)]">
       <div
         className={cn(
-          "flex items-center border-b border-white/10 py-4",
+          "flex items-center border-b border-[var(--border)] py-4",
           collapsed ? "justify-center px-2" : "justify-between px-4"
         )}
       >
@@ -245,10 +245,10 @@ function SidebarContent({
               {user.lastName[0]}
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight text-white">
+              <p className="text-sm font-semibold leading-tight text-[var(--text-primary)]">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="text-[11px] leading-tight text-gray-400">
+              <p className="text-[11px] leading-tight text-[var(--text-secondary)]">
                 {roleLabel}
               </p>
             </div>
@@ -268,7 +268,7 @@ function SidebarContent({
         {onClose && (
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-500 hover:bg-[var(--accent-light)] dark:hover:bg-gray-700 lg:hidden"
+            className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] lg:hidden"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -278,7 +278,7 @@ function SidebarContent({
         {onToggleCollapse && !onClose && (
           <button
             onClick={onToggleCollapse}
-            className="hidden rounded-lg p-1.5 text-gray-500 hover:bg-[var(--accent-light)] dark:hover:bg-gray-700 lg:block"
+            className="hidden rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] lg:block"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? (
@@ -307,8 +307,8 @@ function SidebarContent({
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                     collapsed && "justify-center px-2",
                     isActive
-                      ? "bg-[var(--accent-light)] text-[var(--accent)] dark:bg-blue-900/30 dark:text-blue-400"
-                      : "text-[var(--text-secondary)] hover:bg-[var(--accent-light)] hover:text-[var(--text-primary)] dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                      ? "bg-[var(--accent-light)] text-[var(--accent)]"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
                   )}
                 >
                   {item.icon}
@@ -322,17 +322,17 @@ function SidebarContent({
 
       {/* User Info */}
       {!collapsed && (
-        <div className="border-t border-[var(--border)] dark:border-gray-700 px-6 py-4">
+        <div className="border-t border-[var(--border)] px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-[var(--accent)]">
               {user.firstName[0]}
               {user.lastName[0]}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-[var(--text-primary)] dark:text-gray-100">
+              <p className="truncate text-sm font-medium text-[var(--text-primary)]">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="truncate text-xs text-gray-500 dark:text-gray-400 capitalize">
+              <p className="truncate text-xs text-[var(--text-secondary)] capitalize">
                 {user.role === 'BPLO_OFFICE' ? 'BPLO Office' : user.role === 'MTO' ? 'MTO Staff' : user.role.toLowerCase().replace("_", " ")}
               </p>
             </div>
@@ -340,7 +340,7 @@ function SidebarContent({
         </div>
       )}
       {collapsed && (
-        <div className="border-t border-[var(--border)] dark:border-gray-700 px-2 py-4 flex justify-center">
+        <div className="flex justify-center border-t border-[var(--border)] px-2 py-4">
           <div
             title={`${user.firstName} ${user.lastName}`}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-[var(--accent)]"
@@ -359,7 +359,7 @@ export function DashboardSidebar({ user, isOpen, onClose, collapsed, onToggleCol
     <>
       <aside
         className={cn(
-          "hidden flex-shrink-0 border-r border-[var(--border)] dark:border-gray-700 bg-[var(--surface)] dark:bg-gray-800 transition-all duration-300 lg:block",
+          "hidden flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 lg:block",
           collapsed ? "w-16" : "w-64"
         )}
       >
@@ -376,7 +376,7 @@ export function DashboardSidebar({ user, isOpen, onClose, collapsed, onToggleCol
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface)] dark:bg-gray-800 shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-72 flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface)] shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >

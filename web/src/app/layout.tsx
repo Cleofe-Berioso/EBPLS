@@ -9,7 +9,6 @@ import {
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "sonner";
-import { ThemeProvider } from "@/components/providers/theme-provider";
 
 export const metadata: Metadata = {
   title: {
@@ -66,12 +65,10 @@ export default function RootLayout({
         <WebApplicationSchema />
       </head>
       <body className="min-h-screen bg-[var(--background)] font-sans antialiased">
-        <ThemeProvider forcedColorScheme="light">
-          <QueryProvider>{children}</QueryProvider>
-          <CookieConsent />
-          <ServiceWorkerRegistration />
-          <Toaster richColors position="top-right" closeButton />
-        </ThemeProvider>
+        <QueryProvider>{children}</QueryProvider>
+        <CookieConsent />
+        <ServiceWorkerRegistration />
+        <Toaster richColors position="top-right" closeButton />
       </body>
     </html>
   );

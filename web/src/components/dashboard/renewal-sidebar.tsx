@@ -40,7 +40,7 @@ export function RenewalSidebar({
   collapsed = false,
   onToggleCollapse,
 }: RenewalSidebarProps) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
 
   const mainNav: NavItem[] = [
     {
@@ -92,7 +92,7 @@ export function RenewalSidebar({
   }) => (
     <div className="mb-4">
       {!collapsed && (
-        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-secondary)]">
           {label}
         </p>
       )}
@@ -112,8 +112,8 @@ export function RenewalSidebar({
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   collapsed && "justify-center px-2",
                   isActive
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-400 hover:bg-white/10 hover:text-white"
+                    ? "bg-[var(--accent-light)] text-[var(--accent)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
                 )}
               >
                 {item.icon}
@@ -127,11 +127,11 @@ export function RenewalSidebar({
   );
 
   const SidebarContent = () => (
-    <div className="flex h-full flex-col bg-[#1a2035]">
+    <div className="flex h-full flex-col bg-[var(--surface)]">
       {/* Header with user info */}
       <div
         className={cn(
-          "flex items-center border-b border-white/10 py-4",
+          "flex items-center border-b border-[var(--border)] py-4",
           collapsed ? "justify-center px-2" : "justify-between px-4"
         )}
       >
@@ -142,10 +142,10 @@ export function RenewalSidebar({
               {user.lastName[0]}
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight text-white">
+              <p className="text-sm font-semibold leading-tight text-[var(--text-primary)]">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="text-[11px] leading-tight text-gray-400">
+              <p className="text-[11px] leading-tight text-[var(--text-secondary)]">
                 Renewal Portal
               </p>
             </div>
@@ -166,7 +166,7 @@ export function RenewalSidebar({
         {onClose && (
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-white/10 lg:hidden"
+            className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] lg:hidden"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -177,7 +177,7 @@ export function RenewalSidebar({
         {onToggleCollapse && !onClose && (
           <button
             onClick={onToggleCollapse}
-            className="hidden rounded-lg p-1.5 text-gray-400 hover:bg-white/10 lg:block"
+            className="hidden rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] lg:block"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? (
@@ -202,7 +202,7 @@ export function RenewalSidebar({
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden flex-shrink-0 border-r border-white/10 bg-[#1a2035] transition-all duration-300 lg:block",
+          "hidden flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 lg:block",
           collapsed ? "w-16" : "w-56"
         )}
       >
@@ -221,7 +221,7 @@ export function RenewalSidebar({
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-56 flex-shrink-0 bg-[#1a2035] shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-56 flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface)] shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >

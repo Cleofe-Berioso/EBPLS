@@ -14,16 +14,47 @@ const SENTRY_RELEASE = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
 
 let sentryInitialized = false;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _sentryModule: any = undefined;
+type SentryUser = {
+  id: string;
+  email?: string;
+  role?: string;
+} | null;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getSentry(): Promise<any | null> {
+type SentryEvent = {
+  request?: {
+    headers?: Record<string, string>;
+  };
+};
+
+type SentryScope = {
+  setExtras(extras: Record<string, unknown>): void;
+};
+
+type SentryModule = {
+  init(config: {
+    dsn: string;
+    environment: string;
+    release: string;
+    tracesSampleRate: number;
+    replaysSessionSampleRate: number;
+    replaysOnErrorSampleRate: number;
+    integrations: unknown[];
+    beforeSend(event: SentryEvent): SentryEvent;
+  }): void;
+  withScope(callback: (scope: SentryScope) => void): void;
+  captureException(error: Error | unknown): void;
+  captureMessage(message: string, level: 'info' | 'warning' | 'error'): void;
+  setUser(user: SentryUser): void;
+};
+
+let _sentryModule: SentryModule | null | undefined = undefined;
+
+async function getSentry(): Promise<SentryModule | null> {
   if (_sentryModule !== undefined) return _sentryModule;
   try {
     // Use Function constructor to hide from Turbopack static analysis
-    const loadModule = new Function('name', 'return require(name)');
-    _sentryModule = loadModule('@sentry/nextjs');
+    const loadModule = new Function('name', 'return require(name)') as (name: string) => unknown;
+    _sentryModule = loadModule('@sentry/nextjs') as SentryModule;
     return _sentryModule;
   } catch {
     _sentryModule = null;
@@ -52,8 +83,7 @@ export async function initSentry(): Promise<void> {
       replaysSessionSampleRate: 0.1,
       replaysOnErrorSampleRate: 1.0,
       integrations: [],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      beforeSend(event: any) {
+      beforeSend(event: SentryEvent) {
         if (event.request?.headers) {
           delete event.request.headers['authorization'];
           delete event.request.headers['cookie'];
@@ -80,8 +110,7 @@ export async function captureException(
     if (Sentry) {
       try {
         if (context) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          Sentry.withScope((scope: any) => {
+          Sentry.withScope((scope: SentryScope) => {
             scope.setExtras(context);
             Sentry.captureException(error);
           });

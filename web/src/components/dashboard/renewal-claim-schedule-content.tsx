@@ -191,7 +191,7 @@ export function RenewalClaimScheduleContent() {
                     Bring a valid ID for verification
                   </p>
                   <p className="text-sm text-gray-600">
-                    Driver's License, Passport, or National ID
+                    Driver&rsquo;s License, Passport, or National ID
                   </p>
                 </div>
               </div>
@@ -216,7 +216,7 @@ export function RenewalClaimScheduleContent() {
                 No Appointment Scheduled
               </h3>
               <p className="mb-6 text-sm text-gray-600">
-                You haven't scheduled a permit claim appointment yet.
+                You haven&rsquo;t scheduled a permit claim appointment yet.
               </p>
               <Button>Schedule Appointment</Button>
             </div>

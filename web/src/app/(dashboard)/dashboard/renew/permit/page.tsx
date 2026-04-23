@@ -24,7 +24,7 @@ interface PermitInfo {
 export default function RenewalFormPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const permitId = searchParams.get("permitId");
+  const permitId = searchParams?.get("permitId");
 
   const [permit, setPermit] = useState<PermitInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -215,7 +215,7 @@ export default function RenewalFormPage() {
                     <li>BFP (Fire)</li>
                     <li>RPT Clearance (Municipal Treasurer)</li>
                     <li>Water / Utilities</li>
-                    <li>Assessor's Office</li>
+                    <li>Assessor&rsquo;s Office</li>
                     <li>Market Clearances (if retail / market business)</li>
                     <li>Agriculture Office (if agricultural / piggery)</li>
                   </ul>

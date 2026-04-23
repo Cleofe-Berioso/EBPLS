@@ -184,7 +184,7 @@ export function RenewalProfileContent() {
                   Active Sessions: 2
                 </p>
                 <p className="mt-1 text-sm text-orange-800">
-                  You're logged in on this browser and one other device.
+                  You&rsquo;re logged in on this browser and one other device.
                 </p>
               </div>
             </div>

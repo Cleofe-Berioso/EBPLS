@@ -96,7 +96,7 @@ export function RenewalHistoryContent() {
               No Renewal History
             </h3>
             <p className="mb-6 text-sm text-gray-600">
-              You haven't submitted any renewal applications yet.
+              You haven&rsquo;t submitted any renewal applications yet.
             </p>
             <Link href="/dashboard/renew/permit">
               <Button>Start a Renewal</Button>

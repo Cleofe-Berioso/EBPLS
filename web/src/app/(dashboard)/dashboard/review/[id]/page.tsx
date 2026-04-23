@@ -39,14 +39,22 @@ interface ApplicationDetail {
 export default function ReviewDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const id = params.id as string;
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
 
   const [application, setApplication] = useState<ApplicationDetail | null>(null);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");  const fetchApplication = useCallback(async () => {
+  const [success, setSuccess] = useState("");
+
+  const fetchApplication = useCallback(async () => {
+    if (!id) {
+      setError("Application not found");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/applications/${id}`);
       const data = await res.json();
@@ -123,7 +131,8 @@ export default function ReviewDetailPage() {
         className="mb-4 flex items-center gap-1 text-sm text-[var(--background)]0 hover:text-[var(--text-primary)]"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Reviews
-      </button>      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      </button>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl break-words">
             Review: {application.applicationNumber}
@@ -144,7 +153,8 @@ export default function ReviewDetailPage() {
         <Alert variant="success" className="mb-6">
           {success}
         </Alert>
-      )}      <div className="grid gap-6 lg:grid-cols-3">
+      )}
+      <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2 lg:order-1 order-2">
           {/* Business Info */}
           <Card>
@@ -219,7 +229,8 @@ export default function ReviewDetailPage() {
               {application.documents.length === 0 ? (
                 <p className="text-sm text-[var(--background)]0">No documents uploaded.</p>
               ) : (
-                <ul className="divide-y">                  {application.documents.map((doc) => (
+                <ul className="divide-y">
+                  {application.documents.map((doc) => (
                     <li
                       key={doc.id}
                       className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -244,7 +255,8 @@ export default function ReviewDetailPage() {
               )}
             </CardContent>
           </Card>
-        </div>        {/* Actions Sidebar */}
+        </div>
+        {/* Actions Sidebar */}
         <div className="space-y-6 order-1 lg:order-2">
           <Card>
             <CardHeader>

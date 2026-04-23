@@ -83,7 +83,7 @@ export default async function PermitsPage() {
               No Permits Issued Yet
             </h3>
             <p className="text-[var(--text-secondary)] text-center max-w-md mb-6">
-              You don't have any permits yet. Complete an application and payment
+              You don&rsquo;t have any permits yet. Complete an application and payment
               to get your permit approved and issued.
             </p>
             <Link href="/dashboard/applications/new">

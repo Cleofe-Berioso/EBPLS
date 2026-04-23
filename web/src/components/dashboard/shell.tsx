@@ -34,7 +34,7 @@ export function DashboardShell({
     // ensure no SSR mismatch — runs only on client
   }, []);
   return (
-    <div className="flex h-screen bg-[var(--background)] dark:bg-gray-900">
+    <div className="flex h-screen bg-[var(--background)]">
       <DashboardSidebar
         user={user}
         isOpen={sidebarOpen}

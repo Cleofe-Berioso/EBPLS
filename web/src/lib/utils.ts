@@ -45,10 +45,16 @@ export function generateClaimReference(): string {
  * @param amount - any numeric value (Decimal, number, string)
  * @returns formatted currency string
  */
-export function formatCurrency(amount: any): string {
+export function formatCurrency(amount: unknown): string {
   if (amount === null || amount === undefined) {
     return "₱0.00";
   }
+
+  const hasToNumber = (value: object): value is { toNumber: () => number } =>
+    typeof (value as { toNumber?: unknown }).toNumber === "function";
+
+  const hasToString = (value: object): value is { toString: () => string } =>
+    typeof value.toString === "function";
 
   // Convert Decimal to number safely
   let numValue: number;
@@ -56,10 +62,10 @@ export function formatCurrency(amount: any): string {
     numValue = parseFloat(amount);
   } else if (typeof amount === "number") {
     numValue = amount;
-  } else if (typeof amount === "object" && amount.toNumber) {
+  } else if (typeof amount === "object" && hasToNumber(amount)) {
     // Prisma Decimal type has toNumber() method
     numValue = amount.toNumber();
-  } else if (typeof amount === "object" && amount.toString) {
+  } else if (typeof amount === "object" && hasToString(amount)) {
     // Fallback: convert to string then to number
     numValue = parseFloat(amount.toString());
   } else {
@@ -180,8 +186,8 @@ export function validateFile(file: File): { valid: boolean; error?: string } {
 export function sanitizeUser<T extends Record<string, unknown>>(
   user: T
 ): Omit<T, "password"> {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { password: _pw, ...safe } = user;
+  const safe = { ...user } as T & { password?: unknown };
+  delete safe.password;
   return safe as Omit<T, "password">;
 }
 

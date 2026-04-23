@@ -14,7 +14,7 @@ const navLinks = [
 
 export function PublicNav() {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
 
   return (
     <header className="sticky top-0 z-50 border-b bg-white shadow-sm">

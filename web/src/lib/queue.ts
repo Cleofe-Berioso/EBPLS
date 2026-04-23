@@ -67,8 +67,7 @@ let reportQueue: Queue<ReportJobData> | null = null;
 function getQueue<T>(name: string, queueRef: Queue<T> | null): Queue<T> | null {
   if (queueRef) return queueRef;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return new Queue(name, { connection: redisConfig }) as any as Queue<T>;
+    return new Queue(name, { connection: redisConfig }) as unknown as Queue<T>;
   } catch {
     return null;
   }

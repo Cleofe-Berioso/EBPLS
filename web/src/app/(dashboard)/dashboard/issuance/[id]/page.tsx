@@ -41,25 +41,36 @@ interface IssuanceDetail {
 
 export default function IssuanceDetailPage() {
   const params = useParams();
-  const router = useRouter();  const [issuance, setIssuance] = useState<IssuanceDetail | null>(null);
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
+  const router = useRouter();
+  const [issuance, setIssuance] = useState<IssuanceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [staffNotes, setStaffNotes] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
   const fetchIssuance = useCallback(async () => {
+    if (!id) {
+      setError("Issuance not found");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await fetch(`/api/issuance/${params.id}`);
+      const res = await fetch(`/api/issuance/${id}`);
       if (res.ok) {
         const data = await res.json();
         setIssuance(data);
+      } else {
+        setError("Failed to load issuance details");
       }
       setLoading(false);
     } catch {
       setError("Failed to load issuance details");
       setLoading(false);
     }
-  }, [params.id]);
+  }, [id]);
 
   useEffect(() => {
     fetchIssuance();
@@ -71,7 +82,7 @@ export default function IssuanceDetailPage() {
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/issuance/${params.id}`, {
+      const res = await fetch(`/api/issuance/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, staffNotes }),

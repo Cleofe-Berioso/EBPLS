@@ -49,12 +49,18 @@ interface ApplicationDetail {
 export default function ApplicationDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const id = params.id as string;
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
   const [application, setApplication] = useState<ApplicationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const fetchApplication = useCallback(async () => {
+    if (!id) {
+      setError("Application not found");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/applications/${id}`);
       const data = await res.json();
@@ -219,7 +225,7 @@ export default function ApplicationDetailPage() {
                 <dl className="grid gap-4 text-sm sm:grid-cols-2">
                   {application.additionalData?.ownerName && (
                     <div>
-                      <dt className="text-[var(--background)]0">Owner's Name</dt>
+                      <dt className="text-[var(--background)]0">Owner&rsquo;s Name</dt>
                       <dd className="mt-1 font-medium">{application.additionalData.ownerName}</dd>
                     </div>
                   )}

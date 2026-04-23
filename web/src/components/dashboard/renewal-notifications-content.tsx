@@ -110,7 +110,7 @@ export function RenewalNotificationsContent() {
               <div>
                 <p className="font-medium text-gray-900">In-App Notifications</p>
                 <p className="text-sm text-gray-600">
-                  See notifications when you're logged in
+                  See notifications when you&rsquo;re logged in
                 </p>
               </div>
             </div>
@@ -142,7 +142,7 @@ export function RenewalNotificationsContent() {
                     No Notifications
                   </h3>
                   <p className="text-sm text-gray-600">
-                    You're all caught up! Check back later for updates.
+                    You&rsquo;re all caught up! Check back later for updates.
                   </p>
                 </div>
               </CardContent>

@@ -93,7 +93,7 @@ export default async function PaymentsPage() {
               No Payments Yet
             </h3>
             <p className="text-[var(--text-secondary)] text-center max-w-md">
-              You don't have any payment records. When you submit an application
+              You don&rsquo;t have any payment records. When you submit an application
               and make a payment, it will appear here.
             </p>
           </CardContent>

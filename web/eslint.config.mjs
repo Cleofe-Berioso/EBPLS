@@ -1,16 +1,16 @@
-import { createRequire } from "module";
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+import { FlatCompat } from "@eslint/eslintrc";
 
-const require = createRequire(import.meta.url);
-const nextConfig = require("eslint-config-next");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const compat = new FlatCompat({
+  baseDirectory: __dirname,
+});
 
 export default [
-  ...nextConfig,
-  {
-    rules: {
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "warn",
-    },
-  },
+  ...compat.extends("next/core-web-vitals"),
   {
     ignores: [
       ".next/**",
