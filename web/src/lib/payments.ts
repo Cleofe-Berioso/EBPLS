@@ -5,7 +5,7 @@
 
 export type PaymentMethod = 'GCASH' | 'MAYA' | 'BANK_TRANSFER' | 'OTC' | 'CASH';
 
-export type PaymentStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
+export type PaymentStatus = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
 
 export interface PaymentRequest {
   applicationId: string;
@@ -234,12 +234,12 @@ export async function processPayment(request: PaymentRequest): Promise<PaymentRe
     }
     case 'OTC':
     case 'CASH':
-      // OTC payments are recorded manually by staff
+      // OTC/CASH payments require BPLO_OFFICE verification before they become PAID.
       return {
         success: true,
         transactionId: generateReceiptNumber(),
         referenceNumber: generateReceiptNumber(),
-        status: 'COMPLETED',
+        status: 'PENDING',
       };
     default:
       return {

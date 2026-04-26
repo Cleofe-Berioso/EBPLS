@@ -3,7 +3,7 @@
  * List all permits with pagination, filtering, and search
  *
  * P5.1: Permit Listing & Management
- * Access: STAFF, REVIEWER, ADMINISTRATOR
+ * Access: BPLO_OFFICE
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -11,6 +11,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { captureException } from "@/lib/monitoring";
 import { z } from "zod";
+import { preparePermitForPaidApplication } from "@/lib/workflow";
 
 // Validation schema for list query parameters
 const permitListSchema = z.object({
@@ -24,13 +25,9 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth();
 
-    // Only staff and above can view permit list
-    if (
-      !session?.user ||
-      !["STAFF", "REVIEWER", "ADMINISTRATOR"].includes(session.user.role)
-    ) {
+    if (!session?.user || session.user.role !== "BPLO_OFFICE") {
       return NextResponse.json(
-        { error: "Unauthorized: Staff access required" },
+        { error: "Unauthorized: BPLO access required" },
         { status: 403 }
       );
     }
@@ -126,6 +123,46 @@ export async function GET(request: NextRequest) {
       { error: "Failed to retrieve permits" },
       { status: 500 }
     );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user || session.user.role !== "BPLO_OFFICE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const applicationId = typeof body.applicationId === "string" ? body.applicationId : "";
+    if (!applicationId) {
+      return NextResponse.json({ error: "applicationId is required" }, { status: 400 });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      return preparePermitForPaidApplication({
+        applicationId,
+        issuedById: session.user.id,
+        tx,
+      });
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        userId: session.user.id,
+        action: "PERMIT_PREPARED",
+        entity: "Permit",
+        entityId: result.permit.id,
+        details: { applicationId },
+      },
+    });
+
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    captureException(error, { route: "POST /api/permits" });
+    const message = error instanceof Error ? error.message : "Failed to prepare permit";
+    const status = message.includes("already") ? 409 : message.includes("must be PAID") ? 409 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
 

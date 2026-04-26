@@ -12,33 +12,40 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, label, error, hint, id, ...props }, ref) => {
     const inputId = id || props.name;
 
-  return (
+    return (
       <div className="w-full">
         {label && (
           <label
             htmlFor={inputId}
-            className="mb-1 block text-sm font-medium text-[var(--text-secondary)]"
+            className="mb-1.5 block text-sm font-medium text-muted-foreground"
           >
             {label}
-            {props.required && <span className="ml-1 text-[var(--danger)]">*</span>}
+            {props.required && (
+              <span className="ml-1 text-destructive">*</span>
+            )}
           </label>
         )}
         <input
-          type={type}
           id={inputId}
+          type={type}
+          data-slot="input"
           className={cn(
-            "block w-full rounded-lg border px-4 py-2.5 bg-[var(--surface-muted)] text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0",
+            "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-input flex h-9 w-full min-w-0 rounded-md border bg-input-background px-3 py-1 text-base transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+            "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
             error
-              ? "border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[var(--danger)]/20"
-              : "border-[var(--border)] focus:border-[var(--accent)] focus:ring-[var(--accent)]/20",
+              ? "border-destructive focus-visible:ring-destructive/20"
+              : "",
             className
           )}
           ref={ref}
+          aria-invalid={error ? "true" : undefined}
           {...props}
         />
-        {error && <p className="mt-1 text-sm text-[var(--danger)]">{error}</p>}
+        {error && (
+          <p className="mt-1 text-sm text-destructive">{error}</p>
+        )}
         {hint && !error && (
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">{hint}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
         )}
       </div>
     );

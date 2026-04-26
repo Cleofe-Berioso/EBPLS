@@ -6,6 +6,7 @@ module.exports = {
   changefreq: "weekly",
   priority: 0.7,
   exclude: [
+    "/",
     "/dashboard*",
     "/api/*",
     "/verify-otp",
@@ -24,7 +25,6 @@ module.exports = {
   transform: async (config, path) => {
     // Custom priority for key pages
     const priorities = {
-      "/": 1.0,
       "/login": 0.8,
       "/register": 0.8,
       "/requirements": 0.9,

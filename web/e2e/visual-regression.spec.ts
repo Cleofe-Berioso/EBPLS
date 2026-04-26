@@ -26,22 +26,6 @@ const SNAPSHOT_OPTIONS = {
 // ============================================================================
 
 test.describe("Visual Regression — Public Pages", () => {
-  test("Homepage", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
-    // Wait for any animations to settle
-    await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot("homepage.png", SNAPSHOT_OPTIONS);
-  });
-
-  test("Homepage — Mobile", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 }); // iPhone X
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot("homepage-mobile.png", SNAPSHOT_OPTIONS);
-  });
-
   test("Login Page", async ({ page }) => {
     await page.goto("/login");
     await page.waitForLoadState("networkidle");
@@ -136,7 +120,7 @@ test.describe("Visual Regression — Components", () => {
 
     // Fill form
     const emailInput = page.getByLabel(/email/i);
-    const passwordInput = page.getByLabel(/password/i);
+    const passwordInput = page.getByLabel(/password/i).first();
 
     if (await emailInput.isVisible()) {
       await emailInput.fill("user@example.com");
@@ -164,13 +148,13 @@ test.describe("Visual Regression — Responsive", () => {
   ];
 
   for (const bp of breakpoints) {
-    test(`Homepage at ${bp.name} (${bp.width}x${bp.height})`, async ({ page }) => {
+    test(`Login page at ${bp.name} (${bp.width}x${bp.height})`, async ({ page }) => {
       await page.setViewportSize({ width: bp.width, height: bp.height });
-      await page.goto("/");
+      await page.goto("/login");
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(500);
       await expect(page).toHaveScreenshot(
-        `homepage-${bp.name}.png`,
+        `login-${bp.name}.png`,
         SNAPSHOT_OPTIONS
       );
     });
@@ -182,11 +166,11 @@ test.describe("Visual Regression — Responsive", () => {
 // ============================================================================
 
 test.describe("Visual Regression — Dark Mode", () => {
-  test("Homepage in dark mode", async ({ page }) => {
+  test("Login page in dark mode", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
-    await page.goto("/");
+    await page.goto("/login");
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot("homepage-dark.png", SNAPSHOT_OPTIONS);
+    await expect(page).toHaveScreenshot("login-dark.png", SNAPSHOT_OPTIONS);
   });
 });

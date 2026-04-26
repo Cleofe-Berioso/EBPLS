@@ -8,9 +8,18 @@
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getClientIp, rateLimitAPI, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
   try {
+    const rateLimitResult = rateLimitAPI(`public-permit:${getClientIp(request)}`);
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: rateLimitHeaders(rateLimitResult) }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const permitNumber = searchParams.get("ref");
 
@@ -33,10 +42,24 @@ export async function GET(request: Request) {
             status: true,
           },
         },
+        issuance: {
+          select: { status: true, releasedAt: true, completedAt: true },
+        },
       },
     });
 
     if (!permit) {
+      return NextResponse.json(
+        { error: "Permit not found" },
+        { status: 404 }
+      );
+    }
+
+    const isPubliclyReleased =
+      ["RELEASED", "COMPLETED"].includes(permit.application.status) &&
+      (permit.issuance?.status === "RELEASED" || permit.issuance?.status === "COMPLETED");
+
+    if (!isPubliclyReleased) {
       return NextResponse.json(
         { error: "Permit not found" },
         { status: 404 }

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Geo Map Feature - E2E Tests", () => {
-  const BASE_URL = "http://localhost:3000";
+  const BASE_URL = "http://localhost:8000";
   const ADMIN_PAGE = "/dashboard/admin/locations";
   const API_BASE = `${BASE_URL}/api/admin/locations`;
 
@@ -31,8 +31,8 @@ test.describe("Geo Map Feature - E2E Tests", () => {
     });
 
     // Check for heading that indicates page loaded
-    const heading = page.locator("h1");
-    const headingText = await heading.textContent();
+    const heading = page.locator("h1, h2").first();
+    const headingText = await heading.textContent().catch(() => null);
     console.log(`Page heading: ${headingText}`);
 
     // Check for map container (Leaflet specific)
@@ -54,10 +54,10 @@ test.describe("Geo Map Feature - E2E Tests", () => {
   }) => {
     console.log("Testing: API GET /api/admin/locations");
 
-    // Test without auth - should get 401
+    // Test without auth - should get 401 or 403
     const response = await request.get(API_BASE);
     console.log(`GET response status (no auth): ${response.status()}`);
-    expect(response.status()).toBe(401);
+    expect([401, 403]).toContain(response.status());
 
     const body = await response.json();
     console.log(`GET response body: ${JSON.stringify(body)}`);
@@ -83,8 +83,8 @@ test.describe("Geo Map Feature - E2E Tests", () => {
 
     console.log(`POST response status: ${response.status()}`);
 
-    // Should get 401 (no auth) or 400 (invalid app id) or 409 (duplicate)
-    expect([400, 401, 404, 409]).toContain(response.status());
+    // Should get 401/403 (no auth) or 400 (invalid app id) or 409 (duplicate)
+    expect([400, 401, 403, 404, 409]).toContain(response.status());
 
     const body = await response.json().catch(() => ({}));
     console.log(`POST response: ${JSON.stringify(body)}`);
@@ -100,8 +100,8 @@ test.describe("Geo Map Feature - E2E Tests", () => {
 
     console.log(`DELETE response status: ${response.status()}`);
 
-    // Should get 401 (no auth) or 404 (not found)
-    expect([401, 404]).toContain(response.status());
+    // Should get 401/403 (no auth) or 404 (not found)
+    expect([401, 403, 404]).toContain(response.status());
 
     const body = await response.json().catch(() => ({}));
     console.log(`DELETE response: ${JSON.stringify(body)}`);

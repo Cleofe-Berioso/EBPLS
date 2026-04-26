@@ -87,7 +87,7 @@ export default function RequirementsPage() {
                     key={i}
                     className="flex items-start gap-3 rounded-xl bg-[var(--surface-muted)] p-3"
                   >
-                    <span className="mt-0.5 flex-shrink-0 text-sm font-bold text-[var(--accent)]">
+                    <span className="mt-0.5 flex-shrink-0 text-sm font-bold text-[var(--accent-hover)]">
                       {i + 1}.
                     </span>
                     <div className="min-w-0">

@@ -8,7 +8,7 @@ export const metadata = { title: "System Settings" };
 export default async function AdminSettingsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "BPLO_OFFICE") redirect("/dashboard");
+  if (session.user.role !== "ADMIN") redirect("/dashboard");
 
   const settings = await prisma.systemSetting.findMany({ orderBy: { key: "asc" } });
 

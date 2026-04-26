@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
+import { randomInt } from "crypto";
 import prisma from "@/lib/prisma";
 import { registerSchema } from "@/lib/validations";
 import { sendOtpEmail, sendWelcomeEmail } from "@/lib/email";
@@ -51,8 +52,8 @@ export async function POST(request: Request) {
       },
     });
 
-    // Generate OTP for email verification
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate OTP for email verification (cryptographically secure)
+    const otp = randomInt(100000, 1000000).toString();
 
     await prisma.otpToken.create({
       data: {
@@ -80,11 +81,6 @@ export async function POST(request: Request) {
       await sendOtpSms(phone, otp);
     }
 
-    // In development, also log the OTP to console
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[DEV] OTP for ${email}: ${otp}`);
-    }
-
     return NextResponse.json(
       {
         message: "Account created successfully. Please verify your email.",
@@ -93,7 +89,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );  } catch (error) {
     captureException(error, { route: "POST /api/auth/register" });
-    console.error("Registration error:", error);
+    console.error("Registration error:", error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: "An unexpected error occurred" },
       { status: 500 }

@@ -40,7 +40,7 @@ export async function GET(
     }
 
     // Generate a presigned download URL (valid for 1 hour)
-    const downloadUrl = await getPresignedDownloadUrl(document.filePath, 3600);
+    const downloadUrl = await getPresignedDownloadUrl(document.filePath, 3600, document.mimeType);
 
     // Log the download activity
     await prisma.activityLog.create({

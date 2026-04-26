@@ -12,19 +12,30 @@ import {
   CacheTTL,
 } from "@/lib/cache";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }    const where =
-      session.user.role === "APPLICANT"
-        ? { applicantId: session.user.id }
-        : {};
+    }
 
-    // Only cache applicant-scoped lists (staff/admin see all — too volatile)
+    const { searchParams } = new URL(request.url);
+    const statusFilter = searchParams.get("status");
+    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+    const limit = Math.min(100, parseInt(searchParams.get("limit") ?? "50", 10));
+
     const isApplicant = session.user.role === "APPLICANT";
-    const cacheKey = isApplicant
+
+    // Base where clause: applicants see only their own
+    const baseWhere = isApplicant ? { applicantId: session.user.id } : {};
+
+    // Optional status filter (BPLO_OFFICE can filter by status)
+    const where = statusFilter
+      ? { ...baseWhere, status: statusFilter as import("@prisma/client").ApplicationStatus }
+      : baseWhere;
+
+    // Only cache for applicants with no extra filters (staff/admin lists too volatile)
+    const cacheKey = isApplicant && !statusFilter
       ? CacheKeys.userApplications(session.user.id)
       : null;
 
@@ -32,6 +43,8 @@ export async function GET() {
       prisma.application.findMany({
         where,
         orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
         include: {
           applicant: {
             select: { firstName: true, lastName: true, email: true },
@@ -45,7 +58,12 @@ export async function GET() {
       ? await cacheOrCompute(cacheKey, fetchApplications, CacheTTL.SHORT)
       : await fetchApplications();
 
-    return NextResponse.json({ applications });
+    // Return total count when paginating so clients can page correctly
+    const total = statusFilter
+      ? await prisma.application.count({ where })
+      : undefined;
+
+    return NextResponse.json({ applications, total });
   } catch (error) {
     console.error("Fetch applications error:", error);
     return NextResponse.json(
@@ -60,6 +78,12 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (session.user.role !== "APPLICANT") {
+      return NextResponse.json(
+        { error: "Only applicants can create applications" },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();

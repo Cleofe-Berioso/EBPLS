@@ -1,24 +1,22 @@
-/**
- * POST /api/payments/webhook
- * P4.0 Phase B: PayMongo Webhook Handler
- *
- * Handles PayMongo webhook events:
- * - payment.succeeded → Update payment, generate permit (IDEMPOTENT)
- * - payment.failed → Update status
- * - payment.disputed → Update status
- */
-
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { verifyPayMongoWebhook } from "@/lib/payments";
 import { captureException } from "@/lib/monitoring";
-import { sendPermitIssuedEmail } from "@/lib/email";
-import { broadcastPermitIssued } from "@/lib/sse";
 
 const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || "";
 
+interface PayMongoEvent {
+  id: string;
+  type: string;
+  data: {
+    id: string;
+    attributes: Record<string, unknown>;
+  };
+}
+
 export async function POST(request: Request) {
-  let event: any = {};
+  let event: PayMongoEvent | null = null;
   try {
     // Verify webhook signature from PayMongo
     const signature = request.headers.get("x-paymongo-signature") || "";
@@ -32,8 +30,8 @@ export async function POST(request: Request) {
       );
     }
 
-    event = JSON.parse(body);
-    const webhookId = event.id; // PayMongo's unique webhook ID
+    event = JSON.parse(body) as PayMongoEvent;
+    const webhookId = event.id;
 
     let processed = false;
 
@@ -97,77 +95,49 @@ export async function POST(request: Request) {
                 paidAt: new Date(),
                 metadata: {
                   ...((payment.metadata as Record<string, unknown>) || {}),
-                  paymongoId: event.data.id,
+                  paymongoId: event!.data.id,
                   webhookId: webhookId,
                   completedAt: new Date().toISOString(),
-                } as any,
+                } as Prisma.InputJsonValue,
               },
             });
 
-            // Update application status to APPROVED (critical fix #6)
-            if (payment.application.status !== "ENDORSED") {
+            if (payment.application.status !== "PAYMENT_PENDING") {
               throw new Error(
-                "Application must be ENDORSED before payment approval"
+                "Application must be PAYMENT_PENDING before payment approval"
               );
             }
 
             const updatedApp = await tx.application.update({
               where: { id: payment.applicationId },
-              data: { status: "APPROVED", approvedAt: new Date() },
-            });
-
-            // Check if permit already exists
-            const existingPermit = await tx.permit.findFirst({
-              where: {
-                applicationId: payment.applicationId,
-                status: "ACTIVE", // Only check for active permits (not revoked/expired)
-              },
-            });
-
-            if (existingPermit) {
-              throw new Error("Permit already exists for this application");
-            }
-
-            // Generate permit
-            const permitNumber = `BP-${Date.now()}`;
-            const permit = await tx.permit.create({
-              data: {
-                applicationId: payment.applicationId,
-                permitNumber,
-                businessName: payment.application.businessName,
-                businessAddress: payment.application.businessAddress,
-                ownerName: `${payment.application.applicant.firstName} ${payment.application.applicant.lastName}`,
-                status: "ACTIVE",
-                issueDate: new Date(),
-                expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
-              },
-            });
-
-            // Create issuance record
-            const issuance = await tx.permitIssuance.create({
-              data: {
-                permitId: permit.id,
-                issuedById: payment.application.applicantId,
-                status: "PREPARED",
-              },
+              data: { status: "PAID", paymentConfirmed: true },
             });
 
             // Log activity
             await tx.activityLog.create({
               data: {
                 userId: payment.application.applicantId,
-                action: "PERMIT_GENERATED_VIA_WEBHOOK",
-                entity: "Permit",
-                entityId: permit.id,
+                action: "PAYMENT_PAID_VIA_WEBHOOK",
+                entity: "Payment",
+                entityId: payment.id,
                 details: {
                   paymentId: payment.id,
-                  permitNumber: permit.permitNumber,
                   webhookId: webhookId,
                 },
               },
             });
 
-            return { permit, issuance, payment: updatedPayment };
+            await tx.applicationHistory.create({
+              data: {
+                applicationId: payment.applicationId,
+                previousStatus: payment.application.status,
+                newStatus: "PAID",
+                comment: "Payment marked paid by gateway webhook",
+                changedBy: payment.application.applicantId,
+              },
+            });
+
+            return { application: updatedApp, payment: updatedPayment };
           },
           {
             maxWait: 5000,
@@ -182,37 +152,11 @@ export async function POST(request: Request) {
             eventType: event.type,
             status: "PROCESSED",
             result: {
-              permitId: result.permit.id,
-              issuanceId: result.issuance.id,
               paymentId: result.payment.id,
+              applicationId: result.application.id,
             },
           },
         });
-
-        // Send permit to applicant (non-blocking - log errors but don't fail webhook)
-        try {
-          await sendPermitIssuedEmail(
-            payment.application.applicant.email,
-            {
-              businessName: payment.application.businessName,
-              permitNumber: result.permit.permitNumber,
-              expiryDate: result.permit.expiryDate,
-            }
-          );
-        } catch (error) {
-          console.error("Failed to send permit email:", error);
-        }
-
-        // Broadcast SSE event (non-blocking - log errors but don't fail webhook)
-        try {
-          await broadcastPermitIssued(
-            payment.application.applicantId,
-            result.permit.id,
-            result.permit.permitNumber
-          );
-        } catch (error) {
-          console.error("Failed to broadcast permit issued event:", error);
-        }
 
         processed = true;
       }
@@ -234,9 +178,9 @@ export async function POST(request: Request) {
             failedAt: new Date(),
             metadata: {
               ...((payment.metadata as Record<string, unknown>) || {}),
-              failureReason: event.data.attributes.failure_message,
+              failureReason: (event.data.attributes as { failure_message?: string }).failure_message,
               failedAt: new Date().toISOString(),
-            } as any,
+            } as Prisma.InputJsonValue,
           },
         });
 
@@ -268,9 +212,9 @@ export async function POST(request: Request) {
             status: "FAILED",
             metadata: {
               ...((payment.metadata as Record<string, unknown>) || {}),
-              disputeReason: event.data.attributes.dispute_reason,
+              disputeReason: (event.data.attributes as { dispute_reason?: string }).dispute_reason,
               disputedAt: new Date().toISOString(),
-            } as any,
+            } as Prisma.InputJsonValue,
           },
         });
 
@@ -298,7 +242,7 @@ export async function POST(request: Request) {
       webhookId: event?.id,
     });
 
-    console.error("Webhook processing error:", error);
+    console.error("Webhook processing error:", error instanceof Error ? error.message : String(error));
 
     // Log failed webhook
     try {
@@ -306,14 +250,14 @@ export async function POST(request: Request) {
         await prisma.webhookLog.create({
           data: {
             paymongoWebhookId: event.id,
-            eventType: event.type || "unknown",
+            eventType: event.type ?? "unknown",
             status: "FAILED",
-            errorMessage: String(error),
+            errorMessage: error instanceof Error ? error.message : String(error),
           },
         });
       }
     } catch (logError) {
-      console.error("Failed to log webhook error:", logError);
+      console.error("Failed to log webhook error:", logError instanceof Error ? logError.message : String(logError));
     }
 
     // Return 202 to prevent infinite retries, but the error is logged

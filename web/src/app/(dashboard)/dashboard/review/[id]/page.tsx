@@ -9,7 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/ui/loading";
-import { ArrowLeft, CheckCircle, XCircle, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle,
+  CircleDashed,
+  FileText,
+  SearchCheck,
+  XCircle,
+} from "lucide-react";
 
 interface ApplicationDetail {
   id: string;
@@ -36,12 +43,21 @@ interface ApplicationDetail {
   }[];
 }
 
+interface RequirementItem {
+  id: string;
+  requirementCode: string;
+  requirementName: string;
+  status: string;
+  remarks?: string | null;
+}
+
 export default function ReviewDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
 
   const [application, setApplication] = useState<ApplicationDetail | null>(null);
+  const [requirements, setRequirements] = useState<RequirementItem[]>([]);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -56,12 +72,26 @@ export default function ReviewDetailPage() {
     }
 
     try {
-      const res = await fetch(`/api/applications/${id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setApplication(data.application);
+      const [applicationRes, requirementsRes] = await Promise.all([
+        fetch(`/api/applications/${id}`),
+        fetch(`/api/applications/${id}/clearances`),
+      ]);
+
+      const [applicationData, requirementsData] = await Promise.all([
+        applicationRes.json(),
+        requirementsRes.json(),
+      ]);
+
+      if (applicationRes.ok) {
+        setApplication(applicationData.application);
       } else {
         setError("Application not found");
+      }
+
+      if (requirementsRes.ok) {
+        setRequirements(requirementsData.clearances ?? []);
+      } else {
+        setRequirements([]);
       }
     } catch {
       setError("Failed to load application");
@@ -122,6 +152,20 @@ export default function ReviewDetailPage() {
         Application not found. <Link href="/dashboard/review" className="underline">Go back</Link>
       </Alert>
     );
+  }
+
+  function getRequirementIcon(status: string) {
+    switch (status) {
+      case "CLEARED":
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case "FOR_INSPECTION":
+        return <SearchCheck className="h-4 w-4 text-amber-600" />;
+      case "WITH_DEFICIENCY":
+      case "RETURNED":
+        return <XCircle className="h-4 w-4 text-red-600" />;
+      default:
+        return <CircleDashed className="h-4 w-4 text-slate-500" />;
+    }
   }
 
   return (
@@ -248,6 +292,50 @@ export default function ReviewDetailPage() {
                       </div>
                       <div className="pl-8 sm:pl-0 flex-shrink-0">
                         <StatusBadge status={doc.status} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>BPLO Requirement Checklist</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {requirements.length === 0 ? (
+                <p className="text-sm text-[var(--background)]0">
+                  No BPLO-managed requirement labels have been initialized for this application yet.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {requirements.map((requirement) => (
+                    <li
+                      key={requirement.id}
+                      className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
+                        <span className="mt-0.5 flex-shrink-0">
+                          {getRequirementIcon(requirement.status)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[var(--text-primary)]">
+                            {requirement.requirementName}
+                          </p>
+                          <p className="text-xs text-[var(--background)]0">
+                            {requirement.requirementCode.replace(/_/g, " ")}
+                          </p>
+                          {requirement.remarks && (
+                            <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                              {requirement.remarks}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="pl-7 sm:pl-0 flex-shrink-0">
+                        <StatusBadge status={requirement.status} />
                       </div>
                     </li>
                   ))}

@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { generatePermitPDF, buildPermitPDFData } from '@/lib/pdf';
+import { canApplicantDownloadPermit } from '@/lib/workflow';
 
 export async function GET(
   request: Request,
@@ -33,12 +34,27 @@ export async function GET(
       return NextResponse.json({ error: 'Permit not found' }, { status: 404 });
     }
 
-    // Check permissions
-    if (
-      session.user.role === 'APPLICANT' &&
-      permit.application.applicantId !== session.user.id
-    ) {
+    if (session.user.role !== 'APPLICANT' && session.user.role !== 'BPLO_OFFICE') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (session.user.role === 'APPLICANT') {
+      if (permit.application.applicantId !== session.user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      const issuanceStatus = permit.issuance?.status;
+      const issuanceAllowsDownload =
+        issuanceStatus === 'ISSUED' ||
+        issuanceStatus === 'RELEASED' ||
+        issuanceStatus === 'COMPLETED';
+
+      if (!canApplicantDownloadPermit(permit.application.status) || !issuanceAllowsDownload) {
+        return NextResponse.json(
+          { error: 'Permit PDF is not available for applicant download yet' },
+          { status: 409 }
+        );
+      }
     }
 
     // Build PDF data
@@ -55,7 +71,8 @@ export async function GET(
         tinNumber: permit.application.tinNumber,
         dtiSecRegistration: permit.application.dtiSecRegistration,
       },
-    });    // Generate permit document (returns HTML buffer)
+    });
+
     const pdfBuffer = await generatePermitPDF(pdfData);
 
     // Log download
@@ -68,14 +85,10 @@ export async function GET(
       },
     });
 
-    // Detect if result is HTML or PDF based on content
-    const content = pdfBuffer.toString('utf-8', 0, 15);
-    const isHTML = content.startsWith('<!DOCTYPE') || content.startsWith('<html');
-
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
-        'Content-Type': isHTML ? 'text/html; charset=utf-8' : 'application/pdf',
-        'Content-Disposition': `${isHTML ? 'inline' : 'attachment'}; filename="permit-${permit.permitNumber}.${isHTML ? 'html' : 'pdf'}"`,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="permit-${permit.permitNumber}.pdf"`,
         'Cache-Control': 'no-cache',
       },
     });

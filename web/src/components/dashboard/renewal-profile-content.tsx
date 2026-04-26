@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   AlertCircle,
-  User,
   Mail,
   Phone,
   MapPin,
@@ -15,19 +15,44 @@ import {
   LogOut,
 } from "lucide-react";
 
+interface ProfileData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+}
+
 /**
  * RenewalProfileContent — Displays and manages user profile in renewal portal
  * Shows account details, contact info, and security settings
  */
 export function RenewalProfileContent() {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    firstName: "Juan",
-    lastName: "Dela Cruz",
-    email: "juan@example.com",
-    phone: "+63 917 123 4567",
-    address: "123 Business St., Quezon City",
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [formData, setFormData] = useState<ProfileData>({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
   });
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
+          setFormData({
+            firstName: data.user.firstName ?? "",
+            lastName: data.user.lastName ?? "",
+            email: data.user.email ?? "",
+            phone: data.user.phone ?? "",
+          });
+        }
+      })
+      .catch(() => toast.error("Failed to load profile"))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -38,16 +63,39 @@ export function RenewalProfileContent() {
   };
 
   const handleSave = async () => {
+    setIsSaving(true);
     try {
-      // TODO: Implement API call to update profile
-      console.log("Saving profile:", formData);
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed to update profile");
+      }
+
+      toast.success("Profile updated successfully");
       setIsEditing(false);
-      // Show success toast
     } catch (error) {
-      console.error("Error saving profile:", error);
-      // Show error toast
+      toast.error(error instanceof Error ? error.message : "Failed to save profile");
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-gray-500">
+        Loading profile…
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -58,10 +106,11 @@ export function RenewalProfileContent() {
           <Button
             variant={isEditing ? "default" : "outline"}
             size="sm"
+            disabled={isSaving}
             onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
           >
             <Edit className="mr-2 h-4 w-4" />
-            {isEditing ? "Save Changes" : "Edit Profile"}
+            {isSaving ? "Saving…" : isEditing ? "Save Changes" : "Edit Profile"}
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -102,9 +151,8 @@ export function RenewalProfileContent() {
               type="email"
               name="email"
               value={formData.email}
-              onChange={handleInputChange}
-              disabled={!isEditing}
-              className="mt-2 w-full rounded-lg border px-3 py-2 disabled:bg-gray-100"
+              disabled
+              className="mt-2 w-full rounded-lg border px-3 py-2 bg-gray-100 cursor-not-allowed"
             />
           </div>
 
@@ -116,20 +164,6 @@ export function RenewalProfileContent() {
               type="tel"
               name="phone"
               value={formData.phone}
-              onChange={handleInputChange}
-              disabled={!isEditing}
-              className="mt-2 w-full rounded-lg border px-3 py-2 disabled:bg-gray-100"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold uppercase text-gray-600">
-              Business Address
-            </label>
-            <input
-              type="text"
-              name="address"
-              value={formData.address}
               onChange={handleInputChange}
               disabled={!isEditing}
               className="mt-2 w-full rounded-lg border px-3 py-2 disabled:bg-gray-100"

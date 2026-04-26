@@ -57,7 +57,7 @@ async function getTransporter(): Promise<Transporter> {
 
 const FROM_EMAIL = process.env.SMTP_FROM || 'noreply@businesspermit.gov.ph';
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Online Business Permit System';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:8000';
 
 // ============================================================================
 // Email Layout Template
@@ -217,14 +217,24 @@ export async function sendApplicationStatusEmail(
 ): Promise<void> {
   const statusClasses: Record<string, string> = {
     SUBMITTED: 'status-submitted',
-    APPROVED: 'status-approved',
+    PAYMENT_PENDING: 'status-approved',
+    PAID: 'status-approved',
+    READY_FOR_RELEASE: 'status-approved',
+    RELEASED: 'status-approved',
     REJECTED: 'status-rejected',
   };
 
   const statusLabels: Record<string, string> = {
     SUBMITTED: 'Submitted',
     UNDER_REVIEW: 'Under Review',
-    APPROVED: 'Approved',
+    RETURNED_FOR_CORRECTION: 'Returned for Correction',
+    RESUBMITTED: 'Resubmitted',
+    PAYMENT_PENDING: 'Payment Pending',
+    PAID: 'Paid',
+    PERMIT_PREPARED: 'Permit Prepared',
+    READY_FOR_RELEASE: 'Ready for Release',
+    RELEASED: 'Released',
+    COMPLETED: 'Completed',
     REJECTED: 'Returned for Revision',
     CANCELLED: 'Cancelled',
   };
@@ -238,11 +248,11 @@ export async function sendApplicationStatusEmail(
       <tr><td>New Status</td><td><span class="status-badge ${statusClasses[status] || ''}">${statusLabels[status] || status}</span></td></tr>
     </table>
     ${reason ? `<div class="info-box"><strong>Remarks:</strong><br>${reason}</div>` : ''}
-    ${status === 'APPROVED' ? `
-      <p>🎉 Congratulations! Your application has been approved. Please schedule your permit claiming.</p>
-      <a href="${APP_URL}/dashboard/schedule" class="btn">Schedule Claiming</a>
+    ${status === 'READY_FOR_RELEASE' ? `
+      <p>Your permit is ready for release. Please schedule or proceed with claiming as instructed.</p>
+      <a href="${APP_URL}/dashboard/claim-reference" class="btn">View Claim Details</a>
     ` : ''}
-    ${status === 'REJECTED' ? `
+    ${status === 'REJECTED' || status === 'RETURNED_FOR_CORRECTION' ? `
       <p>Please review the remarks above and resubmit your application with the required corrections.</p>
       <a href="${APP_URL}/dashboard/applications/${appNumber}" class="btn">View Application</a>
     ` : `
@@ -342,7 +352,7 @@ export async function sendPermitExpiryReminderEmail(
 export async function sendClearanceUpdateEmail(
   to: string,
   applicantName: string,
-  officeName: string,
+  requirementName: string,
   status: string,
   remarks?: string,
   applicationNumber?: string
@@ -354,31 +364,31 @@ export async function sendClearanceUpdateEmail(
   };
 
   const statusExplanations: Record<string, string> = {
-    CLEARED: 'Your application has been cleared by the required office.',
-    WITH_DEFICIENCY: 'The clearance office has identified some deficiencies that need to be addressed.',
-    FOR_FURTHER_INSPECTION: 'Your application requires further inspection before clearance.',
+    CLEARED: 'Your application requirement has been cleared by BPLO.',
+    WITH_DEFICIENCY: 'BPLO identified deficiencies that need to be addressed before this requirement can be cleared.',
+    FOR_FURTHER_INSPECTION: 'BPLO marked this requirement for further inspection before it can be cleared.',
   };
 
   const body = `
-    <h2>Clearance Status Update ${statusLabels[status] || ''}</h2>
+    <h2>Requirement Status Update ${statusLabels[status] || ''}</h2>
     <p>Dear ${applicantName},</p>
-    <p>${statusExplanations[status] || 'Your clearance status has been updated.'}</p>
+    <p>${statusExplanations[status] || 'Your requirement status has been updated.'}</p>
     <table class="details">
       <tr><td>Application Number</td><td><strong>${applicationNumber || 'N/A'}</strong></td></tr>
-      <tr><td>Clearance Office</td><td><strong>${officeName}</strong></td></tr>
+      <tr><td>Requirement</td><td><strong>${requirementName}</strong></td></tr>
       <tr><td>Status</td><td><span class="status-badge">${statusLabels[status] || status}</span></td></tr>
     </table>
     ${remarks ? `<div class="info-box"><strong>Requirements/Remarks:</strong><br>${remarks.replace(/\n/g, '<br>')}</div>` : ''}
     ${status === 'WITH_DEFICIENCY' || status === 'FOR_FURTHER_INSPECTION' ? `
-      <p>Please address the requirements above and then coordinate with the clearance office to complete the process.</p>
+      <p>Please address the requirements above and coordinate with BPLO to complete the process.</p>
     ` : ''}
     <a href="${APP_URL}/dashboard/tracking" class="btn">Track Application</a>
   `;
 
   await sendEmail({
     to,
-    subject: `[${APP_NAME}] Clearance Update - ${officeName}`,
-    html: emailLayout('Clearance Update', body),
+    subject: `[${APP_NAME}] Requirement Update - ${requirementName}`,
+    html: emailLayout('Requirement Update', body),
   });
 }
 

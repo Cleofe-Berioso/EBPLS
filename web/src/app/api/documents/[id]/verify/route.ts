@@ -14,7 +14,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role === "APPLICANT") {
+    if (session.user.role !== "BPLO_OFFICE") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -50,7 +50,31 @@ export async function POST(
           rejectionReason: body.reason || "Document rejected during verification",
         }),
       },
-    });    await prisma.activityLog.create({
+    });
+
+    const remainingActiveDocuments = await prisma.document.count({
+      where: {
+        applicationId: document.applicationId,
+        status: { notIn: ["VERIFIED", "REJECTED"] },
+      },
+    });
+
+    if (status === "VERIFIED" && remainingActiveDocuments === 0) {
+      await prisma.application.update({
+        where: { id: document.applicationId },
+        data: {
+          documentVerified: true,
+          status: "UNDER_REVIEW",
+        },
+      });
+    } else if (status === "REJECTED") {
+      await prisma.application.update({
+        where: { id: document.applicationId },
+        data: { documentVerified: false },
+      });
+    }
+
+    await prisma.activityLog.create({
       data: {
         userId: session.user.id,
         action: `DOCUMENT_${status}`,

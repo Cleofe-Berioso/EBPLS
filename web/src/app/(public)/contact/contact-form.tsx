@@ -77,8 +77,9 @@ export function ContactForm() {
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Subject</label>
+        <label htmlFor="contact-subject" className="block text-sm font-medium text-[var(--text-primary)] mb-1">Subject</label>
         <select
+          id="contact-subject"
           name="subject"
           required
           value={form.subject}

@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { Shield } from "lucide-react";
+import Image from "next/image";
 
 export function PublicFooter() {
   return (
@@ -9,17 +11,27 @@ export function PublicFooter() {
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2">
-              <Shield className="h-6 w-6 text-blue-600" />
-              <span className="font-bold text-gray-900">Business Permit System</span>
+              <div className="relative h-8 w-8 flex-shrink-0">
+                <Image
+                  src="/assets/logo.png"
+                  alt="eBPLS Logo"
+                  fill
+                  className="object-contain rounded-sm"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              </div>
+              <span className="font-bold text-gray-900">eBPLS</span>
             </div>
             <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-              A digital service of the Local Government Unit for fast, secure, and convenient business permit processing.
+              Municipality of Enrique B. Magalona — Electronic Business Permits and Licensing System.
             </p>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h5 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Services</h5>
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Services</h3>
             <ul className="mt-3 space-y-2 text-sm">
               {[
                 { href: "/requirements", label: "Requirements" },
@@ -29,7 +41,7 @@ export function PublicFooter() {
                 { href: "/verify-permit", label: "Verify Permit" },
               ].map((l) => (
                 <li key={l.href}>
-                  <Link href={l.href} className="text-gray-500 hover:text-blue-600 transition-colors">
+                  <Link href={l.href} className="text-gray-500 hover:text-green-600 transition-colors">
                     {l.label}
                   </Link>
                 </li>
@@ -39,7 +51,7 @@ export function PublicFooter() {
 
           {/* Legal */}
           <div>
-            <h5 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Legal</h5>
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Legal</h3>
             <ul className="mt-3 space-y-2 text-sm">
               {[
                 { href: "/privacy", label: "Privacy Policy" },
@@ -48,7 +60,7 @@ export function PublicFooter() {
                 { href: "/contact", label: "Contact Us" },
               ].map((l) => (
                 <li key={l.href}>
-                  <Link href={l.href} className="text-gray-500 hover:text-blue-600 transition-colors">
+                  <Link href={l.href} className="text-gray-500 hover:text-green-600 transition-colors">
                     {l.label}
                   </Link>
                 </li>
@@ -58,7 +70,7 @@ export function PublicFooter() {
 
           {/* Contact */}
           <div>
-            <h5 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Contact</h5>
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Contact</h3>
             <ul className="mt-3 space-y-2 text-sm text-gray-500">
               <li>Municipal Hall, Main Street</li>
               <li>(02) 8888-0000</li>
@@ -69,10 +81,10 @@ export function PublicFooter() {
         </div>
 
         <div className="mt-8 border-t pt-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
-          <p className="text-xs text-gray-400">
-            © {new Date().getFullYear()} Online Business Permit System. All rights reserved.
+          <p className="text-xs text-gray-600">
+            © {new Date().getFullYear()} Municipality of Enrique B. Magalona — BPLO. All rights reserved.
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-600">
             Powered by the LGU Digital Transformation Initiative
           </p>
         </div>

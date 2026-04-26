@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -55,43 +56,43 @@ const applicantNav: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
-    icon: <LayoutDashboard className="h-5 w-5" />,
+    icon: <LayoutDashboard className="h-5 w-5 shrink-0" />,
     roles: ["APPLICANT"],
   },
   {
     label: "My Applications",
     href: "/dashboard/applications",
-    icon: <FileText className="h-5 w-5" />,
+    icon: <FileText className="h-5 w-5 shrink-0" />,
     roles: ["APPLICANT"],
   },
   {
     label: "My Documents",
     href: "/dashboard/documents",
-    icon: <File className="h-5 w-5" />,
+    icon: <File className="h-5 w-5 shrink-0" />,
     roles: ["APPLICANT"],
   },
   {
     label: "Track Status",
     href: "/dashboard/tracking",
-    icon: <AlertCircle className="h-5 w-5" />,
+    icon: <AlertCircle className="h-5 w-5 shrink-0" />,
     roles: ["APPLICANT"],
   },
   {
     label: "Payments",
     href: "/dashboard/payments",
-    icon: <DollarSign className="h-5 w-5" />,
+    icon: <DollarSign className="h-5 w-5 shrink-0" />,
     roles: ["APPLICANT"],
   },
   {
     label: "My Permit",
     href: "/dashboard/permits",
-    icon: <Shield className="h-5 w-5" />,
+    icon: <Shield className="h-5 w-5 shrink-0" />,
     roles: ["APPLICANT"],
   },
   {
     label: "Profile",
     href: "/dashboard/profile",
-    icon: <Users className="h-5 w-5" />,
+    icon: <Users className="h-5 w-5 shrink-0" />,
     roles: ["APPLICANT"],
   },
 ];
@@ -101,113 +102,147 @@ const bploNav: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
-    icon: <LayoutDashboard className="h-5 w-5" />,
+    icon: <LayoutDashboard className="h-5 w-5 shrink-0" />,
     roles: ["BPLO_OFFICE"],
   },
   {
     label: "Applications",
     href: "/dashboard/applications",
-    icon: <FileText className="h-5 w-5" />,
+    icon: <FileText className="h-5 w-5 shrink-0" />,
+    roles: ["BPLO_OFFICE"],
+  },
+  {
+    label: "Business Map",
+    href: "/dashboard/admin/locations",
+    icon: <MapPin className="h-5 w-5 shrink-0" />,
     roles: ["BPLO_OFFICE"],
   },
   {
     label: "Document Verification",
     href: "/dashboard/verify-documents",
-    icon: <CheckSquare className="h-5 w-5" />,
+    icon: <CheckSquare className="h-5 w-5 shrink-0" />,
     roles: ["BPLO_OFFICE"],
   },
   {
     label: "Review Queue",
     href: "/dashboard/review",
-    icon: <ClipboardList className="h-5 w-5" />,
+    icon: <ClipboardList className="h-5 w-5 shrink-0" />,
     roles: ["BPLO_OFFICE"],
   },
   {
     label: "Approved Applications",
     href: "/dashboard/approved-applications",
-    icon: <FileText className="h-5 w-5" />,
+    icon: <FileText className="h-5 w-5 shrink-0" />,
     roles: ["BPLO_OFFICE"],
   },
   {
     label: "Permit Issuance",
     href: "/dashboard/issuance",
-    icon: <Printer className="h-5 w-5" />,
+    icon: <Printer className="h-5 w-5 shrink-0" />,
     roles: ["BPLO_OFFICE"],
   },
   {
-    label: "Business Locations",
-    href: "/dashboard/admin/locations",
-    icon: <MapPin className="h-5 w-5" />,
+    label: "Profile",
+    href: "/dashboard/profile",
+    icon: <Users className="h-5 w-5 shrink-0" />,
     roles: ["BPLO_OFFICE"],
+  },
+];
+
+// ── ADMIN NAVIGATION ──
+const adminNav: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: <LayoutDashboard className="h-5 w-5 shrink-0" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "All Applications",
+    href: "/dashboard/admin/applications",
+    icon: <FileText className="h-5 w-5 shrink-0" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Users",
+    href: "/dashboard/admin/users",
+    icon: <Users className="h-5 w-5 shrink-0" />,
+    roles: ["ADMIN"],
   },
   {
     label: "Reports",
     href: "/dashboard/admin/reports",
-    icon: <BarChart3 className="h-5 w-5" />,
-    roles: ["BPLO_OFFICE"],
+    icon: <BarChart3 className="h-5 w-5 shrink-0" />,
+    roles: ["ADMIN"],
   },
   {
     label: "Activity Logs",
     href: "/dashboard/admin/audit-logs",
-    icon: <ClipboardList className="h-5 w-5" />,
-    roles: ["BPLO_OFFICE"],
+    icon: <ClipboardList className="h-5 w-5 shrink-0" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Business Locations",
+    href: "/dashboard/admin/locations",
+    icon: <MapPin className="h-5 w-5 shrink-0" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Settings",
+    href: "/dashboard/admin/settings",
+    icon: <Settings className="h-5 w-5 shrink-0" />,
+    roles: ["ADMIN"],
   },
   {
     label: "Profile",
     href: "/dashboard/profile",
-    icon: <Users className="h-5 w-5" />,
-    roles: ["BPLO_OFFICE"],
+    icon: <Users className="h-5 w-5 shrink-0" />,
+    roles: ["ADMIN"],
   },
 ];
 
-// ── MTO NAVIGATION ──
-const mtoNav: NavItem[] = [
-  {
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: <LayoutDashboard className="h-5 w-5" />,
-    roles: ["MTO"],
-  },
+// ── BPLO PAYMENT NAVIGATION ──
+const paymentNav: NavItem[] = [
   {
     label: "Payment Queue",
     href: "/dashboard/payment-queue",
-    icon: <CreditCard className="h-5 w-5" />,
-    roles: ["MTO"],
+    icon: <CreditCard className="h-5 w-5 shrink-0" />,
+    roles: ["BPLO_OFFICE"],
   },
   {
     label: "Payment Validation",
     href: "/dashboard/validate-payments",
-    icon: <CheckSquare className="h-5 w-5" />,
-    roles: ["MTO"],
+    icon: <CheckSquare className="h-5 w-5 shrink-0" />,
+    roles: ["BPLO_OFFICE"],
   },
   {
     label: "Receipts",
     href: "/dashboard/receipts",
-    icon: <Receipt className="h-5 w-5" />,
-    roles: ["MTO"],
+    icon: <Receipt className="h-5 w-5 shrink-0" />,
+    roles: ["BPLO_OFFICE"],
   },
   {
     label: "Paid Applications",
     href: "/dashboard/paid-applications",
-    icon: <FileText className="h-5 w-5" />,
-    roles: ["MTO"],
+    icon: <FileText className="h-5 w-5 shrink-0" />,
+    roles: ["BPLO_OFFICE"],
   },
   {
     label: "Payment Reports",
     href: "/dashboard/payment-reports",
-    icon: <BarChart3 className="h-5 w-5" />,
-    roles: ["MTO"],
-  },
-  {
-    label: "Profile",
-    href: "/dashboard/profile",
-    icon: <Users className="h-5 w-5" />,
-    roles: ["MTO"],
+    icon: <BarChart3 className="h-5 w-5 shrink-0" />,
+    roles: ["BPLO_OFFICE"],
   },
 ];
 
 // Combine all navigation items
-const allNavItems = [...applicantNav, ...bploNav, ...mtoNav];
+const allNavItems = [...applicantNav, ...bploNav, ...paymentNav, ...adminNav];
+
+const roleLabel: Partial<Record<Role, string>> = {
+  APPLICANT: "Business Owner",
+  BPLO_OFFICE: "BPLO Office",
+  ADMIN: "System Administrator",
+};
 
 function SidebarContent({
   user,
@@ -222,53 +257,59 @@ function SidebarContent({
 }) {
   const pathname = usePathname() ?? "";
   const filteredItems = allNavItems.filter((item) => item.roles.includes(user.role));
-
-  // Map role to display label
-  const roleLabel = {
-    APPLICANT: "Business Owner",
-    BPLO_OFFICE: "BPLO Office",
-    MTO: "MTO Staff",
-  }[user.role] || user.role;
+  const userRole = roleLabel[user.role] ?? user.role;
 
   return (
-    <div className="flex h-full flex-col bg-[var(--surface)]">
+    <div className="flex h-full flex-col bg-sidebar">
+      {/* ── Header / Logo ── */}
       <div
         className={cn(
-          "flex items-center border-b border-[var(--border)] py-4",
-          collapsed ? "justify-center px-2" : "justify-between px-4"
+          "flex items-center border-b border-sidebar-border py-4",
+          collapsed ? "justify-center px-3" : "justify-between px-4"
         )}
       >
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">
-              {user.firstName[0]}
-              {user.lastName[0]}
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Logo */}
+            <div className="relative h-9 w-9 shrink-0">
+              <Image
+                src="/assets/logo.png"
+                alt="eBPLS Logo"
+                fill
+                className="object-contain rounded-md"
+                onError={(e) => {
+                  // Fallback to text avatar if image not found
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
             </div>
-            <div>
-              <p className="text-sm font-semibold leading-tight text-[var(--text-primary)]">
-                {user.firstName} {user.lastName}
+            <div className="min-w-0">
+              <p className="text-sm font-bold leading-tight text-sidebar-foreground truncate">
+                eBPLS
               </p>
-              <p className="text-[11px] leading-tight text-[var(--text-secondary)]">
-                {roleLabel}
+              <p className="text-[10px] leading-tight text-muted-foreground truncate">
+                {userRole}
               </p>
             </div>
           </div>
         )}
 
         {collapsed && (
-          <div
-            title={`${user.firstName} ${user.lastName}`}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white"
-          >
-            {user.firstName[0]}
-            {user.lastName[0]}
+          <div className="relative h-8 w-8 shrink-0">
+            <Image
+              src="/assets/logo.png"
+              alt="eBPLS Logo"
+              fill
+              className="object-contain rounded-md"
+              title={`eBPLS — ${userRole}`}
+            />
           </div>
         )}
 
         {onClose && (
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] lg:hidden"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground lg:hidden ml-auto"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -278,7 +319,7 @@ function SidebarContent({
         {onToggleCollapse && !onClose && (
           <button
             onClick={onToggleCollapse}
-            className="hidden rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] lg:block"
+            className="hidden rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground lg:block"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? (
@@ -290,8 +331,9 @@ function SidebarContent({
         )}
       </div>
 
+      {/* ── Navigation ── */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {filteredItems.map((item) => {
             const isActive =
               pathname === item.href ||
@@ -305,14 +347,16 @@ function SidebarContent({
                   title={collapsed ? item.label : undefined}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                    collapsed && "justify-center px-2",
+                    collapsed && "justify-center px-2.5",
                     isActive
-                      ? "bg-[var(--accent-light)] text-[var(--accent)]"
-                      : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   )}
                 >
                   {item.icon}
-                  {!collapsed && item.label}
+                  {!collapsed && (
+                    <span className="truncate">{item.label}</span>
+                  )}
                 </Link>
               </li>
             );
@@ -320,30 +364,30 @@ function SidebarContent({
         </ul>
       </nav>
 
-      {/* User Info */}
+      {/* ── User Footer ── */}
       {!collapsed && (
-        <div className="border-t border-[var(--border)] px-6 py-4">
+        <div className="border-t border-sidebar-border px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-[var(--accent)]">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
               {user.firstName[0]}
               {user.lastName[0]}
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-sidebar-foreground">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="truncate text-xs text-[var(--text-secondary)] capitalize">
-                {user.role === 'BPLO_OFFICE' ? 'BPLO Office' : user.role === 'MTO' ? 'MTO Staff' : user.role.toLowerCase().replace("_", " ")}
+              <p className="truncate text-xs text-muted-foreground">
+                {userRole}
               </p>
             </div>
           </div>
         </div>
       )}
       {collapsed && (
-        <div className="flex justify-center border-t border-[var(--border)] px-2 py-4">
+        <div className="flex justify-center border-t border-sidebar-border px-2 py-3">
           <div
-            title={`${user.firstName} ${user.lastName}`}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-[var(--accent)]"
+            title={`${user.firstName} ${user.lastName} — ${userRole}`}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
           >
             {user.firstName[0]}
             {user.lastName[0]}
@@ -357,15 +401,17 @@ function SidebarContent({
 export function DashboardSidebar({ user, isOpen, onClose, collapsed, onToggleCollapse }: SidebarProps) {
   return (
     <>
+      {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 lg:block",
+          "hidden flex-shrink-0 border-r border-sidebar-border bg-sidebar transition-all duration-300 lg:block",
           collapsed ? "w-16" : "w-64"
         )}
       >
         <SidebarContent user={user} collapsed={collapsed} onToggleCollapse={onToggleCollapse} />
       </aside>
 
+      {/* Mobile overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -374,9 +420,10 @@ export function DashboardSidebar({ user, isOpen, onClose, collapsed, onToggleCol
         />
       )}
 
+      {/* Mobile drawer */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface)] shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-72 flex-shrink-0 border-r border-sidebar-border bg-sidebar shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >

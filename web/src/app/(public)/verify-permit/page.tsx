@@ -59,11 +59,11 @@ export default function VerifyPermitPage() {
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-8 sm:py-10">
         {/* Back link */}
         <Link
-          href="/"
+          href="/login"
           className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Home
+          Back to Sign In
         </Link>
 
         {/* Header */}

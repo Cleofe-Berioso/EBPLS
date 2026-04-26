@@ -6,6 +6,63 @@
 import prisma from "@/lib/prisma";
 import { ApplicationType, ApplicationStatus } from "@prisma/client";
 
+const CLEARANCE_REQUIREMENTS: Record<
+  ApplicationType,
+  Array<{ requirementCode: string; requirementName: string; description: string | null }>
+> = {
+  NEW: [
+    {
+      requirementCode: "BARANGAY_CLEARANCE",
+      requirementName: "Barangay Business Clearance",
+      description: "Barangay-issued business clearance for the declared location.",
+    },
+    {
+      requirementCode: "ZONING_CLEARANCE",
+      requirementName: "Locational or Zoning Clearance",
+      description: "Land-use compatibility requirement tracked by BPLO.",
+    },
+    {
+      requirementCode: "FIRE_SAFETY",
+      requirementName: "Fire Safety Inspection Certificate",
+      description: "Fire safety compliance requirement tracked by BPLO.",
+    },
+    {
+      requirementCode: "SANITARY_PERMIT",
+      requirementName: "Sanitary Permit or Clearance",
+      description: "Health and sanitation compliance requirement tracked by BPLO.",
+    },
+  ],
+  RENEWAL: [
+    {
+      requirementCode: "BARANGAY_CLEARANCE",
+      requirementName: "Current Barangay Business Clearance",
+      description: "Current-year barangay business clearance.",
+    },
+    {
+      requirementCode: "FIRE_SAFETY",
+      requirementName: "Updated Fire Safety Inspection Certificate",
+      description: "Updated fire safety compliance requirement tracked by BPLO.",
+    },
+    {
+      requirementCode: "SANITARY_PERMIT",
+      requirementName: "Updated Sanitary Permit or Clearance",
+      description: "Updated sanitation compliance requirement tracked by BPLO.",
+    },
+  ],
+  CLOSURE: [
+    {
+      requirementCode: "TAX_CLEARANCE",
+      requirementName: "Tax Clearance",
+      description: "Tax settlement requirement tracked by BPLO.",
+    },
+    {
+      requirementCode: "CLOSURE_AFFIDAVIT",
+      requirementName: "Affidavit of Business Closure",
+      description: "Closure affidavit requirement tracked by BPLO.",
+    },
+  ],
+};
+
 // ============================================================================
 // P2.1: Application Type Validation & Duplicate Checks
 // ============================================================================
@@ -647,7 +704,7 @@ export async function submitApplicationForReview(
 
 /**
  * Update application status with transaction
- * Used by reviewers/staff to update application state
+ * Used by BPLO office users to update application state
  */
 export async function updateApplicationStatus(
   applicationId: string,
@@ -672,7 +729,7 @@ export async function updateApplicationStatus(
       where: { id: applicationId },
       data: {
         status: newStatus,
-        ...(newStatus === "APPROVED" && { approvedAt: new Date() }),
+        ...(["ASSESSED", "PAYMENT_PENDING", "PAID"].includes(newStatus) && { approvedAt: new Date() }),
         ...(newStatus === "REJECTED" && { rejectedAt: new Date() }),
       },
     });
@@ -807,49 +864,31 @@ export function invalidateApplicationCache(applicationId: string) {
 // ============================================================================
 
 /**
- * Get clearance requirements for an application type
- * Returns all ClearanceOffice records applicable to the type
+ * Get BPLO-managed requirement labels for an application type.
  */
 export async function getClearanceRequirements(
   applicationType: ApplicationType
 ): Promise<
   Array<{
-    id: string;
-    code: string;
-    name: string;
+    requirementCode: string;
+    requirementName: string;
     description: string | null;
   }>
 > {
-  const offices = await prisma.clearanceOffice.findMany({
-    where: {
-      isActive: true,
-      applicationTypes: {
-        hasSome: [applicationType],
-      },
-    },
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      description: true,
-    },
-  });
-
-  return offices;
+  return CLEARANCE_REQUIREMENTS[applicationType] ?? [];
 }
 
 /**
- * Generate clearance packages for an application
- * Creates one Clearance record per required office
+ * Generate BPLO-managed requirement tracking records for an application.
  * Can be used within a transaction for atomicity
  *
- * SECURITY FIX #5: Require userId and verify permission (REVIEWER/ADMINISTRATOR only)
+ * SECURITY FIX #5: Require userId and verify permission (BPLO_OFFICE only)
  */
 export async function generateClearancePackages(
   applicationId: string,
-  userId: string, // REQUIRED: User generating clearances
-  tx?: any // PrismaClient transaction context (optional)
-): Promise<Array<{ id: string; officeCode: string; officeName: string }>> {
+  userId: string,
+  tx?: any
+): Promise<Array<{ id: string; requirementCode: string; requirementName: string }>> {
   const client = tx || prisma;
 
   // SECURITY: Verify user has permission to generate clearances
@@ -864,7 +903,7 @@ export async function generateClearancePackages(
 
   if (!["BPLO_OFFICE"].includes(user.role)) {
     throw new Error(
-      "Unauthorized: Only BPLO_OFFICE can generate clearances"
+      "Unauthorized: Only BPLO_OFFICE can generate requirement tracking records"
     );
   }
 
@@ -878,36 +917,21 @@ export async function generateClearancePackages(
     throw new Error(`Application ${applicationId} not found`);
   }
 
-  // Get clearance requirements for this type
-  const requirements = await client.clearanceOffice.findMany({
-    where: {
-      isActive: true,
-      applicationTypes: {
-        hasSome: [app.type],
-      },
-    },
-    select: {
-      id: true,
-      code: true,
-      name: true,
-    },
-  });
+  const requirements = CLEARANCE_REQUIREMENTS[app.type as ApplicationType] ?? [];
 
-  // Create Clearance records
   const created = [];
-  for (const office of requirements) {
+  for (const requirement of requirements) {
     const clearance = await client.clearance.create({
       data: {
         applicationId,
-        officeId: office.id,
-        officeCode: office.code,
-        officeName: office.name,
+        requirementCode: requirement.requirementCode,
+        requirementName: requirement.requirementName,
         status: "PENDING",
       },
       select: {
         id: true,
-        officeCode: true,
-        officeName: true,
+        requirementCode: true,
+        requirementName: true,
       },
     });
     created.push(clearance);
@@ -962,8 +986,8 @@ export async function getClearanceSummary(applicationId: string): Promise<{
   requiredOffices: number;
   clearancesReceived: Array<{
     id: string;
-    officeCode: string;
-    officeName: string;
+    requirementCode: string;
+    requirementName: string;
     status: string;
     remarks: string | null;
   }>;
@@ -981,8 +1005,8 @@ export async function getClearanceSummary(applicationId: string): Promise<{
     where: { applicationId },
     select: {
       id: true,
-      officeCode: true,
-      officeName: true,
+      requirementCode: true,
+      requirementName: true,
       status: true,
       remarks: true,
     },

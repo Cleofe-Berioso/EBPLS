@@ -164,8 +164,8 @@ export const smsTemplates = {
   applicationSubmitted: (appNumber: string) =>
     `[Business Permit] Your application ${appNumber} has been submitted successfully. Track status at ${process.env.NEXT_PUBLIC_APP_URL}/dashboard/tracking`,
 
-  applicationApproved: (appNumber: string) =>
-    `[Business Permit] Your application ${appNumber} has been APPROVED! Schedule your claiming at ${process.env.NEXT_PUBLIC_APP_URL}/dashboard/schedule`,
+  permitReady: (appNumber: string) =>
+    `[Business Permit] Your permit for application ${appNumber} is ready for release. View claim details at ${process.env.NEXT_PUBLIC_APP_URL}/dashboard/claim-reference`,
 
   applicationRejected: (appNumber: string, reason: string) =>
     `[Business Permit] Your application ${appNumber} was returned for revision. Reason: ${reason}. Please check your dashboard for details.`,
@@ -205,9 +205,11 @@ export async function sendStatusNotification(
     case 'SUBMITTED':
       message = smsTemplates.applicationSubmitted(appNumber);
       break;
-    case 'APPROVED':
-      message = smsTemplates.applicationApproved(appNumber);
+    case 'READY_FOR_RELEASE':
+    case 'RELEASED':
+      message = smsTemplates.permitReady(appNumber);
       break;
+    case 'RETURNED_FOR_CORRECTION':
     case 'REJECTED':
       message = smsTemplates.applicationRejected(appNumber, reason || 'See dashboard for details');
       break;

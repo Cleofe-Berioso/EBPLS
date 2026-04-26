@@ -6,6 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { Decimal } from "@prisma/client/runtime/library";
+import type { PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { processPayment, generateReceiptNumber } from "@/lib/payments";
@@ -16,6 +17,7 @@ import { sendPaymentConfirmationEmail } from "@/lib/email";
 import { broadcastPaymentInitiated } from "@/lib/sse";
 import { paymentSchema } from "@/lib/validations";
 import { toNumber, toDecimalString, serializePayment } from "@/lib/serialization";
+import { canCreatePayment, canVerifyPayment } from "@/lib/workflow";
 
 
 // POST /api/payments - Initiate a payment
@@ -24,6 +26,12 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (session.user.role !== "APPLICANT") {
+      return NextResponse.json(
+        { error: "Only applicants can initiate payments" },
+        { status: 403 }
+      );
     }
 
     // Rate limiting: 5 requests per minute per user
@@ -69,12 +77,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Check application status — must be ENDORSED to pay
-    if (application.status !== "ENDORSED") {
+    if (!canCreatePayment(application.status)) {
       return NextResponse.json(
         {
           error: "Application not ready for payment",
-          message: `Application status is ${application.status}. Only ENDORSED applications can proceed to payment.`,
+          message: `Application status is ${application.status}. Payment is allowed only after BPLO assessment.`,
         },
         { status: 400 }
       );
@@ -125,7 +132,7 @@ export async function POST(request: Request) {
         applicationId,
         payerId: session.user.id,
         amount: new Decimal(amountAsNumber), // Wrap in Decimal constructor
-        method: method as any,
+        method: method as PaymentMethod,
         status: "PENDING",
         referenceNumber,
         metadata: {
@@ -135,15 +142,20 @@ export async function POST(request: Request) {
           permitFee: toDecimalString(feeInfo.permitFee) ?? "0.00",
           processingFee: toDecimalString(feeInfo.processingFee) ?? "0.00",
           filingFee: toDecimalString(feeInfo.filingFee) ?? "0.00",
-        } as any, // JSON field accepts any serializable value
+        } as Prisma.InputJsonValue, // JSON field accepts any serializable value
       },
+    });
+
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: { status: "PAYMENT_PENDING" },
     });
 
     // Process payment (dispatch to appropriate gateway)
     const paymentResult = await processPayment({
       applicationId,
       amount: amountAsNumber,
-      method: method as any,
+      method: method as PaymentMethod,
       description: `Business Permit Application Payment - ${application.applicationNumber}`,
     });
 
@@ -157,7 +169,7 @@ export async function POST(request: Request) {
           metadata: {
             ...((payment.metadata as Record<string, unknown>) || {}),
             errorMessage: paymentResult.error,
-          } as any,
+          } as Prisma.InputJsonValue,
         },
       });
 
@@ -174,12 +186,12 @@ export async function POST(request: Request) {
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
       data: {
-        status: paymentResult.status as any,
+        status: paymentResult.status as PaymentStatus,
         transactionId: paymentResult.transactionId || null,
         metadata: {
           ...((payment.metadata as Record<string, unknown>) || {}),
           checkoutUrl: paymentResult.checkoutUrl,
-        } as any,
+        } as Prisma.InputJsonValue,
       },
     });
 
@@ -230,7 +242,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     captureException(error, { route: "POST /api/payments" });
-    console.error("Payment creation error:", error);
+    console.error("Payment creation error:", error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: "Failed to process payment" },
       { status: 500 }
@@ -238,8 +250,133 @@ export async function POST(request: Request) {
   }
 }
 
+// PATCH /api/payments - BPLO_OFFICE verifies or rejects a payment
+export async function PATCH(request: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (session.user.role !== "BPLO_OFFICE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-// GET /api/payments?id={paymentId} - Get payment details
+    const body = await request.json();
+    const { paymentId, action, receiptNumber, notes } = body as {
+      paymentId?: string;
+      action?: "VERIFY" | "REJECT";
+      receiptNumber?: string;
+      notes?: string;
+    };
+
+    if (!paymentId || !["VERIFY", "REJECT"].includes(action || "")) {
+      return NextResponse.json(
+        { error: "paymentId and action VERIFY or REJECT are required" },
+        { status: 400 }
+      );
+    }
+
+    const payment = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { application: true },
+    });
+
+    if (!payment) {
+      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    }
+
+    if (!canVerifyPayment(payment.application.status)) {
+      return NextResponse.json(
+        {
+          error: "Payment cannot be verified",
+          message: `Application status is ${payment.application.status}.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (action === "REJECT") {
+        const rejectedPayment = await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: "FAILED",
+            failedAt: new Date(),
+            notes: notes || "Payment rejected by BPLO",
+          },
+        });
+
+        await tx.activityLog.create({
+          data: {
+            userId: session.user.id,
+            action: "PAYMENT_REJECTED",
+            entity: "Payment",
+            entityId: payment.id,
+            details: { applicationId: payment.applicationId, notes },
+          },
+        });
+
+        return rejectedPayment;
+      }
+
+      const paidPayment = await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "PAID",
+          paidAt: new Date(),
+          receiptNumber: receiptNumber || payment.receiptNumber || generateReceiptNumber(),
+          notes: notes || payment.notes,
+          metadata: {
+            ...((payment.metadata as Record<string, unknown>) || {}),
+            verifiedBy: session.user.id,
+            verifiedAt: new Date().toISOString(),
+          } as Prisma.InputJsonValue,
+        },
+      });
+
+      await tx.application.update({
+        where: { id: payment.applicationId },
+        data: {
+          status: "PAID",
+          paymentConfirmed: true,
+          approvedAt: payment.application.approvedAt || new Date(),
+        },
+      });
+
+      await tx.applicationHistory.create({
+        data: {
+          applicationId: payment.applicationId,
+          previousStatus: payment.application.status,
+          newStatus: "PAID",
+          comment: "Payment verified by BPLO",
+          changedBy: session.user.id,
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId: session.user.id,
+          action: "PAYMENT_VERIFIED",
+          entity: "Payment",
+          entityId: payment.id,
+          details: { applicationId: payment.applicationId, receiptNumber },
+        },
+      });
+
+      return paidPayment;
+    });
+
+    return NextResponse.json({ payment: serializePayment(updated) });
+  } catch (error) {
+    captureException(error, { route: "PATCH /api/payments" });
+    console.error("Verify payment error:", error instanceof Error ? error.message : String(error));
+    return NextResponse.json({ error: "Failed to verify payment" }, { status: 500 });
+  }
+}
+
+
+// GET /api/payments?id={paymentId}     — single payment details
+// GET /api/payments?applicationId={id} — all payments for an application
 export async function GET(request: Request) {
   try {
     const session = await auth();
@@ -249,10 +386,41 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const paymentId = searchParams.get("id");
+    const applicationId = searchParams.get("applicationId");
 
+    // ── List payments by application ──────────────────────────────────────
+    if (applicationId) {
+      const application = await prisma.application.findUnique({
+        where: { id: applicationId },
+        select: { applicantId: true },
+      });
+
+      if (!application) {
+        return NextResponse.json({ error: "Application not found" }, { status: 404 });
+      }
+
+      // Applicants can only see payments for their own applications
+      if (
+        session.user.role === "APPLICANT" &&
+        application.applicantId !== session.user.id
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      const payments = await prisma.payment.findMany({
+        where: { applicationId },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return NextResponse.json({
+        payments: payments.map((p) => serializePayment(p)),
+      });
+    }
+
+    // ── Single payment by ID ──────────────────────────────────────────────
     if (!paymentId) {
       return NextResponse.json(
-        { error: "Payment ID is required" },
+        { error: "id or applicationId query param is required" },
         { status: 400 }
       );
     }
@@ -280,7 +448,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     captureException(error, { route: "GET /api/payments" });
-    console.error("Get payment error:", error);
+    console.error("Get payment error:", error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: "Failed to fetch payment" },
       { status: 500 }

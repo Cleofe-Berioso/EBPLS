@@ -3,9 +3,9 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { ApplicationTracker } from "@/components/dashboard/application-tracker";
 import { formatDateTime } from "@/lib/utils";
-import { Clock, ArrowRight, Radio } from "lucide-react";
+import { Clock, ArrowRight, Radio, ChevronDown, ChevronUp } from "lucide-react";
 import { useSSE } from "@/hooks/use-sse";
 import { toast } from "sonner";
 import type { SSEEvent } from "@/lib/sse";
@@ -26,14 +26,19 @@ interface ApplicationRow {
   history: HistoryEntry[];
 }
 
-const PROGRESS: Record<string, number> = {
-  DRAFT: 10, SUBMITTED: 35, UNDER_REVIEW: 60,
-  APPROVED: 100, REJECTED: 60, CANCELLED: 0,
-};
-
 export function TrackingClient({ initialApplications }: { initialApplications: ApplicationRow[] }) {
   const [apps, setApps] = useState<ApplicationRow[]>(initialApplications);
   const [liveIds, setLiveIds] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set([initialApplications[0]?.id ?? ""]));
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleStatusChange = useCallback((event: SSEEvent) => {
     if (event.type !== "application_status_changed") return;
@@ -44,7 +49,6 @@ export function TrackingClient({ initialApplications }: { initialApplications: A
     setApps((prev) =>
       prev.map((app) => {
         if (app.id !== applicationId) return app;
-        // Prepend a synthetic history entry for immediate feedback
         const syntheticEntry: HistoryEntry = {
           id: `live-${Date.now()}`,
           newStatus,
@@ -59,6 +63,7 @@ export function TrackingClient({ initialApplications }: { initialApplications: A
       })
     );
     setLiveIds((prev) => new Set([...prev, applicationId]));
+    setExpandedIds((prev) => new Set([...prev, applicationId]));
     toast.info(
       `${applicationNumber} status changed to ${newStatus.replace(/_/g, " ")}`,
       { description: "Your application was just updated.", duration: 6000 }
@@ -76,78 +81,74 @@ export function TrackingClient({ initialApplications }: { initialApplications: A
       </div>
 
       {apps.map((app) => (
-        <Card
+        <div
           key={app.id}
-          className={`transition-all duration-500 ${liveIds.has(app.id) ? "ring-2 ring-blue-400 ring-offset-1" : ""} hover:shadow-md`}
+          className={`transition-all duration-500 ${
+            liveIds.has(app.id) ? "ring-2 ring-blue-400 ring-offset-1 rounded-xl" : ""
+          }`}
         >
-          <CardContent className="p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-semibold text-gray-900">
-                    {app.applicationNumber}
-                  </h3>
-                  <StatusBadge status={app.status} />
-                  {liveIds.has(app.id) && (
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                      Updated
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-gray-600">{app.businessName}</p>                {/* Progress Bar */}
-                <div className="mt-4">
-                  <div className="mb-2 hidden justify-between text-xs text-gray-500 sm:flex">
-                    <span>Draft</span>
-                    <span>Submitted</span>
-                    <span>Under Review</span>
-                    <span>Approved</span>
-                  </div>
-                  <div className="mb-1 flex justify-between text-xs text-gray-500 sm:hidden">
-                    <span>Draft</span>
-                    <span>Review</span>
-                    <span>Done</span>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${
-                        app.status === "REJECTED" || app.status === "CANCELLED"
-                          ? "bg-red-500"
-                          : "bg-blue-600"
-                      }`}
-                      style={{ width: `${PROGRESS[app.status] ?? 0}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Recent History */}
-                {app.history.length > 0 && (
-                  <div className="mt-4">
-                    <p className="mb-2 text-xs font-semibold uppercase text-gray-400">
-                      Recent Activity
-                    </p>
-                    <ul className="space-y-1">
-                      {app.history.map((h) => (
-                        <li key={h.id} className="flex items-center gap-2 text-xs text-gray-500">
-                          <Clock className="h-3 w-3" />
-                          <span className="font-medium">{h.newStatus.replace(/_/g, " ")}</span>
-                          <span>—</span>
-                          <span>{formatDateTime(h.createdAt)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
+          {/* Collapse toggle header */}
+          <button
+            onClick={() => toggleExpand(app.id)}
+            className="w-full flex items-center justify-between bg-white rounded-t-xl border border-b-0 border-gray-200 px-6 py-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <h3 className="font-semibold text-gray-900">{app.applicationNumber}</h3>
+              <StatusBadge status={app.status} />
+              {liveIds.has(app.id) && (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  Updated
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
               <Link
                 href={`/dashboard/applications/${app.id}`}
+                onClick={(e) => e.stopPropagation()}
                 className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
               >
                 View Details <ArrowRight className="h-4 w-4" />
               </Link>
+              {expandedIds.has(app.id) ? (
+                <ChevronUp className="h-4 w-4 text-gray-400" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              )}
             </div>
-          </CardContent>
-        </Card>
+          </button>
+
+          {expandedIds.has(app.id) && (
+            <div className="border border-t-0 border-gray-200 rounded-b-xl overflow-hidden">
+              {/* Visual progress tracker */}
+              <div className="overflow-x-auto">
+                <ApplicationTracker
+                  currentStatus={app.status}
+                  applicationId={app.applicationNumber}
+                  businessName={app.businessName}
+                />
+              </div>
+
+              {/* Recent History */}
+              {app.history.length > 0 && (
+                <div className="px-6 pb-6">
+                  <p className="mb-2 text-xs font-semibold uppercase text-gray-400">
+                    Recent Activity
+                  </p>
+                  <ul className="space-y-1">
+                    {app.history.map((h) => (
+                      <li key={h.id} className="flex items-center gap-2 text-xs text-gray-500">
+                        <Clock className="h-3 w-3 flex-shrink-0" />
+                        <span className="font-medium">{h.newStatus.replace(/_/g, " ")}</span>
+                        <span>—</span>
+                        <span>{formatDateTime(h.createdAt)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       ))}
     </div>
   );

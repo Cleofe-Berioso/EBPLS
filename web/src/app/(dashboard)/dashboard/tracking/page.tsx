@@ -20,10 +20,10 @@ export default async function TrackingPage() {
   });
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Track Applications</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Track Applications</h1>
+        <p className="mt-1 text-gray-600">
           Monitor the real-time status of your permit applications
         </p>
       </div>

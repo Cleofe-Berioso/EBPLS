@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Geo Map Feature - E2E Tests", () => {
-  const BASE_URL = "http://localhost:3000";
+  const BASE_URL = "http://localhost:8000";
   const ADMIN_PAGE = "/dashboard/admin/locations";
   const API_BASE = `${BASE_URL}/api/admin/locations`;
 

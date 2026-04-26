@@ -20,10 +20,10 @@ const RATE_LIMITS = {
 } as const;
 
 function getRateLimitCategory(pathname: string): keyof typeof RATE_LIMITS | null {
+  if (pathname.match(/\/api\/auth\/.*otp|\/api\/auth\/2fa/)) return "otp";
   if (pathname.startsWith("/api/auth")) return "auth";
   if (pathname.startsWith("/api/documents/upload")) return "upload";
   if (pathname.startsWith("/api/payments")) return "payment";
-  if (pathname.match(/\/api\/auth\/.*otp|\/api\/auth\/2fa/)) return "otp";
   if (pathname.startsWith("/api/")) return "api";
   return null;
 }
@@ -41,12 +41,40 @@ function createRateLimitResponse(result: RateLimitResult): NextResponse {
   );
 }
 
-export default auth((req) => {
+const BPLO_PAYMENT_ROUTES = new Set([
+  "/dashboard/validate-payments",
+  "/dashboard/payment-queue",
+  "/dashboard/paid-applications",
+  "/dashboard/payment-reports",
+  "/dashboard/receipts",
+]);
+
+function isBploPaymentRoute(pathname: string): boolean {
+  return BPLO_PAYMENT_ROUTES.has(pathname);
+}
+
+function isAdminRoute(pathname: string): boolean {
+  return pathname.startsWith("/dashboard/admin") || pathname.startsWith("/api/admin");
+}
+
+function isSharedBusinessLocationDashboardRoute(pathname: string): boolean {
+  return pathname === "/dashboard/admin/locations";
+}
+
+function isSharedBusinessLocationApiRoute(pathname: string, method: string): boolean {
+  return pathname === "/api/admin/locations" && method === "GET";
+}
+
+export function handleMiddleware(req: Parameters<Parameters<typeof auth>[0]>[0]) {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
   const pathname = nextUrl.pathname;
   const isDashboardRoute = pathname.startsWith("/dashboard");
   const isApiRoute = pathname.startsWith("/api");
+  const isPublicApiRoute =
+    pathname.startsWith("/api/public/track") ||
+    pathname.startsWith("/api/public/verify-permit") ||
+    pathname.startsWith("/api/health");
 
   // ── Rate Limiting for API routes ─────────────────────────────────────
   if (isApiRoute) {
@@ -81,17 +109,29 @@ export default auth((req) => {
     isApiRoute &&
     !pathname.startsWith("/api/auth") &&
     !pathname.startsWith("/api/payments/webhook") &&
+    !isPublicApiRoute &&
     !isLoggedIn
   ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // ── Role-Based Access Control ────────────────────────────────────────
-  // Admin routes (BPLO Office only)
-  if (pathname.startsWith("/dashboard/admin") && isLoggedIn) {
+  // Admin routes (ADMIN only)
+  if (isAdminRoute(pathname) && isLoggedIn) {
     const role = req.auth?.user?.role;
-    if (role !== "BPLO_OFFICE") {
-      return NextResponse.redirect(new URL("/dashboard", nextUrl));
+    if (role !== "ADMIN") {
+      const bploCanReadBusinessMap =
+        role === "BPLO_OFFICE" &&
+        (isSharedBusinessLocationDashboardRoute(pathname) ||
+          isSharedBusinessLocationApiRoute(pathname, req.method));
+
+      if (bploCanReadBusinessMap) {
+        return NextResponse.next();
+      }
+
+      return isApiRoute
+        ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        : NextResponse.redirect(new URL("/dashboard", nextUrl));
     }
   }
 
@@ -111,24 +151,33 @@ export default auth((req) => {
     }
   }
 
-  // Payment routes (MTO only)
-  if ((pathname.startsWith("/dashboard/payment") || pathname.startsWith("/dashboard/validate") || pathname.startsWith("/dashboard/receipts")) && isLoggedIn) {
+  // BPLO-only payment validation/reporting routes. Keep /dashboard/payments applicant-accessible.
+  if (isBploPaymentRoute(pathname) && isLoggedIn) {
     const role = req.auth?.user?.role;
-    if (role !== "MTO") {
+    if (role !== "BPLO_OFFICE") {
       return NextResponse.redirect(new URL("/dashboard", nextUrl));
     }
   }
 
-  // Analytics routes — BPLO+ only
+  // Analytics + metrics routes — ADMIN only
   if (pathname.startsWith("/api/analytics") && isLoggedIn) {
     const role = req.auth?.user?.role;
-    if (role === "APPLICANT") {
+    if (role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  if (pathname.startsWith("/api/metrics") && isLoggedIn) {
+    const role = req.auth?.user?.role;
+    if (role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
 
   return NextResponse.next();
-});
+}
+
+export default auth(handleMiddleware);
 
 export const config = {
   matcher: [

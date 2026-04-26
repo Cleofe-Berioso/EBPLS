@@ -23,13 +23,13 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Only STAFF and ADMIN can print permits
-    if (!['STAFF', 'ADMINISTRATOR'].includes(session.user.role!)) {
+    // Only BPLO_OFFICE can print permits
+    if (session.user.role !== 'BPLO_OFFICE') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
 
     // Validate input
     const validatedData = printPermitSchema.parse(body);
@@ -68,24 +68,17 @@ export async function POST(
       );
     }
 
-    // Update or create PermitIssuance record
-    let issuanceRecord = permit.issuance;
-
-    if (!issuanceRecord) {
-      issuanceRecord = await prisma.permitIssuance.create({
-        data: {
-          permitId: permit.id,
-          issuedById: session.user.id,
-          status: 'ISSUED',
-        },
-      });
+    if (!permit.issuance) {
+      return NextResponse.json(
+        { error: 'Permit must be prepared before printing' },
+        { status: 409 }
+      );
     }
 
-    // Update issuance completedAt on print
     const updatedIssuance = await prisma.permitIssuance.update({
-      where: { id: issuanceRecord.id },
+      where: { id: permit.issuance.id },
       data: {
-        completedAt: new Date(),
+        staffNotes: validatedData.notes || permit.issuance.staffNotes,
       },
     });
 

@@ -109,13 +109,20 @@ export function RenewalHistoryContent() {
 
   const getStatusColor = (status: ApplicationStatus) => {
     switch (status) {
-      case "APPROVED":
+      case "PAID":
+      case "PERMIT_PREPARED":
+      case "READY_FOR_RELEASE":
+      case "RELEASED":
+      case "COMPLETED":
         return "bg-green-100 text-green-800";
       case "REJECTED":
         return "bg-red-100 text-red-800";
       case "UNDER_REVIEW":
-      case "ENDORSED":
+      case "RESUBMITTED":
         return "bg-blue-100 text-blue-800";
+      case "RETURNED_FOR_CORRECTION":
+      case "PAYMENT_PENDING":
+        return "bg-yellow-100 text-yellow-800";
       case "DRAFT":
         return "bg-gray-100 text-gray-800";
       default:
@@ -125,12 +132,17 @@ export function RenewalHistoryContent() {
 
   const getStatusIcon = (status: ApplicationStatus) => {
     switch (status) {
-      case "APPROVED":
+      case "PAID":
+      case "PERMIT_PREPARED":
+      case "READY_FOR_RELEASE":
+      case "RELEASED":
+      case "COMPLETED":
         return <CheckCircle className="h-4 w-4" />;
       case "REJECTED":
         return <XCircle className="h-4 w-4" />;
       case "UNDER_REVIEW":
-      case "ENDORSED":
+      case "RESUBMITTED":
+      case "PAYMENT_PENDING":
         return <Clock className="h-4 w-4" />;
       default:
         return <FileText className="h-4 w-4" />;
@@ -141,9 +153,16 @@ export function RenewalHistoryContent() {
     const labels: Record<ApplicationStatus, string> = {
       DRAFT: "Draft",
       SUBMITTED: "Submitted",
-      ENDORSED: "Endorsed",
       UNDER_REVIEW: "Under Review",
-      APPROVED: "Approved",
+      RETURNED_FOR_CORRECTION: "Returned for Correction",
+      RESUBMITTED: "Resubmitted",
+      ASSESSED: "Assessed",
+      PAYMENT_PENDING: "Payment Pending",
+      PAID: "Paid",
+      PERMIT_PREPARED: "Permit Prepared",
+      READY_FOR_RELEASE: "Ready for Release",
+      RELEASED: "Released",
+      COMPLETED: "Completed",
       REJECTED: "Rejected",
       CANCELLED: "Cancelled",
     };
@@ -209,7 +228,7 @@ export function RenewalHistoryContent() {
                   </p>
                 </div>
 
-                {renewal.status === "APPROVED" && (
+                {["PAID", "PERMIT_PREPARED", "READY_FOR_RELEASE", "RELEASED", "COMPLETED"].includes(renewal.status) && (
                   <div>
                     <p className="text-xs font-semibold uppercase text-gray-500">
                       Approved
@@ -265,7 +284,7 @@ export function RenewalHistoryContent() {
                   </Button>
                 </Link>
 
-                {renewal.status === "APPROVED" && (
+                {["READY_FOR_RELEASE", "RELEASED", "COMPLETED"].includes(renewal.status) && (
                   <Link href="/dashboard/renew/claim-schedule">
                     <Button size="sm" className="sm:w-full">
                       Schedule Claim
@@ -306,7 +325,7 @@ export function RenewalHistoryContent() {
                 Approved
               </p>
               <p className="mt-2 text-2xl font-bold text-green-600">
-                {data.renewals.filter((r) => r.status === "APPROVED").length}
+                {data.renewals.filter((r) => ["PAID", "PERMIT_PREPARED", "READY_FOR_RELEASE", "RELEASED", "COMPLETED"].includes(r.status)).length}
               </p>
             </div>
             <div>
@@ -319,7 +338,8 @@ export function RenewalHistoryContent() {
                     r.status === "DRAFT" ||
                     r.status === "SUBMITTED" ||
                     r.status === "UNDER_REVIEW" ||
-                    r.status === "ENDORSED"
+                    r.status === "RESUBMITTED" ||
+                    r.status === "PAYMENT_PENDING"
                 ).length}
               </p>
             </div>

@@ -36,10 +36,10 @@ export default function GlobalError({
                 Try Again
               </button>
               <Link
-                href="/"
+                href="/login"
                 className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
               >
-                Go Home
+                Go to Sign In
               </Link>
             </div>
           </div>

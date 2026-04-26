@@ -32,7 +32,15 @@ export default function ProfilePage() {
       const res = await fetch("/api/profile");
       const data = await res.json();
       if (res.ok) {
-        setProfile(data.user);
+        setProfile({
+          firstName: data.user.firstName ?? "",
+          lastName: data.user.lastName ?? "",
+          middleName: data.user.middleName ?? "",
+          email: data.user.email ?? "",
+          phone: data.user.phone ?? "",
+          role: data.user.role ?? "",
+          twoFactorEnabled: data.user.twoFactorEnabled ?? false,
+        });
       }
     } catch {
       setError("Failed to load profile");

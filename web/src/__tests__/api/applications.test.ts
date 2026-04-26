@@ -26,9 +26,10 @@ vi.mock("@/lib/prisma", () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
     },
     applicationHistory: {
-      create: vi.fn(),
+      create: vi.fn().mockResolvedValue({}),
     },
     activityLog: {
       create: vi.fn(),
@@ -49,8 +50,16 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/application-helpers", () => ({
   checkDuplicateApplication: vi.fn(),
   validateRenewalPermit: vi.fn(),
-  canCreateApplication: vi.fn(),
+  canStartNewApplication: vi.fn(),
+}));
+
+vi.mock("@/lib/utils", () => ({
   generateApplicationNumber: vi.fn(() => "APP-2026-00001"),
+  cn: vi.fn((...classes: string[]) => classes.filter(Boolean).join(" ")),
+}));
+
+vi.mock("@/lib/monitoring", () => ({
+  captureException: vi.fn(),
 }));
 
 vi.mock("@/lib/cache", () => ({
@@ -79,7 +88,7 @@ import { auth } from "@/lib/auth";
 import {
   checkDuplicateApplication,
   validateRenewalPermit,
-  canCreateApplication,
+  canStartNewApplication,
 } from "@/lib/application-helpers";
 
 describe("POST /api/applications (CREATE)", () => {
@@ -91,14 +100,15 @@ describe("POST /api/applications (CREATE)", () => {
     const session = { user: { id: "user-1", role: "APPLICANT" } };
     (auth as any).mockResolvedValue(session);
 
-    (canCreateApplication as any).mockResolvedValue({ canCreate: true });
-    (checkDuplicateApplication as any).mockResolvedValue({ isDuplicate: false });
+    (canStartNewApplication as any).mockResolvedValue({ isEligible: true });
+    (prisma.application.count as any).mockResolvedValue(0);
 
     const body = {
       type: "NEW",
       businessName: "John's Pizza Shop",
       businessType: "FOOD_SERVICE",
       businessAddress: "123 Main St",
+      dtiSecRegistration: "DTI-2026-00001",
       submitAsDraft: true,
     };
 
@@ -121,26 +131,17 @@ describe("POST /api/applications (CREATE)", () => {
 
     expect(response.status).toBe(201);
     expect(data.application.status).toBe("DRAFT");
-    expect(data.message).toContain("saved as draft");
-  });
-
-  it("should create RENEWAL application with previous permit validation", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should reject RENEWAL without previousPermitId", async () => {
-    expect(true).toBe(true);
   });
 
   it("should reject duplicate application of same type", async () => {
     const session = { user: { id: "user-1", role: "APPLICANT" } };
     (auth as any).mockResolvedValue(session);
 
-    (canCreateApplication as any).mockResolvedValue({ canCreate: true });
-    (checkDuplicateApplication as any).mockResolvedValue({
-      isDuplicate: true,
-      existingAppNumber: "APP-2026-00001",
-      existingAppId: "app-1",
+    (canStartNewApplication as any).mockResolvedValue({
+      isEligible: false,
+      reason: "You already have an active application",
+      conflictingAppId: "app-1",
+      conflictingAppNumber: "APP-2026-00001",
     });
 
     const body = {
@@ -148,6 +149,7 @@ describe("POST /api/applications (CREATE)", () => {
       businessName: "Another Shop",
       businessType: "RETAIL",
       businessAddress: "456 Oak Ave",
+      dtiSecRegistration: "DTI-2026-99999",
     };
 
     const request = new NextRequest("http://localhost/api/applications", {
@@ -158,7 +160,7 @@ describe("POST /api/applications (CREATE)", () => {
     const response = await createAppHandler(request);
     const data = await response.json();
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(400);
     expect(data.message).toContain("already have an active");
   });
 
@@ -166,14 +168,15 @@ describe("POST /api/applications (CREATE)", () => {
     const session = { user: { id: "user-1", role: "APPLICANT" } };
     (auth as any).mockResolvedValue(session);
 
-    (canCreateApplication as any).mockResolvedValue({ canCreate: true });
-    (checkDuplicateApplication as any).mockResolvedValue({ isDuplicate: false });
+    (canStartNewApplication as any).mockResolvedValue({ isEligible: true });
+    (prisma.application.count as any).mockResolvedValue(0);
 
     const body = {
       type: "NEW",
       businessName: "Test Shop",
       businessType: "RETAIL",
       businessAddress: "123 Test St",
+      dtiSecRegistration: "DTI-2026-00002",
     };
 
     (prisma.application.create as any).mockResolvedValue({
@@ -201,16 +204,21 @@ describe("POST /api/applications (CREATE)", () => {
     const session = { user: { id: "staff-1", role: "BPLO_OFFICE" } };
     (auth as any).mockResolvedValue(session);
 
-    (canCreateApplication as any).mockResolvedValue({
-      canCreate: false,
-      reason: "Only applicants can create applications",
+    (canStartNewApplication as any).mockResolvedValue({ isEligible: true });
+    (prisma.application.count as any).mockResolvedValue(0);
+    (prisma.application.create as any).mockResolvedValue({
+      id: "app-staff",
+      applicationNumber: "APP-2026-00002",
+      type: "NEW",
+      status: "SUBMITTED",
     });
 
     const body = {
       type: "NEW",
-      businessName: "Unauthorized Shop",
+      businessName: "Authorized Shop",
       businessType: "RETAIL",
-      businessAddress: "789 No St",
+      businessAddress: "789 Staff St",
+      dtiSecRegistration: "DTI-2026-00003",
     };
 
     const request = new NextRequest("http://localhost/api/applications", {
@@ -219,8 +227,6 @@ describe("POST /api/applications (CREATE)", () => {
     });
 
     const response = await createAppHandler(request);
-    const data = await response.json();
-
     expect(response.status).toBe(403);
   });
 
@@ -228,14 +234,15 @@ describe("POST /api/applications (CREATE)", () => {
     const session = { user: { id: "user-1", role: "APPLICANT" } };
     (auth as any).mockResolvedValue(session);
 
-    (canCreateApplication as any).mockResolvedValue({ canCreate: true });
-    (checkDuplicateApplication as any).mockResolvedValue({ isDuplicate: false });
+    (canStartNewApplication as any).mockResolvedValue({ isEligible: true });
+    (prisma.application.count as any).mockResolvedValue(0);
 
     const body = {
       type: "NEW",
       businessName: "Log Test Shop",
       businessType: "RETAIL",
       businessAddress: "123 Log St",
+      dtiSecRegistration: "DTI-2026-00004",
     };
 
     (prisma.application.create as any).mockResolvedValue({
@@ -253,7 +260,7 @@ describe("POST /api/applications (CREATE)", () => {
 
     expect(prisma.activityLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        action: expect.stringMatching(/APPLICATION_DRAFT_SAVED|APPLICATION_CREATED/),
+        action: expect.stringMatching(/SAVE_DRAFT|SUBMIT_APPLICATION/),
         entity: "Application",
         entityId: "app-log",
       }),
@@ -263,8 +270,6 @@ describe("POST /api/applications (CREATE)", () => {
   it("should validate required fields (businessName, businessType, address)", async () => {
     const session = { user: { id: "user-1", role: "APPLICANT" } };
     (auth as any).mockResolvedValue(session);
-
-    (canCreateApplication as any).mockResolvedValue({ canCreate: true });
 
     const body = {
       type: "NEW",
@@ -284,8 +289,8 @@ describe("POST /api/applications (CREATE)", () => {
     const session = { user: { id: "user-1", role: "APPLICANT" } };
     (auth as any).mockResolvedValue(session);
 
-    (canCreateApplication as any).mockResolvedValue({ canCreate: true });
-    (checkDuplicateApplication as any).mockResolvedValue({ isDuplicate: false });
+    (canStartNewApplication as any).mockResolvedValue({ isEligible: true });
+    (prisma.application.count as any).mockResolvedValue(0);
 
     (prisma.application.create as any).mockRejectedValue(
       new Error("Database connection error")
@@ -296,6 +301,7 @@ describe("POST /api/applications (CREATE)", () => {
       businessName: "Error Test",
       businessType: "RETAIL",
       businessAddress: "456 Error Ave",
+      dtiSecRegistration: "DTI-2026-00005",
     };
 
     const request = new NextRequest("http://localhost/api/applications", {
@@ -343,7 +349,7 @@ describe("GET /api/applications (LIST)", () => {
 
     (prisma.application.findMany as any).mockResolvedValue(mockApps);
 
-    const response = await listAppHandler();
+    const response = await listAppHandler(new Request("http://localhost/api/applications"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -351,7 +357,7 @@ describe("GET /api/applications (LIST)", () => {
     expect(data.applications[0].applicantId).toBe("user-1");
   });
 
-  it("should list all applications if role=STAFF", async () => {
+  it("should list all applications if role=BPLO_OFFICE", async () => {
     const session = { user: { id: "staff-1", role: "BPLO_OFFICE" } };
     (auth as any).mockResolvedValue(session);
 
@@ -363,7 +369,7 @@ describe("GET /api/applications (LIST)", () => {
 
     (prisma.application.findMany as any).mockResolvedValue(mockApps);
 
-    const response = await listAppHandler();
+    const response = await listAppHandler(new Request("http://localhost/api/applications"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -373,7 +379,7 @@ describe("GET /api/applications (LIST)", () => {
   it("should return 401 if not authenticated", async () => {
     (auth as any).mockResolvedValue(null);
 
-    const response = await listAppHandler();
+    const response = await listAppHandler(new Request("http://localhost/api/applications"));
 
     expect(response.status).toBe(401);
   });
@@ -394,105 +400,11 @@ describe("GET /api/applications (LIST)", () => {
 
     (prisma.application.findMany as any).mockResolvedValue(mockApps);
 
-    const response = await listAppHandler();
+    const response = await listAppHandler(new Request("http://localhost/api/applications"));
     const data = await response.json();
 
     expect(data.applications[0]).toHaveProperty("applicant");
     expect(data.applications[0]).toHaveProperty("documents");
     expect(data.applications[0]).toHaveProperty("permit");
-  });
-});
-
-describe("POST /api/applications/check-duplicate (DUPLICATE CHECK)", () => {
-  it("should detect NEW app with same business name", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should allow RENEWAL if previous permit exists and ACTIVE", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should block RENEWAL if no valid permit", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should allow CLOSURE applications", async () => {
-    expect(true).toBe(true);
-  });
-});
-
-describe("PUT /api/applications/[id]/revise (UPDATE DRAFT)", () => {
-  it("should only edit DRAFT applications", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should validate updated fields", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should return 403 if not DRAFT status", async () => {
-    expect(true).toBe(true);
-  });
-});
-
-describe("POST /api/applications/[id]/submit (SUBMIT FOR REVIEW)", () => {
-  it("should require DRAFT status", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should check all required documents present", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should change status to SUBMITTED and create timeline entry", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should send confirmation email to STAFF", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should broadcast SSE event", async () => {
-    expect(true).toBe(true);
-  });
-});
-
-describe("GET /api/applications/[id]/review (REVIEW STATUS)", () => {
-  it("should return review status and pending actions", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should list reviewer comments", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should return 404 if application not found", async () => {
-    expect(true).toBe(true);
-  });
-});
-
-describe("PUT /api/applications/[id]/review (POST REVIEW ACTION)", () => {
-  it("should require REVIEWER role", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should accept APPROVE action → status ENDORSED", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should accept REJECT action → status needs resubmit", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should accept REQUEST_REVISION → ask for changes", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should send decision email to applicant", async () => {
-    expect(true).toBe(true);
-  });
-
-  it("should broadcast SSE event", async () => {
-    expect(true).toBe(true);
   });
 });

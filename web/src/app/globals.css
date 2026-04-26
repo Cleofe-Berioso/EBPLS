@@ -1,151 +1,302 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import 'leaflet/dist/leaflet.css';
 
-/* ============================================
-   Eye-Friendly Light Theme Color System
-   Soft whites, warm neutrals, high contrast
-   ============================================ */
+/* ============================================================
+   eBPLS Design System — Merged from Leader's Figma Design
+   Leader source: plan/src/styles/theme.css (OKLCH shadcn/ui)
+   Brand overrides applied to preserve existing eBPLS identity
+   ============================================================ */
 
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+
+  /* Backgrounds */
+  --background: #F8F7F4;          /* BRAND OVERRIDE: warm off-white (leader: #ffffff) */
+  --foreground: #1A1814;          /* BRAND OVERRIDE: near-black (leader: oklch(0.145 0 0)) */
+  --card: #ffffff;
+  --card-foreground: #1A1814;
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+
+  /* Primary — interactive blue (leader: dark navy #030213) */
+  --primary: #2563EB;             /* BRAND OVERRIDE: keep blue for buttons, links, CTAs */
+  --primary-foreground: #ffffff;
+
+  /* Secondary — lavender (from leader's OKLCH palette) */
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+
+  /* Muted */
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+
+  /* Accent — gray (leader's value; used by shadcn/ui bg-accent for hover/selected states) */
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+
+  /* Destructive */
+  --destructive: #DC2626;         /* BRAND OVERRIDE: keep existing red (leader: #d4183d) */
+  --destructive-foreground: #ffffff;
+
+  /* Border & Input */
+  --border: #E2DDD6;              /* BRAND OVERRIDE: warm border (leader: rgba(0,0,0,0.1)) */
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+
+  /* Typography weights */
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+
+  /* Focus ring */
+  --ring: oklch(0.708 0 0);
+
+  /* Chart colors */
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+
+  /* Border radius */
+  --radius: 0.625rem;
+
+  /* Sidebar tokens (from leader's design) */
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #2563EB;     /* Use brand blue for sidebar primary/active */
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* ============================================================
+     Backward-Compatibility Aliases
+     These map old var names to new tokens.
+     Keep these until all existing code is updated.
+     DO NOT REMOVE — sidebar active states, badges, and labels
+     reference these via bg-[var(--accent-light)] etc.
+     ============================================================ */
+  --surface: var(--card);
+  --surface-muted: var(--muted);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: #9E9892;
+
+  /* IMPORTANT: --accent-light uses the brand blue tone (NOT leader's gray) */
+  --accent-blue: #2563EB;        /* explicit blue alias used by sidebar + buttons */
+  --accent-light: #EFF6FF;       /* light blue for badge backgrounds */
+  --accent-hover: #1D4ED8;       /* darker blue on hover */
+
+  --success: #16A34A;
+  --success-light: #F0FDF4;
+  --warning: #D97706;
+  --warning-light: #FFFBEB;
+  --danger: var(--destructive);
+  --danger-light: #FEF2F2;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Dark mode — kept for shadcn/ui component compatibility */
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+/* ============================================================
+   Tailwind v4 theme mapping — maps CSS vars to Tailwind tokens
+   Copied verbatim from leader's plan/src/styles/theme.css
+   ============================================================ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* ============================================================
+   Base styles — merged from leader's theme and existing project
+   ============================================================ */
 @layer base {
-  :root {
-    /* Backgrounds & Surfaces */
-    --background: #F8F7F4;           /* warm off-white, easy on eyes */
-    --surface: #FFFFFF;               /* cards, modals */
-    --surface-muted: #F1EFE9;        /* table rows, sidebar bg, input bg */
-
-    /* Text Colors */
-    --text-primary: #1A1814;         /* near-black, not pure black */
-    --text-secondary: #6B6560;       /* labels, captions, helper text */
-    --text-muted: #9E9892;           /* placeholders, disabled */
-
-    /* Borders & Dividers */
-    --border: #E2DDD6;               /* subtle warm gray borders */
-
-    /* Accent Colors */
-    --accent: #2563EB;               /* primary blue */
-    --accent-hover: #1D4ED8;         /* darker blue on hover */
-    --accent-light: #EFF6FF;         /* light blue for badges, highlights */
-
-    /* Status Colors */
-    --success: #16A34A;              /* green */
-    --success-light: #F0FDF4;        /* light green bg */
-    --warning: #D97706;              /* amber */
-    --warning-light: #FFFBEB;        /* light amber bg */
-    --danger: #DC2626;               /* red */
-    --danger-light: #FEF2F2;         /* light red bg */
-
-    /* Shadows */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  * {
+    @apply border-border outline-ring/50;
   }
 
-  /* ============================================
-     Global Base Styles
-     ============================================ */
-
   html {
+    font-size: var(--font-size);
     background-color: var(--background);
-    color: var(--text-primary);
+    color: var(--foreground);
   }
 
   body {
-    background-color: var(--background);
-    color: var(--text-primary);
+    @apply bg-background text-foreground;
     font-family: inherit;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Remove any dark mode defaults */
+  /* Disable dark mode forced overrides */
   body.dark {
     background-color: var(--background);
-    color: var(--text-primary);
+    color: var(--foreground);
   }
 
-  /* ============================================
-     Typography
-     ============================================ */
-
-  p {
-    font-size: 14px;
-    line-height: 1.6;
+  /* Typography — from leader's design system */
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+    color: var(--foreground);
+  }
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+    color: var(--foreground);
+  }
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+    color: var(--foreground);
+  }
+  h4, h5, h6 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+    color: var(--foreground);
   }
 
   label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
   }
 
-  small, .text-sm {
-    font-size: 12px;
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
   }
 
-  /* Never use text smaller than 11px */
-  .text-xs {
-    font-size: 11px;
+  input {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    color: var(--text-primary);
-    font-weight: 600;
-  }
+  p { font-size: 14px; line-height: 1.6; }
+  small { font-size: 12px; }
+  /* Minimum accessible font size */
+  .text-xs { font-size: 11px; }
 
-  h1 { font-size: 28px; }
-  h2 { font-size: 24px; }
-  h3 { font-size: 20px; }
-  h4 { font-size: 16px; }
-  h5 { font-size: 14px; }
-  h6 { font-size: 12px; }
-
-  /* ============================================
-     Link Styles
-     ============================================ */
-
+  /* Links */
   a {
-    color: var(--accent);
+    color: var(--accent-blue);
     text-decoration: none;
   }
-
   a:hover {
     color: var(--accent-hover);
   }
 
-  /* ============================================
-     Focus States (for accessibility)
-     ============================================ */
-
+  /* Focus states (accessibility) */
   button:focus-visible,
   a:focus-visible,
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-blue);
     outline-offset: 2px;
   }
 
-  /* ============================================
-     Form Defaults
-     ============================================ */
-
+  /* Form defaults */
   input,
   textarea,
   select {
     font-family: inherit;
-    font-size: 14px;
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: var(--text-muted);
+    color: var(--muted-foreground);
   }
 
-  /* ============================================
-     Remove Sonner Dark Mode
-     ============================================ */
-
+  /* Sonner toast styling */
   .sonner-toaster {
-    --background: var(--surface);
-    --foreground: var(--text-primary);
+    --background: var(--card);
+    --foreground: var(--foreground);
     --border: var(--border);
   }
 }

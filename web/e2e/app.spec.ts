@@ -1,30 +1,15 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Landing Page", () => {
-  test("should display the homepage", async ({ page }) => {
+test.describe("Root Route", () => {
+  test("should redirect root requests to login", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("h1")).toContainText("Business Permit");
-  });
-
-  test("should have navigation links", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByRole("link", { name: /login/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /register/i }).first()).toBeVisible();
-  });
-
-  test("should navigate to login page", async ({ page }) => {
-    await page.goto("/");
-    await page.getByRole("link", { name: /login/i }).first().click();
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("should navigate to requirements page", async ({ page }) => {
+  test("should render the login form after redirecting", async ({ page }) => {
     await page.goto("/");
-    const link = page.getByRole("link", { name: /requirements/i }).first();
-    if (await link.isVisible()) {
-      await link.click();
-      await expect(page).toHaveURL(/\/requirements/);
-    }
+    await expect(page.getByLabel(/email/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /sign in|log in/i })).toBeVisible();
   });
 });
 
@@ -32,7 +17,7 @@ test.describe("Login Page", () => {
   test("should display login form", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByLabel(/email/i)).toBeVisible();
-    await expect(page.getByLabel(/password/i)).toBeVisible();
+    await expect(page.getByLabel(/^password\s*\*?$/i).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /sign in|log in/i })).toBeVisible();
   });
 

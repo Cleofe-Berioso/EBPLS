@@ -14,7 +14,7 @@ export default async function VerifyDocumentsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  if (session.user.role === "APPLICANT") redirect("/dashboard");
+  if (session.user.role !== "BPLO_OFFICE") redirect("/dashboard");
 
   const documents = await prisma.document.findMany({
     where: { status: { in: ["UPLOADED", "PENDING_VERIFICATION"] } },

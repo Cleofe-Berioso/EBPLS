@@ -31,7 +31,7 @@ export default async function PaidApplicationsPage() {
     redirect("/dashboard");
   }
 
-  if (session.user.role !== "MTO") {
+  if (session.user.role !== "BPLO_OFFICE") {
     redirect("/dashboard");
   }
 

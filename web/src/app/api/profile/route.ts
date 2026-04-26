@@ -37,7 +37,7 @@ export async function GET() {
 
     return NextResponse.json({ user });
   } catch (error) {
-    console.error("Get profile error:", error);
+    console.error("Get profile error:", error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: "Failed to fetch profile" },
       { status: 500 }
@@ -172,7 +172,7 @@ export async function PUT(request: Request) {
       user: updatedUser,
     });
   } catch (error) {
-    console.error("Update profile error:", error);
+    console.error("Update profile error:", error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: "Failed to update profile" },
       { status: 500 }

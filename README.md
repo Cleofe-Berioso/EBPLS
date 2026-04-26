@@ -37,7 +37,7 @@ npm run db:push
 npm run dev
 ```
 
-**App will be available at:** `http://localhost:3000`
+**App will be available at:** `http://localhost:8000`
 
 ---
 
@@ -125,7 +125,7 @@ DIRECT_URL=postgresql://user:password@localhost:5432/business_permits
 AUTH_SECRET=your-secure-random-string-min-32-chars
 
 # App Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:8000
 
 # Email (SMTP) - for notifications
 SMTP_HOST=smtp.gmail.com
@@ -147,7 +147,7 @@ S3_SECRET_KEY=minioadmin
 
 ```bash
 # Development
-npm run dev              # Start dev server (PORT 3000)
+npm run dev              # Start dev server (PORT 8000)
 npm run build           # Production build
 npm run start           # Start production server
 

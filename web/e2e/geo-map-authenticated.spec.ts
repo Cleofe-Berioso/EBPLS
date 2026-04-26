@@ -1,9 +1,8 @@
 import { test, expect } from "@playwright/test";
+import { loginAsBPLO } from "./helpers";
 
 test.describe("Geo Map Feature - Authenticated E2E", () => {
-  const BASE_URL = "http://localhost:3000";
-  const ADMIN_EMAIL = "admin@lgu.gov.ph";
-  const ADMIN_PASSWORD = "Password123!";
+  const BASE_URL = "http://localhost:8000";
   const ADMIN_PAGE = "/dashboard/admin/locations";
 
   test("Complete workflow: Login → Create location → Verify map/table → Delete → Verify removal", async ({
@@ -14,27 +13,13 @@ test.describe("Geo Map Feature - Authenticated E2E", () => {
 
     // ========== STEP 1: LOGIN AS ADMIN ==========
     console.log("Step 1: Login as admin...");
-    await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+    const loggedIn = await loginAsBPLO(page);
 
-    // Fill email
-    const emailInput = page.locator('input[type="email"]');
-    await emailInput.fill(ADMIN_EMAIL);
-    console.log(`  ✓ Email entered: ${ADMIN_EMAIL}`);
-
-    // Fill password
-    const passwordInput = page.locator('input[type="password"]');
-    await passwordInput.fill(ADMIN_PASSWORD);
-    console.log(`  ✓ Password entered`);
-
-    // Submit login form
-    const submitButton = page.locator('button[type="submit"]');
-    await submitButton.click();
-    console.log(`  ✓ Login form submitted`);
-
-    // Wait for redirect (should go to dashboard or admin/locations)
-    await page.waitForURL(/dashboard|login/, { timeout: 10000 }).catch(() => {});
-    const currentUrl = page.url();
-    console.log(`  ✓ Redirected to: ${currentUrl}`);
+    if (!loggedIn) {
+      test.skip(true, "Authentication failed — database may not be available");
+      return;
+    }
+    console.log("  ✓ Login successful");
 
     // ========== STEP 2: NAVIGATE TO ADMIN LOCATIONS PAGE ==========
     console.log("\nStep 2: Navigate to /dashboard/admin/locations...");

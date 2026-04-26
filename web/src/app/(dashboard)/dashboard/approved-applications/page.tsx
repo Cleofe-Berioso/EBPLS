@@ -45,6 +45,7 @@ export default async function ApprovedApplicationsPage() {
   const approvedApps = await prisma.application.findMany({
     where: {
       applicationApproved: true,
+      status: "PAID",
       permit: null,
     },
     include: {
@@ -118,7 +119,7 @@ export default async function ApprovedApplicationsPage() {
                 <tbody>
                   {approvedApps.map((app, idx) => {
                     const paymentStatus =
-                      app.payments.length > 0 ? "COMPLETED" : "PENDING";
+                      app.payments.length > 0 ? "PAID" : "PENDING";
                     const paymentInfo = getPaymentStatus(paymentStatus);
 
                     return (

@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { LoadingSpinner } from "@/components/ui/loading";
-import { FileText, Upload, Calendar, DollarSign, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import StatementOfAccount from "@/components/dashboard/statement-of-account";
+import { FileText, Upload, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, Printer } from "lucide-react";
 
 interface ApplicationDetail {
   id: string;
@@ -32,18 +33,30 @@ interface ApplicationDetail {
   grossSales?: number;
   additionalData?: Record<string, any>;
   applicant: { id: string; firstName: string; lastName: string; email: string };
-  dateSubmitted: string;
+  submittedAt?: string | null;
+  payments?: {
+    id: string;
+    referenceNumber: string | null;
+    amount: number | null;
+    method: string;
+    status: string;
+    receiptNumber: string | null;
+    paidAt: string | null;
+    createdAt: string;
+    metadata?: {
+      permitFee?: string;
+      processingFee?: string;
+      filingFee?: string;
+      businessName?: string;
+      applicationType?: string;
+    } | null;
+  }[];
   documents: {
     id: string;
     originalName: string;
     documentType: string;
     status: string;
   }[];
-  payment?: {
-    status: string;
-    amountPaid?: number;
-    totalAmount?: number;
-  };
 }
 
 export default function ApplicationDetailPage() {
@@ -103,10 +116,21 @@ export default function ApplicationDetailPage() {
     DRAFT: <Clock className="h-5 w-5 text-[var(--background)]0" />,
     SUBMITTED: <Clock className="h-5 w-5 text-blue-500" />,
     UNDER_REVIEW: <AlertCircle className="h-5 w-5 text-yellow-500" />,
-    ENDORSED: <CheckCircle className="h-5 w-5 text-indigo-500" />,
-    APPROVED: <CheckCircle className="h-5 w-5 text-green-500" />,
+    RETURNED_FOR_CORRECTION: <AlertCircle className="h-5 w-5 text-orange-500" />,
+    RESUBMITTED: <Clock className="h-5 w-5 text-blue-500" />,
+    ASSESSED: <CheckCircle className="h-5 w-5 text-indigo-500" />,
+    PAYMENT_PENDING: <Clock className="h-5 w-5 text-yellow-500" />,
+    PAID: <CheckCircle className="h-5 w-5 text-green-500" />,
+    PERMIT_PREPARED: <Printer className="h-5 w-5 text-blue-500" />,
+    READY_FOR_RELEASE: <CheckCircle className="h-5 w-5 text-purple-500" />,
+    RELEASED: <CheckCircle className="h-5 w-5 text-green-500" />,
+    COMPLETED: <CheckCircle className="h-5 w-5 text-green-500" />,
     REJECTED: <AlertCircle className="h-5 w-5 text-red-500" />,
   }[application.status] || null;
+
+  const submittedDateLabel = application.submittedAt
+    ? new Date(application.submittedAt).toLocaleDateString()
+    : "Not yet submitted";
 
   return (
     <div className="space-y-6">
@@ -308,13 +332,13 @@ export default function ApplicationDetailPage() {
               </div>
               <div className="border-t pt-3">
                 <p className="text-xs text-[var(--background)]0">Submitted</p>
-                <p className="mt-1 text-sm font-medium">{new Date(application.dateSubmitted).toLocaleDateString()}</p>
+                <p className="mt-1 text-sm font-medium">{submittedDateLabel}</p>
               </div>
             </CardContent>
           </Card>
 
           {/* Payment Info */}
-          {application.payment && (
+          {["PAYMENT_PENDING", "PAID", "PERMIT_PREPARED", "READY_FOR_RELEASE", "RELEASED", "COMPLETED"].includes(application.status) && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -323,24 +347,10 @@ export default function ApplicationDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-[var(--background)]0">Status</dt>
-                    <dd><StatusBadge status={application.payment.status} /></dd>
-                  </div>
-                  {application.payment.amountPaid && (
-                    <div className="flex justify-between">
-                      <dt className="text-[var(--background)]0">Amount Paid</dt>
-                      <dd className="font-medium">₱{application.payment.amountPaid.toLocaleString()}</dd>
-                    </div>
-                  )}
-                  {application.payment.totalAmount && (
-                    <div className="flex justify-between">
-                      <dt className="text-[var(--background)]0">Total Due</dt>
-                      <dd className="font-medium">₱{application.payment.totalAmount.toLocaleString()}</dd>
-                    </div>
-                  )}
-                </dl>
+                <StatementOfAccount
+                  applicationId={application.id}
+                  initialPayments={application.payments ?? []}
+                />
               </CardContent>
             </Card>
           )}

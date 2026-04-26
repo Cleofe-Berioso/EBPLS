@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Shield, Loader2 } from "lucide-react";
+import { FloatingLabelInput } from "@/components/ui/floating-label-input";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -66,7 +67,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
+          <Link href="/login" className="inline-flex items-center gap-2">
             <Shield className="h-10 w-10 text-[var(--accent)]" />
             <span className="text-2xl font-bold text-[var(--text-primary)]">Business Permit System</span>
           </Link>
@@ -93,20 +94,18 @@ export default function ForgotPasswordPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-[var(--text-primary)] mb-1">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="juan@example.com"
-                className="block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-              />
-            </div>
+            <FloatingLabelInput
+              id="email"
+              name="email"
+              type="email"
+              label="Email Address"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              inputClassName="border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-[var(--accent)]/20"
+              labelClassName="bg-[var(--surface)] text-[var(--text-secondary)] peer-focus:text-[var(--accent)] peer-[:not(:placeholder-shown)]:text-[var(--text-primary)]"
+            />
 
             <button
               type="submit"

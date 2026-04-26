@@ -1,12 +1,11 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
-import Link from "next/link";
 import { StatusBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import { Printer, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
+import { PermitGenerationAction } from "@/components/dashboard/permit-generation-action";
 
 export const metadata = { title: "Permit Issuance" };
 
@@ -18,10 +17,10 @@ export default async function IssuancePage() {
     redirect("/dashboard");
   }
 
-  // Get approved applications that don't have permits yet
+  // Get paid applications that don't have permits yet
   const pendingIssuance = await prisma.application.findMany({
     where: {
-      status: "APPROVED",
+      status: "PAID",
       permit: null,
     },
     orderBy: { approvedAt: "asc" },
@@ -49,7 +48,7 @@ export default async function IssuancePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">Permit Issuance</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Generate and issue business permits for approved applications
+          Generate and issue business permits for paid applications
         </p>
       </div>
 
@@ -73,10 +72,10 @@ export default async function IssuancePage() {
                   <p className="font-semibold text-[var(--accent)] text-sm">{app.applicationNumber}</p>
                   <p className="mt-0.5 font-medium text-[var(--text-primary)]">{app.businessName}</p>
                   <p className="text-sm text-[var(--text-secondary)]">{app.applicant.firstName} {app.applicant.lastName}</p>
-                  {app.approvedAt && <p className="mt-1 text-xs text-[var(--text-muted)]">Approved: {formatDate(app.approvedAt)}</p>}
-                  <Link href={`/dashboard/issuance/${app.id}`} className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)]">
-                    <Printer className="h-4 w-4" /> Issue Permit
-                  </Link>
+                  {app.approvedAt && <p className="mt-1 text-xs text-[var(--text-muted)]">Assessed: {formatDate(app.approvedAt)}</p>}
+                  <div className="mt-3">
+                    <PermitGenerationAction applicationId={app.id} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -88,7 +87,7 @@ export default async function IssuancePage() {
                     <th className="px-4 py-3">Application #</th>
                     <th className="px-4 py-3">Business</th>
                     <th className="px-4 py-3">Applicant</th>
-                    <th className="px-4 py-3">Approved</th>
+                    <th className="px-4 py-3">Assessed</th>
                     <th className="px-4 py-3">Action</th>
                   </tr>
                 </thead>
@@ -100,9 +99,7 @@ export default async function IssuancePage() {
                       <td className="px-4 py-3">{app.applicant.firstName} {app.applicant.lastName}</td>
                       <td className="px-4 py-3 text-[var(--text-secondary)]">{app.approvedAt ? formatDate(app.approvedAt) : "—"}</td>
                       <td className="px-4 py-3">
-                        <Link href={`/dashboard/issuance/${app.id}`}>
-                          <Button size="sm"><Printer className="h-3 w-3" /> Issue Permit</Button>
-                        </Link>
+                        <PermitGenerationAction applicationId={app.id} />
                       </td>
                     </tr>
                   ))}

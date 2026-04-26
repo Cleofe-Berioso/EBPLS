@@ -60,8 +60,9 @@ async function checkA11y(
 // ============================================================================
 
 test.describe("Accessibility — Public Pages", () => {
-  test("Homepage should be accessible", async ({ page }) => {
-    await checkA11y(page, "/", "Homepage");
+  test("Root route should redirect to login", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/login/);
   });
 
   test("Login page should be accessible", async ({ page }) => {
@@ -110,8 +111,8 @@ test.describe("Accessibility — Public Pages", () => {
 // ============================================================================
 
 test.describe("Accessibility — Color Contrast", () => {
-  test("should have sufficient color contrast on homepage", async ({ page }) => {
-    await page.goto("/");
+  test("should have sufficient color contrast on login page", async ({ page }) => {
+    await page.goto("/login");
     await page.waitForLoadState("networkidle");
 
     const results = await new AxeBuilder({ page })
@@ -177,7 +178,7 @@ test.describe("Accessibility — Keyboard Navigation", () => {
   });
 
   test("should trap focus in modals", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/login");
 
     // This test will be expanded when modals are tested
     // For now, verify no focus escape from main content
@@ -191,14 +192,14 @@ test.describe("Accessibility — Keyboard Navigation", () => {
 // ============================================================================
 
 test.describe("Accessibility — Semantic Structure", () => {
-  test("should have exactly one h1 on homepage", async ({ page }) => {
-    await page.goto("/");
+  test("should have exactly one h1 on login page", async ({ page }) => {
+    await page.goto("/login");
     const h1Count = await page.locator("h1").count();
     expect(h1Count).toBeGreaterThanOrEqual(1);
   });
 
   test("should have proper heading hierarchy", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/login");
 
     const headings = await page.evaluate(() => {
       const headingEls = document.querySelectorAll("h1, h2, h3, h4, h5, h6");
@@ -221,7 +222,7 @@ test.describe("Accessibility — Semantic Structure", () => {
   });
 
   test("should have proper landmark roles", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/login");
 
     const hasMain = (await page.locator("main").count()) > 0 ||
       (await page.locator('[role="main"]').count()) > 0;
@@ -229,7 +230,7 @@ test.describe("Accessibility — Semantic Structure", () => {
   });
 
   test("all images should have alt text", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/login");
 
     const results = await new AxeBuilder({ page })
       .withRules(["image-alt"])
@@ -255,7 +256,7 @@ test.describe("Accessibility — Semantic Structure", () => {
 
 test.describe("Accessibility — ARIA", () => {
   test("should have valid ARIA attributes", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/login");
 
     const results = await new AxeBuilder({ page })
       .withRules([
@@ -271,7 +272,7 @@ test.describe("Accessibility — ARIA", () => {
   });
 
   test("should have proper language attribute", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/login");
 
     const lang = await page.evaluate(() => document.documentElement.lang);
     expect(lang).toBeTruthy();

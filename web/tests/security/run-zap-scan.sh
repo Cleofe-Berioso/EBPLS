@@ -5,7 +5,7 @@
 #
 # Prerequisites:
 #   - Docker installed
-#   - App running at http://localhost:3000
+#   - App running at http://localhost:8000
 #
 # Usage:
 #   chmod +x tests/security/run-zap-scan.sh
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-TARGET_URL="${TARGET_URL:-http://host.docker.internal:3000}"
+TARGET_URL="${TARGET_URL:-http://host.docker.internal:8000}"
 REPORT_DIR="tests/security/reports"
 SCAN_TYPE="${1:-baseline}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

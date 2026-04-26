@@ -120,8 +120,8 @@ describe("truncate", () => {
 });
 
 describe("getStatusColor", () => {
-  it("returns correct color for APPROVED", () => {
-    expect(getStatusColor("APPROVED")).toContain("green");
+  it("returns correct color for PAID", () => {
+    expect(getStatusColor("PAID")).toContain("green");
   });
 
   it("returns correct color for REJECTED", () => {

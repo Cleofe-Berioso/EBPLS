@@ -1,130 +1,129 @@
-"use client";
-
-import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Plus, Eye, FileText, RefreshCw, XCircle } from "lucide-react";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
-import { LoadingSpinner } from "@/components/ui/loading";
-import { Alert } from "@/components/ui/alert";
-import { Plus, Eye, FileText } from "lucide-react";
 
-interface Application {
-  id: string;
-  applicationNumber: string;
-  type: string;
-  status: string;
-  businessName: string;
-  businessType: string;
-  createdAt: string;
-  updatedAt: string;
-}
+export default async function ApplicationsPage() {
+  const session = await auth();
 
-export default function ApplicationsPage() {
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const fetchApplications = useCallback(async () => {
-    try {
-      const res = await fetch("/api/applications");
-      const data = await res.json();
-      if (res.ok) {
-        setApplications(data.applications || []);
-      } else {
-        setError(data.error || "Failed to load applications");
-      }
-    } catch {
-      setError("Failed to load applications");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchApplications();
-  }, [fetchApplications]);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <LoadingSpinner size="lg" text="Loading applications..." />
-      </div>
-    );
+  if (!session?.user) {
+    redirect("/login");
   }
+
+  const applications = await prisma.application.findMany({
+    where: session.user.role === "APPLICANT" ? { applicantId: session.user.id } : {},
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      applicationNumber: true,
+      type: true,
+      status: true,
+      businessName: true,
+      businessType: true,
+      createdAt: true,
+    },
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">My Applications</h1>
-          <p className="text-[var(--text-secondary)]">Manage your business permit applications</p>
-        </div>
-        <Link href="/dashboard/applications/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Application
-          </Button>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">New Application</h1>
+        <p className="mt-1 text-gray-600">Select application type to begin</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <Link
+          href="/dashboard/applications/new"
+          className="group rounded-xl bg-gradient-to-br from-green-500 to-green-600 p-8 text-white shadow-lg transition-shadow hover:shadow-xl"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="mb-4 rounded-full bg-white/20 p-4">
+              <Plus className="h-12 w-12" />
+            </div>
+            <h3 className="mb-2 text-2xl font-bold">New Application</h3>
+            <p className="mb-6 text-sm text-green-100">Apply for a new business permit</p>
+            <span className="rounded-lg bg-white px-6 py-2 font-semibold text-green-600 transition-colors hover:bg-green-50">
+              Start Application
+            </span>
+          </div>
+        </Link>
+
+        <Link
+          href="/dashboard/renew"
+          className="group rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 p-8 text-white shadow-lg transition-shadow hover:shadow-xl"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="mb-4 rounded-full bg-white/20 p-4">
+              <RefreshCw className="h-12 w-12" />
+            </div>
+            <h3 className="mb-2 text-2xl font-bold">Renewal</h3>
+            <p className="mb-6 text-sm text-blue-100">Renew your existing business permit</p>
+            <span className="rounded-lg bg-white px-6 py-2 font-semibold text-blue-600 transition-colors hover:bg-blue-50">
+              Renew Permit
+            </span>
+          </div>
+        </Link>
+
+        <Link
+          href="/dashboard/applications/closure"
+          className="group rounded-xl bg-gradient-to-br from-red-500 to-red-600 p-8 text-white shadow-lg transition-shadow hover:shadow-xl"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="mb-4 rounded-full bg-white/20 p-4">
+              <XCircle className="h-12 w-12" />
+            </div>
+            <h3 className="mb-2 text-2xl font-bold">Closure</h3>
+            <p className="mb-6 text-sm text-red-100">Close your registered business</p>
+            <span className="rounded-lg bg-white px-6 py-2 font-semibold text-red-600 transition-colors hover:bg-red-50">
+              File Closure
+            </span>
+          </div>
         </Link>
       </div>
 
-      {error && (
-        <Alert variant="error" onClose={() => setError("")}>
-          {error}
-        </Alert>
-      )}
+      <div className="mt-8">
+        <h2 className="mb-4 text-xl font-semibold text-gray-900">My Applications</h2>
 
-      {applications.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="h-12 w-12 text-[var(--text-muted)] mb-4" />
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No applications yet</h3>
-            <p className="text-[var(--background)]0 mb-4">Start by creating your first business permit application</p>
-            <Link href="/dashboard/applications/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Application
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Applications ({applications.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y">
-              {applications.map((app) => (
-                <div
-                  key={app.id}
-                  className="flex items-center justify-between py-4 first:pt-0 last:pb-0"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm font-medium">
-                        {app.applicationNumber}
-                      </span>
-                      <StatusBadge status={app.status} />
-                    </div>
-                    <p className="font-medium text-[var(--text-primary)]">{app.businessName}</p>
-                    <p className="text-sm text-[var(--background)]0">
-                      {app.type} • {app.businessType} • Created{" "}
-                      {new Date(app.createdAt).toLocaleDateString()}
-                    </p>
+        {applications.length === 0 ? (
+          <div className="rounded-lg bg-white p-12 text-center shadow">
+            <FileText className="mx-auto mb-4 h-16 w-16 text-gray-300" />
+            <h3 className="mb-2 text-xl font-semibold text-gray-900">No applications yet</h3>
+            <p className="text-gray-600">Start by selecting an application type above</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200 rounded-lg bg-white shadow">
+            {applications.map((app) => (
+              <div
+                key={app.id}
+                className="flex items-center justify-between p-4 transition-colors hover:bg-gray-50"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-sm font-medium text-gray-700">
+                      {app.applicationNumber}
+                    </span>
+                    <StatusBadge status={app.status} />
                   </div>
-                  <Link href={`/dashboard/applications/${app.id}`}>
-                    <Button variant="outline" size="sm">
-                      <Eye className="mr-2 h-4 w-4" />
-                      View
-                    </Button>
-                  </Link>
+                  <p className="font-medium text-gray-900">{app.businessName}</p>
+                  <p className="text-sm text-gray-500">
+                    {app.type} • {app.businessType} • Submitted{" "}
+                    {new Date(app.createdAt).toLocaleDateString()}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                <Link href={`/dashboard/applications/${app.id}`}>
+                  <Button variant="outline" size="sm">
+                    <Eye className="mr-2 h-4 w-4" />
+                    View
+                  </Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

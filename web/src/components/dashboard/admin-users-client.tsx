@@ -19,7 +19,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-type Role = "APPLICANT" | "STAFF" | "REVIEWER" | "ADMINISTRATOR";
+type Role = "APPLICANT" | "BPLO_OFFICE" | "ADMIN";
 type Status = "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION";
 
 interface User {
@@ -43,9 +43,8 @@ const PAGE_SIZE = 15;
 const ROLE_OPTIONS = [
   { value: "", label: "All Roles" },
   { value: "APPLICANT", label: "Applicant" },
-  { value: "STAFF", label: "Staff" },
-  { value: "REVIEWER", label: "Reviewer" },
-  { value: "ADMINISTRATOR", label: "Administrator" },
+  { value: "BPLO_OFFICE", label: "BPLO Office" },
+  { value: "ADMIN", label: "Admin" },
 ];
 const STATUS_OPTIONS = [
   { value: "", label: "All Statuses" },
@@ -57,7 +56,7 @@ const STATUS_OPTIONS = [
 
 // ─── Create User Modal ───────────────────────────────────────────────────────
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (user: User, pw: string) => void }) {
-  const [form, setForm] = useState({ email: "", firstName: "", lastName: "", role: "STAFF" as Role, phone: "" });
+  const [form, setForm] = useState({ email: "", firstName: "", lastName: "", role: "APPLICANT" as Role, phone: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -81,7 +80,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Create Staff Account</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Create User Account</h2>
           <button onClick={onClose} className="rounded p-1 hover:bg-gray-100"><X className="h-5 w-5" /></button>
         </div>
         {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
@@ -107,9 +106,9 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Role</label>
             <select className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as Role }))}>
-              <option value="STAFF">Staff</option>
-              <option value="REVIEWER">Reviewer</option>
-              <option value="ADMINISTRATOR">Administrator</option>
+              <option value="APPLICANT">Applicant</option>
+              <option value="BPLO_OFFICE">BPLO Office</option>
+              <option value="ADMIN">Admin</option>
             </select>
           </div>
           <div className="flex gap-2 pt-2">
@@ -266,7 +265,10 @@ export function AdminUsersClient({ initialUsers, initialTotal }: Props) {
             </div>
           ) : users.length === 0 ? (
             <p className="py-10 text-center text-sm text-gray-500">No users found.</p>
-          ) : users.map((user) => (
+          ) : users.map((user, index) => {
+            const openUpward = users.length - index <= 2;
+
+            return (
             <div key={user.id} className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
@@ -291,9 +293,17 @@ export function AdminUsersClient({ initialUsers, initialTotal }: Props) {
                   {openMenu === user.id && (
                     <>
                       <div className="fixed inset-0 z-30" onClick={() => setOpenMenu(null)} />
-                      <div className="absolute right-0 z-40 mt-1 w-48 rounded-lg border bg-white py-1 shadow-lg">
-                        <button onClick={() => updateUser(user.id, { role: user.role === "STAFF" ? "REVIEWER" : user.role === "REVIEWER" ? "ADMINISTRATOR" : "STAFF" })} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                          <Pencil className="h-4 w-4 text-blue-500" /> Change Role
+                      <div className={`absolute right-0 z-40 w-48 rounded-lg border bg-white py-1 shadow-lg ${
+                        openUpward ? "bottom-full mb-1" : "mt-1"
+                      }`}>
+                        <button onClick={() => updateUser(user.id, { role: "APPLICANT" })} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                          <Pencil className="h-4 w-4 text-blue-500" /> Set as Applicant
+                        </button>
+                        <button onClick={() => updateUser(user.id, { role: "BPLO_OFFICE" })} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                          <Pencil className="h-4 w-4 text-blue-500" /> Set as BPLO Office
+                        </button>
+                        <button onClick={() => updateUser(user.id, { role: "ADMIN" })} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                          <Pencil className="h-4 w-4 text-blue-500" /> Set as Admin
                         </button>
                         {user.status === "ACTIVE" ? (
                           <button onClick={() => updateUser(user.id, { status: "SUSPENDED" })} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
@@ -322,7 +332,7 @@ export function AdminUsersClient({ initialUsers, initialTotal }: Props) {
               </div>
               <p className="mt-1 text-xs text-gray-400">Last login: {user.lastLoginAt ? formatDate(user.lastLoginAt) : "Never"}</p>
             </div>
-          ))}
+          )})}
         </div>
 
         {/* Desktop table */}
@@ -353,7 +363,10 @@ export function AdminUsersClient({ initialUsers, initialTotal }: Props) {
                     No users found.
                   </td>
                 </tr>
-              ) : users.map((user) => (
+              ) : users.map((user, index) => {
+                const openUpward = users.length - index <= 2;
+
+                return (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -388,13 +401,20 @@ export function AdminUsersClient({ initialUsers, initialTotal }: Props) {
                       {openMenu === user.id && (
                         <>
                           <div className="fixed inset-0 z-30" onClick={() => setOpenMenu(null)} />
-                          <div className="absolute right-0 z-40 mt-1 w-48 rounded-lg border bg-white py-1 shadow-lg">
-                            <button
-                              onClick={() => updateUser(user.id, { role: user.role === "STAFF" ? "REVIEWER" : user.role === "REVIEWER" ? "ADMINISTRATOR" : "STAFF" })}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            >
+                          <div className={`absolute right-0 z-40 w-48 rounded-lg border bg-white py-1 shadow-lg ${
+                            openUpward ? "bottom-full mb-1" : "mt-1"
+                          }`}>
+                            <button onClick={() => updateUser(user.id, { role: "APPLICANT" })} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                               <Pencil className="h-4 w-4 text-blue-500" />
-                              Change Role
+                              Set as Applicant
+                            </button>
+                            <button onClick={() => updateUser(user.id, { role: "BPLO_OFFICE" })} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              <Pencil className="h-4 w-4 text-blue-500" />
+                              Set as BPLO Office
+                            </button>
+                            <button onClick={() => updateUser(user.id, { role: "ADMIN" })} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              <Pencil className="h-4 w-4 text-blue-500" />
+                              Set as Admin
                             </button>
                             {user.status === "ACTIVE" ? (
                               <button
@@ -427,7 +447,7 @@ export function AdminUsersClient({ initialUsers, initialTotal }: Props) {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

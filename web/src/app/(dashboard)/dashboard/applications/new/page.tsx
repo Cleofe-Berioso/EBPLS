@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 
 export default function NewApplicationPage() {
@@ -82,8 +88,8 @@ export default function NewApplicationPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">New Business Permit Application</h1>
-        <p className="text-[var(--text-secondary)]">Fill out the form below to apply for a business permit</p>
+        <h1 className="text-2xl font-bold text-gray-900">New Business Permit Application</h1>
+        <p className="text-gray-600">Fill out the form below to apply for a business permit</p>
       </div>
 
       {error && (
@@ -98,16 +104,25 @@ export default function NewApplicationPage() {
             <CardTitle>Application Type</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select
-              label="Type"
-              name="type"
-              value={formData.type}
-              onChange={handleChange}
-              options={[
-                { value: "NEW", label: "New Application" },
-                { value: "RENEWAL", label: "Renewal" },
-              ]}
-            />
+            <div className="w-full">
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+                Type
+              </label>
+              <Select
+                value={formData.type}
+                onValueChange={(v) =>
+                  setFormData((prev) => ({ ...prev, type: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NEW">New Application</SelectItem>
+                  <SelectItem value="RENEWAL">Renewal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
 
@@ -123,20 +138,27 @@ export default function NewApplicationPage() {
               onChange={handleChange}
               required
             />
-            <Select
-              label="Type of Business"
-              name="businessTypeCategory"
-              value={formData.businessTypeCategory}
-              onChange={handleChange}
-              options={[
-                { value: "", label: "Select..." },
-                { value: "SOLE_PROPRIETORSHIP", label: "Sole Proprietorship" },
-                { value: "PARTNERSHIP", label: "Partnership" },
-                { value: "CORPORATION", label: "Corporation" },
-                { value: "COOPERATIVE", label: "Cooperative" },
-              ]}
-              required
-            />
+            <div className="w-full">
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+                Type of Business <span className="ml-1 text-destructive">*</span>
+              </label>
+              <Select
+                value={formData.businessTypeCategory}
+                onValueChange={(v) =>
+                  setFormData((prev) => ({ ...prev, businessTypeCategory: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SOLE_PROPRIETORSHIP">Sole Proprietorship</SelectItem>
+                  <SelectItem value="PARTNERSHIP">Partnership</SelectItem>
+                  <SelectItem value="CORPORATION">Corporation</SelectItem>
+                  <SelectItem value="COOPERATIVE">Cooperative</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Input
               label="Line of Business / Business Activity"
               name="lineOfBusiness"
@@ -310,7 +332,7 @@ export default function NewApplicationPage() {
           </CardContent>
         </Card>
 
-        <Card className="mb-6 border-blue-200 bg-[var(--accent-light)]">
+        <Card className="mb-6 border-blue-200 bg-blue-50">
           <CardHeader>
             <CardTitle className="text-blue-900">Required Documents</CardTitle>
           </CardHeader>
@@ -322,7 +344,10 @@ export default function NewApplicationPage() {
               <li>Location plan or sketch of location — 1 original copy</li>
               <li>Fire Safety Inspection Certificate (at least 9 months valid) — 1 original copy</li>
               <li>Affidavit of Undertaking (if you have a valid FSIC) — 1 original copy</li>
-              <li><strong>Government Clearances</strong> from relevant agencies depending on your line of business (e.g., Sanitary, Environment, Engineering, BFP, Tax/RPT, Water, Assessor, Market/Agriculture)</li>
+              <li>
+                <strong>BPLO-managed compliance requirements</strong> relevant to your business, such as sanitary, environmental,
+                engineering, fire safety, property-related, utility, or other business-specific supporting documents
+              </li>
             </ul>
             <div className="border-t border-blue-200 pt-3 mt-3">
               <p className="text-xs">

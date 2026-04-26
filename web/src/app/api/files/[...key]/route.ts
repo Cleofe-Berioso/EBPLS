@@ -30,7 +30,8 @@ export async function GET(
 
   // Prevent path traversal
   const uploadDir = path.resolve(process.cwd(), "uploads");
-  if (!path.resolve(filePath).startsWith(uploadDir)) {
+  const resolvedFilePath = path.resolve(filePath);
+  if (resolvedFilePath !== uploadDir && !resolvedFilePath.startsWith(uploadDir + path.sep)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -40,19 +41,23 @@ export async function GET(
 
   // For document files, verify the user has access
   if (key[0] === "documents") {
-    const keyStr = key.join("/");
+    const filePath = key.join("/");
     const document = await prisma.document.findFirst({
-      where: { filePath: { contains: key[key.length - 1].split(".")[0] } },
+      where: { filePath },
       include: { application: { select: { applicantId: true } } },
     });
+    if (!document) {
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+    if (session.user.role !== "APPLICANT" && session.user.role !== "BPLO_OFFICE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     if (
-      document &&
       session.user.role === "APPLICANT" &&
       document.application.applicantId !== session.user.id
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    void keyStr;
   }
 
   const buffer = fs.readFileSync(filePath);

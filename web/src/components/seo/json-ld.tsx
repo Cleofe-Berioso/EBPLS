@@ -21,11 +21,14 @@ export function JsonLd({ data, id }: JsonLdProps) {
 
   if (!mounted) return null;
 
+  // Escape </script> sequences to prevent script-tag injection breakout
+  const safeJson = JSON.stringify(data).replace(/<\/script>/gi, '<\\/script>');
+
   return (
     <script
       id={id}
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      dangerouslySetInnerHTML={{ __html: safeJson }}
       suppressHydrationWarning
     />
   );
@@ -38,7 +41,7 @@ export function JsonLd({ data, id }: JsonLdProps) {
 export function GovernmentServiceSchema() {
   const appUrl = typeof window !== 'undefined' 
     ? window.location.origin 
-    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:8000';
 
   return (
     <JsonLd
@@ -119,7 +122,7 @@ export function BreadcrumbSchema({
 }) {
   const appUrl = typeof window !== 'undefined' 
     ? window.location.origin 
-    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:8000';
 
   return (
     <JsonLd
@@ -145,7 +148,7 @@ export function BreadcrumbSchema({
 export function OrganizationSchema() {
   const appUrl = typeof window !== 'undefined' 
     ? window.location.origin 
-    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:8000';
 
   return (
     <JsonLd
@@ -182,7 +185,7 @@ export function OrganizationSchema() {
 export function WebApplicationSchema() {
   const appUrl = typeof window !== 'undefined' 
     ? window.location.origin 
-    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:8000';
 
   return (
     <JsonLd

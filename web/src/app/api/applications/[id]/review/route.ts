@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { generatePermitNumber, generateClaimReference } from "@/lib/utils";
 import {
   broadcastApplicationStatusChange,
   broadcastNotification,
@@ -9,6 +8,7 @@ import {
 import { sendApplicationStatusEmail } from "@/lib/email";
 import { captureException } from "@/lib/monitoring";
 import { reviewActionSchema } from "@/lib/validations";
+import { REVIEWABLE_APPLICATION_STATUSES } from "@/lib/workflow";
 
 export async function POST(
   request: Request,
@@ -20,8 +20,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only staff, reviewer, or admin can review
-    if (session.user.role === "APPLICANT") {
+    if (session.user.role !== "BPLO_OFFICE") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -40,9 +39,7 @@ export async function POST(
       include: {
         applicant: true,
         previousPermit: true,
-        documents: {
-          where: { status: { not: "REJECTED" } },
-        },
+        documents: true,
       },
     });
 
@@ -53,14 +50,37 @@ export async function POST(
       );
     }
 
-    // Validate minimum document requirements before approval
+    if (!REVIEWABLE_APPLICATION_STATUSES.includes(application.status)) {
+      return NextResponse.json(
+        {
+          error: "Invalid application status",
+          message: `Cannot review application in ${application.status} status.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    const activeDocuments = application.documents.filter(
+      (document) => document.status !== "REJECTED"
+    );
+
     if (action === "APPROVE") {
       const minDocsRequired = application.type === "NEW" ? 2 : 1;
-      if (application.documents.length < minDocsRequired) {
+      if (activeDocuments.length < minDocsRequired) {
         return NextResponse.json(
           {
             error: "Cannot approve application",
-            message: `${application.type} applications require at least ${minDocsRequired} document(s). Current: ${application.documents.length}`,
+            message: `${application.type} applications require at least ${minDocsRequired} verified document(s). Current: ${activeDocuments.length}`,
+          },
+          { status: 400 }
+        );
+      }
+      const unverified = activeDocuments.filter((document) => document.status !== "VERIFIED");
+      if (unverified.length > 0) {
+        return NextResponse.json(
+          {
+            error: "Cannot approve application",
+            message: "All active documents must be verified before assessment/payment.",
           },
           { status: 400 }
         );
@@ -69,9 +89,10 @@ export async function POST(
 
     // Determine new status
     let newStatus = application.status;
-    if (action === "APPROVE") newStatus = "APPROVED";
+    if (action === "APPROVE") newStatus = "PAYMENT_PENDING";
     else if (action === "REJECT") newStatus = "REJECTED";
-    else if (action === "REQUEST_REVISION") newStatus = "DRAFT";
+    else if (action === "REQUEST_REVISION") newStatus = "RETURNED_FOR_CORRECTION";
+    else if (action === "COMMENT") newStatus = "UNDER_REVIEW";
 
     // Update application status
     const updatedApplication = await prisma.application.update({
@@ -81,11 +102,17 @@ export async function POST(
         ...(action === "APPROVE" && {
           approvedAt: new Date(),
           reviewedAt: new Date(),
+          documentVerified: true,
+          applicationApproved: true,
         }),
         ...(action === "REJECT" && {
           rejectedAt: new Date(),
           reviewedAt: new Date(),
           rejectionReason: comment || null,
+        }),
+        ...(action === "REQUEST_REVISION" && {
+          reviewedAt: new Date(),
+          rejectionReason: comment || "Returned for correction",
         }),
       },
     });
@@ -108,67 +135,10 @@ export async function POST(
         newStatus,
         comment:
           comment ||
-          `Application ${action.toLowerCase().replace("_", " ")} by reviewer`,
+          `Application ${action.toLowerCase().replace("_", " ")} by BPLO office`,
         changedBy: session.user.id,
       },
-    });    // If approved, handle permit creation/closure based on application type
-    if (action === "APPROVE") {
-      // For RENEWAL: mark the previous permit as RENEWED
-      if (application.type === "RENEWAL" && application.previousPermitId) {
-        await prisma.permit.update({
-          where: { id: application.previousPermitId },
-          data: { status: "RENEWED" },
-        });
-      }
-
-      // For CLOSURE: mark the referenced permit as CLOSED, no new permit created
-      if (application.type === "CLOSURE") {
-        if (application.previousPermitId) {
-          await prisma.permit.update({
-            where: { id: application.previousPermitId },
-            data: { status: "CLOSED" },
-          });
-        }
-        // Create a closure reference for tracking
-        // (removed - claim references no longer used in 3-role system)
-      } else {
-        // For NEW/RENEWAL: create a new active permit
-        const permitCount = await prisma.permit.count();
-        const permitNumber = generatePermitNumber(permitCount + 1);
-
-        const permit = await prisma.permit.create({
-          data: {
-            permitNumber,
-            applicationId: id,
-            businessName: application.businessName,
-            businessAddress: application.businessAddress,
-            ownerName: `${application.applicant.firstName} ${application.applicant.lastName}`,
-            issueDate: new Date(),
-            expiryDate: new Date(
-              new Date().setFullYear(new Date().getFullYear() + 1)
-            ),
-            status: "ACTIVE",
-          },
-        });
-
-        // Create permit issuance record with Mayor signing status based on type
-        await prisma.permitIssuance.create({
-          data: {
-            permitId: permit.id,
-            issuedById: session.user.id,
-            status: "PREPARED",
-            // P7.2: For NEW/RENEWAL, mark as pending Mayor signing; for local tests may skip
-            mayorSigningStatus:
-              application.type === "NEW" || application.type === "RENEWAL"
-                ? "PENDING"
-                : "NOT_REQUIRED",
-          },
-        });
-
-        // Generate claim reference
-        // (removed - claim references no longer used in 3-role system)
-      }
-    }    // Log activity
+    });    // Log activity
     await prisma.activityLog.create({
       data: {
         userId: session.user.id,

@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Shield, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { FloatingLabelInput } from "@/components/ui/floating-label-input";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -60,223 +62,196 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--accent-light)] to-[var(--background)] px-4 py-12">
-      <div className="w-full max-w-lg">
-        {/* Logo */}
-        <div className="mb-8 text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <Shield className="h-10 w-10 text-[var(--accent)]" />
-            <span className="text-2xl font-bold text-[var(--text-primary)]">
-              Business Permit System
-            </span>
-          </Link>
-        </div>        {/* Form Card */}
-        <div className="rounded-2xl bg-[var(--surface)] p-6 sm:p-8 shadow-xl">
-          <h2 className="text-2xl font-bold text-[var(--text-primary)]">
-            Create your account
-          </h2>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Register to apply for a business permit online
-          </p>
+    <div className="size-full min-h-screen relative flex items-center justify-center p-4 py-12">
+      {/* Blurred Background */}
+      <div className="absolute inset-0 z-0">
+        <Image
+          src="/assets/login-bg.png"
+          alt="Municipal Hall Background"
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 backdrop-blur-md bg-white/30" />
+      </div>
 
-          {error && (
-            <div className="mt-4 rounded-lg bg-[var(--danger-light)] p-3 text-sm text-[var(--danger)]">
-              {error}
+      <div className="w-full max-w-lg relative z-10">
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          {/* Green Gradient Header */}
+          <div className="bg-gradient-to-r from-green-600 to-green-700 p-8 text-white text-center">
+            <div className="flex justify-center mb-4">
+              <div className="bg-white p-2 rounded-full shadow-lg">
+                <Image
+                  src="/assets/logo.png"
+                  alt="Municipality of Enrique B. Magalona Logo"
+                  width={60}
+                  height={60}
+                  className="object-contain rounded-sm"
+                />
+              </div>
             </div>
-          )}
+            <h1 className="text-2xl font-bold mb-2">Create Account</h1>
+            <p className="text-green-100 text-sm">
+              Municipality of Enrique B. Magalona
+            </p>
+            <p className="text-green-100 text-xs mt-1">
+              Register to apply for a business permit online
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="firstName"
-                  className="block text-sm font-medium text-[var(--text-primary)]"
-                >
-                  First Name *
-                </label>
-                <input
+          {/* Form */}
+          <div className="p-8">
+            {error && (
+              <div className="mb-4 rounded-lg bg-[var(--danger-light)] p-3 text-sm text-[var(--danger)]">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FloatingLabelInput
                   id="firstName"
                   name="firstName"
                   type="text"
+                  label="First Name"
                   required
                   value={formData.firstName}
                   onChange={handleChange}
-                  className="mt-1 block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                  placeholder="Juan"
+                  autoComplete="given-name"
                 />
-              </div>
-              <div>
-                <label
-                  htmlFor="lastName"
-                  className="block text-sm font-medium text-[var(--text-primary)]"
-                >
-                  Last Name *
-                </label>
-                <input
+                <FloatingLabelInput
                   id="lastName"
                   name="lastName"
                   type="text"
+                  label="Last Name"
                   required
                   value={formData.lastName}
                   onChange={handleChange}
-                  className="mt-1 block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                  placeholder="Dela Cruz"
+                  autoComplete="family-name"
                 />
               </div>
-            </div>
 
-            <div>
-              <label
-                htmlFor="middleName"
-                className="block text-sm font-medium text-[var(--text-primary)]"
-              >
-                Middle Name (Optional)
-              </label>
-              <input
+              <FloatingLabelInput
                 id="middleName"
                 name="middleName"
                 type="text"
+                label="Middle Name (Optional)"
                 value={formData.middleName}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                placeholder="Santos"
+                autoComplete="additional-name"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-[var(--text-primary)]"
-              >
-                Email Address *
-              </label>
-              <input
+              <FloatingLabelInput
                 id="email"
                 name="email"
                 type="email"
+                label="Email Address"
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                placeholder="juan@email.com"
+                autoComplete="email"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="phone"
-                className="block text-sm font-medium text-[var(--text-primary)]"
-              >
-                Phone Number (Optional)
-              </label>
-              <input
+              <FloatingLabelInput
                 id="phone"
                 name="phone"
                 type="tel"
+                label="Phone Number (Optional)"
                 value={formData.phone}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                placeholder="09171234567"
+                autoComplete="tel"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-[var(--text-primary)]"
-              >
-                Password *
-              </label>
-              <div className="relative mt-1">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 pr-10 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                  placeholder="Min. 8 chars, upper, lower, number, special"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-              <p className="mt-1 text-xs text-[var(--background)]0">
-                Must include uppercase, lowercase, number, and special character
-              </p>
-            </div>
+              <FloatingLabelInput
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                label="Password"
+                required
+                value={formData.password}
+                onChange={handleChange}
+                autoComplete="new-password"
+                endAdornment={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                }
+                hint="Must include uppercase, lowercase, number, and special character"
+              />
 
-            <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-sm font-medium text-[var(--text-primary)]"
-              >
-                Confirm Password *
-              </label>
-              <input
+              <FloatingLabelInput
                 id="confirmPassword"
                 name="confirmPassword"
                 type="password"
+                label="Confirm Password"
                 required
                 value={formData.confirmPassword}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                placeholder="••••••••"
+                autoComplete="new-password"
               />
-            </div>
 
-            <div className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                required
-                className="mt-1 h-4 w-4 rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)]"
-              />
-              <span className="text-sm text-[var(--text-secondary)]">
-                I agree to the{" "}
-                <Link
-                  href="/terms"
-                  className="font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
-                >
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
-                <Link
-                  href="/privacy"
-                  className="font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
-                >
-                  Privacy Policy
-                </Link>
-                , in accordance with Republic Act 10173 (Data Privacy Act).
-              </span>
-            </div>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  required
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                />
+                <span className="text-sm text-gray-600">
+                  I agree to the{" "}
+                  <Link
+                    href="/terms"
+                    className="font-medium underline text-green-600 hover:text-green-700"
+                  >
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link
+                    href="/privacy"
+                    className="font-medium underline text-green-600 hover:text-green-700"
+                  >
+                    Privacy Policy
+                  </Link>
+                  , in accordance with Republic Act 10173 (Data Privacy Act).
+                </span>
+              </label>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? "Creating account..." : "Create Account"}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-green-600/30"
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading ? "Creating account…" : "Create Account"}
+              </button>
+            </form>
 
-          <p className="mt-6 text-center text-sm text-[var(--text-secondary)]">
-            Already have an account?{" "}
-            <Link
-              href="/login"
-              className="font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
-            >
-              Sign in
-            </Link>
-          </p>
+            <p className="mt-6 text-center text-sm text-gray-600">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="font-medium text-green-600 hover:text-green-700"
+              >
+                Sign in
+              </Link>
+            </p>
+          </div>
+
+          {/* Footer */}
+          <div className="bg-gray-50 px-8 py-4 border-t border-gray-100">
+            <p className="text-xs text-center text-gray-500">
+              © 2026 Municipality of Enrique B. Magalona — BPLO. All rights reserved.
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -234,7 +234,7 @@ export function broadcastApplicationApproved(
       applicationNumber,
       permitNumber,
       comment,
-      status: 'APPROVED',
+      status: 'PAID',
     }, userId)
   );
 }
@@ -278,23 +278,23 @@ export function broadcastRevisionRequested(
 }
 
 // ============================================================================
-// P3.0: Clearance & Endorsement Events
+// P3.0: BPLO-managed requirement tracking events
 // ============================================================================
 
 export function broadcastClearanceInitiated(
   userId: string,
   applicationId: string,
   applicationNumber: string,
-  offices: string[]
+  requirements: string[]
 ): void {
   sseBroadcaster.sendToUser(
     userId,
     createSSEEvent('clearance_initiated', {
       applicationId,
       applicationNumber,
-      offices,
-      officeCount: offices.length,
-      status: 'CLEARANCE_INITIATED',
+      requirements,
+      requirementCount: requirements.length,
+      status: 'REQUIREMENTS_INITIALIZED',
       timestamp: new Date().toISOString(),
     }, userId)
   );
@@ -303,16 +303,16 @@ export function broadcastClearanceInitiated(
 export function broadcastClearanceUpdated(
   userId: string,
   applicationId: string,
-  officeCode: string,
-  officeName: string,
+  requirementCode: string,
+  requirementName: string,
   status: string
 ): void {
   sseBroadcaster.sendToUser(
     userId,
     createSSEEvent('clearance_updated', {
       applicationId,
-      officeCode,
-      officeName,
+      requirementCode,
+      requirementName,
       status,
       timestamp: new Date().toISOString(),
     }, userId)

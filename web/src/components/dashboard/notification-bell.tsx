@@ -70,7 +70,7 @@ export function NotificationBell() {
           actionUrl: "/dashboard/tracking",
           read: false,
           createdAt: new Date(),
-          type: newStatus === "APPROVED" ? "success" : newStatus === "REJECTED" ? "warning" : "info",
+          type: ["PAID", "PERMIT_PREPARED", "READY_FOR_RELEASE", "RELEASED", "COMPLETED"].includes(newStatus) ? "success" : newStatus === "REJECTED" ? "warning" : "info",
         },
         ...prev.slice(0, 49),
       ]);

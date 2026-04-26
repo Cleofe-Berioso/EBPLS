@@ -31,7 +31,7 @@ export default async function PaymentReportsPage() {
     redirect("/dashboard");
   }
 
-  if (session.user.role !== "MTO") {
+  if (session.user.role !== "BPLO_OFFICE") {
     redirect("/dashboard");
   }
 

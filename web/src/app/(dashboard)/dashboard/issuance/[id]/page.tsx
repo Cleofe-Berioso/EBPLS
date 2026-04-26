@@ -82,10 +82,18 @@ export default function IssuanceDetailPage() {
     setSuccess("");
 
     try {
+      const mayorSignedBy =
+        action === "MAYOR_SIGNED"
+          ? window.prompt("Mayor/signatory name") || undefined
+          : undefined;
+      const remarks =
+        action === "MAYOR_HELD" || action === "MAYOR_RETURNED"
+          ? window.prompt("Remarks") || undefined
+          : undefined;
       const res = await fetch(`/api/issuance/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, staffNotes }),
+        body: JSON.stringify({ action, staffNotes, mayorSignedBy, remarks }),
       });
 
       const data = await res.json();

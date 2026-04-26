@@ -231,9 +231,25 @@ export async function generatePermitPDF(data: PermitPDFData): Promise<Buffer> {
   });
   data.qrCodeUrl = await generateQRCode(qrData);
 
-  const html = generatePermitHTML(data);  // Return HTML as buffer — use client-side or external service for PDF conversion
-  // Puppeteer can be used separately as a microservice if needed
-  return Buffer.from(html, 'utf-8');
+  const html = generatePermitHTML(data);
+  const puppeteer = await import('puppeteer');
+  const browser = await puppeteer.default.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '12mm', right: '10mm', bottom: '12mm', left: '10mm' },
+    });
+    return Buffer.from(pdf);
+  } finally {
+    await browser.close();
+  }
 }
 
 // ============================================================================
@@ -315,7 +331,7 @@ export function buildPermitPDFData(permit: {
     dtiSecRegistration?: string | null;
   };
 }): PermitPDFData {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:8000';
 
   return {
     permitNumber: permit.permitNumber,

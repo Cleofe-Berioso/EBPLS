@@ -4,7 +4,7 @@
 #
 # Prerequisites:
 #   - Docker Desktop installed
-#   - App running at http://localhost:3000
+#   - App running at http://localhost:8000
 #
 # Usage:
 #   .\tests\security\run-zap-scan.ps1 [-ScanType baseline|full|api]
@@ -14,7 +14,7 @@ param(
     [ValidateSet("baseline", "full", "api")]
     [string]$ScanType = "baseline",
 
-    [string]$TargetUrl = "http://host.docker.internal:3000"
+    [string]$TargetUrl = "http://host.docker.internal:8000"
 )
 
 $ErrorActionPreference = "Stop"

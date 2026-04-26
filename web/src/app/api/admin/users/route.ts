@@ -3,20 +3,34 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { z } from "zod";
+import { randomBytes } from "crypto";
 import { captureException } from "@/lib/monitoring";
 
 const createUserSchema = z.object({
   email: z.string().email(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  role: z.enum(["BPLO_OFFICE", "MTO"]),
+  role: z.enum(["APPLICANT", "BPLO_OFFICE", "ADMIN"]),
   phone: z.string().optional(),
 });
+
+function generateSecureTempPassword(length: number): string {
+  const charset =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const bytes = randomBytes(length);
+  let result = "";
+
+  for (let i = 0; i < length; i++) {
+    result += charset[bytes[i] % charset.length];
+  }
+
+  return result;
+}
 
 export async function GET(req: Request) {
   try {
     const session = await auth();
-    if (!session?.user || session.user.role !== "BPLO_OFFICE") {
+    if (!session?.user || session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -37,7 +51,7 @@ export async function GET(req: Request) {
             ],
           }
         : {}),
-      ...(role ? { role: role as "APPLICANT" | "BPLO_OFFICE" | "MTO" } : {}),
+      ...(role ? { role: role as "APPLICANT" | "BPLO_OFFICE" | "ADMIN" } : {}),
       ...(status ? { status: status as "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION" } : {}),
     };
 
@@ -70,7 +84,7 @@ export async function GET(req: Request) {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || session.user.role !== "BPLO_OFFICE") {
+    if (!session?.user || session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -91,7 +105,7 @@ export async function POST(request: Request) {
     }
 
     // Generate a temporary password
-    const tempPassword = Math.random().toString(36).slice(-10) + "A1!";
+    const tempPassword = generateSecureTempPassword(10) + "A1!";
     const hashedPassword = await hash(tempPassword, 12);
 
     const user = await prisma.user.create({

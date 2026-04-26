@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import SystemStats from "@/components/dashboard/system-stats";
 import {
   FileText,
   Users,
@@ -19,7 +20,7 @@ export const metadata = { title: "Reports" };
 export default async function AdminReportsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "BPLO_OFFICE") redirect("/dashboard");
+  if (session.user.role !== "ADMIN") redirect("/dashboard");
 
   // Aggregate stats
   const [
@@ -69,8 +70,8 @@ export default async function AdminReportsPage() {
       bg: "bg-indigo-50",
     },
     {
-      label: "Approved",
-      value: statusMap["APPROVED"] || 0,
+      label: "Paid/Ready",
+      value: (statusMap["PAID"] || 0) + (statusMap["PERMIT_PREPARED"] || 0) + (statusMap["READY_FOR_RELEASE"] || 0),
       icon: <CheckCircle className="h-6 w-6 text-[var(--success)]" />,
       bg: "bg-[var(--success-light)]",
     },
@@ -147,6 +148,12 @@ export default async function AdminReportsPage() {
       </div>
 
       {/* Application Status Distribution */}
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Analytics Charts</h2>
+        <SystemStats period="30" />
+      </div>
+
+      {/* Status breakdown bars */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -164,7 +171,14 @@ export default async function AdminReportsPage() {
                   DRAFT: "bg-gray-400",
                   SUBMITTED: "bg-[var(--accent-light)]0",
                   UNDER_REVIEW: "bg-[var(--warning-light)]0",
-                  APPROVED: "bg-[var(--success-light)]0",
+                  RETURNED_FOR_CORRECTION: "bg-orange-400",
+                  RESUBMITTED: "bg-blue-400",
+                  PAYMENT_PENDING: "bg-yellow-400",
+                  PAID: "bg-[var(--success-light)]0",
+                  PERMIT_PREPARED: "bg-blue-500",
+                  READY_FOR_RELEASE: "bg-purple-400",
+                  RELEASED: "bg-green-500",
+                  COMPLETED: "bg-green-600",
                   REJECTED: "bg-[var(--danger-light)]0",
                   CANCELLED: "bg-[var(--border)]",
                 };
@@ -216,9 +230,16 @@ export default async function AdminReportsPage() {
                       {
                         DRAFT: "bg-[var(--surface-muted)] text-[var(--text-primary)]",
                         SUBMITTED: "bg-blue-100 text-[var(--accent-hover)]",
-                        ENDORSED: "bg-purple-100 text-purple-700",
                         UNDER_REVIEW: "bg-yellow-100 text-yellow-700",
-                        APPROVED: "bg-green-100 text-[var(--success)]",
+                        RETURNED_FOR_CORRECTION: "bg-orange-100 text-orange-700",
+                        RESUBMITTED: "bg-blue-100 text-blue-700",
+                        ASSESSED: "bg-indigo-100 text-indigo-700",
+                        PAYMENT_PENDING: "bg-yellow-100 text-yellow-700",
+                        PAID: "bg-green-100 text-[var(--success)]",
+                        PERMIT_PREPARED: "bg-blue-100 text-blue-700",
+                        READY_FOR_RELEASE: "bg-purple-100 text-purple-700",
+                        RELEASED: "bg-green-100 text-green-700",
+                        COMPLETED: "bg-green-100 text-green-800",
                         REJECTED: "bg-red-100 text-[var(--danger)]",
                         CANCELLED: "bg-[var(--surface-muted)] text-[var(--background)]0",
                       }[app.status] || "bg-[var(--surface-muted)] text-[var(--text-primary)]"

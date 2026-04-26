@@ -21,7 +21,7 @@ export async function GET(req: Request) {
 
   // Session auth for admins
   const session = await auth();
-  if (!session?.user || (session.user as { role?: string }).role !== 'ADMINISTRATOR') {
+  if (!session?.user || (session.user as { role?: string }).role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

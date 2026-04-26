@@ -167,7 +167,7 @@ export default function VerifyOtpPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--accent-light)] to-[var(--background)] px-4 py-12">
       <div className="w-full max-w-md">        <div className="mb-8 text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
+          <Link href="/login" className="inline-flex items-center gap-2">
             <Shield className="h-8 w-8 text-[var(--accent)] sm:h-10 sm:w-10 flex-shrink-0" />
             <span className="text-lg font-bold text-[var(--text-primary)] sm:text-2xl">Business Permit System</span>
           </Link>

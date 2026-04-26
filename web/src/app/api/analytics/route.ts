@@ -11,7 +11,7 @@ import { cacheOrCompute, CacheKeys, CacheTTL } from '@/lib/cache';
 export async function GET(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || !['ADMINISTRATOR', 'STAFF', 'REVIEWER'].includes(session.user.role)) {
+    if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }    const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || '30'; // days
@@ -120,7 +120,9 @@ export async function GET(request: Request) {
       `, startDate),    ]);
 
     // Calculate approval rate
-    const approvedCount = applicationsByStatus.find((s) => s.status === 'APPROVED')?._count.status || 0;
+    const approvedCount = applicationsByStatus
+      .filter((s) => ['PAYMENT_PENDING', 'PAID', 'PERMIT_PREPARED', 'READY_FOR_RELEASE', 'RELEASED', 'COMPLETED'].includes(s.status))
+      .reduce((sum, s) => sum + s._count.status, 0);
     const rejectedCount = applicationsByStatus.find((s) => s.status === 'REJECTED')?._count.status || 0;
     const decidedCount = approvedCount + rejectedCount;
     const approvalRate = decidedCount > 0 ? ((approvedCount / decidedCount) * 100).toFixed(1) : '0';

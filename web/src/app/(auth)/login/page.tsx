@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Shield, Eye, EyeOff, Loader2, Home } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, Loader2 } from "lucide-react";
 import { signIn } from "next-auth/react";
-import { Suspense } from "react";
+import { FloatingLabelInput } from "@/components/ui/floating-label-input";
 
 function LoginForm() {
   const router = useRouter();
@@ -23,11 +24,10 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      // Use NextAuth's signIn function to properly create a session
       const result = await signIn("credentials", {
         email,
         password,
-        redirect: false, // Don't auto-redirect so we can handle errors
+        redirect: false,
         callbackUrl: "/dashboard",
       });
 
@@ -36,10 +36,9 @@ function LoginForm() {
         return;
       }
 
-      // Session cookie should now be set, redirect to dashboard
       router.push("/dashboard");
       router.refresh();
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
@@ -47,132 +46,146 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--accent-light)] to-[var(--background)] px-4">
-      <div className="w-full max-w-md">        {/* Logo */}
-        <div className="mb-8 text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <Shield className="h-8 w-8 text-[var(--accent)] sm:h-10 sm:w-10 flex-shrink-0" />
-            <span className="text-lg font-bold text-[var(--text-primary)] sm:text-2xl">
-              Business Permit System
-            </span>
-          </Link>
-        </div>
+    <div className="size-full min-h-screen relative flex items-center justify-center p-4">
+      {/* Blurred Background */}
+      <div className="absolute inset-0 z-0">
+        <Image
+          src="/assets/login-bg.png"
+          alt="Municipal Hall Background"
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 backdrop-blur-md bg-white/30" />
+      </div>
 
-        {/* Form Card */}
-        <div className="rounded-2xl bg-[var(--surface)] p-6 sm:p-8 shadow-xl">
-          <h2 className="text-2xl font-bold text-[var(--text-primary)]">Welcome back</h2>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Sign in to your account to continue
-          </p>
-
-          {justVerified && (
-            <div className="mt-4 rounded-lg bg-[var(--success-light)] border border-green-200 px-4 py-3 text-sm text-[var(--success)]">
-              ✓ Email verified successfully! You can now sign in.
+      <div className="w-full max-w-md relative z-10">
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          {/* Green Gradient Header */}
+          <div className="bg-gradient-to-r from-green-600 to-green-700 p-8 text-white text-center">
+            <div className="flex justify-center mb-4">
+              <div className="bg-white p-2 rounded-full shadow-lg">
+                <Image
+                  src="/assets/logo.png"
+                  alt="Municipality of Enrique B. Magalona Logo"
+                  width={80}
+                  height={80}
+                  className="object-contain rounded-sm"
+                />
+              </div>
             </div>
-          )}
+            <h1 className="text-2xl font-bold mb-2">eBPLS System</h1>
+            <p className="text-green-100 text-sm">
+              Municipality of Enrique B. Magalona
+            </p>
+            <p className="text-green-100 text-xs mt-1">
+              Electronic Business Permits and Licensing
+            </p>
+          </div>
 
-          {error && (
-            <div className="mt-4 rounded-lg bg-[var(--danger-light)] p-3 text-sm text-[var(--danger)]">
-              {error}
-            </div>
-          )}
+          {/* Login Form */}
+          <div className="p-8">
+            {justVerified && (
+              <div className="mb-4 rounded-lg bg-[var(--success-light)] border border-green-200 px-4 py-3 text-sm text-[var(--success)]">
+                ✓ Email verified successfully! You can now sign in.
+              </div>
+            )}
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-[var(--text-primary)]"
-              >
-                Email Address
-              </label>
-              <input
+            {error && (
+              <div className="mb-4 rounded-lg bg-[var(--danger-light)] p-3 text-sm text-[var(--danger)]">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <FloatingLabelInput
                 id="email"
                 name="email"
                 type="email"
+                label="Email Address"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                placeholder="juan@email.com"
+                autoComplete="email"
+                startAdornment={<Mail className="h-5 w-5" />}
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-[var(--text-primary)]"
-              >
-                Password
-              </label>
-              <div className="relative mt-1">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full rounded-lg border border-[var(--border)] px-4 py-2.5 pr-10 text-[var(--text-primary)] placeholder-gray-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              <FloatingLabelInput
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                label="Password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                startAdornment={<Lock className="h-5 w-5" />}
+                endAdornment={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                }
+              />
+
+              {/* Remember Me & Forgot Password */}
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <span className="text-sm text-gray-600">Remember me</span>
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-green-600 hover:text-green-700 font-medium"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
+                  Forgot password?
+                </Link>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)]"
-                />
-                <span className="text-sm text-[var(--text-secondary)]">Remember me</span>
-              </label>
-              <Link
-                href="/forgot-password"
-                className="text-sm font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+              {/* Sign In Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-green-600/30"
               >
-                Forgot password?
-              </Link>
-            </div>            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "Signing in…" : "Sign In"}
-            </button>
-          </form>
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading ? "Signing in…" : "Sign In"}
+              </button>
+            </form>
 
-          <p className="mt-6 text-center text-sm text-[var(--text-secondary)]">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
-            >
-              Create an account
-            </Link>
-          </p>
+            {/* Create Account Link */}
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-600">
+                Don&apos;t have an account?{" "}
+                <Link
+                  href="/register"
+                  className="text-green-600 hover:text-green-700 font-medium"
+                >
+                  Register as Applicant
+                </Link>
+              </p>
+            </div>
+          </div>
 
-          <div className="mt-6 border-t border-[var(--border)] pt-6">
-            <Link
-              href="/"
-              className="flex items-center justify-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] transition-colors"
-            >
-              <Home className="h-4 w-4" />
-              Back to Homepage
-            </Link>
+          {/* Footer */}
+          <div className="bg-gray-50 px-8 py-4 border-t border-gray-100">
+            <p className="text-xs text-center text-gray-500">
+              © 2026 Municipality of Enrique B. Magalona — BPLO. All rights reserved.
+            </p>
           </div>
         </div>
+
       </div>
     </div>
   );
@@ -180,11 +193,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)]" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import * as React from "react";
 import { X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface ModalProps {
   isOpen: boolean;
@@ -31,63 +38,45 @@ export function Modal({
   size = "md",
   footer,
 }: ModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
-    if (isOpen) {
-      document.addEventListener("keydown", handleEscape);
-      document.body.style.overflow = "hidden";
-    }
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-      document.body.style.overflow = "";
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
-      }}
-    >
-      <div
-        className={cn(
-          "w-full rounded-2xl bg-[var(--surface)] shadow-[var(--shadow-md)]",
-          sizeClasses[size]
-        )}
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className={cn("p-0 gap-0", sizeClasses[size])}
+        onInteractOutside={() => onClose()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
+        <DialogHeader className="flex flex-row items-start justify-between border-b border-border px-6 py-4 space-y-0">
           <div>
-            <h3 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h3>
+            <DialogTitle className="text-lg font-semibold text-foreground">
+              {title}
+            </DialogTitle>
             {description && (
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">{description}</p>
+              <DialogDescription className="mt-1 text-sm text-muted-foreground">
+                {description}
+              </DialogDescription>
             )}
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-5 w-5" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8 shrink-0"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
           </Button>
-        </div>
+        </DialogHeader>
 
         {/* Body */}
         <div className="max-h-[70vh] overflow-y-auto px-6 py-4">{children}</div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4">
+          <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
             {footer}
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

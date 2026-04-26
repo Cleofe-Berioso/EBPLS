@@ -15,7 +15,7 @@ datasource db {
 enum Role {
   APPLICANT
   BPLO_OFFICE
-  MTO
+  ADMIN
 }
 
 enum AccountStatus {
@@ -122,9 +122,16 @@ enum ApplicationType {
 enum ApplicationStatus {
   DRAFT
   SUBMITTED
-  ENDORSED
   UNDER_REVIEW
-  APPROVED
+  RETURNED_FOR_CORRECTION
+  RESUBMITTED
+  ASSESSED
+  PAYMENT_PENDING
+  PAID
+  PERMIT_PREPARED
+  READY_FOR_RELEASE
+  RELEASED
+  COMPLETED
   REJECTED
   CANCELLED
 }
@@ -211,7 +218,7 @@ model Application {
   reviewActions      ReviewAction[]
   permit             Permit?            @relation("PermitApplication")
   payments           Payment[]
-  clearances         Clearance[]        @relation("ApplicationClearances")
+  clearances         Clearance[]        @relation("ApplicationRequirements")
   businessLocation   BusinessLocation?
 
   @@index([applicantId])
@@ -467,7 +474,7 @@ model WebhookLog {
 }
 
 // ============================================================================
-// MODULE 3.0: ENDORSEMENT & CLEARANCE OFFICES
+// MODULE 3.0: BPLO REQUIREMENT TRACKING
 // ============================================================================
 
 enum ClearanceStatus {
@@ -478,41 +485,22 @@ enum ClearanceStatus {
   RETURNED
 }
 
-model ClearanceOffice {
-  id                String        @id @default(cuid())
-  code              String        @unique
-  name              String
-  description       String?
-  applicationTypes  String[]      // "NEW", "RENEWAL", "CLOSURE"
-  isActive          Boolean       @default(true)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-
-  clearances        Clearance[]
-
-  @@index([code])
-  @@index([isActive])
-  @@map("clearance_offices")
-}
-
 model Clearance {
   id                String            @id @default(cuid())
   applicationId     String
-  officeId          String
-  officeCode        String            // Denormalized for quick lookup: SANITARY, ZONING, etc.
-  officeName        String            // Denormalized for quick lookup
+  requirementCode   String
+  requirementName   String
   status            ClearanceStatus   @default(PENDING)
   remarks           String?
   dateCleared       DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  application       Application       @relation("ApplicationClearances", fields: [applicationId], references: [id], onDelete: Cascade)
-  office            ClearanceOffice   @relation(fields: [officeId], references: [id], onDelete: Restrict)
+  application       Application       @relation("ApplicationRequirements", fields: [applicationId], references: [id], onDelete: Cascade)
 
-  @@unique([applicationId, officeId])
+  @@unique([applicationId, requirementCode])
   @@index([applicationId])
-  @@index([officeId])
+  @@index([requirementCode])
   @@index([status])
   @@map("clearances")
 }

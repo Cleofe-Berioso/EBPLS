@@ -4,12 +4,40 @@ import prisma from "@/lib/prisma";
 import { randomUUID } from "crypto";
 import { uploadFile, generateStoragePath, scanForVirus } from "@/lib/storage";
 import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from "@/lib/utils";
+import { DocumentType } from "@prisma/client";
+import { canApplicantMutateApplication } from "@/lib/workflow";
+import { rateLimitHeaders, rateLimitUpload } from "@/lib/rate-limit";
+
+const VALID_DOCUMENT_TYPES = [
+  "PROOF_OF_REGISTRATION",
+  "PROOF_OF_OWNERSHIP",
+  "LOCATION_PLAN",
+  "FSIC",
+  "AFFIDAVIT",
+  "BARANGAY_CLEARANCE",
+  "OTHER",
+] as const;
+
+const SAFE_EXTENSION_BY_MIME: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rateLimitResult = rateLimitUpload(session.user.id);
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: "Too many uploads. Try again later." },
+        { status: 429, headers: rateLimitHeaders(rateLimitResult) }
+      );
     }
 
     const formData = await request.formData();
@@ -47,6 +75,7 @@ export async function POST(request: Request) {
     // Verify application belongs to user
     const application = await prisma.application.findUnique({
       where: { id: applicationId },
+      select: { id: true, applicantId: true, status: true },
     });
 
     if (!application) {
@@ -56,31 +85,33 @@ export async function POST(request: Request) {
       );
     }
 
+    if (session.user.role !== "APPLICANT" && session.user.role !== "BPLO_OFFICE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (session.user.role === "APPLICANT" && application.applicantId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     if (
       session.user.role === "APPLICANT" &&
-      application.applicantId !== session.user.id
+      !canApplicantMutateApplication(application.status)
     ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Documents can only be uploaded while the application is draft or returned for correction" },
+        { status: 409 }
+      );
     }
 
     const documents = [];
     const errors = [];
-    const VALID_DOCUMENT_TYPES = [
-      "PROOF_OF_REGISTRATION",
-      "PROOF_OF_OWNERSHIP",
-      "LOCATION_PLAN",
-      "FSIC",
-      "AFFIDAVIT",
-      "BARANGAY_CLEARANCE",
-      "OTHER",
-    ];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const documentType = documentTypes[i];
 
-      // CRITICAL FIX #9: Validate document type is in allowed list
-      if (!VALID_DOCUMENT_TYPES.includes(documentType)) {
+      // Validate document type is in allowed list using type-safe check
+      if (!(VALID_DOCUMENT_TYPES as readonly string[]).includes(documentType)) {
         errors.push(
           `${file.name}: Invalid document type "${documentType}". Allowed types: ${VALID_DOCUMENT_TYPES.join(", ")}`
         );
@@ -99,7 +130,7 @@ export async function POST(request: Request) {
 
       const buffer = Buffer.from(await file.arrayBuffer());
       const fileId = randomUUID();
-      const ext = file.name.split(".").pop() || "bin";
+      const ext = SAFE_EXTENSION_BY_MIME[file.type];
       const storagePath = generateStoragePath(applicationId, fileId, ext);
 
       // Virus scan
@@ -137,7 +168,7 @@ export async function POST(request: Request) {
           mimeType: file.type,
           fileSize: buffer.length,
           filePath: storagePath,
-          documentType: (documentType as any) || "OTHER", // Cast to DocumentType enum
+          documentType: documentType as DocumentType,
           status: "UPLOADED",
         },
       });
@@ -155,6 +186,16 @@ export async function POST(request: Request) {
       },
     });
 
+    if (documents.length === 0 && errors.length > 0) {
+      return NextResponse.json(
+        {
+          error: "No valid documents were uploaded",
+          errors,
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       {
         message: `${documents.length} document(s) uploaded successfully`,
@@ -164,7 +205,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Upload documents error:", error);
+    console.error("Upload documents error:", error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: "Failed to upload documents" },
       { status: 500 }

@@ -1,3 +1,5 @@
+import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
@@ -6,12 +8,17 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-[var(--surface-muted)] text-[var(--text-secondary)]",
-        primary: "bg-[var(--accent-light)] text-[var(--accent)]",
+        // shadcn/ui standard variants
+        default: "border-transparent bg-primary text-primary-foreground",
+        secondary: "border-transparent bg-secondary text-secondary-foreground",
+        destructive: "border-transparent bg-destructive text-white",
+        outline: "text-foreground border border-border",
+        // Existing project status variants (preserved for backward compatibility)
+        primary: "bg-[var(--accent-light)] text-[var(--accent-blue)]",
         success: "bg-[var(--success-light)] text-[var(--success)]",
         warning: "bg-[var(--warning-light)] text-[var(--warning)]",
         danger: "bg-[var(--danger-light)] text-[var(--danger)]",
-        info: "bg-[var(--accent-light)] text-[var(--accent)]",
+        info: "bg-[var(--accent-light)] text-[var(--accent-blue)]",
         purple: "bg-purple-100 text-purple-800",
         orange: "bg-orange-100 text-orange-800",
       },
@@ -24,23 +31,36 @@ const badgeVariants = cva(
 
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof badgeVariants> {}
+    VariantProps<typeof badgeVariants> {
+  asChild?: boolean;
+}
 
-export function Badge({ className, variant, ...props }: BadgeProps) {
+function Badge({ className, variant, asChild = false, ...props }: BadgeProps) {
+  const Comp = asChild ? Slot : "span";
   return (
-    <span className={cn(badgeVariants({ variant }), className)} {...props} />
+    <Comp
+      data-slot="badge"
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
   );
 }
 
 /**
- * Map application/document/permit status to badge variant
+ * Map application/document/permit status string to a badge variant
  */
 export function StatusBadge({ status }: { status: string }) {
   const variantMap: Record<string, BadgeProps["variant"]> = {
     DRAFT: "default",
     SUBMITTED: "primary",
     UNDER_REVIEW: "warning",
-    APPROVED: "success",
+    RETURNED_FOR_CORRECTION: "orange",
+    RESUBMITTED: "primary",
+    ASSESSED: "info",
+    PAYMENT_PENDING: "warning",
+    PAID: "success",
+    PERMIT_PREPARED: "info",
+    READY_FOR_RELEASE: "purple",
     REJECTED: "danger",
     CANCELLED: "default",
     ACTIVE: "success",
@@ -65,3 +85,5 @@ export function StatusBadge({ status }: { status: string }) {
 
   return <Badge variant={variantMap[status] || "default"}>{displayLabel}</Badge>;
 }
+
+export { Badge, badgeVariants };

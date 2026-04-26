@@ -5,6 +5,47 @@ import { broadcastNotification, sseBroadcaster, createSSEEvent } from "@/lib/sse
 import { captureException } from "@/lib/monitoring";
 import { issuanceUpdateSchema } from "@/lib/validations";
 
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (session.user.role !== "BPLO_OFFICE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = await params;
+    const issuance = await prisma.permitIssuance.findUnique({
+      where: { id },
+      include: {
+        permit: {
+          include: {
+            application: {
+              select: { id: true, applicationNumber: true, status: true },
+            },
+          },
+        },
+        issuedBy: {
+          select: { firstName: true, lastName: true },
+        },
+      },
+    });
+
+    if (!issuance) {
+      return NextResponse.json({ error: "Issuance record not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(issuance);
+  } catch (error) {
+    captureException(error, { route: "GET /api/issuance/[id]" });
+    return NextResponse.json({ error: "Failed to retrieve issuance" }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -38,7 +79,7 @@ export async function POST(
       include: {
         permit: {
           include: {
-            application: { select: { applicantId: true } },
+            application: { select: { id: true, applicantId: true, status: true } },
           },
         },
       },
@@ -66,7 +107,6 @@ export async function POST(
       case "MAYOR_SIGNED":
         // Mark permit as signed by Mayor (after offline signing)
         // Requires mayorSignedBy (name/title) in request body
-        const { mayorSignedBy } = body;
         if (!mayorSignedBy) {
           return NextResponse.json(
             { error: "mayorSignedBy is required for MAYOR_SIGNED action" },
@@ -83,7 +123,6 @@ export async function POST(
       case "MAYOR_HELD":
         // Mark permit as held by Mayor (e.g., needs correction)
         // Requires remarks in body
-        const { remarks } = body;
         updateData = {
           mayorSigningStatus: "HELD",
           mayorSigningRemarks: remarks || "Held by Mayor - action pending",
@@ -95,7 +134,7 @@ export async function POST(
         updateData = {
           mayorSigningStatus: "NOT_REQUIRED", // Reset for re-preparation if needed
           status: "PREPARED",
-          mayorSigningRemarks: body.remarks || "Returned by Mayor",
+          mayorSigningRemarks: remarks || "Returned by Mayor",
           staffNotes: staffNotes || null,
         };
         break;
@@ -103,6 +142,18 @@ export async function POST(
       // Issuance workflow actions (require Mayor signature first if applicable)
       case "ISSUE":
         // Verify Mayor signature if applicable (NEW/RENEWAL)
+        if (
+          issuance.permit.application.status !== "PERMIT_PREPARED" &&
+          issuance.permit.application.status !== "READY_FOR_RELEASE"
+        ) {
+          return NextResponse.json(
+            {
+              error: "Cannot issue permit",
+              message: "Permit can only be issued after it has been prepared from a paid application.",
+            },
+            { status: 409 }
+          );
+        }
         if (
           issuance.mayorSigningStatus === "PENDING" ||
           issuance.mayorSigningStatus === "HELD"
@@ -123,6 +174,12 @@ export async function POST(
         };
         break;
       case "RELEASE":
+        if (issuance.status !== "ISSUED") {
+          return NextResponse.json(
+            { error: "Permit must be issued before release" },
+            { status: 409 }
+          );
+        }
         updateData = {
           status: "RELEASED",
           releasedAt: new Date(),
@@ -130,6 +187,12 @@ export async function POST(
         };
         break;
       case "COMPLETE":
+        if (issuance.status !== "RELEASED") {
+          return NextResponse.json(
+            { error: "Permit must be released before completion" },
+            { status: 409 }
+          );
+        }
         updateData = {
           status: "COMPLETED",
           completedAt: new Date(),
@@ -147,20 +210,49 @@ export async function POST(
         );
     }
 
-    const updated = await prisma.permitIssuance.update({
-      where: { id },
-      data: updateData,
-    });    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: `ISSUANCE_${action}`,
-        entity: "PermitIssuance",
-        entityId: id,
-        details: {
-          permitNumber: issuance.permit.permitNumber,
-          action,
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedIssuance = await tx.permitIssuance.update({
+        where: { id },
+        data: updateData,
+      });
+
+      const applicationStatusByAction: Record<string, "READY_FOR_RELEASE" | "RELEASED" | "COMPLETED" | undefined> = {
+        ISSUE: "READY_FOR_RELEASE",
+        RELEASE: "RELEASED",
+        COMPLETE: "COMPLETED",
+      };
+      const newApplicationStatus = applicationStatusByAction[action];
+
+      if (newApplicationStatus && issuance.permit.application.status !== newApplicationStatus) {
+        await tx.application.update({
+          where: { id: issuance.permit.application.id },
+          data: { status: newApplicationStatus },
+        });
+        await tx.applicationHistory.create({
+          data: {
+            applicationId: issuance.permit.application.id,
+            previousStatus: issuance.permit.application.status,
+            newStatus: newApplicationStatus,
+            comment: `Issuance action: ${action}`,
+            changedBy: session.user.id,
+          },
+        });
+      }
+
+      await tx.activityLog.create({
+        data: {
+          userId: session.user.id,
+          action: `ISSUANCE_${action}`,
+          entity: "PermitIssuance",
+          entityId: id,
+          details: {
+            permitNumber: issuance.permit.permitNumber,
+            action,
+          },
         },
-      },
+      });
+
+      return updatedIssuance;
     });
 
     // Broadcast real-time permit_issued event to the applicant when permit is ISSUED (non-blocking)

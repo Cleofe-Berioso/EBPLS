@@ -2,7 +2,7 @@
  * GET /api/renewals/documents
  * Fetch all documents related to the user's renewal applications
  *
- * Access: APPLICANT (own documents), REVIEWER/ADMINISTRATOR (any)
+ * Access: APPLICANT (own documents), BPLO_OFFICE (any)
  * Returns: List of documents with status, verification info
  */
 
@@ -34,7 +34,7 @@ export async function GET() {
         type: "RENEWAL",
       };
     } else {
-      // STAFF/REVIEWER/ADMIN: documents from renewal applications only
+      // BPLO_OFFICE: documents from renewal applications only
       where.application = {
         type: "RENEWAL",
       };

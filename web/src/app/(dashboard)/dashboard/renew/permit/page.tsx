@@ -207,17 +207,15 @@ export default function RenewalFormPage() {
                   </ul>
                 </div>
                 <div>
-                  <p className="font-medium text-blue-900">Government Clearances Required (1 certified copy each)</p>
+                  <p className="font-medium text-blue-900">BPLO-Managed Compliance Requirements (1 certified copy each)</p>
                   <ul className="list-disc ml-5 mt-1 text-xs space-y-1">
-                    <li>Sanitary Office</li>
-                    <li>Environment Office</li>
-                    <li>Engineering Office</li>
-                    <li>BFP (Fire)</li>
-                    <li>RPT Clearance (Municipal Treasurer)</li>
-                    <li>Water / Utilities</li>
-                    <li>Assessor&rsquo;s Office</li>
-                    <li>Market Clearances (if retail / market business)</li>
-                    <li>Agriculture Office (if agricultural / piggery)</li>
+                    <li>Updated sanitary permit or sanitary clearance</li>
+                    <li>Environmental compliance document, if applicable</li>
+                    <li>Engineering or occupancy-related supporting document, if applicable</li>
+                    <li>Fire Safety Inspection Certificate</li>
+                    <li>Property-related tax or occupancy clearance, if applicable</li>
+                    <li>Utility or service compliance document, if applicable</li>
+                    <li>Any BPLO-required supporting document specific to your business activity</li>
                   </ul>
                 </div>
               </div>

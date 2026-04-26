@@ -248,11 +248,11 @@ export const adminCreateUserSchema = z.object({
     .regex(/^(\+63|0)(9\d{9})$/, "Invalid Philippine phone number")
     .optional()
     .or(z.literal("")),
-  role: z.enum(["BPLO_OFFICE", "MTO"]),
+  role: z.enum(["APPLICANT", "BPLO_OFFICE", "ADMIN"]),
 });
 
 export const adminUpdateUserSchema = z.object({
-  role: z.enum(["BPLO_OFFICE", "MTO"]).optional(),
+  role: z.enum(["APPLICANT", "BPLO_OFFICE", "ADMIN"]).optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING_VERIFICATION"]).optional(),
   resetPassword: z.boolean().optional(),
 });
@@ -484,15 +484,12 @@ export const clearanceUpdateSchema = z.object({
   remarks: z.string().max(1000, "Remarks cannot exceed 1000 characters").optional(),
 });
 
-export const clearanceOfficeSchema = z.object({
-  code: z
+export const requirementLabelSchema = z.object({
+  requirementCode: z
     .string()
     .min(2, "Code must be at least 2 characters")
     .toUpperCase(),
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-  applicationTypes: z.array(z.enum(["NEW", "RENEWAL", "CLOSURE"])),
-  isActive: z.boolean().default(true),
+  requirementName: z.string().min(2, "Name must be at least 2 characters"),
 });
 
 // ============================================================================
@@ -502,7 +499,7 @@ export const clearanceOfficeSchema = z.object({
 export const permitListSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  status: z.enum(["ACTIVE", "EXPIRED", "REVOKED", "RENEWED"]).optional(),
+  status: z.enum(["ACTIVE", "EXPIRED", "REVOKED", "RENEWED", "CLOSED"]).optional(),
   search: z.string().max(100).optional(),
 });
 
@@ -579,7 +576,7 @@ export type ApplicationSubmitInput = z.infer<typeof applicationSubmitSchema>;
 export type DocumentUploadInput = z.infer<typeof documentUploadSchema>;
 export type DocumentTypeVerificationInput = z.infer<typeof documentTypeVerificationSchema>;
 export type ClearanceUpdateInput = z.infer<typeof clearanceUpdateSchema>;
-export type ClearanceOfficeInput = z.infer<typeof clearanceOfficeSchema>;
+export type RequirementLabelInput = z.infer<typeof requirementLabelSchema>;
 export type PermitListInput = z.infer<typeof permitListSchema>;
 export type PermitPrintInput = z.infer<typeof permitPrintSchema>;
 export type VerifyPermitInput = z.infer<typeof verifyPermitSchema>;

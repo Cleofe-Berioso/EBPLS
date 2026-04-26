@@ -5,6 +5,7 @@
 
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
+import { randomBytes } from 'crypto';
 
 const APP_NAME = process.env.TOTP_ISSUER || process.env.NEXT_PUBLIC_APP_NAME || 'BusinessPermit';
 
@@ -57,10 +58,12 @@ export function verifyTotp(token: string, secret: string): boolean {
 
 export function generateBackupCodes(count: number = 8): string[] {
   const codes: string[] = [];
+  const CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   for (let i = 0; i < count; i++) {
-    const code = Array.from({ length: 8 }, () =>
-      Math.random().toString(36).charAt(2)
-    ).join('').toUpperCase();
+    const bytes = randomBytes(8);
+    const code = Array.from(bytes)
+      .map((b) => CHARSET[b % CHARSET.length])
+      .join('');
     // Format as XXXX-XXXX
     codes.push(`${code.slice(0, 4)}-${code.slice(4)}`);
   }

@@ -1,555 +1,799 @@
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 const bcrypt = require("bcryptjs");
+const { randomUUID } = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-// Load DATABASE_URL from .env manually (Prisma 7 seed runs outside Next.js)
-function loadEnv() {
-  const envPath = path.join(__dirname, "..", ".env");
-  if (!fs.existsSync(envPath)) return;
-  const lines = fs.readFileSync(envPath, "utf-8").split("\n");
-  for (const line of lines) {
+const envPath = path.join(__dirname, "..", ".env");
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, "utf-8").split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIndex = trimmed.indexOf("=");
-    if (eqIndex === -1) continue;
-    const key = trimmed.slice(0, eqIndex).trim();
-    let value = trimmed.slice(eqIndex + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     if (!process.env[key]) process.env[key] = value;
   }
 }
 
-loadEnv();
-
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-async function main() {
-  console.log("🌱 Seeding database with 3-role system (APPLICANT, BPLO_OFFICE, MTO)...\n");
+const SYSTEM_SETTINGS = [
+  { key: "system_name", value: "Online Business Permit System" },
+  { key: "lgu_name", value: "Municipality of Enrique B. Magalona" },
+  { key: "lgu_email", value: "permits@lgu.gov.ph" },
+  { key: "office_hours", value: "Mon-Fri 8:00 AM – 5:00 PM" },
+  { key: "session_timeout_minutes", value: "30" },
+];
 
-  // Clean existing data
+function atUtc(dateString) {
+  return new Date(dateString);
+}
+
+function extensionFromMimeType(mimeType) {
+  if (mimeType === "application/pdf") return "pdf";
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  throw new Error(`Unsupported MIME type for seed document: ${mimeType}`);
+}
+
+function storageDocumentPath(dateString, applicationId, fileId, extension) {
+  const date = new Date(dateString);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `documents/${year}/${month}/${applicationId}/${fileId}.${extension}`;
+}
+
+function buildDocumentSeed({
+  applicationId,
+  uploadedBy,
+  originalName,
+  mimeType = "application/pdf",
+  fileSize,
+  documentType,
+  status,
+  createdAt,
+  verifiedBy,
+  verifiedAt,
+  rejectionReason,
+}) {
+  const extension = extensionFromMimeType(mimeType);
+  const fileId = randomUUID();
+
+  return {
+    uploadedBy,
+    fileName: `${fileId}.${extension}`,
+    originalName,
+    mimeType,
+    fileSize,
+    filePath: storageDocumentPath(createdAt, applicationId, fileId, extension),
+    documentType,
+    status,
+    ...(verifiedBy ? { verifiedBy } : {}),
+    ...(verifiedAt ? { verifiedAt: atUtc(verifiedAt) } : {}),
+    ...(rejectionReason ? { rejectionReason } : {}),
+  };
+}
+
+async function resetData() {
+  await prisma.activityLog.deleteMany();
+  await prisma.webhookLog.deleteMany();
+  await prisma.payment.deleteMany();
   await prisma.permitIssuance.deleteMany();
   await prisma.permit.deleteMany();
-  await prisma.clearance.deleteMany();
-  await prisma.clearanceOffice.deleteMany();
+  await prisma.document.deleteMany();
   await prisma.reviewAction.deleteMany();
   await prisma.applicationHistory.deleteMany();
+  await prisma.clearance.deleteMany();
   await prisma.businessLocation.deleteMany();
-  await prisma.document.deleteMany();
   await prisma.application.deleteMany();
-  await prisma.payment.deleteMany();
-  await prisma.activityLog.deleteMany();
+  await prisma.systemSetting.deleteMany();
   await prisma.otpToken.deleteMany();
   await prisma.session.deleteMany();
-  await prisma.systemSetting.deleteMany();
   await prisma.user.deleteMany();
+}
+
+async function main() {
+  console.log("Resetting and seeding EBPLS for APPLICANT, BPLO_OFFICE, and ADMIN only...");
+
+  await resetData();
 
   const password = await bcrypt.hash("Password123!", 12);
 
-  // ── Users ──────────────────────────────────────────────────────────
-  console.log("👤 Creating users...");
-
-  // 3 BPLO Office staff (handling applications & permits)
-  const bplo1 = await prisma.user.create({
-    data: {
-      email: "bplo1@lgu.gov.ph",
-      password,
-      firstName: "Maria",
-      lastName: "Santos",
-      phone: "09181234567",
-      role: "BPLO_OFFICE",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-    },
-  });
-
-  const bplo2 = await prisma.user.create({
-    data: {
-      email: "bplo2@lgu.gov.ph",
-      password,
-      firstName: "Jose",
-      lastName: "Reyes",
-      phone: "09191234567",
-      role: "BPLO_OFFICE",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-    },
-  });
-
-  const bplo3 = await prisma.user.create({
-    data: {
-      email: "bplo3@lgu.gov.ph",
-      password,
-      firstName: "Ana",
-      lastName: "Cruz",
-      phone: "09201234567",
-      role: "BPLO_OFFICE",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-    },
-  });
-
-  // 2 MTO staff (handling payments)
-  const mto1 = await prisma.user.create({
-    data: {
-      email: "mto1@lgu.gov.ph",
-      password,
-      firstName: "Roberto",
-      lastName: "Torres",
-      phone: "09211234567",
-      role: "MTO",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-    },
-  });
-
-  const mto2 = await prisma.user.create({
-    data: {
-      email: "mto2@lgu.gov.ph",
-      password,
-      firstName: "Elena",
-      lastName: "Gonzalez",
-      phone: "09221234567",
-      role: "MTO",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-    },
-  });
-
-  // 5 Applicants (business owners)
-  const applicant1 = await prisma.user.create({
-    data: {
-      email: "juan@example.com",
-      password,
-      firstName: "Juan",
-      lastName: "Dela Cruz",
-      phone: "09231234567",
-      role: "APPLICANT",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-      renewalEligible: true,
-    },
-  });
-
-  const applicant2 = await prisma.user.create({
-    data: {
-      email: "pedro@example.com",
-      password,
-      firstName: "Pedro",
-      lastName: "Garcia",
-      phone: "09241234567",
-      role: "APPLICANT",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-      renewalEligible: false,
-    },
-  });
-
-  const applicant3 = await prisma.user.create({
-    data: {
-      email: "ana@example.com",
-      password,
-      firstName: "Ana",
-      lastName: "Reyes",
-      phone: "09251234567",
-      role: "APPLICANT",
-      status: "PENDING_VERIFICATION",
-      renewalEligible: false,
-    },
-  });
-
-  const applicant4 = await prisma.user.create({
-    data: {
-      email: "maria@example.com",
-      password,
-      firstName: "Maria",
-      lastName: "Gonzales",
-      phone: "09261234567",
-      role: "APPLICANT",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-      renewalEligible: true,
-    },
-  });
-
-  const applicant5 = await prisma.user.create({
-    data: {
-      email: "carlos@example.com",
-      password,
-      firstName: "Carlos",
-      lastName: "Mendoza",
-      phone: "09271234567",
-      role: "APPLICANT",
-      status: "ACTIVE",
-      emailVerified: new Date(),
-      renewalEligible: false,
-    },
-  });
-
-  console.log(`  ✓ Created 12 users (3 BPLO_OFFICE, 2 MTO, 7 APPLICANT)`);
-
-  // ── ClearanceOffice ────────────────────────────────────────────────────
-  console.log("🏢 Creating clearance offices...");
-
-  const offices = await Promise.all([
-    prisma.clearanceOffice.create({
+  const [admin, bploOfficer, juan, maria, ana] = await Promise.all([
+    prisma.user.create({
       data: {
-        code: "SANITARY",
-        name: "Department of Health - Sanitary Division",
-        description: "Health and sanitation clearance for food and beverage businesses",
-        applicationTypes: ["NEW", "RENEWAL"],
-        isActive: true,
+        email: "admin@lgu.gov.ph",
+        password,
+        firstName: "System",
+        lastName: "Admin",
+        phone: "09170000002",
+        role: "ADMIN",
+        status: "ACTIVE",
+        emailVerified: new Date(),
       },
     }),
-    prisma.clearanceOffice.create({
+    prisma.user.create({
       data: {
-        code: "ZONING",
-        name: "City Planning & Development Office - Zoning Division",
-        description: "Zoning compliance and land use verification",
-        applicationTypes: ["NEW"],
-        isActive: true,
+        email: "bplo@lgu.gov.ph",
+        password,
+        firstName: "Bianca",
+        lastName: "Lopez",
+        phone: "09170000001",
+        role: "BPLO_OFFICE",
+        status: "ACTIVE",
+        emailVerified: new Date(),
       },
     }),
-    prisma.clearanceOffice.create({
+    prisma.user.create({
       data: {
-        code: "BFP_FIRE",
-        name: "Bureau of Fire Protection - Fire Safety",
-        description: "Fire safety certificate and compliance",
-        applicationTypes: ["NEW", "RENEWAL"],
-        isActive: true,
+        email: "juan@example.com",
+        password,
+        firstName: "Juan",
+        lastName: "Dela Cruz",
+        phone: "09171234567",
+        role: "APPLICANT",
+        status: "ACTIVE",
+        emailVerified: new Date(),
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "maria@example.com",
+        password,
+        firstName: "Maria",
+        lastName: "Santos",
+        phone: "09181234567",
+        role: "APPLICANT",
+        status: "ACTIVE",
+        emailVerified: new Date(),
+        renewalEligible: true,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "ana@example.com",
+        password,
+        firstName: "Ana",
+        lastName: "Reyes",
+        phone: "09192223344",
+        role: "APPLICANT",
+        status: "ACTIVE",
+        emailVerified: new Date(),
       },
     }),
   ]);
 
-  console.log(`  ✓ Created ${offices.length} clearance offices`);
+  await prisma.systemSetting.createMany({ data: SYSTEM_SETTINGS });
 
-  // ── Applications ───────────────────────────────────────────────────
-  console.log("📋 Creating applications...");
-
-  const app1 = await prisma.application.create({
+  const historicalPermitApplicationId = randomUUID();
+  const historicalPermitApplication = await prisma.application.create({
     data: {
-      applicationNumber: "APP-2026-000001",
+      id: historicalPermitApplicationId,
+      applicationNumber: "APP-20250418-NEW001",
       type: "NEW",
-      status: "APPROVED",
-      applicantId: applicant1.id,
-      businessName: "Juan's Sari-Sari Store",
-      businessType: "Retail - General Merchandise",
-      businessAddress: "123 Rizal Street, Barangay 1",
-      businessCity: "Quezon City",
-      businessProvince: "Metro Manila",
-      businessZipCode: "1100",
-      businessPhone: "09231234567",
-      businessEmail: "juan@store.example.com",
-      dtiSecRegistration: "DTI-2026-001234",
-      numberOfEmployees: 3,
-      capitalInvestment: 250000,
-      grossSales: 500000,
+      status: "COMPLETED",
+      applicantId: maria.id,
+      businessName: "Santos Trading",
+      businessType: "SOLE_PROPRIETORSHIP",
+      lineOfBusiness: "Retail",
+      businessAddress: "Old Highway, Enrique B. Magalona, Negros Occidental",
+      businessBarangay: "Tabigue",
+      businessCity: "Enrique B. Magalona",
+      businessProvince: "Negros Occidental",
+      businessZipCode: "6118",
+      businessPhone: maria.phone,
+      businessEmail: maria.email,
+      dtiSecRegistration: "DTI-2025-009",
+      tinNumber: "987-654-321-000",
+      businessArea: 42,
+      numberOfEmployees: 4,
+      capitalInvestment: 95000,
+      grossSales: 380000,
       documentVerified: true,
       applicationApproved: true,
-      submittedAt: new Date("2026-01-15"),
-      approvedAt: new Date("2026-01-20"),
+      paymentConfirmed: true,
+      submittedAt: atUtc("2025-04-18T08:00:00Z"),
+      reviewedAt: atUtc("2025-04-19T09:00:00Z"),
+      approvedAt: atUtc("2025-04-20T10:00:00Z"),
+      documents: {
+        create: [
+          buildDocumentSeed({
+            applicationId: historicalPermitApplicationId,
+            uploadedBy: maria.id,
+            originalName: "DTI Registration 2025.pdf",
+            fileSize: 2104,
+            documentType: "PROOF_OF_REGISTRATION",
+            status: "VERIFIED",
+            createdAt: "2025-04-19T09:15:00Z",
+            verifiedBy: bploOfficer.id,
+            verifiedAt: "2025-04-19T09:15:00Z",
+          }),
+          buildDocumentSeed({
+            applicationId: historicalPermitApplicationId,
+            uploadedBy: maria.id,
+            originalName: "Barangay Clearance 2025.pdf",
+            fileSize: 1840,
+            documentType: "BARANGAY_CLEARANCE",
+            status: "VERIFIED",
+            createdAt: "2025-04-19T09:20:00Z",
+            verifiedBy: bploOfficer.id,
+            verifiedAt: "2025-04-19T09:20:00Z",
+          }),
+        ],
+      },
+      payments: {
+        create: [
+          {
+            payerId: maria.id,
+            amount: 2400,
+            method: "GCASH",
+            status: "PAID",
+            transactionId: "seed-paymongo-2025-0001",
+            receiptNumber: "OR-2025-0001",
+            referenceNumber: "PM-2025-0001",
+            paidAt: atUtc("2025-04-20T11:30:00Z"),
+            notes: "Initial permit payment seeded for renewal history.",
+          },
+        ],
+      },
+      history: {
+        create: [
+          {
+            previousStatus: "DRAFT",
+            newStatus: "SUBMITTED",
+            comment: "Historical application submitted by applicant",
+            changedBy: maria.id,
+          },
+          {
+            previousStatus: "SUBMITTED",
+            newStatus: "UNDER_REVIEW",
+            comment: "BPLO began review for 2025 permit",
+            changedBy: bploOfficer.id,
+          },
+          {
+            previousStatus: "UNDER_REVIEW",
+            newStatus: "PAID",
+            comment: "Payment confirmed by BPLO",
+            changedBy: bploOfficer.id,
+          },
+          {
+            previousStatus: "PAID",
+            newStatus: "COMPLETED",
+            comment: "Permit released to applicant",
+            changedBy: bploOfficer.id,
+          },
+        ],
+      },
+      reviewActions: {
+        create: [
+          {
+            reviewerId: bploOfficer.id,
+            action: "APPROVE",
+            comment: "Historical application approved by BPLO.",
+          },
+        ],
+      },
+      clearances: {
+        create: [
+          {
+            requirementCode: "BARANGAY_CLEARANCE",
+            requirementName: "Barangay Business Clearance",
+            status: "CLEARED",
+            remarks: "Validated by BPLO against submitted clearance copy.",
+            dateCleared: atUtc("2025-04-19T09:30:00Z"),
+          },
+          {
+            requirementCode: "SANITARY_PERMIT",
+            requirementName: "Sanitary Permit or Clearance",
+            status: "CLEARED",
+            remarks: "Requirement marked complete during BPLO review.",
+            dateCleared: atUtc("2025-04-19T09:45:00Z"),
+          },
+        ],
+      },
     },
   });
 
-  const app2 = await prisma.application.create({
+  const historicalPermit = await prisma.permit.create({
     data: {
-      applicationNumber: "APP-2026-000002",
+      permitNumber: "BP-2025-000118",
+      applicationId: historicalPermitApplication.id,
+      businessName: historicalPermitApplication.businessName,
+      businessAddress: historicalPermitApplication.businessAddress,
+      ownerName: `${maria.firstName} ${maria.lastName}`,
+      issueDate: atUtc("2025-04-20T13:00:00Z"),
+      expiryDate: atUtc("2026-04-20T13:00:00Z"),
+      status: "RENEWED",
+    },
+  });
+
+  await prisma.permitIssuance.create({
+    data: {
+      permitId: historicalPermit.id,
+      issuedById: bploOfficer.id,
+      status: "COMPLETED",
+      issuedAt: atUtc("2025-04-20T13:00:00Z"),
+      releasedAt: atUtc("2025-04-20T15:00:00Z"),
+      completedAt: atUtc("2025-04-20T15:15:00Z"),
+      staffNotes: "Historical permit record seeded for renewal linkage.",
+      mayorSigningStatus: "SIGNED",
+      mayorSignedAt: atUtc("2025-04-20T12:30:00Z"),
+      mayorSignedBy: "Hon. Municipal Mayor",
+    },
+  });
+
+  const underReviewNewApplicationId = randomUUID();
+  const underReviewNewApplication = await prisma.application.create({
+    data: {
+      id: underReviewNewApplicationId,
+      applicationNumber: "APP-20260425-NEW001",
       type: "NEW",
       status: "UNDER_REVIEW",
-      applicantId: applicant2.id,
-      businessName: "Pedro's Computer Shop",
-      businessType: "Service - Internet Cafe",
-      businessAddress: "456 Mabini Street, Barangay 5",
-      businessCity: "Quezon City",
-      businessProvince: "Metro Manila",
-      businessZipCode: "1101",
-      dtiSecRegistration: "DTI-2026-005678",
-      numberOfEmployees: 5,
-      capitalInvestment: 500000,
-      documentVerified: false,
-      applicationApproved: false,
-      submittedAt: new Date("2026-02-01"),
+      applicantId: juan.id,
+      businessName: "Dela Cruz Eatery",
+      businessType: "SOLE_PROPRIETORSHIP",
+      lineOfBusiness: "Restaurant",
+      businessAddress: "Poblacion, Enrique B. Magalona, Negros Occidental",
+      businessBarangay: "Poblacion",
+      businessCity: "Enrique B. Magalona",
+      businessProvince: "Negros Occidental",
+      businessZipCode: "6118",
+      businessPhone: juan.phone,
+      businessEmail: juan.email,
+      dtiSecRegistration: "DTI-2026-001",
+      tinNumber: "123-456-789-000",
+      businessArea: 65,
+      numberOfEmployees: 6,
+      capitalInvestment: 150000,
+      ownerBirthdate: atUtc("1990-01-15T00:00:00Z"),
+      ownerResidenceAddress: "San Jose, Enrique B. Magalona, Negros Occidental",
+      ownerPhone: juan.phone,
+      submittedAt: atUtc("2026-04-23T08:00:00Z"),
+      reviewedAt: atUtc("2026-04-24T09:00:00Z"),
+      documents: {
+        create: [
+          buildDocumentSeed({
+            applicationId: underReviewNewApplicationId,
+            uploadedBy: juan.id,
+            originalName: "DTI Registration.pdf",
+            fileSize: 1024,
+            documentType: "PROOF_OF_REGISTRATION",
+            status: "VERIFIED",
+            createdAt: "2026-04-24T09:15:00Z",
+            verifiedBy: bploOfficer.id,
+            verifiedAt: "2026-04-24T09:15:00Z",
+          }),
+          buildDocumentSeed({
+            applicationId: underReviewNewApplicationId,
+            uploadedBy: juan.id,
+            originalName: "Location Plan.pdf",
+            fileSize: 1136,
+            documentType: "LOCATION_PLAN",
+            status: "PENDING_VERIFICATION",
+            createdAt: "2026-04-24T09:00:00Z",
+          }),
+          buildDocumentSeed({
+            applicationId: underReviewNewApplicationId,
+            uploadedBy: juan.id,
+            originalName: "Barangay Clearance.pdf",
+            fileSize: 976,
+            documentType: "BARANGAY_CLEARANCE",
+            status: "VERIFIED",
+            createdAt: "2026-04-24T09:20:00Z",
+            verifiedBy: bploOfficer.id,
+            verifiedAt: "2026-04-24T09:20:00Z",
+          }),
+        ],
+      },
+      history: {
+        create: [
+          {
+            previousStatus: "DRAFT",
+            newStatus: "SUBMITTED",
+            comment: "Application submitted by applicant",
+            changedBy: juan.id,
+          },
+          {
+            previousStatus: "SUBMITTED",
+            newStatus: "UNDER_REVIEW",
+            comment: "BPLO initialized requirement tracking",
+            changedBy: bploOfficer.id,
+          },
+        ],
+      },
+      reviewActions: {
+        create: [
+          {
+            reviewerId: bploOfficer.id,
+            action: "INITIAL_REVIEW",
+            comment: "Waiting for location plan validation and final requirement checks.",
+          },
+        ],
+      },
+      clearances: {
+        create: [
+          {
+            requirementCode: "BARANGAY_CLEARANCE",
+            requirementName: "Barangay Business Clearance",
+            status: "CLEARED",
+            dateCleared: atUtc("2026-04-24T09:30:00Z"),
+            remarks: "Requirement reviewed by BPLO.",
+          },
+          {
+            requirementCode: "ZONING_CLEARANCE",
+            requirementName: "Locational or Zoning Clearance",
+            status: "PENDING",
+            remarks: "Awaiting final submitted copy from applicant.",
+          },
+          {
+            requirementCode: "FIRE_SAFETY",
+            requirementName: "Fire Safety Inspection Certificate",
+            status: "FOR_INSPECTION",
+            remarks: "BPLO flagged the requirement for follow-up inspection.",
+          },
+        ],
+      },
     },
   });
 
-  const app3 = await prisma.application.create({
+  const returnedNewApplicationId = randomUUID();
+  const returnedNewApplication = await prisma.application.create({
     data: {
-      applicationNumber: "APP-2026-000003",
+      id: returnedNewApplicationId,
+      applicationNumber: "APP-20260425-NEW002",
+      type: "NEW",
+      status: "RETURNED_FOR_CORRECTION",
+      applicantId: ana.id,
+      businessName: "Reyes Mini Mart",
+      businessType: "SOLE_PROPRIETORSHIP",
+      lineOfBusiness: "Convenience Store",
+      businessAddress: "San Isidro, Enrique B. Magalona, Negros Occidental",
+      businessBarangay: "San Isidro",
+      businessCity: "Enrique B. Magalona",
+      businessProvince: "Negros Occidental",
+      businessZipCode: "6118",
+      businessPhone: ana.phone,
+      businessEmail: ana.email,
+      dtiSecRegistration: "DTI-2026-014",
+      tinNumber: "555-333-111-000",
+      businessArea: 32,
+      numberOfEmployees: 2,
+      capitalInvestment: 60000,
+      submittedAt: atUtc("2026-04-22T08:30:00Z"),
+      reviewedAt: atUtc("2026-04-23T10:00:00Z"),
+      rejectionReason: "Uploaded proof of ownership is unreadable and FSIC copy is missing.",
+      documents: {
+        create: [
+          buildDocumentSeed({
+            applicationId: returnedNewApplicationId,
+            uploadedBy: ana.id,
+            originalName: "DTI Registration.pdf",
+            fileSize: 1420,
+            documentType: "PROOF_OF_REGISTRATION",
+            status: "VERIFIED",
+            createdAt: "2026-04-23T10:05:00Z",
+            verifiedBy: bploOfficer.id,
+            verifiedAt: "2026-04-23T10:05:00Z",
+          }),
+          buildDocumentSeed({
+            applicationId: returnedNewApplicationId,
+            uploadedBy: ana.id,
+            originalName: "Proof of Ownership.pdf",
+            fileSize: 860,
+            documentType: "PROOF_OF_OWNERSHIP",
+            status: "REJECTED",
+            createdAt: "2026-04-23T10:10:00Z",
+            verifiedBy: bploOfficer.id,
+            verifiedAt: "2026-04-23T10:10:00Z",
+            rejectionReason: "Document scan is blurry and missing the lessor signature page.",
+          }),
+        ],
+      },
+      history: {
+        create: [
+          {
+            previousStatus: "DRAFT",
+            newStatus: "SUBMITTED",
+            comment: "Application submitted by applicant",
+            changedBy: ana.id,
+          },
+          {
+            previousStatus: "SUBMITTED",
+            newStatus: "UNDER_REVIEW",
+            comment: "BPLO started review",
+            changedBy: bploOfficer.id,
+          },
+          {
+            previousStatus: "UNDER_REVIEW",
+            newStatus: "RETURNED_FOR_CORRECTION",
+            comment: "BPLO returned the application for document correction",
+            changedBy: bploOfficer.id,
+          },
+        ],
+      },
+      reviewActions: {
+        create: [
+          {
+            reviewerId: bploOfficer.id,
+            action: "RETURN",
+            comment: "Please re-upload proof of ownership and complete the fire safety requirement.",
+          },
+        ],
+      },
+      clearances: {
+        create: [
+          {
+            requirementCode: "BARANGAY_CLEARANCE",
+            requirementName: "Barangay Business Clearance",
+            status: "CLEARED",
+            dateCleared: atUtc("2026-04-23T10:20:00Z"),
+            remarks: "Requirement accepted by BPLO.",
+          },
+          {
+            requirementCode: "FIRE_SAFETY",
+            requirementName: "Fire Safety Inspection Certificate",
+            status: "RETURNED",
+            remarks: "Applicant must upload a valid FSIC copy.",
+          },
+        ],
+      },
+    },
+  });
+
+  const renewalApplicationId = randomUUID();
+  const renewalApplication = await prisma.application.create({
+    data: {
+      id: renewalApplicationId,
+      applicationNumber: "APP-20260425-REN001",
       type: "RENEWAL",
-      status: "APPROVED",
-      applicantId: applicant4.id,
-      businessName: "Maria's Beauty Salon",
-      businessType: "Service - Beauty & Wellness",
-      businessAddress: "555 Ortigas Avenue, Barangay 7",
-      businessCity: "Quezon City",
-      businessProvince: "Metro Manila",
-      businessZipCode: "1103",
-      businessPhone: "09261234567",
-      dtiSecRegistration: "DTI-2025-003456",
+      status: "COMPLETED",
+      applicantId: maria.id,
+      previousPermitId: historicalPermit.id,
+      businessName: "Santos Trading",
+      businessType: "SOLE_PROPRIETORSHIP",
+      lineOfBusiness: "Retail",
+      businessAddress: "Old Highway, Enrique B. Magalona, Negros Occidental",
+      businessBarangay: "Tabigue",
+      businessCity: "Enrique B. Magalona",
+      businessProvince: "Negros Occidental",
+      businessZipCode: "6118",
+      businessPhone: maria.phone,
+      businessEmail: maria.email,
+      dtiSecRegistration: "DTI-2025-009",
+      tinNumber: "987-654-321-000",
+      businessArea: 44,
       numberOfEmployees: 4,
-      capitalInvestment: 300000,
-      grossSales: 800000,
+      capitalInvestment: 110000,
+      grossSales: 460000,
       documentVerified: true,
       applicationApproved: true,
-      submittedAt: new Date("2026-02-05"),
-      approvedAt: new Date("2026-02-10"),
+      paymentConfirmed: true,
+      acknowledgedOutstandingFees: true,
+      submittedAt: atUtc("2026-04-10T08:00:00Z"),
+      reviewedAt: atUtc("2026-04-11T08:00:00Z"),
+      approvedAt: atUtc("2026-04-12T08:00:00Z"),
+      documents: {
+        create: [
+          buildDocumentSeed({
+            applicationId: renewalApplicationId,
+            uploadedBy: maria.id,
+            originalName: "Renewal Registration.pdf",
+            fileSize: 2048,
+            documentType: "PROOF_OF_REGISTRATION",
+            status: "VERIFIED",
+            createdAt: "2026-04-11T08:10:00Z",
+            verifiedBy: bploOfficer.id,
+            verifiedAt: "2026-04-11T08:10:00Z",
+          }),
+          buildDocumentSeed({
+            applicationId: renewalApplicationId,
+            uploadedBy: maria.id,
+            originalName: "Barangay Clearance Renewal.pdf",
+            fileSize: 1812,
+            documentType: "BARANGAY_CLEARANCE",
+            status: "VERIFIED",
+            createdAt: "2026-04-11T08:15:00Z",
+            verifiedBy: bploOfficer.id,
+            verifiedAt: "2026-04-11T08:15:00Z",
+          }),
+        ],
+      },
+      payments: {
+        create: [
+          {
+            payerId: maria.id,
+            amount: 2500,
+            method: "GCASH",
+            status: "PAID",
+            transactionId: "seed-paymongo-2026-0001",
+            receiptNumber: "OR-2026-0001",
+            referenceNumber: "PM-2026-0001",
+            paidAt: atUtc("2026-04-12T09:00:00Z"),
+            notes: "Renewal payment completed through seeded online payment.",
+          },
+        ],
+      },
+      history: {
+        create: [
+          {
+            previousStatus: "DRAFT",
+            newStatus: "SUBMITTED",
+            comment: "Renewal application submitted by applicant",
+            changedBy: maria.id,
+          },
+          {
+            previousStatus: "SUBMITTED",
+            newStatus: "UNDER_REVIEW",
+            comment: "BPLO began renewal review",
+            changedBy: bploOfficer.id,
+          },
+          {
+            previousStatus: "UNDER_REVIEW",
+            newStatus: "PAID",
+            comment: "Payment confirmed by BPLO",
+            changedBy: bploOfficer.id,
+          },
+          {
+            previousStatus: "PAID",
+            newStatus: "COMPLETED",
+            comment: "Renewed permit released to applicant",
+            changedBy: bploOfficer.id,
+          },
+        ],
+      },
+      reviewActions: {
+        create: [
+          {
+            reviewerId: bploOfficer.id,
+            action: "APPROVE",
+            comment: "Renewal requirements completed and approved by BPLO.",
+          },
+        ],
+      },
+      clearances: {
+        create: [
+          {
+            requirementCode: "BARANGAY_CLEARANCE",
+            requirementName: "Updated Barangay Business Clearance",
+            status: "CLEARED",
+            remarks: "Renewal barangay clearance accepted by BPLO.",
+            dateCleared: atUtc("2026-04-11T08:30:00Z"),
+          },
+          {
+            requirementCode: "SANITARY_PERMIT",
+            requirementName: "Updated Sanitary Permit or Clearance",
+            status: "CLEARED",
+            remarks: "Renewal sanitary requirement validated by BPLO.",
+            dateCleared: atUtc("2026-04-11T08:40:00Z"),
+          },
+        ],
+      },
     },
   });
 
-  console.log(`  ✓ Created 3 applications`);
-
-  // ── Application History ────────────────────────────────────────────
-  console.log("📜 Creating application history...");
-
-  const historyEntries = [
-    { applicationId: app1.id, newStatus: "DRAFT", comment: "Application created", changedBy: applicant1.id },
-    { applicationId: app1.id, previousStatus: "DRAFT", newStatus: "SUBMITTED", comment: "Application submitted", changedBy: applicant1.id },
-    { applicationId: app1.id, previousStatus: "SUBMITTED", newStatus: "UNDER_REVIEW", comment: "Under review by BPLO", changedBy: bplo1.id },
-    { applicationId: app1.id, previousStatus: "UNDER_REVIEW", newStatus: "APPROVED", comment: "All requirements met. Approved.", changedBy: bplo2.id },
-    { applicationId: app2.id, newStatus: "SUBMITTED", comment: "Application submitted", changedBy: applicant2.id },
-    { applicationId: app2.id, previousStatus: "SUBMITTED", newStatus: "UNDER_REVIEW", comment: "Under review by BPLO", changedBy: bplo1.id },
-    { applicationId: app3.id, newStatus: "SUBMITTED", comment: "Renewal submitted", changedBy: applicant4.id },
-    { applicationId: app3.id, previousStatus: "SUBMITTED", newStatus: "UNDER_REVIEW", comment: "Renewal under review", changedBy: bplo2.id },
-    { applicationId: app3.id, previousStatus: "UNDER_REVIEW", newStatus: "APPROVED", comment: "Renewal approved. All documents verified.", changedBy: bplo3.id },
-  ];
-
-  for (const entry of historyEntries) {
-    await prisma.applicationHistory.create({ data: entry });
-  }
-  console.log(`  ✓ Created ${historyEntries.length} history entries`);
-
-  // ── Documents ──────────────────────────────────────────────────────
-  console.log("📄 Creating documents...");
-
-  const docs = [
-    { applicationId: app1.id, uploadedBy: applicant1.id, fileName: "dti_cert.pdf", originalName: "DTI Certificate.pdf", mimeType: "application/pdf", fileSize: 524288, filePath: "uploads/app1/dti_cert.pdf", documentType: "PROOF_OF_REGISTRATION", status: "VERIFIED", verifiedBy: bplo1.id, verifiedAt: new Date("2026-01-19") },
-    { applicationId: app1.id, uploadedBy: applicant1.id, fileName: "fire_cert.pdf", originalName: "Fire Safety Certificate.pdf", mimeType: "application/pdf", fileSize: 410000, filePath: "uploads/app1/fire_cert.pdf", documentType: "FSIC", status: "VERIFIED", verifiedBy: bplo1.id, verifiedAt: new Date("2026-01-19") },
-    { applicationId: app2.id, uploadedBy: applicant2.id, fileName: "dti_cert2.pdf", originalName: "DTI Certificate.pdf", mimeType: "application/pdf", fileSize: 530000, filePath: "uploads/app2/dti_cert2.pdf", documentType: "PROOF_OF_REGISTRATION", status: "PENDING_VERIFICATION" },
-    { applicationId: app3.id, uploadedBy: applicant4.id, fileName: "dti_renewal.pdf", originalName: "DTI Renewal Certificate.pdf", mimeType: "application/pdf", fileSize: 520000, filePath: "uploads/app3/dti_renewal.pdf", documentType: "PROOF_OF_REGISTRATION", status: "VERIFIED", verifiedBy: bplo2.id, verifiedAt: new Date("2026-02-09") },
-  ];
-
-  for (const doc of docs) {
-    await prisma.document.create({ data: doc });
-  }
-  console.log(`  ✓ Created ${docs.length} documents`);
-
-  // ── Review Actions ─────────────────────────────────────────────────
-  console.log("✅ Creating review actions...");
-
-  await prisma.reviewAction.create({
+  const renewalPermit = await prisma.permit.create({
     data: {
-      applicationId: app1.id,
-      reviewerId: bplo2.id,
-      action: "APPROVE",
-      comment: "All requirements complete. Approved.",
-    },
-  });
-
-  await prisma.reviewAction.create({
-    data: {
-      applicationId: app3.id,
-      reviewerId: bplo3.id,
-      action: "APPROVE",
-      comment: "Renewal documents verified and complete.",
-    },
-  });
-
-  console.log("  ✓ Created 2 review actions");
-
-  // ── Permits (for approved apps) ──────────────────────────────────────
-  console.log("🏛️ Creating permits...");
-
-  const permit1 = await prisma.permit.create({
-    data: {
-      permitNumber: "PERMIT-2026-000001",
-      applicationId: app1.id,
-      businessName: "Juan's Sari-Sari Store",
-      businessAddress: "123 Rizal Street, Barangay 1, Quezon City",
-      ownerName: "Juan Dela Cruz",
-      issueDate: new Date("2026-01-20"),
-      expiryDate: new Date("2027-01-20"),
+      permitNumber: "BP-2026-000001",
+      applicationId: renewalApplication.id,
+      businessName: renewalApplication.businessName,
+      businessAddress: renewalApplication.businessAddress,
+      ownerName: `${maria.firstName} ${maria.lastName}`,
+      issueDate: atUtc("2026-04-12T09:30:00Z"),
+      expiryDate: atUtc("2027-04-12T09:30:00Z"),
       status: "ACTIVE",
     },
   });
 
   await prisma.permitIssuance.create({
     data: {
-      permitId: permit1.id,
-      issuedById: bplo1.id,
-      status: "ISSUED",
-      issuedAt: new Date("2026-01-20"),
+      permitId: renewalPermit.id,
+      issuedById: bploOfficer.id,
+      status: "RELEASED",
+      issuedAt: atUtc("2026-04-12T09:30:00Z"),
+      releasedAt: atUtc("2026-04-12T10:00:00Z"),
+      completedAt: atUtc("2026-04-12T10:05:00Z"),
+      mayorSigningStatus: "SIGNED",
+      mayorSignedAt: atUtc("2026-04-12T09:00:00Z"),
+      mayorSignedBy: "Hon. Municipal Mayor",
+      staffNotes: "Renewed permit released over the BPLO counter.",
     },
   });
 
-  const permit2 = await prisma.permit.create({
-    data: {
-      permitNumber: "PERMIT-2026-000002",
-      applicationId: app3.id,
-      businessName: "Maria's Beauty Salon",
-      businessAddress: "555 Ortigas Avenue, Barangay 7, Quezon City",
-      ownerName: "Maria Gonzales",
-      issueDate: new Date("2026-02-11"),
-      expiryDate: new Date("2027-02-11"),
-      status: "ACTIVE",
-    },
+  await prisma.businessLocation.createMany({
+    data: [
+      {
+        applicationId: underReviewNewApplication.id,
+        latitude: 10.8839,
+        longitude: 122.9662,
+        label: "Dela Cruz Eatery",
+        businessType: "Restaurant",
+        markerColor: "green",
+      },
+      {
+        applicationId: returnedNewApplication.id,
+        latitude: 10.8894,
+        longitude: 122.9723,
+        label: "Reyes Mini Mart",
+        businessType: "Convenience Store",
+        markerColor: "orange",
+      },
+      {
+        applicationId: renewalApplication.id,
+        latitude: 10.891,
+        longitude: 122.9686,
+        label: "Santos Trading",
+        businessType: "Retail",
+        markerColor: "blue",
+      },
+    ],
   });
 
-  await prisma.permitIssuance.create({
-    data: {
-      permitId: permit2.id,
-      issuedById: bplo2.id,
-      status: "ISSUED",
-      issuedAt: new Date("2026-02-11"),
-    },
+  await prisma.activityLog.createMany({
+    data: [
+      {
+        userId: admin.id,
+        action: "ADMIN_CREATE_USER",
+        entity: "User",
+        entityId: bploOfficer.id,
+        details: { role: "BPLO_OFFICE" },
+      },
+      {
+        userId: admin.id,
+        action: "ADMIN_REVIEW_SETTINGS",
+        entity: "SystemSetting",
+        details: { seeded: true },
+      },
+      {
+        userId: bploOfficer.id,
+        action: "REQUIREMENTS_INITIALIZED",
+        entity: "Application",
+        entityId: underReviewNewApplication.id,
+        details: { applicationNumber: underReviewNewApplication.applicationNumber },
+      },
+      {
+        userId: bploOfficer.id,
+        action: "APPLICATION_RETURNED",
+        entity: "Application",
+        entityId: returnedNewApplication.id,
+        details: { applicationNumber: returnedNewApplication.applicationNumber },
+      },
+      {
+        userId: bploOfficer.id,
+        action: "REVIEW_APPROVE",
+        entity: "Application",
+        entityId: renewalApplication.id,
+        details: { applicationNumber: renewalApplication.applicationNumber },
+      },
+    ],
   });
 
-  console.log("  ✓ Created 2 permits with issuance records");
-
-  // ── System Settings ────────────────────────────────────────────────
-  console.log("⚙️ Creating system settings...");
-
-  const settings = [
-    { key: "lgu_name", value: "City of Quezon", type: "string" },
-    { key: "lgu_address", value: "Quezon City Hall, Elliptical Road, Diliman, Quezon City", type: "string" },
-    { key: "lgu_phone", value: "(02) 8988-4242", type: "string" },
-    { key: "lgu_email", value: "bplo@quezoncity.gov.ph", type: "string" },
-    { key: "permit_validity_days", value: "365", type: "number" },
-    { key: "max_file_size_mb", value: "10", type: "number" },
-    { key: "otp_expiry_minutes", value: "15", type: "number" },
-    { key: "session_timeout_minutes", value: "30", type: "number" },
-    { key: "maintenance_mode", value: "false", type: "boolean" },
-  ];
-
-  for (const setting of settings) {
-    await prisma.systemSetting.create({ data: setting });
-  }
-  console.log(`  ✓ Created ${settings.length} system settings`);
-
-  // ── Activity Logs ──────────────────────────────────────────────────
-  console.log("📊 Creating activity logs...");
-
-  const logs = [
-    { userId: bplo1.id, action: "LOGIN", entity: "User", entityId: bplo1.id },
-    { userId: applicant1.id, action: "REGISTER", entity: "User", entityId: applicant1.id },
-    { userId: applicant1.id, action: "LOGIN", entity: "User", entityId: applicant1.id },
-    { userId: applicant1.id, action: "CREATE_APPLICATION", entity: "Application", entityId: app1.id },
-    { userId: applicant1.id, action: "SUBMIT_APPLICATION", entity: "Application", entityId: app1.id },
-    { userId: bplo2.id, action: "REVIEW_APPROVE", entity: "Application", entityId: app1.id },
-    { userId: applicant2.id, action: "REGISTER", entity: "User", entityId: applicant2.id },
-    { userId: applicant4.id, action: "REGISTER", entity: "User", entityId: applicant4.id },
-  ];
-
-  for (const log of logs) {
-    await prisma.activityLog.create({ data: log });
-  }
-  console.log(`  ✓ Created ${logs.length} activity logs`);
-
-  // ── Payments ───────────────────────────────────────────────────────
-  console.log("💳 Creating payment records...");
-
-  // App1: Paid (APPROVED application with payment confirmed)
-  const payment1 = await prisma.payment.create({
-    data: {
-      applicationId: app1.id,
-      payerId: applicant1.id,
-      amount: 5000,
-      method: "GCASH",
-      status: "PAID",
-      referenceNumber: "REF-GCH-20260120-001",
-      transactionId: "TXN-GCH-001",
-      paidAt: new Date("2026-01-20"),
-    },
-  });
-
-  // Update app1 to have paymentConfirmed
-  await prisma.application.update({
-    where: { id: app1.id },
-    data: { paymentConfirmed: true }
-  });
-
-  // App2: Pending payment (waiting for MTO confirmation)
-  await prisma.payment.create({
-    data: {
-      applicationId: app2.id,
-      payerId: applicant2.id,
-      amount: 5000,
-      method: "BANK_TRANSFER",
-      status: "PENDING",
-      referenceNumber: "REF-BNK-20260215-001",
-    },
-  });
-
-  // App3: Paid (RENEWAL approved with payment confirmed)
-  const payment3 = await prisma.payment.create({
-    data: {
-      applicationId: app3.id,
-      payerId: applicant4.id,
-      amount: 3500,
-      method: "MAYA",
-      status: "PAID",
-      referenceNumber: "REF-MAY-20260211-001",
-      transactionId: "TXN-MAY-001",
-      paidAt: new Date("2026-02-11"),
-    },
-  });
-
-  // Update app3 to have paymentConfirmed
-  await prisma.application.update({
-    where: { id: app3.id },
-    data: { paymentConfirmed: true }
-  });
-
-  console.log("  ✓ Created 3 payment records");
-
-  console.log("\n✅ Database seeded successfully!\n");
-
-  console.log("📌 Test Credentials:\n");
-
-  console.log("🔹 APPLICANTS (Business Owners):");
-  console.log("   Email                | Status                | Renewal Eligible?");
-  console.log("   -------------------- | --------------------- | -----------------");
-  console.log("   juan@example.com     | ACTIVE, HAS PERMIT     | YES ✓");
-  console.log("   pedro@example.com    | ACTIVE, NO PERMITS     | NO");
-  console.log("   maria@example.com    | ACTIVE, HAS PERMIT     | YES ✓");
-  console.log("   carlos@example.com   | ACTIVE, NO PERMITS     | NO");
-  console.log("   ana@example.com      | PENDING_VERIFICATION   | NO");
-  console.log("   Password: Password123!\n");
-
-  console.log("🔹 BPLO OFFICE (Application Processing):");
-  console.log("   bplo1@lgu.gov.ph");
-  console.log("   bplo2@lgu.gov.ph");
-  console.log("   bplo3@lgu.gov.ph");
-  console.log("   Password: Password123!\n");
-
-  console.log("🔹 MTO (Payment Validation):");
-  console.log("   mto1@lgu.gov.ph");
-  console.log("   mto2@lgu.gov.ph");
-  console.log("   Password: Password123!\n");
-
-  console.log("📊 Test Data Summary:");
-  console.log("   • 12 users (5 applicants, 3 BPLO_OFFICE, 2 MTO)");
-  console.log("   • 3 applications (1 NEW approved, 1 NEW under review, 1 RENEWAL approved)");
-  console.log("   • 4 documents (2 verified, 2 pending)");
-  console.log("   • 2 permits (ACTIVE, ready for distribution)");
-  console.log("   • 3 payments (2 paid with confirmed status, 1 pending)");
-  console.log("   • 9 activity logs\n");
-
-  console.log("✅ Ready to test:\n");
-  console.log("   • Applicant can view My Applications sidebar (NOT New Application)");
-  console.log("   • Renewal-eligible users (juan, maria) → Separate renewal portal");
-  console.log("   • Non-eligible users (pedro, carlos) → Cannot access renewal");
-  console.log("   • BPLO processes applications and issues permits");
-  console.log("   • MTO validates payments before permit issuance");
+  console.log("Seed complete:");
+  console.log("  admin@lgu.gov.ph  / Password123! / ADMIN");
+  console.log("  bplo@lgu.gov.ph   / Password123! / BPLO_OFFICE");
+  console.log("  juan@example.com  / Password123! / APPLICANT");
+  console.log("  maria@example.com / Password123! / APPLICANT");
+  console.log("  ana@example.com   / Password123! / APPLICANT");
+  console.log("Seeded applications:");
+  console.log("  APP-20250418-NEW001  / historical NEW permit record for renewal linkage");
+  console.log("  APP-20260425-NEW001  / NEW application under BPLO review");
+  console.log("  APP-20260425-NEW002  / NEW application returned for correction");
+  console.log("  APP-20260425-REN001  / completed RENEWAL with payment and permit");
 }
 
 main()
-  .catch((e) => {
-    console.error("❌ Seed error:", e);
+  .catch((error) => {
+    console.error("Seed failed:", error);
     process.exit(1);
   })
   .finally(async () => {

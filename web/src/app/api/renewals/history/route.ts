@@ -2,7 +2,7 @@
  * GET /api/renewals/history
  * Fetch all RENEWAL type applications for the current user
  *
- * Access: APPLICANT (own renewals only), REVIEWER/ADMINISTRATOR (any)
+ * Access: APPLICANT (own renewals only), BPLO_OFFICE (any)
  * Returns: List of renewal applications with status, dates, and permit info
  */
 
@@ -26,7 +26,7 @@ export async function GET() {
 
     // Build where clause based on role
     // APPLICANT: only own renewals
-    // STAFF/REVIEWER/ADMINISTRATOR: all renewals
+    // BPLO_OFFICE: all renewals
     const where: any = {
       type: "RENEWAL", // Only fetch RENEWAL type applications
     };

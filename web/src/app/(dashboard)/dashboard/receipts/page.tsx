@@ -36,7 +36,7 @@ export default async function ReceiptsPage() {
     redirect("/dashboard");
   }
 
-  if (session.user.role !== "MTO") {
+  if (session.user.role !== "BPLO_OFFICE") {
     redirect("/dashboard");
   }
 

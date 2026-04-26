@@ -1,6 +1,6 @@
 /**
  * Admin Reports Analytics API Route
- * GET /api/admin/reports/analytics - Get BPLO analytics and metrics
+ * GET /api/admin/reports/analytics - Get admin analytics and metrics
  */
 
 import { NextResponse } from 'next/server';
@@ -14,8 +14,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Only REVIEWER and ADMIN can access analytics
-    if (!["BPLO_OFFICE"].includes(session.user.role!)) {
+    if (session.user.role !== "ADMIN") {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

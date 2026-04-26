@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, AlertCircle } from "lucide-react";
+import { PaymentValidationActions } from "@/components/dashboard/payment-validation-actions";
 
 function formatDate(date: Date) {
   return new Date(date).toLocaleDateString("en-US", {
@@ -44,7 +45,7 @@ export default async function ValidatePaymentsPage() {
     redirect("/dashboard");
   }
 
-  if (session.user.role !== "MTO") {
+  if (session.user.role !== "BPLO_OFFICE") {
     redirect("/dashboard");
   }
 
@@ -197,14 +198,7 @@ export default async function ValidatePaymentsPage() {
                           Please verify the payment details and confirm the
                           receipt of funds before proceeding.
                         </p>
-                        <div className="flex gap-2">
-                          <Button className="flex-1 bg-green-600 hover:bg-green-700">
-                            Confirm Payment
-                          </Button>
-                          <Button variant="outline" className="flex-1">
-                            Reject
-                          </Button>
-                        </div>
+                        <PaymentValidationActions paymentId={payment.id} />
                       </div>
                     </div>
                   ))}

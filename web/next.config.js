@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV === 'development';
+
 const nextConfig = {
   output: "standalone",
   serverExternalPackages: [
@@ -82,11 +84,14 @@ const nextConfig = {
             value: "camera=(), microphone=(), geolocation=(self), interest-cohort=()",
           },
           // Content Security Policy
+          // 'unsafe-inline' for script-src is required by Next.js 15 App Router inline hydration scripts.
+          // 'unsafe-eval' is only added in development for Next.js Fast Refresh (react-refresh/HMR).
+          // Production builds never need unsafe-eval.
           {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",

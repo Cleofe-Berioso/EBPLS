@@ -22,7 +22,14 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   DRAFT:        { label: "Draft",        color: "text-[var(--text-secondary)] bg-[var(--surface-muted)]",    icon: <FileText className="h-5 w-5" /> },
   SUBMITTED:    { label: "Submitted",    color: "text-[var(--accent-hover)] bg-blue-100",    icon: <Clock className="h-5 w-5" /> },
   UNDER_REVIEW: { label: "Under Review", color: "text-yellow-700 bg-yellow-100",icon: <Clock className="h-5 w-5" /> },
-  APPROVED:     { label: "Approved",     color: "text-[var(--success)] bg-green-100",  icon: <CheckCircle className="h-5 w-5" /> },
+  RETURNED_FOR_CORRECTION: { label: "Returned for Correction", color: "text-orange-700 bg-orange-100", icon: <Clock className="h-5 w-5" /> },
+  RESUBMITTED:  { label: "Resubmitted",  color: "text-[var(--accent-hover)] bg-blue-100", icon: <Clock className="h-5 w-5" /> },
+  PAYMENT_PENDING: { label: "Payment Pending", color: "text-yellow-700 bg-yellow-100", icon: <Clock className="h-5 w-5" /> },
+  PAID:         { label: "Paid",         color: "text-[var(--success)] bg-green-100",  icon: <CheckCircle className="h-5 w-5" /> },
+  PERMIT_PREPARED: { label: "Permit Prepared", color: "text-[var(--accent-hover)] bg-blue-100", icon: <FileText className="h-5 w-5" /> },
+  READY_FOR_RELEASE: { label: "Ready for Release", color: "text-purple-700 bg-purple-100", icon: <CheckCircle className="h-5 w-5" /> },
+  RELEASED:     { label: "Released",     color: "text-[var(--success)] bg-green-100",  icon: <CheckCircle className="h-5 w-5" /> },
+  COMPLETED:    { label: "Completed",    color: "text-[var(--success)] bg-green-100",  icon: <CheckCircle className="h-5 w-5" /> },
   REJECTED:     { label: "Rejected",     color: "text-[var(--danger)] bg-red-100",      icon: <XCircle className="h-5 w-5" /> },
   CANCELLED:    { label: "Cancelled",    color: "text-[var(--text-secondary)] bg-[var(--surface-muted)]",    icon: <XCircle className="h-5 w-5" /> },
 };
@@ -36,6 +43,7 @@ function formatDate(d: string) {
 
 export default function PublicTrackPage() {
   const [query, setQuery] = useState("");
+  const [verifier, setVerifier] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TrackResult | null>(null);
   const [error, setError] = useState("");
@@ -47,7 +55,10 @@ export default function PublicTrackPage() {
     setError("");
     setResult(null);
     try {
-      const res = await fetch(`/api/public/track?number=${encodeURIComponent(query.trim())}`);
+      const verifierParam = verifier.includes("@") ? "email" : "phone";
+      const res = await fetch(
+        `/api/public/track?number=${encodeURIComponent(query.trim())}&${verifierParam}=${encodeURIComponent(verifier.trim())}`
+      );
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Not found"); return; }
       setResult(data.application);
@@ -65,11 +76,11 @@ export default function PublicTrackPage() {
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-8 sm:py-10">
         {/* Back link */}
         <Link
-          href="/"
+          href="/login"
           className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Home
+          Back to Sign In
         </Link>
 
         {/* Header */}
@@ -79,20 +90,29 @@ export default function PublicTrackPage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Track Your Application</h1>
           <p className="mt-2 text-sm sm:text-base text-[var(--text-secondary)]">
-            Enter your application number (e.g.{" "}
+            Enter your application number and the email or phone number on the application.
+            Example:{" "}
             <code className="rounded bg-[var(--surface-muted)] px-1.5 py-0.5 text-sm">BP-2026-000001</code>
-            ) to check its current status.
           </p>
         </div>
 
         {/* Search Form */}
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
+        <form onSubmit={handleSearch} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <input
             type="text"
+            required
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="e.g. BP-2026-000001"
-            className="flex-1 rounded-lg border border-[var(--border)] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] uppercase placeholder:normal-case"
+            className="min-w-0 rounded-lg border border-[var(--border)] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] uppercase placeholder:normal-case"
+          />
+          <input
+            type="text"
+            required
+            value={verifier}
+            onChange={(e) => setVerifier(e.target.value)}
+            placeholder="Email or phone"
+            className="min-w-0 rounded-lg border border-[var(--border)] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           />
           <button
             type="submit"
@@ -191,7 +211,8 @@ export default function PublicTrackPage() {
             <ol className="list-decimal space-y-2 pl-5 text-sm text-[var(--text-secondary)]">
               <li>Locate your <strong>Application Number</strong> from the confirmation email you received.</li>
               <li>Enter it above in the format <code className="rounded bg-[var(--surface-muted)] px-1">BP-YYYY-NNNNNN</code>.</li>
-              <li>Click <strong>Track Application</strong> to view the real-time status.</li>
+              <li>Enter the email address or phone number used on the application.</li>
+              <li>Click <strong>Track Application</strong> to view the current status.</li>
             </ol>
           </div>
         )}

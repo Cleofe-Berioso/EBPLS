@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Shield, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 const navLinks = [
   { href: "/requirements", label: "Requirements" },
@@ -21,17 +22,27 @@ export function PublicNav() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link
-          href="/"
+          href="/login"
           className="flex items-center gap-2.5 min-w-0"
           onClick={() => setOpen(false)}
         >
-          <Shield className="h-7 w-7 flex-shrink-0 text-blue-600" />
+          <div className="relative h-8 w-8 flex-shrink-0">
+            <Image
+              src="/assets/logo.png"
+              alt="eBPLS Logo"
+              fill
+              className="object-contain rounded-sm"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          </div>
           <div className="min-w-0">
             <p className="truncate text-base font-bold leading-tight text-gray-900 sm:text-lg">
-              Online Business Permit
+              eBPLS
             </p>
             <p className="hidden text-xs text-gray-500 sm:block">
-              Local Government Unit
+              Municipality of Enrique B. Magalona
             </p>
           </div>
         </Link>
@@ -44,7 +55,7 @@ export function PublicNav() {
               href={link.href}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 pathname === link.href
-                  ? "bg-blue-50 text-blue-700"
+                  ? "bg-green-50 text-green-700"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               }`}
             >
@@ -54,13 +65,13 @@ export function PublicNav() {
           <div className="ml-2 flex items-center gap-2">
             <Link
               href="/track"
-              className="rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50"
+              className="rounded-lg border border-green-200 px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50"
             >
               Track Application
             </Link>
             <Link
               href="/login"
-              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors"
             >
               Sign In
             </Link>
@@ -71,7 +82,7 @@ export function PublicNav() {
         <div className="flex items-center gap-2 md:hidden">
           <Link
             href="/login"
-            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
           >
             Sign In
           </Link>
@@ -103,7 +114,7 @@ export function PublicNav() {
                     onClick={() => setOpen(false)}
                     className={`flex items-center rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
                       pathname === link.href
-                        ? "bg-blue-50 text-blue-700"
+                        ? "bg-green-50 text-green-700"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
@@ -115,7 +126,7 @@ export function PublicNav() {
                 <Link
                   href="/track"
                   onClick={() => setOpen(false)}
-                  className="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                  className="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-green-600 hover:bg-green-50"
                 >
                   Track Application
                 </Link>
@@ -124,7 +135,7 @@ export function PublicNav() {
                 <Link
                   href="/register"
                   onClick={() => setOpen(false)}
-                  className="flex items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+                  className="flex items-center justify-center rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700"
                 >
                   Create Account
                 </Link>

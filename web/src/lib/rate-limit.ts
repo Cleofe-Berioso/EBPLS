@@ -108,12 +108,36 @@ export function rateLimitPayment(userId: string): RateLimitResult {
 // Helper: Get client IP from request
 // ============================================================================
 
-export function getClientIp(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
+/**
+ * Trusted proxy CIDR ranges.
+ * Set TRUSTED_PROXY_CIDRS env var to a comma-separated list of trusted proxy IPs/CIDRs
+ * (e.g. "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" for RFC-1918 private ranges).
+ * If not set, X-Forwarded-For is NOT trusted and the connection address is used.
+ */
+const TRUSTED_PROXY_CIDRS = process.env.TRUSTED_PROXY_CIDRS
+  ? process.env.TRUSTED_PROXY_CIDRS.split(',').map((s) => s.trim())
+  : [];
 
+function isPrivateOrTrustedIp(ip: string): boolean {
+  if (TRUSTED_PROXY_CIDRS.length === 0) return false;
+  // Simple prefix-match for common private ranges configured in env
+  return TRUSTED_PROXY_CIDRS.some((cidr) => {
+    // Support exact IP or simple /8, /16, /24 prefix matching
+    const [base] = cidr.split('/');
+    const prefix = base.split('.').slice(0, cidr.includes('/8') ? 1 : cidr.includes('/16') ? 2 : 3).join('.');
+    return ip.startsWith(prefix);
+  });
+}
+
+export function getClientIp(request: Request): string {
   const realIp = request.headers.get('x-real-ip');
-  if (realIp) return realIp;
+  if (realIp) return realIp.trim();
+
+  // Only trust X-Forwarded-For when running behind a known trusted proxy
+  if (TRUSTED_PROXY_CIDRS.length > 0) {
+    const forwarded = request.headers.get('x-forwarded-for');
+    if (forwarded) return forwarded.split(',')[0].trim();
+  }
 
   return '127.0.0.1';
 }

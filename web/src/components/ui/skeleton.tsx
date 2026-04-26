@@ -1,9 +1,11 @@
+import * as React from "react";
 import { cn } from "@/lib/utils";
 
-function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("animate-pulse rounded-md bg-[var(--border)]", className)}
+      data-slot="skeleton"
+      className={cn("animate-pulse rounded-md bg-muted", className)}
       {...props}
     />
   );
@@ -11,7 +13,7 @@ function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
 
 export function StatCardSkeleton() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
       <div className="flex items-center gap-4">
         <Skeleton className="h-12 w-12 rounded-lg" />
         <div className="flex-1 space-y-2">
@@ -37,7 +39,7 @@ export function TableRowSkeleton({ cols = 5 }: { cols?: number }) {
 
 export function CardSkeleton() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
       <Skeleton className="h-5 w-1/3" />
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-4/5" />
@@ -81,9 +83,9 @@ export function TablePageSkeleton({ rows = 8, cols = 5 }: { rows?: number; cols?
         </div>
         <Skeleton className="h-9 w-28" />
       </div>
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         <table className="w-full">
-          <thead className="border-b bg-gray-50">
+          <thead className="border-b bg-muted/50">
             <tr>
               {Array.from({ length: cols }).map((_, i) => (
                 <th key={i} className="px-4 py-3">

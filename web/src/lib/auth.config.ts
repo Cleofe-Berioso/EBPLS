@@ -10,7 +10,7 @@
 import type { NextAuthConfig } from "next-auth";
 
 // Inline Role type to avoid importing @prisma/client in Edge Runtime
-type Role = "APPLICANT" | "BPLO_OFFICE" | "MTO";
+type Role = "APPLICANT" | "BPLO_OFFICE" | "ADMIN";
 type AccountStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION";
 
 export const authConfig = {

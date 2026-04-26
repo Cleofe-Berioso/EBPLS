@@ -1,66 +1,57 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DEFAULT_MAP_CENTER } from "@/lib/locations";
-import { BusinessMap } from "./business-map";
-
-// Define types directly to avoid Prisma import issues
-interface BusinessLocation {
-  id: string;
-  applicationId: string;
-  latitude: number;
-  longitude: number;
-  label: string | null;
-  businessType: string | null;
-  markerColor: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface LocationWithApp extends BusinessLocation {
-  application?: {
-    id: string;
-    applicationNumber: string;
-    businessName: string;
-    businessType: string;
-  };
-}
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/badge";
+import { DEFAULT_MAP_CENTER, type GeoMapLocationRecord } from "@/lib/locations";
+import { BusinessMap, BusinessMapLegend } from "./business-map";
 
 interface AdminLocationsClientProps {
-  initialLocations: LocationWithApp[];
+  initialLocations: GeoMapLocationRecord[];
+  initialHiddenOutsideBoundaryCount: number;
+  canManage: boolean;
+  viewerRole: "ADMIN" | "BPLO_OFFICE";
 }
 
 export function AdminLocationsClient({
   initialLocations,
+  initialHiddenOutsideBoundaryCount,
+  canManage,
+  viewerRole,
 }: AdminLocationsClientProps) {
-  const [locations, setLocations] = useState<LocationWithApp[]>(initialLocations);
+  const [locations, setLocations] = useState<GeoMapLocationRecord[]>(initialLocations);
+  const [hiddenOutsideBoundaryCount, setHiddenOutsideBoundaryCount] = useState(
+    initialHiddenOutsideBoundaryCount
+  );
   const [loading, setLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(initialLocations.length);
-
   const [formData, setFormData] = useState({
     applicationId: "",
     latitude: DEFAULT_MAP_CENTER[0].toString(),
     longitude: DEFAULT_MAP_CENTER[1].toString(),
     label: "",
-    businessType: "",
-    markerColor: "blue",
   });
 
-  const fetchLocations = useCallback(async (p: number) => {
+  const fetchLocations = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/locations?page=${p}&take=15`);
+      const res = await fetch("/api/admin/locations", {
+        cache: "no-store",
+      });
       const data = await res.json();
-      setLocations(data.locations);
-      setTotal(data.total);
-      setPage(p);
-    } catch (error) {
-      toast.error("Failed to fetch locations");
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to fetch business locations");
+        return;
+      }
+
+      setLocations(data.locations ?? []);
+      setHiddenOutsideBoundaryCount(data.hiddenOutsideBoundaryCount ?? 0);
+    } catch {
+      toast.error("Failed to fetch business locations");
     } finally {
       setLoading(false);
     }
@@ -69,6 +60,7 @@ export function AdminLocationsClient({
   const handleAddLocation = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
     try {
       const res = await fetch("/api/admin/locations", {
         method: "POST",
@@ -78,8 +70,6 @@ export function AdminLocationsClient({
           latitude: parseFloat(formData.latitude),
           longitude: parseFloat(formData.longitude),
           label: formData.label || null,
-          businessType: formData.businessType || null,
-          markerColor: formData.markerColor,
         }),
       });
 
@@ -90,17 +80,15 @@ export function AdminLocationsClient({
         return;
       }
 
-      toast.success("Location added successfully");
+      toast.success("Location saved");
       setFormData({
         applicationId: "",
         latitude: DEFAULT_MAP_CENTER[0].toString(),
         longitude: DEFAULT_MAP_CENTER[1].toString(),
         label: "",
-        businessType: "",
-        markerColor: "blue",
       });
-      fetchLocations(1);
-    } catch (error) {
+      await fetchLocations();
+    } catch {
       toast.error("Failed to add location");
     } finally {
       setLoading(false);
@@ -121,8 +109,8 @@ export function AdminLocationsClient({
 
       toast.success("Location deleted");
       setDeleteConfirmId(null);
-      fetchLocations(page);
-    } catch (error) {
+      await fetchLocations();
+    } catch {
       toast.error("Failed to delete location");
     } finally {
       setLoading(false);
@@ -131,186 +119,274 @@ export function AdminLocationsClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Business Location Management</h1>
-        <p className="text-gray-600 mt-1">
-          Manage business locations on the map
-        </p>
-      </div>
-
-      {/* Map and Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Map */}
-        <div className="h-96 lg:h-[500px]">
-          <BusinessMap locations={locations} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)]">
+            Business GeoMap
+          </h1>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            Registered business locations shown only within the EB Magalona area.
+          </p>
         </div>
-
-        {/* Form */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Add Location</h2>
-          <form onSubmit={handleAddLocation} className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">
-                Application ID *{" "}
-                <span className="text-xs text-gray-500">(v1: temporary text input)</span>
-              </label>
-              <Input
-                type="text"
-                placeholder="cuid..."
-                value={formData.applicationId}
-                onChange={(e) =>
-                  setFormData({ ...formData, applicationId: e.target.value })
-                }
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Copy from applications list. V2 upgrade: dropdown selector with
-                autocomplete
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-sm font-medium">Latitude *</label>
-                <Input
-                  type="number"
-                  placeholder="10.8779"
-                  step="0.0001"
-                  value={formData.latitude}
-                  onChange={(e) =>
-                    setFormData({ ...formData, latitude: e.target.value })
-                  }
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">10.8349–10.9209</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Longitude *</label>
-                <Input
-                  type="number"
-                  placeholder="122.9779"
-                  step="0.0001"
-                  value={formData.longitude}
-                  onChange={(e) =>
-                    setFormData({ ...formData, longitude: e.target.value })
-                  }
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">122.9359–123.0199</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Label (Optional)</label>
-              <Input
-                type="text"
-                placeholder="e.g., Juan's Store"
-                value={formData.label}
-                onChange={(e) =>
-                  setFormData({ ...formData, label: e.target.value })
-                }
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Business Type</label>
-              <select
-                value={formData.businessType}
-                onChange={(e) =>
-                  setFormData({ ...formData, businessType: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              >
-                <option value="">Select type</option>
-                <option value="Retail">Retail</option>
-                <option value="Service">Service</option>
-                <option value="Manufacturing">Manufacturing</option>
-                <option value="Food">Food</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
-            >
-              {loading ? "Saving..." : "Save Location"}
-            </button>
-          </form>
+        <div className="text-sm text-[var(--text-secondary)]">
+          {canManage ? "Admin access: manage and review locations" : "BPLO access: read-only map view"}
         </div>
       </div>
 
-      {/* Locations Table */}
-      <div className="overflow-x-auto border rounded-lg">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-left px-4 py-3 font-semibold">Application</th>
-              <th className="text-left px-4 py-3 font-semibold">Label</th>
-              <th className="text-left px-4 py-3 font-semibold">Coordinates</th>
-              <th className="text-left px-4 py-3 font-semibold">Type</th>
-              <th className="text-left px-4 py-3 font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {locations.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="text-center py-4 text-gray-500">
-                  No locations yet
-                </td>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Visible Businesses</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">
+              {locations.length}
+            </p>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Pins currently displayed on the map
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Boundary Filtered</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">
+              {hiddenOutsideBoundaryCount}
+            </p>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Hidden because coordinates fall outside EB Magalona
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Current Viewer</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">
+              {viewerRole === "ADMIN" ? "Admin" : "BPLO"}
+            </p>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Applicant users do not get map management access
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {hiddenOutsideBoundaryCount > 0 ? (
+        <Card className="border-yellow-300 bg-yellow-50">
+          <CardContent className="pt-6 text-sm text-yellow-900">
+            {hiddenOutsideBoundaryCount} mapped business
+            {hiddenOutsideBoundaryCount === 1 ? " is" : "es are"} outside the
+            EB Magalona boundary and hidden from the map pins.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className={`grid grid-cols-1 gap-6 ${canManage ? "xl:grid-cols-[minmax(0,2fr)_360px]" : ""}`}>
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>EB Magalona Business Map</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="h-[420px] sm:h-[520px]">
+                <BusinessMap locations={locations} />
+              </div>
+              <div className="lg:h-[520px]">
+                <BusinessMapLegend />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {canManage ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Add Business Location</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAddLocation} className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[var(--text-primary)]">
+                    Application ID
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="cuid..."
+                    value={formData.applicationId}
+                    onChange={(e) =>
+                      setFormData({ ...formData, applicationId: e.target.value })
+                    }
+                    required
+                  />
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                    The business name, address, type, and status come from the linked application.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-[var(--text-primary)]">
+                      Latitude
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.000001"
+                      value={formData.latitude}
+                      onChange={(e) =>
+                        setFormData({ ...formData, latitude: e.target.value })
+                      }
+                      required
+                    />
+                    <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                      10.834893 to 10.920893
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-[var(--text-primary)]">
+                      Longitude
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.000001"
+                      value={formData.longitude}
+                      onChange={(e) =>
+                        setFormData({ ...formData, longitude: e.target.value })
+                      }
+                      required
+                    />
+                    <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                      122.935881 to 123.019881
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[var(--text-primary)]">
+                    Optional Label
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Map label override"
+                    value={formData.label}
+                    onChange={(e) =>
+                      setFormData({ ...formData, label: e.target.value })
+                    }
+                  />
+                </div>
+
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "Saving..." : "Save Location"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mapped Businesses</CardTitle>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-sm">
+            <thead>
+              <tr className="border-b text-left text-[var(--text-secondary)]">
+                <th className="px-3 py-3 font-medium">Business</th>
+                <th className="px-3 py-3 font-medium">Application</th>
+                <th className="px-3 py-3 font-medium">Type</th>
+                <th className="px-3 py-3 font-medium">Status</th>
+                <th className="px-3 py-3 font-medium">Address</th>
+                <th className="px-3 py-3 font-medium">Coordinates</th>
+                {canManage ? (
+                  <th className="px-3 py-3 font-medium">Actions</th>
+                ) : null}
               </tr>
-            ) : (
-              locations.map((location) => (
-                <tr key={location.id} className="border-b hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div className="text-sm">
-                      <p className="font-medium">
-                        {location.application?.businessName}
-                      </p>
-                      <p className="text-gray-500 text-xs">
-                        {location.application?.applicationNumber}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {location.label || "–"}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-mono text-xs">
-                    {location.latitude.toFixed(4)},{" "}
-                    {location.longitude.toFixed(4)}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {location.businessType || "–"}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <button
-                      onClick={() => setDeleteConfirmId(location.id)}
-                      className="text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
+            </thead>
+            <tbody>
+              {locations.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={canManage ? 7 : 6}
+                    className="px-3 py-6 text-center text-[var(--text-secondary)]"
+                  >
+                    No in-boundary business locations found.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                locations.map((location) => (
+                  <tr key={location.id} className="border-b align-top">
+                    <td className="px-3 py-3">
+                      <div className="space-y-1">
+                        <p className="font-medium text-[var(--text-primary)]">
+                          {location.label || location.application?.businessName || "Unnamed business"}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                          <span
+                            className="inline-block h-3 w-3 rounded-full border border-white shadow-sm"
+                            style={{ backgroundColor: location.pinColor }}
+                          />
+                          <span>{location.pinTone.toUpperCase()} pin</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-[var(--text-primary)]">
+                      {location.application?.applicationNumber || "N/A"}
+                    </td>
+                    <td className="px-3 py-3 text-[var(--text-primary)]">
+                      {location.application?.type || "N/A"}
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge
+                        status={
+                          location.application?.permit?.status ||
+                          location.application?.status ||
+                          "UNKNOWN"
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-3 text-[var(--text-primary)]">
+                      {location.application?.businessAddress || "N/A"}
+                    </td>
+                    <td className="px-3 py-3 font-mono text-xs text-[var(--text-primary)]">
+                      {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
+                    </td>
+                    {canManage ? (
+                      <td className="px-3 py-3">
+                        <button
+                          onClick={() => setDeleteConfirmId(location.id)}
+                          className="text-sm text-red-600 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    ) : null}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmId && (
+      {deleteConfirmId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900">
               Delete Location?
             </h3>
             <p className="mt-2 text-sm text-gray-600">
-              This action cannot be undone.
+              This will remove the map point for the selected business.
             </p>
-            <div className="flex gap-3 justify-end mt-4">
+            <div className="mt-4 flex justify-end gap-3">
               <button
                 onClick={() => setDeleteConfirmId(null)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
               >
                 Cancel
               </button>
@@ -319,14 +395,14 @@ export function AdminLocationsClient({
                   deleteConfirmId && handleDeleteLocation(deleteConfirmId)
                 }
                 disabled={loading}
-                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60"
+                className="rounded-md bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {loading ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

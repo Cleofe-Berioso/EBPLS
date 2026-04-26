@@ -12,8 +12,39 @@ import IORedis from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
-let redis: IORedis | null = null;
-let redisAvailable = true;
+const globalForCache = globalThis as typeof globalThis & {
+  __ebplsRedisClient?: IORedis | null;
+  __ebplsRedisAvailable?: boolean;
+  __ebplsRedisWarningLogged?: boolean;
+};
+
+let redis = globalForCache.__ebplsRedisClient ?? null;
+let redisAvailable = globalForCache.__ebplsRedisAvailable ?? true;
+let redisWarningLogged = globalForCache.__ebplsRedisWarningLogged ?? false;
+
+function syncCacheGlobals() {
+  globalForCache.__ebplsRedisClient = redis;
+  globalForCache.__ebplsRedisAvailable = redisAvailable;
+  globalForCache.__ebplsRedisWarningLogged = redisWarningLogged;
+}
+
+function markRedisUnavailable(reason?: string) {
+  redisAvailable = false;
+
+  if (!redisWarningLogged) {
+    const suffix = reason ? ` (${reason})` : "";
+    console.warn(`[Cache] Redis unavailable; using in-memory cache${suffix}`);
+    redisWarningLogged = true;
+  }
+
+  if (redis) {
+    redis.removeAllListeners();
+    redis.disconnect();
+    redis = null;
+  }
+
+  syncCacheGlobals();
+}
 
 function getRedis(): IORedis | null {
   if (!redisAvailable) return null;
@@ -25,8 +56,7 @@ function getRedis(): IORedis | null {
         enableReadyCheck: true,
         retryStrategy(times) {
           if (times > 3) {
-            redisAvailable = false;
-            console.warn('[Cache] Redis not available — falling back to in-memory cache');
+            markRedisUnavailable("retry limit reached");
             return null;
           }
           return Math.min(times * 200, 2000);
@@ -34,19 +64,19 @@ function getRedis(): IORedis | null {
         lazyConnect: true,
       });
       redis.on('error', (err) => {
-        if (redisAvailable) {
-          console.warn('[Cache] Redis error:', err.message);
-        }
+        markRedisUnavailable(err.message);
       });
       redis.on('connect', () => {
         redisAvailable = true;
-        console.log('[Cache] Redis connected');
+        redisWarningLogged = false;
+        syncCacheGlobals();
       });
       redis.connect().catch(() => {
-        redisAvailable = false;
+        markRedisUnavailable("connect failed");
       });
+      syncCacheGlobals();
     } catch {
-      redisAvailable = false;
+      markRedisUnavailable("client init failed");
       return null;
     }
   }

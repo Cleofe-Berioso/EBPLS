@@ -19,7 +19,7 @@ function toCsv(rows: Record<string, unknown>[]): string {
 
 export async function GET(request: Request) {
   const session = await auth();
-  if (!session?.user || !["BPLO_OFFICE"].includes(session.user.role!)) {
+  if (!session?.user || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
