@@ -74,6 +74,7 @@ export function StatusBadge({ status }: { status: string }) {
     ISSUED: "primary",
     RELEASED: "purple",
     COMPLETED: "success",
+    APPROVED: "success",
     TEMPORARY: "warning",
     CONFIRMED: "success",
     RESCHEDULED: "info",

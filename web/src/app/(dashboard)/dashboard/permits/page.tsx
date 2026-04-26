@@ -52,7 +52,16 @@ export default async function PermitsPage() {
     include: {
       application: {
         select: {
+          id: true,
           applicationNumber: true,
+          status: true,
+          businessType: true,
+          lineOfBusiness: true,
+          businessLocation: {
+            select: {
+              status: true,
+            },
+          },
         },
       },
     },
@@ -148,11 +157,22 @@ export default async function PermitsPage() {
                   </div>
 
                   {permit.status === "ACTIVE" && (
-                    <Link href="/dashboard/renew">
-                      <Button variant="outline" className="w-full">
-                        Renew Permit
-                      </Button>
-                    </Link>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Link href="/dashboard/renew">
+                        <Button variant="outline" className="w-full">
+                          Renew Permit
+                        </Button>
+                      </Link>
+                      {["RELEASED", "COMPLETED"].includes(permit.application?.status ?? "") ? (
+                        <Link href={`/dashboard/business-location?applicationId=${permit.application?.id}`}>
+                          <Button variant="outline" className="w-full">
+                            {permit.application?.businessLocation?.status
+                              ? "Location Status"
+                              : "Submit Location"}
+                          </Button>
+                        </Link>
+                      ) : null}
+                    </div>
                   )}
                 </CardContent>
               </Card>

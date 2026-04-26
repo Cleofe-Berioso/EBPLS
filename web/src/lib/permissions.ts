@@ -42,7 +42,7 @@ export function defineAbilitiesFor(role: Role, userId?: string): AppAbility {
     can(["read", "confirm", "update"], "Payment");
     can(["read", "issue", "release"], "Permit");
     can(["read", "update"], "PermitIssuance");
-    can("read", "BusinessLocation");
+    can(["read", "update"], "BusinessLocation");
     can("read", "Report");
   } else if (role === "ADMIN") {
     can("manage", "User");
@@ -60,6 +60,7 @@ export function defineAbilitiesFor(role: Role, userId?: string): AppAbility {
     can("read", "Payment");
     can("create", "Payment");
     can("read", "Permit");
+    can(["create", "read", "update"], "BusinessLocation");
     cannot(["review", "verify", "return", "assess"], "Application");
     cannot("verify", "Document");
     cannot("confirm", "Payment");
@@ -88,6 +89,7 @@ export const NAV_PERMISSIONS: NavPermission[] = [
   { path: "/dashboard/tracking", label: "Track Status", requiredAbility: { action: "read", subject: "Application" }, roles: ["APPLICANT"] },
   { path: "/dashboard/payments", label: "Payments", requiredAbility: { action: "read", subject: "Payment" }, roles: ["APPLICANT", "BPLO_OFFICE"] },
   { path: "/dashboard/permits", label: "Permits", requiredAbility: { action: "read", subject: "Permit" }, roles: ["APPLICANT", "BPLO_OFFICE"] },
+  { path: "/dashboard/business-location", label: "Business Location", requiredAbility: { action: "create", subject: "BusinessLocation" }, roles: ["APPLICANT"] },
   { path: "/dashboard/profile", label: "Profile", requiredAbility: { action: "read", subject: "User" }, roles: ["APPLICANT", "BPLO_OFFICE", "ADMIN"] },
   { path: "/dashboard/verify-documents", label: "Document Verification", requiredAbility: { action: "verify", subject: "Document" }, roles: ["BPLO_OFFICE"] },
   { path: "/dashboard/review", label: "Review Queue", requiredAbility: { action: "review", subject: "Application" }, roles: ["BPLO_OFFICE"] },

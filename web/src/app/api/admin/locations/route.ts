@@ -1,35 +1,18 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { businessLocationSchema } from "@/lib/validations";
+import { NextResponse } from "next/server";
 import {
   EB_MAGALONA_DB_FILTER,
   EB_MAGALONA_OUTSIDE_DB_FILTER,
+  GEO_MAP_LOCATION_INCLUDE,
+  LOCATION_ELIGIBLE_APPLICATION_STATUSES,
+  LOCATION_REVIEWABLE_STATUSES,
   normalizeGeoMapLocation,
 } from "@/lib/locations";
-import { NextResponse } from "next/server";
 
 function canReadBusinessLocations(role?: string) {
   return role === "ADMIN" || role === "BPLO_OFFICE";
 }
-
-const locationInclude = {
-  application: {
-    select: {
-      id: true,
-      applicationNumber: true,
-      businessName: true,
-      businessType: true,
-      businessAddress: true,
-      type: true,
-      status: true,
-      permit: {
-        select: {
-          status: true,
-        },
-      },
-    },
-  },
-} as const;
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -46,130 +29,68 @@ export async function GET(req: Request) {
     const take = takeParam ? Math.min(500, Math.max(1, parseInt(takeParam, 10))) : undefined;
     const skip = take ? (page - 1) * take : undefined;
 
-    const [locations, totalVisible, hiddenOutsideBoundaryCount] = await Promise.all([
-      prisma.businessLocation.findMany({
-        where: EB_MAGALONA_DB_FILTER,
-        ...(typeof skip === "number" ? { skip } : {}),
-        ...(typeof take === "number" ? { take } : {}),
-        include: locationInclude,
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.businessLocation.count({
-        where: EB_MAGALONA_DB_FILTER,
-      }),
-      prisma.businessLocation.count({
-        where: EB_MAGALONA_OUTSIDE_DB_FILTER,
-      }),
-    ]);
-
-    const normalizedLocations = locations.map((location) =>
-      normalizeGeoMapLocation({
-        ...location,
-        application: location.application
-          ? {
-              ...location.application,
-              applicationNumber: location.application.applicationNumber,
-              businessName: location.application.businessName,
-              businessType: location.application.businessType,
-              businessAddress: location.application.businessAddress,
-              type: location.application.type,
-              status: location.application.status,
-              permit: location.application.permit
-                ? { status: location.application.permit.status }
-                : null,
-            }
-          : null,
-      })
-    );
+    const [approvedLocations, reviewQueue, approvedCount, pendingCount, rejectedCount, hiddenOutsideBoundaryCount] =
+      await Promise.all([
+        prisma.businessLocation.findMany({
+          where: {
+            status: "APPROVED",
+            application: {
+              status: {
+                in: [...LOCATION_ELIGIBLE_APPLICATION_STATUSES],
+              },
+            },
+            ...EB_MAGALONA_DB_FILTER,
+          },
+          ...(typeof skip === "number" ? { skip } : {}),
+          ...(typeof take === "number" ? { take } : {}),
+          include: GEO_MAP_LOCATION_INCLUDE,
+          orderBy: { reviewedAt: "desc" },
+        }),
+        prisma.businessLocation.findMany({
+          where: {
+            status: {
+              in: [...LOCATION_REVIEWABLE_STATUSES],
+            },
+          },
+          include: GEO_MAP_LOCATION_INCLUDE,
+          orderBy: { submittedAt: "desc" },
+        }),
+        prisma.businessLocation.count({
+          where: {
+            status: "APPROVED",
+            application: {
+              status: {
+                in: [...LOCATION_ELIGIBLE_APPLICATION_STATUSES],
+              },
+            },
+            ...EB_MAGALONA_DB_FILTER,
+          },
+        }),
+        prisma.businessLocation.count({
+          where: { status: "SUBMITTED" },
+        }),
+        prisma.businessLocation.count({
+          where: { status: "REJECTED" },
+        }),
+        prisma.businessLocation.count({
+          where: EB_MAGALONA_OUTSIDE_DB_FILTER,
+        }),
+      ]);
 
     return NextResponse.json({
-      locations: normalizedLocations,
-      total: totalVisible,
+      locations: approvedLocations.map((location) => normalizeGeoMapLocation(location)),
+      submissions: reviewQueue.map((location) => normalizeGeoMapLocation(location)),
+      total: approvedCount,
       page,
-      pages: take ? Math.ceil(totalVisible / take) : 1,
+      pages: take ? Math.ceil(approvedCount / take) : 1,
+      pendingCount,
+      rejectedCount,
       hiddenOutsideBoundaryCount,
     });
   } catch (error) {
     console.error("Error fetching locations:", error);
     return NextResponse.json(
       { error: "Failed to fetch locations" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(req: Request) {
-  const session = await auth();
-
-  if (!session?.user || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  try {
-    const body = await req.json();
-    const validated = businessLocationSchema.safeParse(body);
-
-    if (!validated.success) {
-      return NextResponse.json(
-        { error: validated.error.issues[0]?.message || "Validation failed" },
-        { status: 400 }
-      );
-    }
-
-    const app = await prisma.application.findUnique({
-      where: { id: validated.data.applicationId },
-    });
-
-    if (!app) {
-      return NextResponse.json(
-        { error: "Application not found" },
-        { status: 404 }
-      );
-    }
-
-    const existing = await prisma.businessLocation.findUnique({
-      where: { applicationId: validated.data.applicationId },
-    });
-
-    if (existing) {
-      return NextResponse.json(
-        { error: "Location already exists for this application" },
-        { status: 409 }
-      );
-    }
-
-    const location = await prisma.businessLocation.create({
-      data: {
-        applicationId: validated.data.applicationId,
-        latitude: validated.data.latitude,
-        longitude: validated.data.longitude,
-        label: validated.data.label,
-        businessType: validated.data.businessType,
-        markerColor: validated.data.markerColor,
-      },
-      include: locationInclude,
-    });
-
-    return NextResponse.json(
-      {
-        location: normalizeGeoMapLocation({
-          ...location,
-          application: location.application
-            ? {
-                ...location.application,
-                permit: location.application.permit
-                  ? { status: location.application.permit.status }
-                  : null,
-              }
-            : null,
-        }),
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error("Error creating location:", error);
-    return NextResponse.json(
-      { error: "Failed to create location" },
       { status: 500 }
     );
   }

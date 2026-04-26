@@ -85,10 +85,13 @@ export function BusinessMapContent({ locations }: BusinessMapContentProps) {
             ${escapeHtml(location.label || location.application?.businessName || "Business")}
           </p>
           <p style="margin: 0 0 4px 0; color: #475569;">
-            <strong>Type:</strong> ${escapeHtml(location.application?.businessType || location.businessType || "N/A")}
+            <strong>Category:</strong> ${escapeHtml(location.businessCategoryLabel)}
           </p>
           <p style="margin: 0 0 4px 0; color: #475569;">
-            <strong>Status:</strong> ${escapeHtml(location.statusLabel)}
+            <strong>Business Type:</strong> ${escapeHtml(location.application?.lineOfBusiness || location.application?.businessType || location.businessType || "N/A")}
+          </p>
+          <p style="margin: 0 0 4px 0; color: #475569;">
+            <strong>Status:</strong> ${escapeHtml(location.applicationStatusLabel)}
           </p>
           <p style="margin: 0 0 4px 0; color: #475569;">
             <strong>Address:</strong> ${escapeHtml(location.application?.businessAddress || "N/A")}

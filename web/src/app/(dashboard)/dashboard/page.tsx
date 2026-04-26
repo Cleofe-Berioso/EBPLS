@@ -7,6 +7,7 @@ import {
   getRenewalEligibility,
   checkClosureEligibility,
 } from "@/lib/application-helpers";
+import AdminDashboardAnalytics from "@/components/dashboard/admin-dashboard-analytics";
 import {
   FileText,
   Clock,
@@ -153,6 +154,8 @@ export default async function DashboardPage() {
           iconColor="text-red-600"
         />
       </div>
+
+      {role === "ADMIN" && <AdminDashboardAnalytics />}
 
       {/* Quick Actions */}
       <div>

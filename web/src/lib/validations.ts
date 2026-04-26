@@ -23,8 +23,19 @@ export const DocumentTypeEnum = z.enum([
   "OTHER",
 ]);
 
+export const BusinessCategoryEnum = z.enum([
+  "FOOD",
+  "RETAIL",
+  "SERVICES",
+  "MANUFACTURING",
+  "AGRICULTURE",
+  "FINANCE",
+  "OTHER",
+]);
+
 export type ClosureReason = z.infer<typeof ClosureReasonEnum>;
 export type DocumentType = z.infer<typeof DocumentTypeEnum>;
+export type BusinessCategory = z.infer<typeof BusinessCategoryEnum>;
 
 // ============================================================================
 // User Validations
@@ -541,9 +552,13 @@ export const businessLocationSchema = z.object({
     .number()
     .min(122.935881, "Longitude outside EB Magalona area")
     .max(123.019881, "Longitude outside EB Magalona area"),
+  businessCategory: BusinessCategoryEnum,
   label: z.string().max(100).optional().nullable(),
-  businessType: z.string().max(100).optional().nullable(),
-  markerColor: z.string().default("blue"),
+});
+
+export const businessLocationReviewSchema = z.object({
+  action: z.enum(["APPROVE", "REJECT"]),
+  reviewNotes: z.string().max(500).optional().nullable(),
 });
 
 // Permit Issuance Update Actions (Mayor Signing, Release, etc.)

@@ -39,31 +39,53 @@ export const EB_MAGALONA_OUTSIDE_DB_FILTER = {
   ],
 };
 
-export type GeoMapPinTone = "green" | "yellow" | "red" | "blue" | "purple" | "gray";
+export const LOCATION_ELIGIBLE_APPLICATION_STATUSES = ["RELEASED", "COMPLETED"] as const;
+export const LOCATION_REVIEWABLE_STATUSES = ["SUBMITTED", "REJECTED"] as const;
+const LOCATION_ELIGIBLE_APPLICATION_STATUS_SET = new Set<string>(LOCATION_ELIGIBLE_APPLICATION_STATUSES);
+
+export const BUSINESS_CATEGORY_VALUES = [
+  "FOOD",
+  "RETAIL",
+  "SERVICES",
+  "MANUFACTURING",
+  "AGRICULTURE",
+  "FINANCE",
+  "OTHER",
+] as const;
+
+export type GeoMapPinTone = (typeof BUSINESS_CATEGORY_VALUES)[number];
 
 export const GEO_MAP_PIN_COLORS: Record<GeoMapPinTone, string> = {
-  green: "#16A34A",
-  yellow: "#EAB308",
-  red: "#DC2626",
-  blue: "#2563EB",
-  purple: "#9333EA",
-  gray: "#6B7280",
+  FOOD: "#F97316",
+  RETAIL: "#2563EB",
+  SERVICES: "#16A34A",
+  MANUFACTURING: "#9333EA",
+  AGRICULTURE: "#EAB308",
+  FINANCE: "#DC2626",
+  OTHER: "#6B7280",
 };
 
-export const GEO_MAP_LEGEND = [
-  { tone: "green", label: "Active / Released / Completed permit" },
-  { tone: "yellow", label: "Under Review / Pending" },
-  { tone: "red", label: "Returned / Rejected / Problem application" },
-  { tone: "blue", label: "New application" },
-  { tone: "purple", label: "Renewal application" },
-  { tone: "gray", label: "Draft / Unknown status" },
-] as const satisfies ReadonlyArray<{ tone: GeoMapPinTone; label: string }>;
+export const GEO_MAP_CATEGORY_LABELS: Record<GeoMapPinTone, string> = {
+  FOOD: "Food / Restaurant",
+  RETAIL: "Retail / Store",
+  SERVICES: "Services",
+  MANUFACTURING: "Manufacturing",
+  AGRICULTURE: "Agriculture",
+  FINANCE: "Finance",
+  OTHER: "Other",
+};
+
+export const GEO_MAP_LEGEND = BUSINESS_CATEGORY_VALUES.map((tone) => ({
+  tone,
+  label: GEO_MAP_CATEGORY_LABELS[tone],
+})) as ReadonlyArray<{ tone: GeoMapPinTone; label: string }>;
 
 export interface GeoMapApplicationSummary {
   id: string;
   applicationNumber: string | null;
   businessName: string | null;
   businessType: string | null;
+  lineOfBusiness: string | null;
   businessAddress: string | null;
   type: string | null;
   status: string | null;
@@ -77,9 +99,15 @@ export interface GeoMapSourceLocation {
   applicationId: string;
   latitude: number;
   longitude: number;
+  businessCategory?: string | null;
   label: string | null;
   businessType: string | null;
   markerColor: string | null;
+  status: string | null;
+  submittedAt?: string | Date | null;
+  reviewedAt?: string | Date | null;
+  reviewedById?: string | null;
+  reviewNotes?: string | null;
   createdAt?: string | Date;
   updatedAt?: string | Date;
   application?: GeoMapApplicationSummary | null;
@@ -88,30 +116,34 @@ export interface GeoMapSourceLocation {
 export interface GeoMapLocationRecord extends GeoMapSourceLocation {
   pinTone: GeoMapPinTone;
   pinColor: string;
-  statusLabel: string;
+  businessCategory: GeoMapPinTone;
+  businessCategoryLabel: string;
+  applicationStatusLabel: string;
+  locationStatusLabel: string;
   isWithinBoundary: boolean;
+  canAppearOnMap: boolean;
+  canApplicantSubmit: boolean;
 }
 
-const GREEN_APPLICATION_STATUSES = new Set(["RELEASED", "COMPLETED"]);
-const YELLOW_APPLICATION_STATUSES = new Set([
-  "SUBMITTED",
-  "UNDER_REVIEW",
-  "RESUBMITTED",
-  "ASSESSED",
-  "PAYMENT_PENDING",
-  "PAID",
-  "PERMIT_PREPARED",
-  "READY_FOR_RELEASE",
-]);
-const RED_APPLICATION_STATUSES = new Set([
-  "RETURNED_FOR_CORRECTION",
-  "REJECTED",
-  "CANCELLED",
-]);
-const GRAY_APPLICATION_STATUSES = new Set(["DRAFT"]);
-const GREEN_PERMIT_STATUSES = new Set(["ACTIVE", "RENEWED"]);
-const RED_PERMIT_STATUSES = new Set(["REVOKED"]);
-const GRAY_PERMIT_STATUSES = new Set(["EXPIRED", "CLOSED"]);
+export const GEO_MAP_LOCATION_INCLUDE = {
+  application: {
+    select: {
+      id: true,
+      applicationNumber: true,
+      businessName: true,
+      businessType: true,
+      lineOfBusiness: true,
+      businessAddress: true,
+      type: true,
+      status: true,
+      permit: {
+        select: {
+          status: true,
+        },
+      },
+    },
+  },
+} as const;
 
 export function isWithinEbMagalona(latitude: number, longitude: number): boolean {
   return (
@@ -122,71 +154,73 @@ export function isWithinEbMagalona(latitude: number, longitude: number): boolean
   );
 }
 
-function normalizeStatusValue(status?: string | null): string | null {
-  return status?.trim().toUpperCase() ?? null;
+function normalizeBusinessCategory(category?: string | null): GeoMapPinTone {
+  const normalized = category?.trim().toUpperCase();
+  if (normalized && BUSINESS_CATEGORY_VALUES.includes(normalized as GeoMapPinTone)) {
+    return normalized as GeoMapPinTone;
+  }
+
+  return "OTHER";
 }
 
-function legacyMarkerTone(markerColor?: string | null): GeoMapPinTone | null {
-  const normalized = markerColor?.trim().toLowerCase();
-  switch (normalized) {
-    case "green":
-    case "yellow":
-    case "red":
-    case "blue":
-    case "purple":
-    case "gray":
-      return normalized;
-    default:
-      return null;
-  }
+export function canSubmitBusinessLocation(applicationStatus?: string | null): boolean {
+  return LOCATION_ELIGIBLE_APPLICATION_STATUS_SET.has(
+    applicationStatus?.trim().toUpperCase() ?? ""
+  );
+}
+
+export function canLocationAppearOnMap(input: {
+  locationStatus?: string | null;
+  applicationStatus?: string | null;
+  latitude: number;
+  longitude: number;
+}): boolean {
+  const locationStatus = input.locationStatus?.trim().toUpperCase();
+  return (
+    locationStatus === "APPROVED" &&
+    canSubmitBusinessLocation(input.applicationStatus) &&
+    isWithinEbMagalona(input.latitude, input.longitude)
+  );
 }
 
 export function getGeoMapPinTone(input: {
-  applicationStatus?: string | null;
-  applicationType?: string | null;
-  permitStatus?: string | null;
-  markerColor?: string | null;
+  businessCategory?: string | null;
 }): GeoMapPinTone {
-  const applicationStatus = normalizeStatusValue(input.applicationStatus);
-  const applicationType = normalizeStatusValue(input.applicationType);
-  const permitStatus = normalizeStatusValue(input.permitStatus);
-
-  if (permitStatus && GREEN_PERMIT_STATUSES.has(permitStatus)) return "green";
-  if (permitStatus && RED_PERMIT_STATUSES.has(permitStatus)) return "red";
-  if (permitStatus && GRAY_PERMIT_STATUSES.has(permitStatus)) return "gray";
-
-  if (applicationStatus && GREEN_APPLICATION_STATUSES.has(applicationStatus)) return "green";
-  if (applicationStatus && RED_APPLICATION_STATUSES.has(applicationStatus)) return "red";
-  if (applicationStatus && GRAY_APPLICATION_STATUSES.has(applicationStatus)) return "gray";
-  if (applicationStatus && YELLOW_APPLICATION_STATUSES.has(applicationStatus)) return "yellow";
-
-  if (applicationType === "RENEWAL") return "purple";
-  if (applicationType === "NEW") return "blue";
-
-  return legacyMarkerTone(input.markerColor) ?? "gray";
+  return normalizeBusinessCategory(input.businessCategory);
 }
 
 export function getGeoMapPinColor(input: {
-  applicationStatus?: string | null;
-  applicationType?: string | null;
-  permitStatus?: string | null;
-  markerColor?: string | null;
+  businessCategory?: string | null;
 }): string {
   return GEO_MAP_PIN_COLORS[getGeoMapPinTone(input)];
 }
 
-export function getGeoMapStatusLabel(input: {
+export function getGeoMapBusinessCategoryLabel(input: {
+  businessCategory?: string | null;
+}): string {
+  return GEO_MAP_CATEGORY_LABELS[getGeoMapPinTone(input)];
+}
+
+export function getApplicationStatusLabel(input: {
   applicationStatus?: string | null;
   permitStatus?: string | null;
 }): string {
-  const permitStatus = normalizeStatusValue(input.permitStatus);
+  const permitStatus = input.permitStatus?.trim().toUpperCase();
   if (permitStatus === "ACTIVE") return "ACTIVE PERMIT";
   if (permitStatus) return permitStatus.replace(/_/g, " ");
 
-  const applicationStatus = normalizeStatusValue(input.applicationStatus);
+  const applicationStatus = input.applicationStatus?.trim().toUpperCase();
   if (applicationStatus) return applicationStatus.replace(/_/g, " ");
 
   return "UNKNOWN";
+}
+
+export function getLocationStatusLabel(status?: string | null): string {
+  const normalized = status?.trim().toUpperCase();
+  if (normalized === "APPROVED") return "Approved";
+  if (normalized === "REJECTED") return "Rejected";
+  if (normalized === "SUBMITTED") return "Submitted for BPLO review";
+  return "Unknown";
 }
 
 export function normalizeGeoMapLocation(
@@ -194,28 +228,28 @@ export function normalizeGeoMapLocation(
 ): GeoMapLocationRecord {
   const businessType = location.application?.businessType ?? location.businessType ?? null;
   const applicationStatus = location.application?.status ?? null;
-  const applicationType = location.application?.type ?? null;
   const permitStatus = location.application?.permit?.status ?? null;
+  const businessCategory = normalizeBusinessCategory(location.businessCategory);
 
   return {
     ...location,
     businessType,
-    pinTone: getGeoMapPinTone({
-      applicationStatus,
-      applicationType,
-      permitStatus,
-      markerColor: location.markerColor,
-    }),
-    pinColor: getGeoMapPinColor({
-      applicationStatus,
-      applicationType,
-      permitStatus,
-      markerColor: location.markerColor,
-    }),
-    statusLabel: getGeoMapStatusLabel({
+    businessCategory,
+    pinTone: businessCategory,
+    pinColor: GEO_MAP_PIN_COLORS[businessCategory],
+    businessCategoryLabel: GEO_MAP_CATEGORY_LABELS[businessCategory],
+    applicationStatusLabel: getApplicationStatusLabel({
       applicationStatus,
       permitStatus,
     }),
+    locationStatusLabel: getLocationStatusLabel(location.status),
     isWithinBoundary: isWithinEbMagalona(location.latitude, location.longitude),
+    canAppearOnMap: canLocationAppearOnMap({
+      locationStatus: location.status,
+      applicationStatus,
+      latitude: location.latitude,
+      longitude: location.longitude,
+    }),
+    canApplicantSubmit: canSubmitBusinessLocation(applicationStatus),
   };
 }

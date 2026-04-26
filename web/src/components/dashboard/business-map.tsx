@@ -33,7 +33,7 @@ export function BusinessMapLegend() {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Pin Legend</CardTitle>
+        <CardTitle>Business Category Legend</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 gap-3">
@@ -54,7 +54,7 @@ export function BusinessMapLegend() {
         </div>
 
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
-          EB Magalona only. Businesses outside the allowed boundary stay hidden from the map.
+          EB Magalona only. Only BPLO-approved business locations inside the allowed boundary appear on the map.
         </div>
       </CardContent>
     </Card>

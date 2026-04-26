@@ -136,6 +136,22 @@ enum ApplicationStatus {
   CANCELLED
 }
 
+enum BusinessLocationStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum BusinessCategory {
+  FOOD
+  RETAIL
+  SERVICES
+  MANUFACTURING
+  AGRICULTURE
+  FINANCE
+  OTHER
+}
+
 enum ClosureReason {
   RETIREMENT
   RELOCATION
@@ -233,15 +249,22 @@ model BusinessLocation {
   applicationId   String      @unique
   latitude        Float
   longitude       Float
+  businessCategory BusinessCategory
   label           String?
   businessType    String?
   markerColor     String?     @default("blue")
+  status          BusinessLocationStatus @default(SUBMITTED)
+  submittedAt     DateTime    @default(now())
+  reviewedAt      DateTime?
+  reviewedById    String?
+  reviewNotes     String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId])
+  @@index([status])
   @@map("business_locations")
 }
 

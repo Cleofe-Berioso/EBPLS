@@ -62,7 +62,10 @@ function isSharedBusinessLocationDashboardRoute(pathname: string): boolean {
 }
 
 function isSharedBusinessLocationApiRoute(pathname: string, method: string): boolean {
-  return pathname === "/api/admin/locations" && method === "GET";
+  return (
+    (pathname === "/api/admin/locations" && method === "GET") ||
+    (/^\/api\/admin\/locations\/[^/]+$/.test(pathname) && method === "PATCH")
+  );
 }
 
 export function handleMiddleware(req: Parameters<Parameters<typeof auth>[0]>[0]) {

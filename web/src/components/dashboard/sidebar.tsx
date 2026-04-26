@@ -90,6 +90,12 @@ const applicantNav: NavItem[] = [
     roles: ["APPLICANT"],
   },
   {
+    label: "Business Location",
+    href: "/dashboard/business-location",
+    icon: <MapPin className="h-5 w-5 shrink-0" />,
+    roles: ["APPLICANT"],
+  },
+  {
     label: "Profile",
     href: "/dashboard/profile",
     icon: <Users className="h-5 w-5 shrink-0" />,

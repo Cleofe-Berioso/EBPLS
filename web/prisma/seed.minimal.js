@@ -313,6 +313,22 @@ async function main() {
     },
   });
 
+  await prisma.businessLocation.create({
+    data: {
+      applicationId: renewalApplication.id,
+      latitude: 10.8798,
+      longitude: 122.9764,
+      businessCategory: "SERVICES",
+      label: "Flores Pharmacy",
+      businessType: renewalApplication.lineOfBusiness,
+      status: "APPROVED",
+      reviewedAt: atUtc("2026-04-12T10:10:00Z"),
+      reviewedById: bploOfficer.id,
+      reviewNotes: "Approved for GeoMap display after permit release.",
+      markerColor: null,
+    },
+  });
+
   await prisma.activityLog.createMany({
     data: [
       {

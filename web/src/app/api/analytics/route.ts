@@ -8,6 +8,91 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { cacheOrCompute, CacheKeys, CacheTTL } from '@/lib/cache';
 
+const APPROVED_STATUSES = new Set([
+  'PAYMENT_PENDING',
+  'PAID',
+  'PERMIT_PREPARED',
+  'READY_FOR_RELEASE',
+  'RELEASED',
+  'COMPLETED',
+]);
+
+const PENDING_STATUSES = new Set([
+  'DRAFT',
+  'SUBMITTED',
+  'UNDER_REVIEW',
+  'RESUBMITTED',
+  'ASSESSED',
+]);
+
+const RETURNED_STATUSES = new Set([
+  'RETURNED_FOR_CORRECTION',
+  'REJECTED',
+  'CANCELLED',
+]);
+
+function buildMonthlySeries(
+  rows: { month: Date | string; count: bigint }[],
+  months = 12
+) {
+  const monthFormatter = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    year: 'numeric',
+  });
+  const now = new Date();
+  const monthStarts = Array.from({ length: months }, (_, index) => {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - index - 1), 1));
+    return {
+      key: date.toISOString().slice(0, 7),
+      label: monthFormatter.format(date),
+    };
+  });
+
+  const counts = new Map(
+    rows.map((row) => {
+      const month = new Date(row.month);
+      return [month.toISOString().slice(0, 7), Number(row.count)] as const;
+    })
+  );
+
+  return monthStarts.map((month) => ({
+    month: month.label,
+    count: counts.get(month.key) ?? 0,
+  }));
+}
+
+function buildStatusDistribution(
+  applicationStatusRows: { status: string; _count: { status: number } }[]
+) {
+  const summary = {
+    approved: 0,
+    pending: 0,
+    returned: 0,
+  };
+
+  for (const row of applicationStatusRows) {
+    if (APPROVED_STATUSES.has(row.status)) {
+      summary.approved += row._count.status;
+      continue;
+    }
+
+    if (PENDING_STATUSES.has(row.status)) {
+      summary.pending += row._count.status;
+      continue;
+    }
+
+    if (RETURNED_STATUSES.has(row.status)) {
+      summary.returned += row._count.status;
+    }
+  }
+
+  return [
+    { label: 'Approved', count: summary.approved },
+    { label: 'Pending', count: summary.pending },
+    { label: 'Returned', count: summary.returned },
+  ];
+}
+
 export async function GET(request: Request) {
   try {
     const session = await auth();
@@ -17,6 +102,9 @@ export async function GET(request: Request) {
     const period = searchParams.get('period') || '30'; // days
     const daysAgo = parseInt(period);
     const startDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+    const monthlyStartDate = new Date();
+    monthlyStartDate.setUTCMonth(monthlyStartDate.getUTCMonth() - 11, 1);
+    monthlyStartDate.setUTCHours(0, 0, 0, 0);
 
     // Cache key varies by period; analytics are expensive — use 15 min TTL
     const cacheKey = `${CacheKeys.analytics()}:${period}d`;
@@ -38,6 +126,7 @@ export async function GET(request: Request) {
       expiringPermits,
       processingTimes,
       dailyApplicationCounts,
+      monthlyApplicationCounts,
       activityByHour,
     ] = await Promise.all([
       // Total applications
@@ -110,6 +199,14 @@ export async function GET(request: Request) {
         ORDER BY date ASC
       `, startDate),
 
+      prisma.$queryRawUnsafe<{ month: Date | string; count: bigint }[]>(`
+        SELECT DATE_TRUNC('month', "createdAt") as month, COUNT(*) as count
+        FROM applications
+        WHERE "createdAt" >= $1
+        GROUP BY DATE_TRUNC('month', "createdAt")
+        ORDER BY month ASC
+      `, monthlyStartDate),
+
       // Activity by hour of day
       prisma.$queryRawUnsafe<{ hour: number; count: bigint }[]>(`
         SELECT EXTRACT(HOUR FROM "createdAt") as hour, COUNT(*) as count
@@ -173,10 +270,15 @@ export async function GET(request: Request) {
           date: d.date,
           count: Number(d.count),
         })),
+        monthlyApplications: buildMonthlySeries(monthlyApplicationCounts),
         peakHours: activityByHour.map((h) => ({
           hour: Number(h.hour),
           count: Number(h.count),
         })),
+      },
+
+      summaries: {
+        statusDistribution: buildStatusDistribution(applicationsByStatus),
       },
     };
       }, // end cacheOrCompute compute fn

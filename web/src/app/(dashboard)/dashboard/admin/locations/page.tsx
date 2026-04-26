@@ -5,6 +5,9 @@ import { AdminLocationsClient } from "@/components/dashboard/admin-locations-cli
 import {
   EB_MAGALONA_DB_FILTER,
   EB_MAGALONA_OUTSIDE_DB_FILTER,
+  GEO_MAP_LOCATION_INCLUDE,
+  LOCATION_ELIGIBLE_APPLICATION_STATUSES,
+  LOCATION_REVIEWABLE_STATUSES,
   normalizeGeoMapLocation,
   type GeoMapLocationRecord,
 } from "@/lib/locations";
@@ -24,63 +27,64 @@ export default async function AdminLocationsPage() {
     redirect("/dashboard");
   }
 
-  let locations: GeoMapLocationRecord[] = [];
+  let approvedLocations: GeoMapLocationRecord[] = [];
+  let submissions: GeoMapLocationRecord[] = [];
   let hiddenOutsideBoundaryCount = 0;
+  let pendingCount = 0;
+  let rejectedCount = 0;
 
   try {
-    const [rawLocations, outsideCount] = await Promise.all([
+    const [approvedRows, reviewRows, outsideCount, pendingRows, rejectedRows] = await Promise.all([
       prisma.businessLocation.findMany({
-        where: EB_MAGALONA_DB_FILTER,
-        include: {
+        where: {
+          status: "APPROVED",
           application: {
-            select: {
-              id: true,
-              applicationNumber: true,
-              businessName: true,
-              businessType: true,
-              businessAddress: true,
-              type: true,
-              status: true,
-              permit: {
-                select: {
-                  status: true,
-                },
-              },
+            status: {
+              in: [...LOCATION_ELIGIBLE_APPLICATION_STATUSES],
             },
           },
+          ...EB_MAGALONA_DB_FILTER,
         },
-        orderBy: { createdAt: "desc" },
+        include: GEO_MAP_LOCATION_INCLUDE,
+        orderBy: { reviewedAt: "desc" },
+      }),
+      prisma.businessLocation.findMany({
+        where: {
+          status: {
+            in: [...LOCATION_REVIEWABLE_STATUSES],
+          },
+        },
+        include: GEO_MAP_LOCATION_INCLUDE,
+        orderBy: { submittedAt: "desc" },
       }),
       prisma.businessLocation.count({
         where: EB_MAGALONA_OUTSIDE_DB_FILTER,
       }),
+      prisma.businessLocation.count({
+        where: { status: "SUBMITTED" },
+      }),
+      prisma.businessLocation.count({
+        where: { status: "REJECTED" },
+      }),
     ]);
 
-    locations = rawLocations.map((location) =>
-      normalizeGeoMapLocation({
-        ...location,
-        application: location.application
-          ? {
-              ...location.application,
-              permit: location.application.permit
-                ? { status: location.application.permit.status }
-                : null,
-            }
-          : null,
-      })
-    );
+    approvedLocations = approvedRows.map((location) => normalizeGeoMapLocation(location));
+    submissions = reviewRows.map((location) => normalizeGeoMapLocation(location));
     hiddenOutsideBoundaryCount = outsideCount;
+    pendingCount = pendingRows;
+    rejectedCount = rejectedRows;
   } catch (error) {
     console.error("Error fetching locations:", error);
-    locations = [];
-    hiddenOutsideBoundaryCount = 0;
   }
 
   return (
     <div className="p-6">
       <AdminLocationsClient
-        initialLocations={JSON.parse(JSON.stringify(locations))}
+        initialLocations={JSON.parse(JSON.stringify(approvedLocations))}
+        initialSubmissions={JSON.parse(JSON.stringify(submissions))}
         initialHiddenOutsideBoundaryCount={hiddenOutsideBoundaryCount}
+        initialPendingCount={pendingCount}
+        initialRejectedCount={rejectedCount}
         canManage={session.user.role === "ADMIN"}
         viewerRole={session.user.role}
       />
