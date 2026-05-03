@@ -12,6 +12,11 @@ function isValidCategory(category: string): boolean {
   return FEE_CATEGORY_OPTIONS.some((item) => item.key === category);
 }
 
+function isValidClassification(category: FeeCategoryKey, classification: string): boolean {
+  const option = FEE_CATEGORY_OPTIONS.find((item) => item.key === category);
+  return option ? option.classifications.includes(classification.trim()) : false;
+}
+
 export async function GET() {
   const session = await requireSuperAdminSession();
   if (!session) {
@@ -45,6 +50,10 @@ export async function POST(req: Request) {
 
   if (typeof classification !== "string" || !classification.trim()) {
     return NextResponse.json({ error: "Size classification is required." }, { status: 400 });
+  }
+
+  if (!isValidClassification(feeCategory, classification)) {
+    return NextResponse.json({ error: "Invalid size classification for the selected business category." }, { status: 400 });
   }
 
   if (typeof amount !== "number" || Number.isNaN(amount) || amount < 0) {

@@ -16,6 +16,7 @@ type Flash = { type: "success" | "danger" | "info"; message: string } | null;
 type FeeCategoryOption = {
   key: string;
   label: string;
+  classifications: string[];
 };
 
 type FeeItem = {
@@ -103,8 +104,6 @@ export function SuperAdminFeeSettingsManager() {
     renewalSurchargePercent: "25",
     monthlyInterestPercent: "2",
     liquorTobaccoAddOnPercent: "25",
-    powerDistributionFixedFee: "10000",
-    privatePortFixedFee: "50000",
   });
 
   const [extensionForm, setExtensionForm] = useState({
@@ -148,16 +147,27 @@ export function SuperAdminFeeSettingsManager() {
       setFeeItems(feeJson.items ?? []);
       setPenalties(nextPenalties);
       setExtensions(extJson.extensions ?? []);
-      setFeeForm((prev) => ({
-        ...prev,
-        category: prev.category || nextCategories[0]?.key || "",
-      }));
+      setFeeForm((prev) => {
+        const nextCategory =
+          prev.category && nextCategories.some((item) => item.key === prev.category)
+            ? prev.category
+            : nextCategories[0]?.key || "";
+        const nextCategoryOption = nextCategories.find((item) => item.key === nextCategory);
+        const nextClassification =
+          prev.classification && nextCategoryOption?.classifications.includes(prev.classification)
+            ? prev.classification
+            : nextCategoryOption?.classifications[0] || "";
+
+        return {
+          ...prev,
+          category: nextCategory,
+          classification: nextClassification,
+        };
+      });
       setPenaltyForm({
         renewalSurchargePercent: String(nextPenalties.renewalSurchargePercent),
         monthlyInterestPercent: String(nextPenalties.monthlyInterestPercent),
         liquorTobaccoAddOnPercent: String(nextPenalties.liquorTobaccoAddOnPercent),
-        powerDistributionFixedFee: String(nextPenalties.powerDistributionFixedFee),
-        privatePortFixedFee: String(nextPenalties.privatePortFixedFee),
       });
     } catch {
       setFlash({ type: "danger", message: "Failed to load system settings." });
@@ -169,6 +179,16 @@ export function SuperAdminFeeSettingsManager() {
   useEffect(() => {
     void loadSettings();
   }, []);
+
+  const categoryLabelMap = useMemo(() => {
+    return new Map(categories.map((item) => [item.key, item.label]));
+  }, [categories]);
+
+  const selectedCategory = useMemo(() => {
+    return categories.find((item) => item.key === feeForm.category) ?? null;
+  }, [categories, feeForm.category]);
+
+  const classificationOptions = selectedCategory?.classifications ?? [];
 
   const summary = useMemo(() => {
     const activeCategories = new Set(feeItems.filter((item) => item.isActive).map((item) => item.category)).size;
@@ -186,7 +206,7 @@ export function SuperAdminFeeSettingsManager() {
     const rows = [
       ...feeItems.map((item) => ({
         type: "Fee Table",
-        message: `${item.category} / ${item.classification}: ${formatAmount(item.amount)}`,
+        message: `${categoryLabelMap.get(item.category) ?? item.category} / ${item.classification}: ${formatAmount(item.amount)}`,
         updatedAt: item.updatedAt,
       })),
       {
@@ -202,11 +222,21 @@ export function SuperAdminFeeSettingsManager() {
     ];
 
     return rows.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 8);
-  }, [extensions, feeItems, penalties]);
+  }, [categoryLabelMap, extensions, feeItems, penalties]);
 
   async function saveFeeItem(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFlash(null);
+
+    if (!feeForm.category) {
+      setFlash({ type: "danger", message: "Business category is required." });
+      return;
+    }
+
+    if (!feeForm.classification) {
+      setFlash({ type: "danger", message: "Size classification is required." });
+      return;
+    }
 
     const amount = Number(feeForm.amount);
     if (Number.isNaN(amount) || amount < 0) {
@@ -232,7 +262,11 @@ export function SuperAdminFeeSettingsManager() {
       }
 
       setFlash({ type: "success", message: "Fee table entry saved." });
-      setFeeForm((prev) => ({ ...prev, classification: "", amount: "" }));
+      setFeeForm((prev) => ({
+        ...prev,
+        classification: selectedCategory?.classifications[0] ?? prev.classification,
+        amount: "",
+      }));
       await loadSettings();
     } catch {
       setFlash({ type: "danger", message: "Failed to save fee table entry." });
@@ -267,19 +301,15 @@ export function SuperAdminFeeSettingsManager() {
     const renewalSurchargePercent = Number(penaltyForm.renewalSurchargePercent);
     const monthlyInterestPercent = Number(penaltyForm.monthlyInterestPercent);
     const liquorTobaccoAddOnPercent = Number(penaltyForm.liquorTobaccoAddOnPercent);
-    const powerDistributionFixedFee = Number(penaltyForm.powerDistributionFixedFee);
-    const privatePortFixedFee = Number(penaltyForm.privatePortFixedFee);
 
     const all = [
       renewalSurchargePercent,
       monthlyInterestPercent,
       liquorTobaccoAddOnPercent,
-      powerDistributionFixedFee,
-      privatePortFixedFee,
     ];
 
     if (all.some((value) => Number.isNaN(value) || value < 0)) {
-      setFlash({ type: "danger", message: "Penalty and fixed-fee values must be non-negative." });
+      setFlash({ type: "danger", message: "Penalty values must be non-negative." });
       return;
     }
 
@@ -291,8 +321,6 @@ export function SuperAdminFeeSettingsManager() {
           renewalSurchargePercent,
           monthlyInterestPercent,
           liquorTobaccoAddOnPercent,
-          powerDistributionFixedFee,
-          privatePortFixedFee,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -378,6 +406,15 @@ export function SuperAdminFeeSettingsManager() {
 
   const flashVariant = flash?.type === "danger" ? "danger" : flash?.type === "success" ? "success" : "info";
 
+  function handleCategoryChange(nextCategory: string) {
+    const nextCategoryOption = categories.find((item) => item.key === nextCategory);
+    setFeeForm((prev) => ({
+      ...prev,
+      category: nextCategory,
+      classification: nextCategoryOption?.classifications[0] ?? "",
+    }));
+  }
+
   return (
     <section className="space-y-6">
       <PageHeader
@@ -405,27 +442,33 @@ export function SuperAdminFeeSettingsManager() {
 
       <SectionCard
         title="Fee Table Maintenance"
-        description="Configure Mayor's Permit Fee entries by business category and size classification."
+        description="Configure Mayor's Permit Fee entries by business category and valid classification. Fixed-fee categories such as Power and Private Port are maintained here."
       >
         <form className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-5" onSubmit={saveFeeItem}>
           <FormField label="Business Category" required>
             <select
               value={feeForm.category}
-              onChange={(e) => setFeeForm((prev) => ({ ...prev, category: e.target.value }))}
+              onChange={(e) => handleCategoryChange(e.target.value)}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
             >
+              {categories.length === 0 ? <option value="">No categories available</option> : null}
               {categories.map((item) => (
                 <option key={item.key} value={item.key}>{item.label}</option>
               ))}
             </select>
           </FormField>
 
-          <FormField label="Size Classification" required hint="Example: Micro Industry, Small-Scale Industries A">
-            <input
+          <FormField label="Size Classification" required hint="Only classifications supported by the selected category can be used.">
+            <select
               value={feeForm.classification}
               onChange={(e) => setFeeForm((prev) => ({ ...prev, classification: e.target.value }))}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-            />
+            >
+              {classificationOptions.length === 0 ? <option value="">No classifications available</option> : null}
+              {classificationOptions.map((classification) => (
+                <option key={classification} value={classification}>{classification}</option>
+              ))}
+            </select>
           </FormField>
 
           <FormField label="Fee Amount" required>
@@ -481,7 +524,7 @@ export function SuperAdminFeeSettingsManager() {
                   <tbody className="divide-y divide-slate-100">
                     {feeItems.map((item) => (
                       <tr key={item.id} className="align-top hover:bg-slate-50/60">
-                        <td className="px-4 py-3 font-medium text-slate-900">{item.category}</td>
+                        <td className="px-4 py-3 font-medium text-slate-900">{categoryLabelMap.get(item.category) ?? item.category}</td>
                         <td className="px-4 py-3 text-slate-700">{item.classification}</td>
                         <td className="px-4 py-3 text-slate-700">{formatAmount(item.amount)}</td>
                         <td className="px-4 py-3">
@@ -516,7 +559,7 @@ export function SuperAdminFeeSettingsManager() {
                 <div className="space-y-3 p-4">
                   {feeItems.map((item) => (
                     <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-900">{item.category}</p>
+                      <p className="text-sm font-semibold text-slate-900">{categoryLabelMap.get(item.category) ?? item.category}</p>
                       <p className="text-xs text-slate-600">{item.classification}</p>
                       <p className="mt-1 text-sm text-slate-700">{formatAmount(item.amount)}</p>
                       <p className="mt-1 text-xs text-slate-500">Updated: {formatDate(item.updatedAt)}</p>
@@ -547,9 +590,9 @@ export function SuperAdminFeeSettingsManager() {
 
       <SectionCard
         title="Surcharge and Interest Settings"
-        description="Configure renewal surcharge, monthly interest, and liquor/tobacco add-on percentages."
+        description="Configure renewal surcharge, monthly interest, and liquor/tobacco add-on percentages. Fixed-fee category amounts are maintained in the fee table above."
       >
-        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-5" onSubmit={savePenalties}>
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={savePenalties}>
           <FormField label="Renewal Late Surcharge (%)" required>
             <input
               type="number"
@@ -583,29 +626,7 @@ export function SuperAdminFeeSettingsManager() {
             />
           </FormField>
 
-          <FormField label="Power Generation/Distribution Fixed Fee" required>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={penaltyForm.powerDistributionFixedFee}
-              onChange={(e) => setPenaltyForm((prev) => ({ ...prev, powerDistributionFixedFee: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-            />
-          </FormField>
-
-          <FormField label="Private Port Fixed Fee" required>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={penaltyForm.privatePortFixedFee}
-              onChange={(e) => setPenaltyForm((prev) => ({ ...prev, privatePortFixedFee: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-            />
-          </FormField>
-
-          <div className="md:col-span-2 xl:col-span-5 flex justify-end">
+          <div className="md:col-span-2 xl:col-span-3 flex justify-end">
             <button type="submit" className={actionButtonStyles("primary", "sm")} disabled={isLoading}>
               Save Penalty Settings
             </button>

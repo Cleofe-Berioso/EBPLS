@@ -309,6 +309,37 @@ function buildDefaultFeeConfigurationItems() {
     }
   }
 
+  addFeeSeedRow(itemMap, {
+    category: "BANKS",
+    classification: "Rural / Thrift / Savings Banks",
+    amount: 4000,
+  });
+  addFeeSeedRow(itemMap, {
+    category: "BANKS",
+    classification: "Commercial and Development Banks",
+    amount: 6000,
+  });
+  addFeeSeedRow(itemMap, {
+    category: "BANKS",
+    classification: "Universal Banks",
+    amount: 8000,
+  });
+  addFeeSeedRow(itemMap, {
+    category: "POWER_COMPANY",
+    classification: "Fixed Fee",
+    amount: DEFAULT_SYSTEM_FEE_SETTINGS.powerDistributionFixedFee,
+  });
+  addFeeSeedRow(itemMap, {
+    category: "POWER_GEN_DIST",
+    classification: "Fixed Fee",
+    amount: DEFAULT_SYSTEM_FEE_SETTINGS.powerDistributionFixedFee,
+  });
+  addFeeSeedRow(itemMap, {
+    category: "PRIVATE_PORT",
+    classification: "Fixed Fee",
+    amount: DEFAULT_SYSTEM_FEE_SETTINGS.privatePortFixedFee,
+  });
+
   return Array.from(itemMap.values());
 }
 

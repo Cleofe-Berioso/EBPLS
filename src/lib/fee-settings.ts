@@ -21,27 +21,19 @@ export type FeeCategoryKey =
   | "PRIVATE_PORT"
   | "GENERAL";
 
-export const FEE_CATEGORY_OPTIONS: Array<{ key: FeeCategoryKey; label: string }> = [
-  { key: "MANUFACTURERS", label: "Manufacturers / Importers / Producers" },
-  { key: "BANKS", label: "Banks" },
-  { key: "OTHER_FINANCIAL", label: "Other Financial Institutions" },
-  { key: "CONTRACTORS", label: "Contractors and Service Providers" },
-  { key: "WHOLESALERS_RETAILERS", label: "Wholesalers / Retailers / Dealers / Distributors" },
-  { key: "TRANSPORTATION", label: "Transportation Operations" },
-  { key: "COMMUNICATIONS", label: "Communications" },
-  { key: "LESSORS_LAND", label: "Lessors of Real Estate - Land" },
-  { key: "LESSORS_COMMERCIAL", label: "Lessors of Real Estate - Commercial Buildings" },
-  { key: "HOTELS_MOTELS", label: "Hotels / Motels / Pension Houses / Apartelles" },
-  { key: "LODGING", label: "Lodging / Boarding Houses" },
-  { key: "AMUSEMENT", label: "Amusement Places" },
-  { key: "RESTAURANTS", label: "Restaurants / Cafes / Catering Services" },
-  { key: "LIQUOR_TOBACCO", label: "Liquor and Tobacco Businesses" },
-  { key: "POWER_COMPANY", label: "Power Companies / Hydropower Plants" },
-  { key: "POWER_GEN_DIST", label: "Power Generation and Distribution" },
-  { key: "OTHER_INDUSTRIAL", label: "Other Industrial Companies" },
-  { key: "PRIVATE_PORT", label: "Private Ports / Wharves" },
-  { key: "GENERAL", label: "General Business" },
-];
+export type FeeCategoryOption = {
+  key: FeeCategoryKey;
+  label: string;
+  classifications: string[];
+};
+
+export const FIXED_FEE_CLASSIFICATION = "Fixed Fee";
+
+export const BANK_CLASSIFICATIONS = [
+  "Rural / Thrift / Savings Banks",
+  "Commercial and Development Banks",
+  "Universal Banks",
+] as const;
 
 export const DEFAULT_CLASSIFICATIONS = [
   "Micro Industry",
@@ -52,6 +44,292 @@ export const DEFAULT_CLASSIFICATIONS = [
   "Medium-Scale Industries",
   "Large-Scale Industries",
 ] as const;
+
+export const FEE_CATEGORY_OPTIONS: FeeCategoryOption[] = [
+  {
+    key: "MANUFACTURERS",
+    label: "Manufacturers / Importers / Producers",
+    classifications: [...DEFAULT_CLASSIFICATIONS],
+  },
+  {
+    key: "BANKS",
+    label: "Banks",
+    classifications: [...BANK_CLASSIFICATIONS],
+  },
+  {
+    key: "OTHER_FINANCIAL",
+    label: "Other Financial Institutions",
+    classifications: [
+      "Micro Industry",
+      "Cottage Industry (₱100K–₱250K)",
+      "Cottage Industry (₱250K–₱500K)",
+      "Small Industry (₱500K–₱2M)",
+      "Medium Industry (₱2M–₱5M)",
+      "Large Industry (₱5M–₱20M)",
+      "Large Industry (Over ₱20M)",
+      "Micro Industry (no workers)",
+      "Micro Industry (1–5)",
+      "Cottage Industry (6–10)",
+      "Small Industry (11–50)",
+      "Medium Industry (51–99)",
+      "Large Industry (100–150)",
+      "Large Industry (200+)",
+    ],
+  },
+  {
+    key: "CONTRACTORS",
+    label: "Contractors and Service Providers",
+    classifications: [
+      "Micro",
+      "Cottage A",
+      "Cottage B",
+      "Small A",
+      "Small B",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage A (6–10)",
+      "Small A (11–50)",
+      "Small B (51–99)",
+      "Medium (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "WHOLESALERS_RETAILERS",
+    label: "Wholesalers / Retailers / Dealers / Distributors",
+    classifications: [
+      "Micro",
+      "Cottage A",
+      "Cottage B",
+      "Small A",
+      "Small B",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage A (6–10)",
+      "Small A (11–50)",
+      "Small B (51–99)",
+      "Medium (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "TRANSPORTATION",
+    label: "Transportation Operations",
+    classifications: [
+      "Small-Scale",
+      "Medium-Scale",
+      "Large-Scale",
+      "Small-Scale (no workers)",
+      "Small-Scale (1–5)",
+      "Small-Scale (6–10)",
+      "Medium-Scale (11–50)",
+      "Medium-Scale (51–99)",
+      "Large-Scale (100–150)",
+      "Large-Scale (200+)",
+    ],
+  },
+  {
+    key: "COMMUNICATIONS",
+    label: "Communications",
+    classifications: [
+      "Micro",
+      "Cottage",
+      "Small",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage (6–10)",
+      "Small (11–50)",
+      "Medium (51–99)",
+      "Large (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "LESSORS_LAND",
+    label: "Lessors of Real Estate - Land",
+    classifications: [
+      "Micro",
+      "Cottage",
+      "Small",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage (6–10)",
+      "Small (11–50)",
+      "Medium (51–99)",
+      "Large (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "LESSORS_COMMERCIAL",
+    label: "Lessors of Real Estate - Commercial Buildings",
+    classifications: [
+      "Micro",
+      "Cottage",
+      "Small",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage (6–10)",
+      "Small (11–50)",
+      "Medium (51–99)",
+      "Large (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "HOTELS_MOTELS",
+    label: "Hotels / Motels / Pension Houses / Apartelles",
+    classifications: [
+      "Cottage (below ₱100K)",
+      "Cottage",
+      "Small",
+      "Medium",
+      "Large",
+      "Cottage (no workers)",
+      "Cottage (1–5)",
+      "Cottage (6–10)",
+      "Small (11–50)",
+      "Medium (51–99)",
+      "Large (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "LODGING",
+    label: "Lodging / Boarding Houses",
+    classifications: [
+      "Micro",
+      "Cottage",
+      "Small",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage (6–10)",
+      "Small (11–50)",
+      "Medium (51–99)",
+      "Large (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "AMUSEMENT",
+    label: "Amusement Places",
+    classifications: [
+      "Micro",
+      "Cottage",
+      "Small",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage (6–10)",
+      "Small (11–50)",
+      "Medium (51–99)",
+      "Large (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "RESTAURANTS",
+    label: "Restaurants / Cafes / Catering Services",
+    classifications: [
+      "Micro",
+      "Cottage",
+      "Small",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage (6–10)",
+      "Small (11–50)",
+      "Medium (51–99)",
+      "Large (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "LIQUOR_TOBACCO",
+    label: "Liquor and Tobacco Businesses",
+    classifications: [
+      "Micro",
+      "Cottage A",
+      "Cottage B",
+      "Small A",
+      "Small B",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage A (6–10)",
+      "Small A (11–50)",
+      "Small B (51–99)",
+      "Medium (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "POWER_COMPANY",
+    label: "Power Companies / Hydropower Plants",
+    classifications: [FIXED_FEE_CLASSIFICATION],
+  },
+  {
+    key: "POWER_GEN_DIST",
+    label: "Power Generation and Distribution",
+    classifications: [FIXED_FEE_CLASSIFICATION],
+  },
+  {
+    key: "OTHER_INDUSTRIAL",
+    label: "Other Industrial Companies",
+    classifications: [
+      "Small",
+      "Medium",
+      "Large",
+      "Small (no workers)",
+      "Small (1–5)",
+      "Small (6–10)",
+      "Small (11–50)",
+      "Medium (51–99)",
+      "Large (100–150)",
+      "Large (200+)",
+    ],
+  },
+  {
+    key: "PRIVATE_PORT",
+    label: "Private Ports / Wharves",
+    classifications: [FIXED_FEE_CLASSIFICATION],
+  },
+  {
+    key: "GENERAL",
+    label: "General Business",
+    classifications: [
+      "Micro",
+      "Cottage A",
+      "Cottage B",
+      "Small A",
+      "Small B",
+      "Medium",
+      "Large",
+      "Micro (no workers)",
+      "Micro (1–5)",
+      "Cottage A (6–10)",
+      "Small A (11–50)",
+      "Small B (51–99)",
+      "Medium (100–150)",
+      "Large (200+)",
+    ],
+  },
+];
 
 export const DEFAULT_SYSTEM_FEE_SETTINGS = {
   renewalSurchargePercent: 25,
@@ -99,7 +377,8 @@ export type RuntimeFeeSettings = {
     liquorTobaccoAddOnPercent: number;
   };
   fixed: {
-    powerDistributionFixedFee: number;
+    powerCompanyFixedFee: number;
+    powerGenerationDistributionFixedFee: number;
     privatePortFixedFee: number;
   };
   feeOverrides: Array<{
@@ -123,6 +402,34 @@ function roundMoney(value: number): number {
 function clampNonNegative(value: number): number {
   if (!Number.isFinite(value) || value < 0) return 0;
   return roundMoney(value);
+}
+
+function findFixedFeeOverride(
+  rows: Array<{
+    category: FeeCategoryKey;
+    classification: string;
+    amount: number;
+    updatedAt: Date;
+  }>,
+  category: FeeCategoryKey
+) {
+  return rows.find(
+    (row) => row.category === category && row.classification === FIXED_FEE_CLASSIFICATION
+  );
+}
+
+function resolveFixedFeeAmount(input: {
+  legacyAmount: number;
+  legacyUpdatedAt: Date;
+  overrideRow?: { amount: number; updatedAt: Date };
+}): number {
+  if (!input.overrideRow) {
+    return input.legacyAmount;
+  }
+
+  return input.overrideRow.updatedAt >= input.legacyUpdatedAt
+    ? input.overrideRow.amount
+    : input.legacyAmount;
 }
 
 export async function listFeeConfigurationItems(): Promise<FeeConfigurationItemDto[]> {
@@ -394,7 +701,7 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
     getOrCreateSystemFeeSetting(),
     prisma.feeConfigurationItem.findMany({
       where: { isActive: true },
-      select: { category: true, classification: true, amount: true },
+      select: { category: true, classification: true, amount: true, updatedAt: true },
       orderBy: [{ category: "asc" }, { classification: "asc" }],
     }),
     prisma.renewalExtension.findFirst({
@@ -414,6 +721,17 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
     }),
   ]);
 
+  const feeOverrideRows = feeOverrides.map((row) => ({
+    category: row.category as FeeCategoryKey,
+    classification: row.classification,
+    amount: row.amount,
+    updatedAt: row.updatedAt,
+  }));
+  const penaltiesUpdatedAt = new Date(penalties.updatedAt);
+  const powerCompanyOverride = findFixedFeeOverride(feeOverrideRows, "POWER_COMPANY");
+  const powerGenDistOverride = findFixedFeeOverride(feeOverrideRows, "POWER_GEN_DIST");
+  const privatePortOverride = findFixedFeeOverride(feeOverrideRows, "PRIVATE_PORT");
+
   return {
     penalties: {
       renewalSurchargePercent: penalties.renewalSurchargePercent,
@@ -421,11 +739,24 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
       liquorTobaccoAddOnPercent: penalties.liquorTobaccoAddOnPercent,
     },
     fixed: {
-      powerDistributionFixedFee: penalties.powerDistributionFixedFee,
-      privatePortFixedFee: penalties.privatePortFixedFee,
+      powerCompanyFixedFee: resolveFixedFeeAmount({
+        legacyAmount: penalties.powerDistributionFixedFee,
+        legacyUpdatedAt: penaltiesUpdatedAt,
+        overrideRow: powerCompanyOverride,
+      }),
+      powerGenerationDistributionFixedFee: resolveFixedFeeAmount({
+        legacyAmount: penalties.powerDistributionFixedFee,
+        legacyUpdatedAt: penaltiesUpdatedAt,
+        overrideRow: powerGenDistOverride,
+      }),
+      privatePortFixedFee: resolveFixedFeeAmount({
+        legacyAmount: penalties.privatePortFixedFee,
+        legacyUpdatedAt: penaltiesUpdatedAt,
+        overrideRow: privatePortOverride,
+      }),
     },
-    feeOverrides: feeOverrides.map((row) => ({
-      category: row.category as FeeCategoryKey,
+    feeOverrides: feeOverrideRows.map((row) => ({
+      category: row.category,
       classification: row.classification,
       amount: row.amount,
     })),

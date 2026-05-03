@@ -1,4 +1,4 @@
-import type { FeeCategoryKey, RuntimeFeeSettings } from "@/lib/fee-settings";
+import { BANK_CLASSIFICATIONS, type FeeCategoryKey, type RuntimeFeeSettings } from "@/lib/fee-settings";
 
 /**
  * Mayor's Permit Fee computation helper.
@@ -500,7 +500,7 @@ export function computeMayorsPermitFee(
 
   // ----- 2. Power Companies / Hydropower Plants — ₱10,000 fixed -----
   if (/power company|hydropower|hydro power|hydroelectric|electric cooperative/.test(lower)) {
-    const fee = runtimeSettings?.fixed.powerDistributionFixedFee ?? 10_000;
+    const fee = runtimeSettings?.fixed.powerCompanyFixedFee ?? 10_000;
     return buildResult(input, {
       detectedCategory: "Power Companies / Hydropower Plants",
       assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
@@ -514,7 +514,7 @@ export function computeMayorsPermitFee(
 
   // ----- 3. Power Generation and Distribution — ₱10,000 fixed -----
   if (/power generation|power distribution|generation company|distribution company/.test(lower)) {
-    const fee = runtimeSettings?.fixed.powerDistributionFixedFee ?? 10_000;
+    const fee = runtimeSettings?.fixed.powerGenerationDistributionFixedFee ?? 10_000;
     return buildResult(input, {
       detectedCategory: "Power Generation and Distribution",
       assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
@@ -530,11 +530,22 @@ export function computeMayorsPermitFee(
   if (/rural bank|thrift bank|savings bank|commercial bank|development bank|universal bank|cooperative bank/.test(lower)) {
     const bankType = detectBankType(lineOfBusiness ?? "");
     const bankFeeMap = {
-      RURAL_THRIFT_SAVINGS:    { fee: 4_000, label: "Rural / Thrift / Savings Banks" },
-      COMMERCIAL_DEVELOPMENT:  { fee: 6_000, label: "Commercial and Development Banks" },
-      UNIVERSAL:               { fee: 8_000, label: "Universal Banks" },
+      RURAL_THRIFT_SAVINGS: {
+        fee: 4_000,
+        label: BANK_CLASSIFICATIONS[0],
+      },
+      COMMERCIAL_DEVELOPMENT: {
+        fee: 6_000,
+        label: BANK_CLASSIFICATIONS[1],
+      },
+      UNIVERSAL: {
+        fee: 8_000,
+        label: BANK_CLASSIFICATIONS[2],
+      },
     };
-    const { fee, label: bankLabel } = bankFeeMap[bankType];
+    const bankConfig = bankFeeMap[bankType];
+    const bankLabel = bankConfig.label;
+    const fee = findConfiguredFeeAmount(runtimeSettings, "BANKS", bankLabel) ?? bankConfig.fee;
     return buildResult(input, {
       detectedCategory: `Banks — ${bankLabel}`,
       assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
