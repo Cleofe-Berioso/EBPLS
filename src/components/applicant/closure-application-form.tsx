@@ -1,0 +1,541 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { defaultBusinessInfo } from "@/lib/applicant-mock";
+import { FormStepper } from "@/components/applicant/form-stepper";
+import { UploadSlot } from "@/components/applicant/upload-slot";
+import { resolveRequiredDocuments } from "@/lib/required-documents";
+import type {
+  ApplicationDocumentInput,
+  BusinessInfo,
+  PersistMode,
+  SaveApplicationInput,
+  SubmitValidationErrorDetail,
+} from "@/lib/applicant-types";
+import { actionButtonStyles } from "@/components/ui/action-button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FormField } from "@/components/ui/form-field";
+import { InfoBanner } from "@/components/ui/info-banner";
+import { SectionCard } from "@/components/ui/section-card";
+
+const steps = [
+  {
+    title: "Select Business to Close",
+    description: "Choose the registered business record for closure.",
+  },
+  {
+    title: "Upload Requirements",
+    description: "Attach closure documents and proof of ceased operations.",
+  },
+  {
+    title: "Outstanding Balance Preview",
+    description: "Review the estimated closure-related charges.",
+  },
+  {
+    title: "Review and Submit",
+    description: "Confirm the closure package before final validation.",
+  },
+];
+
+function ReviewStat({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    </div>
+  );
+}
+
+function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+      <p className="font-semibold">Submission requirements still missing</p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+            Missing Fields
+          </p>
+          <ul className="mt-2 space-y-1">
+            {detail.missingFields.length > 0 ? (
+              detail.missingFields.map((item) => <li key={item}>• {item}</li>)
+            ) : (
+              <li>• None</li>
+            )}
+          </ul>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+            Missing Documents
+          </p>
+          <ul className="mt-2 space-y-1">
+            {detail.missingDocuments.length > 0 ? (
+              detail.missingDocuments.map((item) => <li key={item}>• {item}</li>)
+            ) : (
+              <li>• None</li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ClosureApplicationForm() {
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("applicationId");
+
+  const [step, setStep] = useState(0);
+  const [applicationId, setApplicationId] = useState<string | undefined>(editId ?? undefined);
+  const [selectedBusinessId, setSelectedBusinessId] = useState("");
+  const [records, setRecords] = useState<
+    Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>
+  >([]);
+  const [selectedBusinessName, setSelectedBusinessName] = useState(defaultBusinessInfo.businessName);
+  const [selectedBusinessInfo, setSelectedBusinessInfo] = useState<BusinessInfo>(defaultBusinessInfo);
+  const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
+  const [statusMessage, setStatusMessage] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
+
+  const requiredDocs = useMemo(
+    () =>
+      resolveRequiredDocuments({
+        applicationType: "CLOSURE",
+        formData: selectedBusinessInfo,
+      }),
+    [selectedBusinessInfo]
+  );
+
+  const uploadedRequiredCount = requiredDocs.filter((doc) => uploadedDocuments[doc]).length;
+  const selectedRecord = records.find((item) => item.id === selectedBusinessId);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadRecords() {
+      const response = await fetch("/api/applicant/business-records", { cache: "no-store" });
+      const data = (await response.json()) as {
+        records?: Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>;
+      };
+
+      if (!active || !response.ok || !data.records) return;
+
+      setRecords(data.records);
+      if (data.records[0] && !selectedBusinessId) {
+        setSelectedBusinessId(data.records[0].id);
+        setSelectedBusinessName(data.records[0].businessName);
+        setSelectedBusinessInfo(data.records[0].businessInfo);
+      }
+    }
+
+    void loadRecords();
+    return () => {
+      active = false;
+    };
+  }, [selectedBusinessId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadExistingApplication() {
+      if (!editId) return;
+
+      const response = await fetch(`/api/applicant/applications/${editId}`, { cache: "no-store" });
+      const data = (await response.json()) as {
+        application?: {
+          id: string;
+          businessRecordId?: string;
+          formData: BusinessInfo;
+          documents: ApplicationDocumentInput[];
+        };
+      };
+
+      if (!active || !response.ok || !data.application) return;
+
+      setApplicationId(data.application.id);
+      setSelectedBusinessInfo(data.application.formData);
+      setSelectedBusinessName(data.application.formData.businessName);
+      if (data.application.businessRecordId) setSelectedBusinessId(data.application.businessRecordId);
+      setUploadedDocuments(
+        data.application.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
+          acc[doc.documentName] = doc;
+          return acc;
+        }, {})
+      );
+    }
+
+    void loadExistingApplication();
+    return () => {
+      active = false;
+    };
+  }, [editId]);
+
+  function next() {
+    setStep((current) => Math.min(current + 1, steps.length - 1));
+  }
+
+  function back() {
+    setStep((current) => Math.max(current - 1, 0));
+  }
+
+  async function persist(mode: PersistMode) {
+    setSubmitting(true);
+    setStatusMessage(null);
+    setValidationDetail(null);
+
+    const selected = records.find((item) => item.id === selectedBusinessId);
+    const payload: SaveApplicationInput = {
+      applicationId,
+      applicationType: "CLOSURE",
+      businessRecordId: selectedBusinessId || undefined,
+      formData: selected?.businessInfo ?? selectedBusinessInfo,
+      documents: Object.values(uploadedDocuments),
+      mode,
+    };
+
+    const response = await fetch("/api/applicant/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = (await response.json()) as {
+      application?: { id: string; applicationNumber: string; status: string };
+      error?: string;
+      detail?: SubmitValidationErrorDetail;
+    };
+    setSubmitting(false);
+
+    if (!response.ok || !data.application) {
+      setStatusMessage({
+        kind: "error",
+        text: data.error ?? "Unable to save closure application.",
+      });
+      if (data.detail) setValidationDetail(data.detail);
+      return null;
+    }
+
+    setApplicationId(data.application.id);
+    setStatusMessage({
+      kind: "success",
+      text:
+        mode === "SUBMIT"
+          ? `Closure ${data.application.applicationNumber} submitted successfully.`
+          : `Closure draft ${data.application.applicationNumber} saved successfully.`,
+    });
+    return data.application.id;
+  }
+
+  async function ensureApplicationId(): Promise<string | null> {
+    if (applicationId) return applicationId;
+    return persist("DRAFT");
+  }
+
+  async function handleDocumentUpload(documentName: string, file: File | null) {
+    if (!file) return;
+
+    const ensuredId = await ensureApplicationId();
+    if (!ensuredId) return;
+
+    setSubmitting(true);
+    setStatusMessage(null);
+
+    const formData = new FormData();
+    formData.append("documentName", documentName);
+    formData.append("file", file);
+
+    const response = await fetch(`/api/applicant/applications/${ensuredId}/documents`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = (await response.json()) as {
+      document?: ApplicationDocumentInput;
+      error?: string;
+    };
+
+    setSubmitting(false);
+
+    if (!response.ok || !data.document) {
+      setStatusMessage({
+        kind: "error",
+        text: data.error ?? "Unable to upload document.",
+      });
+      return;
+    }
+
+    const uploadedDoc = data.document;
+
+    setUploadedDocuments((current) => ({
+      ...current,
+      [documentName]: uploadedDoc,
+    }));
+    setStatusMessage({
+      kind: "success",
+      text: `${documentName} uploaded.`,
+    });
+  }
+
+  async function handleDocumentDelete(documentName: string) {
+    const doc = uploadedDocuments[documentName];
+    if (!doc?.id || !applicationId) return;
+
+    setSubmitting(true);
+    const response = await fetch(`/api/applicant/applications/${applicationId}/documents/${doc.id}`, {
+      method: "DELETE",
+    });
+    setSubmitting(false);
+
+    if (!response.ok) return;
+
+    setUploadedDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setStatusMessage({
+      kind: "success",
+      text: `${documentName} removed.`,
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <FormStepper steps={steps} currentStep={step} />
+
+      {statusMessage ? (
+        <InfoBanner
+          title={statusMessage.kind === "success" ? "Closure update" : "Closure issue"}
+          description={statusMessage.text}
+          variant={statusMessage.kind === "success" ? "success" : "danger"}
+        />
+      ) : null}
+
+      {step === 0 ? (
+        <SectionCard
+          title="Select Business to Close"
+          description="Closure starts from an existing registered business record so the correct business history is preserved."
+        >
+          {records.length === 0 ? (
+            <EmptyState
+              title="No records available yet"
+              description="No action is required right now. This closure form will populate once you have an existing business record."
+            />
+          ) : (
+            <div className="space-y-4">
+              <FormField
+                label="Existing Business Record"
+                hint="Choose the registered business record that will be closed."
+                required
+              >
+                <select
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  value={selectedBusinessId}
+                  disabled={records.length === 0}
+                  onChange={(event) => {
+                    const selectedId = event.target.value;
+                    setSelectedBusinessId(selectedId);
+                    const selected = records.find((item) => item.id === selectedId);
+                    if (selected) {
+                      setSelectedBusinessName(selected.businessName);
+                      setSelectedBusinessInfo(selected.businessInfo);
+                    }
+                  }}
+                >
+                  {records.map((business) => (
+                    <option key={business.id} value={business.id}>
+                      {business.businessName} ({business.registrationNumber})
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              {selectedRecord ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                  <p className="font-semibold text-slate-900">{selectedRecord.businessName}</p>
+                  <p className="mt-1">Registration: {selectedRecord.registrationNumber}</p>
+                  <p className="mt-1">Business Type: {selectedRecord.businessInfo.businessType}</p>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </SectionCard>
+      ) : null}
+
+      {step === 1 ? (
+        <div className="space-y-4">
+          <InfoBanner
+            title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredDocs.length}`}
+            description="Upload the closure letter, barangay certification, and proof of ceased operation with clear file copies."
+            variant="info"
+          />
+          <SectionCard
+            title="Upload Requirements"
+            description="These documents support closure review and later settlement checking."
+          >
+            <div className="grid gap-3 md:grid-cols-2">
+              {requiredDocs.map((doc) => (
+                <UploadSlot
+                  key={doc}
+                  label={doc}
+                  required
+                  helperText="Upload a clear file that supports business closure review."
+                  disabled={submitting || records.length === 0}
+                  fileName={uploadedDocuments[doc]?.fileName}
+                  onFileChange={(file) => {
+                    void handleDocumentUpload(doc, file);
+                  }}
+                  onRemove={() => {
+                    void handleDocumentDelete(doc);
+                  }}
+                />
+              ))}
+            </div>
+          </SectionCard>
+        </div>
+      ) : null}
+
+      {step === 2 ? (
+        <div className="space-y-4">
+          <InfoBanner
+            title="Preview only — final closure settlement happens later"
+            description="This balance preview is shown for applicant guidance only. BPLO assessment and payment verification logic remain unchanged."
+            variant="warning"
+          />
+          <SectionCard
+            title="Outstanding Balance Preview"
+            description="Use this screen to understand possible closure-related amounts before final submission."
+          >
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-gray-800">
+                <div className="flex justify-between py-1">
+                  <span>Arrears</span>
+                  <span>Php 1,200.00</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span>Penalties</span>
+                  <span>Php 350.00</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span>Other Charges</span>
+                  <span>Php 250.00</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span>Closure Certificate Fee</span>
+                  <span>Php 100.00</span>
+                </div>
+                <div className="mt-2 flex justify-between border-t border-green-200 pt-2 font-semibold text-green-800">
+                  <span>Total Amount</span>
+                  <span>Php 1,900.00</span>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">Closure reminder</p>
+                <ul className="mt-2 space-y-1">
+                  <li>• Closure submission does not immediately release the certificate.</li>
+                  <li>• Outstanding balances may still be validated during BPLO review.</li>
+                  <li>• Final release still follows the existing assessment, payment, and issuance flow.</li>
+                </ul>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+      ) : null}
+
+      {step === 3 ? (
+        <div className="space-y-4">
+          <SectionCard
+            title="Review and Submit"
+            description="Confirm the selected business and uploaded closure requirements before running final validation."
+            action={
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={submitting || records.length === 0}
+                  onClick={() => {
+                    void persist("DRAFT");
+                  }}
+                  className={actionButtonStyles("secondary", "md")}
+                >
+                  Save Draft
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting || records.length === 0}
+                  onClick={() => {
+                    void persist("SUBMIT");
+                  }}
+                  className={actionButtonStyles("primary", "md")}
+                >
+                  Submit Closure
+                </button>
+              </div>
+            }
+          >
+            <div className="grid gap-4 md:grid-cols-3">
+              <ReviewStat
+                label="Business Name"
+                value={selectedBusinessName || "-"}
+                helper="Selected from your registered business records"
+              />
+              <ReviewStat
+                label="Application Type"
+                value="Closure"
+                helper="Closure workflow behavior remains unchanged"
+              />
+              <ReviewStat
+                label="Required Documents"
+                value={`${uploadedRequiredCount} / ${requiredDocs.length}`}
+                helper="Uploaded required document count"
+              />
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">Before you submit</p>
+              <ul className="mt-2 space-y-1">
+                <li>• Make sure the selected business record is the one being closed.</li>
+                <li>• Confirm each closure requirement has a clear uploaded file.</li>
+                <li>• Review the outstanding balance preview as guidance only.</li>
+              </ul>
+            </div>
+          </SectionCard>
+
+          {validationDetail ? <ValidationPanel detail={validationDetail} /> : null}
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-between pt-2">
+        <button
+          type="button"
+          disabled={step === 0}
+          onClick={back}
+          className={actionButtonStyles("ghost", "md")}
+        >
+          Back
+        </button>
+        <button
+          type="button"
+          disabled={step === steps.length - 1}
+          onClick={next}
+          className={actionButtonStyles("primary", "md")}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}

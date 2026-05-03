@@ -1,0 +1,43 @@
+import { NextResponse } from "next/server";
+import { requireBploSession } from "@/lib/bplo-api";
+import { rejectPaymentReference } from "@/lib/bplo-payment-verification";
+
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ paymentReferenceId: string }> }
+) {
+  const session = await requireBploSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { paymentReferenceId } = await params;
+
+  let payload: { remarks?: string };
+  try {
+    payload = (await req.json()) as { remarks?: string };
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+  }
+
+  if (!payload.remarks?.trim()) {
+    return NextResponse.json(
+      { error: "Remarks are required when rejecting a payment" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const result = await rejectPaymentReference(
+      paymentReferenceId,
+      session.user.id,
+      payload.remarks
+    );
+    return NextResponse.json({ result });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to reject payment reference";
+    const status = message === "Payment reference not found" ? 404 : 422;
+    return NextResponse.json({ error: message }, { status });
+  }
+}

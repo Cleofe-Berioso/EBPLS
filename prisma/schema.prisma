@@ -1,0 +1,300 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  APPLICANT
+  BPLO
+  SUPER_ADMIN
+}
+
+enum ApplicationType {
+  NEW
+  RENEWAL
+  CLOSURE
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  ASSESSED
+  APPROVED_FOR_PAYMENT
+  PAID
+  FOR_RELEASE
+  RELEASED
+  RETURNED_FOR_CORRECTION
+  REJECTED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(APPLICANT)
+  isActive     Boolean  @default(true)
+  applications BusinessApplication[] @relation("ApplicantApplications")
+  businessRecords BusinessRecord[]
+  submittedLocations BusinessLocation[] @relation("LocationSubmittedBy")
+  verifiedLocations  BusinessLocation[] @relation("LocationVerifiedBy")
+  historyEntries ApplicationHistory[] @relation("HistoryActor")
+  assessmentsComputed FeeAssessment[] @relation("AssessmentComputedBy")
+  permitsPrepared PermitIssuance[] @relation("PermitPreparedBy")
+  permitsReleased PermitIssuance[] @relation("PermitReleasedBy")
+  feeConfigurationUpdates FeeConfigurationItem[] @relation("FeeConfigUpdatedBy")
+  systemFeeSettingUpdates SystemFeeSetting[] @relation("SystemFeeSettingUpdatedBy")
+  renewalExtensionUpdates RenewalExtension[] @relation("RenewalExtensionUpdatedBy")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model BusinessRecord {
+  id                 String   @id @default(cuid())
+  applicantId        String
+  businessType       String
+  registrationNumber String   @unique
+  tin                String
+  businessName       String
+  tradeName          String
+  ownerName          String
+  nationality        String
+  email              String
+  phone              String
+  mainOfficeAddress  String
+  businessAddress    String
+  sameAsMainOffice   Boolean  @default(true)
+  businessArea       String?
+  totalFloorArea     String?
+  totalEmployees     String?
+  maleEmployees      String?
+  femaleEmployees    String?
+  employeesWithinMunicipality String?
+  deliveryVehicles   String?
+  propertyOwnership  String?
+  taxDeclarationNumber String?
+  propertyIdentificationNumber String?
+  taxIncentives      String?
+  businessActivity   String?
+  lineOfBusiness     String?
+  assetSize          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  applicant    User                 @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  applications BusinessApplication[]
+  location     BusinessLocation?
+
+  @@index([applicantId])
+}
+
+enum BusinessLocationStatus {
+  PENDING
+  VERIFIED
+  NEEDS_CORRECTION
+}
+
+model BusinessLocation {
+  id               String                 @id @default(cuid())
+  businessRecordId String                 @unique
+  latitude         Float
+  longitude        Float
+  address          String?
+  barangay         String?
+  status           BusinessLocationStatus @default(PENDING)
+  submittedById    String
+  verifiedById     String?
+  remarks          String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  businessRecord BusinessRecord @relation(fields: [businessRecordId], references: [id], onDelete: Cascade)
+  submittedBy   User           @relation("LocationSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
+  verifiedBy    User?          @relation("LocationVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([submittedById])
+  @@index([verifiedById])
+}
+
+model BusinessApplication {
+  id                String            @id @default(cuid())
+  applicationNumber String            @unique
+  applicantId       String
+  businessRecordId  String?
+  applicationType   ApplicationType
+  status            ApplicationStatus @default(DRAFT)
+  formData          Json
+  submittedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  applicant     User                @relation("ApplicantApplications", fields: [applicantId], references: [id], onDelete: Cascade)
+  businessRecord BusinessRecord?    @relation(fields: [businessRecordId], references: [id], onDelete: SetNull)
+  documents     ApplicationDocument[]
+  history       ApplicationHistory[]
+  feeAssessment FeeAssessment?
+  permitIssuance PermitIssuance?
+
+  @@index([applicantId, createdAt])
+  @@index([applicantId, status])
+}
+
+enum PermitDocumentType {
+  BUSINESS_PERMIT
+  CLOSURE_CERTIFICATE
+}
+
+enum PermitIssuanceStatus {
+  PREPARED
+  FOR_RELEASE
+  RELEASED
+}
+
+model PermitIssuance {
+  id            String               @id @default(cuid())
+  applicationId String               @unique
+  documentNumber String              @unique
+  documentType  PermitDocumentType
+  status        PermitIssuanceStatus @default(PREPARED)
+  issuedAt      DateTime             @default(now())
+  releasedAt    DateTime?
+  preparedById  String
+  releasedById  String?
+  documentPath  String?
+  remarks       String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  application BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  preparedBy  User                @relation("PermitPreparedBy", fields: [preparedById], references: [id], onDelete: Restrict)
+  releasedBy  User?               @relation("PermitReleasedBy", fields: [releasedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([applicationId, status])
+}
+
+model ApplicationDocument {
+  id            String   @id @default(cuid())
+  applicationId String
+  documentName  String
+  fileName      String
+  storagePath   String
+  mimeType      String
+  sizeBytes     Int
+  uploadedAt    DateTime @default(now())
+
+  application BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model ApplicationHistory {
+  id            String            @id @default(cuid())
+  applicationId String
+  actorId       String?
+  actorRole     Role?
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  remarks       String?
+  createdAt     DateTime          @default(now())
+
+  application BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor       User?               @relation("HistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+}
+
+enum FeeAssessmentStatus {
+  DRAFT
+  GENERATED
+}
+
+enum PaymentFrequency {
+  ANNUAL
+  BI_ANNUAL
+  QUARTERLY
+}
+
+model FeeAssessment {
+  id                    String              @id @default(cuid())
+  applicationId         String              @unique
+  assessmentNumber      String              @unique
+  status                FeeAssessmentStatus @default(DRAFT)
+  paymentFrequency      PaymentFrequency    @default(ANNUAL)
+  mayorsPermitFee       Float               @default(0)
+  regulatoryFees        Float               @default(0)
+  additionalCharges     Float               @default(0)
+  penalties             Float               @default(0)
+  surcharge             Float               @default(0)
+  interest              Float               @default(0)
+  closureCertificateFee Float               @default(0)
+  arrears               Float               @default(0)
+  otherCharges          Float               @default(0)
+  totalAmount           Float               @default(0)
+  remarks               String?
+  computedById          String?
+  generatedAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  application  BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  computedBy   User?               @relation("AssessmentComputedBy", fields: [computedById], references: [id], onDelete: SetNull)
+
+  @@index([applicationId])
+}
+
+model FeeConfigurationItem {
+  id             String   @id @default(cuid())
+  category       String
+  classification String
+  amount         Float    @default(0)
+  isActive       Boolean  @default(true)
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  updatedBy User? @relation("FeeConfigUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([category, classification])
+  @@index([category, isActive])
+}
+
+model SystemFeeSetting {
+  id                          String   @id @default(cuid())
+  renewalSurchargePercent     Float    @default(25)
+  monthlyInterestPercent      Float    @default(2)
+  liquorTobaccoAddOnPercent   Float    @default(25)
+  powerDistributionFixedFee   Float    @default(10000)
+  privatePortFixedFee         Float    @default(50000)
+  updatedById                 String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  updatedBy User? @relation("SystemFeeSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+model RenewalExtension {
+  id             String   @id @default(cuid())
+  title          String
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean  @default(true)
+  waiveSurcharge Boolean  @default(true)
+  waiveInterest  Boolean  @default(false)
+  remarks        String?
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  updatedBy User? @relation("RenewalExtensionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([isActive, startDate, endDate])
+}
