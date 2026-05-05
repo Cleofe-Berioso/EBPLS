@@ -666,7 +666,7 @@ export async function listApplicantNotifications(applicantId: string) {
 }
 
 export async function getApplicantTopSummary(applicantId: string) {
-  const application = await prisma.businessApplication.findFirst({
+  const applications = await prisma.businessApplication.findMany({
     where: {
       applicantId,
       status: {
@@ -680,76 +680,83 @@ export async function getApplicantTopSummary(applicantId: string) {
         take: 1,
       },
     },
-    orderBy: {
-      updatedAt: "desc",
-    },
+    orderBy: [{ updatedAt: "desc" }],
   });
 
-  if (!application) return null;
+  if (applications.length === 0) return null;
 
-  const payment = application.paymentReferences[0] ?? null;
+  const summaries = applications.map((application: any) => {
+    const payment = application.paymentReferences[0] ?? null;
+    const fa = application.feeAssessment as {
+      assessmentNumber: string;
+      status: string;
+      paymentFrequency: string;
+      annualAssessedAmount: any;
+      releasePaymentAmount: any;
+      amountPaid: any;
+      remainingBalance: any;
+      paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
+      mayorsPermitFee: any;
+      regulatoryFees: any;
+      additionalCharges: any;
+      penalties: any;
+      surcharge: any;
+      interest: any;
+      closureCertificateFee: any;
+      arrears: any;
+      otherCharges: any;
+      totalAmount: any;
+      remarks: string | null;
+      generatedAt: Date | null;
+    } | null;
 
-  const fa = (application as any).feeAssessment as {
-    assessmentNumber: string;
-    status: string;
-    paymentFrequency: string;
-    annualAssessedAmount: any;
-    releasePaymentAmount: any;
-    amountPaid: any;
-    remainingBalance: any;
-    paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
-    mayorsPermitFee: any;
-    regulatoryFees: any;
-    additionalCharges: any;
-    penalties: any;
-    surcharge: any;
-    interest: any;
-    closureCertificateFee: any;
-    arrears: any;
-    otherCharges: any;
-    totalAmount: any;
-    remarks: string | null;
-    generatedAt: Date | null;
-  } | null;
+    return {
+      applicationId: application.id,
+      applicationNumber: application.applicationNumber,
+      applicationType: application.applicationType as string,
+      status: mapDbStatusToUi(application.status),
+      rawStatus: application.status,
+      topNumber: fa?.assessmentNumber ?? null,
+      assessmentStatus: (fa?.status ?? null) as "DRAFT" | "GENERATED" | null,
+      paymentFrequency: (fa?.paymentFrequency ?? null) as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null,
+      annualAssessedAmount: toMoneyNumber(fa?.annualAssessedAmount),
+      releasePaymentAmount: toMoneyNumber(fa?.releasePaymentAmount),
+      amountPaid: toMoneyNumber(fa?.amountPaid),
+      remainingBalance: toMoneyNumber(fa?.remainingBalance),
+      paymentStatus: fa?.paymentStatus ?? "UNPAID",
+      mayorsPermitFee: toMoneyNumber(fa?.mayorsPermitFee),
+      regulatoryFees: toMoneyNumber(fa?.regulatoryFees),
+      additionalCharges: toMoneyNumber(fa?.additionalCharges),
+      penalties: toMoneyNumber(fa?.penalties),
+      surcharge: toMoneyNumber(fa?.surcharge),
+      interest: toMoneyNumber(fa?.interest),
+      closureCertificateFee: toMoneyNumber(fa?.closureCertificateFee),
+      arrears: toMoneyNumber(fa?.arrears),
+      otherCharges: toMoneyNumber(fa?.otherCharges),
+      totalAmount: toMoneyNumber(fa?.totalAmount),
+      remarks: fa?.remarks ?? null,
+      generatedAt: fa?.generatedAt ? fa.generatedAt.toISOString() : null,
+      paymentReference: payment
+        ? {
+            id: payment.id,
+            transactionNumber: payment.transactionNumber,
+            amountPaid: toMoneyNumber(payment.amountPaid),
+            paymentDate: payment.paymentDate.toISOString(),
+            submittedAt: payment.submittedAt.toISOString(),
+            status: payment.status,
+            reviewerRemarks: payment.reviewerRemarks,
+            reviewedAt: payment.reviewedAt ? payment.reviewedAt.toISOString() : null,
+            proofFileName: payment.proofFileName,
+          }
+        : null,
+    };
+  });
 
   return {
-    applicationId: application.id,
-    applicationNumber: application.applicationNumber,
-    applicationType: application.applicationType as string,
-    status: mapDbStatusToUi(application.status),
-    topNumber: fa?.assessmentNumber ?? null,
-    assessmentStatus: (fa?.status ?? null) as "DRAFT" | "GENERATED" | null,
-    paymentFrequency: (fa?.paymentFrequency ?? null) as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null,
-    annualAssessedAmount: toMoneyNumber(fa?.annualAssessedAmount),
-    releasePaymentAmount: toMoneyNumber(fa?.releasePaymentAmount),
-    amountPaid: toMoneyNumber(fa?.amountPaid),
-    remainingBalance: toMoneyNumber(fa?.remainingBalance),
-    paymentStatus: fa?.paymentStatus ?? "UNPAID",
-    mayorsPermitFee: toMoneyNumber(fa?.mayorsPermitFee),
-    regulatoryFees: toMoneyNumber(fa?.regulatoryFees),
-    additionalCharges: toMoneyNumber(fa?.additionalCharges),
-    penalties: toMoneyNumber(fa?.penalties),
-    surcharge: toMoneyNumber(fa?.surcharge),
-    interest: toMoneyNumber(fa?.interest),
-    closureCertificateFee: toMoneyNumber(fa?.closureCertificateFee),
-    arrears: toMoneyNumber(fa?.arrears),
-    otherCharges: toMoneyNumber(fa?.otherCharges),
-    totalAmount: toMoneyNumber(fa?.totalAmount),
-    remarks: fa?.remarks ?? null,
-    generatedAt: fa?.generatedAt ? fa.generatedAt.toISOString() : null,
-    paymentReference: payment
-      ? {
-          id: payment.id,
-          transactionNumber: payment.transactionNumber,
-          amountPaid: toMoneyNumber(payment.amountPaid),
-          paymentDate: payment.paymentDate.toISOString(),
-          submittedAt: payment.submittedAt.toISOString(),
-          status: payment.status,
-          reviewerRemarks: payment.reviewerRemarks,
-          reviewedAt: payment.reviewedAt ? payment.reviewedAt.toISOString() : null,
-          proofFileName: payment.proofFileName,
-        }
-      : null,
+    activeSummary:
+      summaries.find((summary: { rawStatus: string }) => summary.rawStatus === "APPROVED_FOR_PAYMENT") ??
+      summaries[0],
+    records: summaries,
   };
 }
 

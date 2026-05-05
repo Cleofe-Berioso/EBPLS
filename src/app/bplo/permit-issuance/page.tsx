@@ -42,6 +42,70 @@ export default async function BploPermitIssuancePage() {
 
       <div className="space-y-4">
         <ResponsiveDataTable
+          title={`Blocked / Awaiting Payment (${data.blocked.length})`}
+          description="Applications that cannot be prepared yet because required payment is missing, pending verification, or not yet eligible."
+          table={
+            data.blocked.length === 0 ? (
+              <div className="px-6 py-8 text-sm text-slate-500">No blocked applications at the moment.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-left text-slate-700">
+                    <th className="px-4 py-3 font-semibold">Application Number</th>
+                    <th className="px-4 py-3 font-semibold">Business Name</th>
+                    <th className="px-4 py-3 font-semibold">Payment Status</th>
+                    <th className="px-4 py-3 font-semibold">Release Payment</th>
+                    <th className="px-4 py-3 font-semibold">Amount Paid</th>
+                    <th className="px-4 py-3 font-semibold">Block Reason</th>
+                    <th className="px-4 py-3 font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.blocked.map((row) => (
+                    <tr key={row.applicationId} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.applicationNumber}</td>
+                      <td className="px-4 py-3 font-medium text-slate-900">{row.businessName}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.paymentStatus ?? "NO PAYMENT REFERENCE"}</td>
+                      <td className="px-4 py-3 text-slate-600">₱ {row.requiredReleasePayment.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-3 text-slate-600">₱ {row.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.blockingReason ?? "Awaiting payment action"}</td>
+                      <td className="px-4 py-3">
+                        <button type="button" disabled className={actionButtonStyles("secondary", "sm")}>
+                          Awaiting Payment
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          }
+          mobile={
+            data.blocked.length === 0 ? (
+              <div className="p-4 text-sm text-slate-500">No blocked applications at the moment.</div>
+            ) : (
+              <div className="space-y-3 p-4">
+                {data.blocked.map((row) => (
+                  <article key={row.applicationId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
+                    <p className="mt-1 text-xs text-slate-500">Payment: {row.paymentStatus ?? "NO PAYMENT REFERENCE"}</p>
+                    <p className="text-xs text-slate-500">Required Release Payment: ₱ {row.requiredReleasePayment.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-slate-500">Amount Paid: ₱ {row.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+                    <p className="mt-2 text-xs text-slate-600">{row.blockingReason ?? "Awaiting payment action"}</p>
+                    <div className="mt-3">
+                      <button type="button" disabled className={actionButtonStyles("secondary", "sm")}>
+                        Awaiting Payment
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )
+          }
+        />
+
+        <ResponsiveDataTable
           title={`Paid Applications (${data.paid.length})`}
           description="Verified payments waiting for permit or certificate preparation."
           table={

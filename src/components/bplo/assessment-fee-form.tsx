@@ -19,6 +19,12 @@ const PAYMENT_FREQ_LABELS: Record<string, string> = {
   QUARTERLY: "Quarterly",
 };
 
+function getReleasePaymentAmount(totalAmount: number, paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY") {
+  if (paymentFrequency === "BI_ANNUAL") return totalAmount / 2;
+  if (paymentFrequency === "QUARTERLY") return totalAmount / 4;
+  return totalAmount;
+}
+
 function SummaryTile({
   label,
   value,
@@ -119,6 +125,10 @@ export function AssessmentFeeForm({ detail }: Props) {
     closureCertificateFee +
     arrears +
     otherCharges;
+  const annualAssessedAmount = totalAmount;
+  const releasePaymentAmount = getReleasePaymentAmount(annualAssessedAmount, paymentFrequency);
+  const amountPaid = savedAssessment?.amountPaid ?? 0;
+  const remainingBalance = Math.max(0, annualAssessedAmount - amountPaid);
 
   const isTopGenerated = savedAssessment?.status === "GENERATED";
   const overridesSuggested =
@@ -451,6 +461,34 @@ export function AssessmentFeeForm({ detail }: Props) {
         ) : null}
 
         <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <SummaryTile
+              label="Annual Assessed Amount"
+              value={`₱ ${annualAssessedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
+              helper="Full annual assessment basis"
+            />
+            <SummaryTile
+              label="Payment Frequency"
+              value={PAYMENT_FREQ_LABELS[paymentFrequency]}
+              helper="TOP release schedule"
+            />
+            <SummaryTile
+              label="Required Release Payment"
+              value={`₱ ${releasePaymentAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
+              helper="Amount required to move toward release"
+            />
+            <SummaryTile
+              label="Amount Paid"
+              value={`₱ ${amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
+              helper="Verified payment total recorded in TOP"
+            />
+            <SummaryTile
+              label="Remaining Balance"
+              value={`₱ ${remainingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
+              helper="Outstanding annual balance"
+            />
+          </div>
+
           <FormField
             label="Payment Frequency"
             hint="This setting follows existing TOP behavior and does not alter fee computation logic."

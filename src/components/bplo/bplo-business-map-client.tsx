@@ -84,10 +84,7 @@ export function BploBusinessMapClient() {
     setIsLoading(true);
     setError(null);
 
-    const response = await fetch(
-      `/api/bplo/business-map?type=${encodeURIComponent(typeFilter)}&status=${encodeURIComponent(statusFilter)}&category=${encodeURIComponent(categoryFilter)}&owner=${encodeURIComponent(ownerFilter)}&search=${encodeURIComponent(searchFilter)}`,
-      { cache: "no-store" }
-    );
+    const response = await fetch(`/api/bplo/business-map`, { cache: "no-store" });
 
     const data = (await response.json()) as { rows?: BploBusinessLocationRow[]; error?: string };
 
@@ -103,11 +100,33 @@ export function BploBusinessMapClient() {
 
   useEffect(() => {
     void loadRows();
-  }, [typeFilter, statusFilter, categoryFilter, ownerFilter, searchFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  const visibleRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (typeFilter !== "ALL" && row.applicationType !== typeFilter) return false;
+        if (statusFilter !== "ALL" && row.status !== statusFilter) return false;
+        if (categoryFilter !== "ALL" && row.businessCategory !== categoryFilter) return false;
+
+        if (ownerFilter.trim()) {
+          const owner = ownerFilter.trim().toLowerCase();
+          if (!row.ownerName.toLowerCase().includes(owner)) return false;
+        }
+
+        if (searchFilter.trim()) {
+          const search = searchFilter.trim().toLowerCase();
+          if (!row.businessName.toLowerCase().includes(search)) return false;
+        }
+
+        return true;
+      }),
+    [categoryFilter, ownerFilter, rows, searchFilter, statusFilter, typeFilter]
+  );
 
   const markers = useMemo(
     () =>
-      rows.map((row) => ({
+      visibleRows.map((row) => ({
         id: row.locationId,
         latitude: row.latitude,
         longitude: row.longitude,
@@ -123,11 +142,11 @@ export function BploBusinessMapClient() {
         businessCategoryLabel: row.businessCategoryLabel,
         businessCategoryColor: row.businessCategoryColor,
       })),
-    [rows]
+    [visibleRows]
   );
 
   const summary = useMemo(() => {
-    return rows.reduce(
+    return visibleRows.reduce(
       (accumulator, row) => {
         accumulator.total += 1;
 
@@ -151,7 +170,7 @@ export function BploBusinessMapClient() {
         closureCount: 0,
       }
     );
-  }, [rows]);
+  }, [visibleRows]);
 
   async function verifyLocation(row: BploBusinessLocationRow) {
     setIsSaving(true);
@@ -323,6 +342,21 @@ export function BploBusinessMapClient() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700"
               />
             </label>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
+              <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">Active Filters</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700">
+                  Type: {typeFilter === "ALL" ? "All" : typeFilter}
+                </span>
+                <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700">
+                  Status: {statusFilter === "ALL" ? "All" : statusFilter}
+                </span>
+                <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700">
+                  Category: {categoryFilter === "ALL" ? "All" : MAP_CATEGORY_META[categoryFilter].label}
+                </span>
+              </div>
+            </div>
           </FilterBar>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -378,17 +412,17 @@ export function BploBusinessMapClient() {
       </div>
 
       <SectionCard
-        title={`Location Submissions (${rows.length})`}
+        title={`Location Submissions (${visibleRows.length})`}
         description="Review submitted Business Location records, then verify or return for correction with remarks."
       >
-        {rows.length === 0 ? (
+        {visibleRows.length === 0 ? (
           <EmptyState
             title="No records available yet"
             description="Location submissions that match your selected filters will appear here."
           />
         ) : (
           <div className="space-y-4">
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <div
                 key={row.locationId}
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"

@@ -28,6 +28,10 @@ export interface PermitIssuanceRow {
   topNumber: string | null;
   paymentStatus: "PENDING" | "VERIFIED" | "REJECTED" | null;
   datePaid: string | null;
+  requiredReleasePayment: number;
+  amountPaid: number;
+  remainingBalance: number;
+  blockingReason: string | null;
   documentNumber: string | null;
   preparedDate: string | null;
   releasedDate: string | null;
@@ -36,9 +40,29 @@ export interface PermitIssuanceRow {
 }
 
 export interface PermitIssuanceLists {
+  blocked: PermitIssuanceRow[];
   paid: PermitIssuanceRow[];
   forRelease: PermitIssuanceRow[];
   released: PermitIssuanceRow[];
+}
+
+function getBlockingReason(params: {
+  rawStatus: DbApplicationStatus;
+  latestPaymentStatus: "PENDING" | "VERIFIED" | "REJECTED" | null;
+  amountPaid: number;
+  requiredReleasePayment: number;
+}): string | null {
+  const { rawStatus, latestPaymentStatus, amountPaid, requiredReleasePayment } = params;
+
+  if (rawStatus !== "APPROVED_FOR_PAYMENT") return null;
+  if (!latestPaymentStatus) return "Awaiting applicant payment submission";
+  if (latestPaymentStatus === "PENDING") return "Awaiting BPLO payment verification";
+  if (latestPaymentStatus === "REJECTED") return "Payment reference rejected; applicant must resubmit";
+  if (requiredReleasePayment > 0 && amountPaid < requiredReleasePayment) {
+    return "Required release payment has not been completed";
+  }
+
+  return "Awaiting permit eligibility";
 }
 
 export interface PermitIssuanceDetail {
@@ -137,6 +161,9 @@ function findPaidDate(history: Array<{ toStatus: DbApplicationStatus; createdAt:
 
 function toListRow(app: any): PermitIssuanceRow {
   const latestRef = app.paymentReferences?.[0] ?? null;
+  const requiredReleasePayment = toMoneyNumber(app.feeAssessment?.releasePaymentAmount);
+  const amountPaid = toMoneyNumber(app.feeAssessment?.amountPaid);
+  const remainingBalance = toMoneyNumber(app.feeAssessment?.remainingBalance);
 
   return {
     applicationId: app.id,
@@ -148,6 +175,15 @@ function toListRow(app: any): PermitIssuanceRow {
     topNumber: app.feeAssessment?.assessmentNumber ?? null,
     paymentStatus: latestRef?.status ?? null,
     datePaid: findPaidDate(app.history),
+    requiredReleasePayment,
+    amountPaid,
+    remainingBalance,
+    blockingReason: getBlockingReason({
+      rawStatus: app.status,
+      latestPaymentStatus: latestRef?.status ?? null,
+      amountPaid,
+      requiredReleasePayment,
+    }),
     documentNumber: app.permitIssuance?.documentNumber ?? null,
     preparedDate: dateIsoOrNull(app.permitIssuance?.issuedAt),
     releasedDate: dateIsoOrNull(app.permitIssuance?.releasedAt),
@@ -160,13 +196,20 @@ export async function listPermitIssuanceEntries(): Promise<PermitIssuanceLists> 
   const rows = await prisma.businessApplication.findMany({
     where: {
       status: {
-        in: ["PAID", "FOR_RELEASE", "RELEASED"],
+        in: ["APPROVED_FOR_PAYMENT", "PAID", "FOR_RELEASE", "RELEASED"],
       },
     },
     include: {
       applicant: { select: { name: true, email: true } },
       businessRecord: { select: { businessName: true } },
-      feeAssessment: { select: { assessmentNumber: true } },
+      feeAssessment: {
+        select: {
+          assessmentNumber: true,
+          releasePaymentAmount: true,
+          amountPaid: true,
+          remainingBalance: true,
+        },
+      },
       paymentReferences: {
         orderBy: { submittedAt: "desc" },
         take: 1,
@@ -186,6 +229,9 @@ export async function listPermitIssuanceEntries(): Promise<PermitIssuanceLists> 
   });
 
   return {
+    blocked: rows
+      .filter((row: { status: DbApplicationStatus }) => row.status === "APPROVED_FOR_PAYMENT")
+      .map(toListRow),
     paid: rows
       .filter((row: { status: DbApplicationStatus }) => row.status === "PAID")
       .map(toListRow),

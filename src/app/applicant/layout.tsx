@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { signOut } from "@/lib/auth";
 import { requireApplicantSession } from "@/lib/applicant-api";

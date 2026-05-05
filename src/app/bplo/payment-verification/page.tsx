@@ -79,6 +79,11 @@ function money(value: number): string {
   return `₱ ${value.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 }
 
+function formatDateTime(value: string | null): string {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("en-PH");
+}
+
 function SummaryTile({
   label,
   value,
@@ -426,7 +431,17 @@ export default function BploPaymentVerificationPage() {
                 />
               ) : null}
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+                <SummaryTile
+                  label="Applicant Name"
+                  value={detail.applicant.name}
+                  helper={detail.applicant.email}
+                />
+                <SummaryTile
+                  label="Business Name"
+                  value={detail.business.businessName}
+                  helper={`${detail.row.applicationType} application`}
+                />
                 <SummaryTile
                   label="Application Number"
                   value={detail.row.applicationNumber}
@@ -442,19 +457,71 @@ export default function BploPaymentVerificationPage() {
                   value={passFailLabel(detail.row.paymentStatus)}
                   helper="Pass for verified, Fail for rejected, Pending when under review"
                 />
+                <SummaryTile
+                  label="Amount Paid"
+                  value={money(detail.row.amountPaid)}
+                  helper="Submitted by applicant"
+                />
+                <SummaryTile
+                  label="Required Release Payment"
+                  value={money(detail.top.releasePaymentAmount)}
+                  helper="Required before permit preparation"
+                />
+                <SummaryTile
+                  label="Payment Date"
+                  value={formatDateTime(detail.row.paymentDate)}
+                  helper="Applicant-submitted payment date"
+                />
+                <SummaryTile
+                  label="Payment Status"
+                  value={detail.top.paymentStatus}
+                  helper="Assessment settlement status"
+                />
+                <SummaryTile
+                  label="Annual Assessed Amount"
+                  value={money(detail.top.annualAssessedAmount)}
+                  helper="Full annual assessment basis"
+                />
+                <SummaryTile
+                  label="Remaining Balance"
+                  value={money(detail.top.remainingBalance)}
+                  helper="Balance after verified payments"
+                />
+                <SummaryTile
+                  label="Payment Frequency"
+                  value={detail.top.paymentFrequency ? detail.top.paymentFrequency.replace("_", "-") : "-"}
+                  helper="Current TOP release schedule"
+                />
+                <SummaryTile
+                  label="Proof File"
+                  value={detail.row.proofFileName}
+                  helper="Available for review and download"
+                />
               </div>
 
-              <p className="text-xs text-slate-500">
-                Payment proof submitted by the applicant: {detail.row.proofFileName}
-              </p>
-              <a
-                href={`/api/bplo/payment-verification/${detail.row.paymentReferenceId}/proof`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Download Payment Proof
-              </a>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">Payment Proof</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Submitted file: <span className="font-medium text-slate-900">{detail.row.proofFileName}</span>
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a
+                    href={`/api/bplo/payment-verification/${detail.row.paymentReferenceId}/proof`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Open Payment Proof
+                  </a>
+                  <a
+                    href={`/api/bplo/payment-verification/${detail.row.paymentReferenceId}/proof`}
+                    download
+                    className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Download Payment Proof
+                  </a>
+                </div>
+              </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
                 <p className="text-sm font-semibold text-slate-900">BPLO Review Action</p>

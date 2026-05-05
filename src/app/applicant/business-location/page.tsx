@@ -156,22 +156,25 @@ export default function BusinessLocationPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!selectedRecord) return;
+    if (!selectedBusinessRecordId) return;
 
-    if (selectedRecord.location) {
+    const nextRecord = records.find((row) => row.businessRecordId === selectedBusinessRecordId) ?? null;
+    if (!nextRecord) return;
+
+    if (nextRecord.location) {
       setSelectedCoords({
-        latitude: selectedRecord.location.latitude,
-        longitude: selectedRecord.location.longitude,
+        latitude: nextRecord.location.latitude,
+        longitude: nextRecord.location.longitude,
       });
-      setBarangay(selectedRecord.location.barangay ?? "");
-      setAddress(selectedRecord.location.address ?? "");
+      setBarangay(nextRecord.location.barangay ?? "");
+      setAddress(nextRecord.location.address ?? "");
       return;
     }
 
     setSelectedCoords(null);
     setBarangay("");
     setAddress("");
-  }, [selectedRecord?.businessRecordId]);
+  }, [records, selectedBusinessRecordId]);
 
   async function saveLocation() {
     if (!selectedRecord || !selectedCoords) return;

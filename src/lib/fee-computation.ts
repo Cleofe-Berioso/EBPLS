@@ -476,7 +476,7 @@ export function computeMayorsPermitFee(
   input: AssessmentInput,
   runtimeSettings?: RuntimeFeeSettings
 ): ComputedFees {
-  const { lineOfBusiness, assetSize, totalEmployees, applicationType } = input;
+  const { lineOfBusiness, assetSize, totalEmployees } = input;
   const lower = (lineOfBusiness ?? "").toLowerCase();
 
   const assetBracket = classifyAssetBracket(assetSize);
