@@ -102,8 +102,8 @@ function getNextActionForStatus(input: {
 
   if (input.status === "Approved for Payment") {
     return {
-      label: "View Tax Order of Payment and submit OR/eGov transaction number",
-      detail: "Your Tax Order of Payment is available. Submit your OR Number / eGov Transaction Number after payment.",
+      label: "View Tax Order of Payment and submit OR number",
+      detail: "Your Tax Order of Payment is available. Submit your OR Number after payment.",
       href: "/applicant/top",
       cta: "Open Tax Order of Payment",
       variant: "warning",

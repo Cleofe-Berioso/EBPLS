@@ -29,7 +29,7 @@ const steps = [
     description: "Attach closure documents and proof of ceased operations.",
   },
   {
-    title: "Outstanding Balance Preview",
+    title: "Estimated Closure Balance Preview",
     description: "Review the estimated closure-related charges.",
   },
   {
@@ -412,34 +412,26 @@ export function ClosureApplicationForm() {
         <div className="space-y-4">
           <InfoBanner
             title="Preview only — final closure settlement happens later"
-            description="This balance preview is shown for applicant guidance only. BPLO assessment and payment verification logic remain unchanged."
+            description="This is an estimated preview only. Final closure charges will be validated by BPLO during assessment."
             variant="warning"
           />
           <SectionCard
-            title="Outstanding Balance Preview"
+            title="Estimated Closure Balance Preview"
             description="Use this screen to understand possible closure-related amounts before final submission."
           >
             <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-gray-800">
                 <div className="flex justify-between py-1">
-                  <span>Arrears</span>
-                  <span>Php 1,200.00</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span>Penalties</span>
-                  <span>Php 350.00</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span>Other Charges</span>
-                  <span>Php 250.00</span>
+                  <span>Tax Dues</span>
+                  <span>To be assessed by BPLO</span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span>Closure Certificate Fee</span>
-                  <span>Php 100.00</span>
+                  <span>To be assessed by BPLO</span>
                 </div>
                 <div className="mt-2 flex justify-between border-t border-green-200 pt-2 font-semibold text-green-800">
-                  <span>Total Amount</span>
-                  <span>Php 1,900.00</span>
+                  <span>Estimated Total</span>
+                  <span>To be assessed by BPLO</span>
                 </div>
               </div>
 
@@ -509,7 +501,7 @@ export function ClosureApplicationForm() {
               <ul className="mt-2 space-y-1">
                 <li>• Make sure the selected business record is the one being closed.</li>
                 <li>• Confirm each closure requirement has a clear uploaded file.</li>
-                <li>• Review the outstanding balance preview as guidance only.</li>
+                <li>• Review the estimated closure balance preview as guidance only.</li>
               </ul>
             </div>
           </SectionCard>
