@@ -1,10 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
-import {
-  getPaymentReferencesFromFormData,
-  upsertPaymentReferencesInFormData,
-  type PaymentReferenceEntry,
-} from "@/lib/payment-reference";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -27,14 +22,18 @@ export interface PaymentVerificationRow {
   applicantEmail: string;
   applicationType: "NEW" | "RENEWAL" | "CLOSURE";
   topNumber: string | null;
+  annualAssessedAmount: number;
+  releasePaymentAmount: number;
   totalAmountDue: number;
   amountPaid: number;
+  paymentDate: string;
   transactionNumber: string;
   submittedAt: string;
   paymentStatus: "PENDING" | "VERIFIED" | "REJECTED";
   applicationStatus: string;
   reviewerRemarks: string | null;
   reviewedAt: string | null;
+  proofFileName: string;
 }
 
 export interface PaymentVerificationLists {
@@ -56,6 +55,11 @@ export interface PaymentVerificationDetail {
   top: {
     assessmentNumber: string | null;
     paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null;
+    annualAssessedAmount: number;
+    releasePaymentAmount: number;
+    amountPaid: number;
+    remainingBalance: number;
+    paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
     mayorsPermitFee: number;
     regulatoryFees: number;
     additionalCharges: number;
@@ -94,9 +98,24 @@ function toRow(params: {
     formData: unknown;
     applicant: { name: string; email: string };
     businessRecord: { businessName: string } | null;
-    feeAssessment: { assessmentNumber: string; totalAmount: number } | null;
+    feeAssessment: {
+      assessmentNumber: string;
+      annualAssessedAmount: number;
+      releasePaymentAmount: number;
+      totalAmount: number;
+    } | null;
   };
-  ref: PaymentReferenceEntry;
+  ref: {
+    id: string;
+    transactionNumber: string;
+    amountPaid: number;
+    paymentDate: Date;
+    submittedAt: Date;
+    status: "PENDING" | "VERIFIED" | "REJECTED";
+    reviewerRemarks: string | null;
+    reviewedAt: Date | null;
+    proofFileName: string;
+  };
 }): PaymentVerificationRow {
   const { app, ref } = params;
   return {
@@ -108,25 +127,32 @@ function toRow(params: {
     applicantEmail: app.applicant.email,
     applicationType: app.applicationType,
     topNumber: app.feeAssessment?.assessmentNumber ?? null,
+    annualAssessedAmount: app.feeAssessment?.annualAssessedAmount ?? 0,
+    releasePaymentAmount: app.feeAssessment?.releasePaymentAmount ?? 0,
     totalAmountDue: app.feeAssessment?.totalAmount ?? 0,
     amountPaid: ref.amountPaid,
+    paymentDate: ref.paymentDate.toISOString(),
     transactionNumber: ref.transactionNumber,
-    submittedAt: ref.submittedAt,
+    submittedAt: ref.submittedAt.toISOString(),
     paymentStatus: ref.status,
     applicationStatus: mapDbStatusToUi(app.status),
     reviewerRemarks: ref.reviewerRemarks,
-    reviewedAt: ref.reviewedAt,
+    reviewedAt: ref.reviewedAt ? ref.reviewedAt.toISOString() : null,
+    proofFileName: ref.proofFileName,
   };
 }
 
 async function fetchCandidateApplications() {
-  return prisma.businessApplication.findMany({
+  return (prisma as any).businessApplication.findMany({
     where: {
       status: {
         in: ["APPROVED_FOR_PAYMENT", "PAID", "FOR_RELEASE", "RELEASED"],
       },
       feeAssessment: {
         isNot: null,
+      },
+      paymentReferences: {
+        some: {},
       },
     },
     include: {
@@ -135,8 +161,12 @@ async function fetchCandidateApplications() {
       feeAssessment: {
         select: {
           assessmentNumber: true,
-          totalAmount: true,
           paymentFrequency: true,
+          annualAssessedAmount: true,
+          releasePaymentAmount: true,
+          amountPaid: true,
+          remainingBalance: true,
+          paymentStatus: true,
           mayorsPermitFee: true,
           regulatoryFees: true,
           additionalCharges: true,
@@ -146,8 +176,12 @@ async function fetchCandidateApplications() {
           closureCertificateFee: true,
           arrears: true,
           otherCharges: true,
+          totalAmount: true,
           remarks: true,
         },
+      },
+      paymentReferences: {
+        orderBy: { submittedAt: "desc" },
       },
     },
     orderBy: [{ updatedAt: "desc" }],
@@ -160,8 +194,7 @@ export async function listPaymentVerificationEntries(): Promise<PaymentVerificat
   const allRows: PaymentVerificationRow[] = [];
 
   for (const app of apps as any[]) {
-    const refs = getPaymentReferencesFromFormData(app.formData, app.id, app.status);
-    for (const ref of refs) {
+    for (const ref of app.paymentReferences as any[]) {
       allRows.push(
         toRow({
           app: {
@@ -190,21 +223,18 @@ export async function listPaymentVerificationEntries(): Promise<PaymentVerificat
 }
 
 async function findReference(paymentReferenceId: string) {
-  const apps = await fetchCandidateApplications();
-
-  for (const app of apps as any[]) {
-    const refs = getPaymentReferencesFromFormData(app.formData, app.id, app.status);
-    const idx = refs.findIndex((r) => r.id === paymentReferenceId);
-    if (idx >= 0) {
-      return {
-        app,
-        refs,
-        idx,
-      };
-    }
-  }
-
-  return null;
+  return (prisma as any).paymentReference.findUnique({
+    where: { id: paymentReferenceId },
+    include: {
+      application: {
+        include: {
+          applicant: { select: { id: true, name: true, email: true } },
+          businessRecord: { select: { businessName: true } },
+          feeAssessment: true,
+        },
+      },
+    },
+  });
 }
 
 export async function getPaymentVerificationDetail(
@@ -213,8 +243,7 @@ export async function getPaymentVerificationDetail(
   const found = await findReference(paymentReferenceId);
   if (!found) return null;
 
-  const ref = found.refs[found.idx];
-  const app = found.app;
+  const app = found.application;
 
   return {
     row: toRow({
@@ -222,13 +251,23 @@ export async function getPaymentVerificationDetail(
         id: app.id,
         applicationNumber: app.applicationNumber,
         applicationType: app.applicationType,
-        status: app.status,
+        status: app.status as DbApplicationStatus,
         formData: app.formData,
         applicant: app.applicant,
         businessRecord: app.businessRecord,
         feeAssessment: app.feeAssessment,
       },
-      ref,
+      ref: {
+        id: found.id,
+        transactionNumber: found.transactionNumber,
+        amountPaid: found.amountPaid,
+        paymentDate: found.paymentDate,
+        submittedAt: found.submittedAt,
+        status: found.status,
+        reviewerRemarks: found.reviewerRemarks,
+        reviewedAt: found.reviewedAt,
+        proofFileName: found.proofFileName,
+      },
     }),
     applicant: app.applicant,
     business: {
@@ -241,6 +280,11 @@ export async function getPaymentVerificationDetail(
     top: {
       assessmentNumber: app.feeAssessment?.assessmentNumber ?? null,
       paymentFrequency: app.feeAssessment?.paymentFrequency ?? null,
+      annualAssessedAmount: app.feeAssessment?.annualAssessedAmount ?? 0,
+      releasePaymentAmount: app.feeAssessment?.releasePaymentAmount ?? 0,
+      amountPaid: app.feeAssessment?.amountPaid ?? 0,
+      remainingBalance: app.feeAssessment?.remainingBalance ?? 0,
+      paymentStatus: app.feeAssessment?.paymentStatus ?? "UNPAID",
       mayorsPermitFee: app.feeAssessment?.mayorsPermitFee ?? 0,
       regulatoryFees: app.feeAssessment?.regulatoryFees ?? 0,
       additionalCharges: app.feeAssessment?.additionalCharges ?? 0,
@@ -264,10 +308,14 @@ export async function approvePaymentReference(
   const found = await findReference(paymentReferenceId);
   if (!found) throw new Error("Payment reference not found");
 
-  const { app, refs, idx } = found;
-  const target = refs[idx];
+  const app = found.application;
+  const assessment = app.feeAssessment;
 
-  if (target.status !== "PENDING") {
+  if (!assessment) {
+    throw new Error("Fee assessment not found for this application");
+  }
+
+  if (found.status !== "PENDING") {
     throw new Error("Only pending payment references can be verified");
   }
 
@@ -275,35 +323,48 @@ export async function approvePaymentReference(
     throw new Error("Application is not eligible for payment verification");
   }
 
-  const totalDue = app.feeAssessment?.totalAmount ?? 0;
-  const isUnderpaid = totalDue > 0 && target.amountPaid < totalDue;
+  const requiredForRelease = assessment.releasePaymentAmount;
+  if (found.amountPaid < requiredForRelease) {
+    throw new Error(
+      `Amount paid is below required release payment amount (₱${requiredForRelease.toLocaleString("en-PH", {
+        minimumFractionDigits: 2,
+      })}).`
+    );
+  }
 
-  const nowIso = new Date().toISOString();
-  refs[idx] = {
-    ...target,
-    status: "VERIFIED",
-    reviewerRemarks: remarks?.trim() ? remarks.trim() : null,
-    reviewedAt: nowIso,
-    reviewedById: bploUserId,
-  };
+  const paidSoFar = Math.round((assessment.amountPaid + found.amountPaid) * 100) / 100;
+  const remainingBalance = Math.max(0, Math.round((assessment.annualAssessedAmount - paidSoFar) * 100) / 100);
+  const paymentStatus =
+    remainingBalance <= 0 ? "PAID" : paidSoFar > 0 ? "PARTIALLY_PAID" : "UNPAID";
 
-  const nextFormData = upsertPaymentReferencesInFormData(app.formData, refs);
+  const now = new Date();
 
   await prisma.$transaction(async (tx: any) => {
+    await tx.paymentReference.update({
+      where: { id: found.id },
+      data: {
+        status: "VERIFIED",
+        reviewerRemarks: remarks?.trim() ? remarks.trim() : null,
+        reviewedAt: now,
+        reviewedById: bploUserId,
+      },
+    });
+
+    await tx.feeAssessment.update({
+      where: { applicationId: app.id },
+      data: {
+        amountPaid: paidSoFar,
+        remainingBalance,
+        paymentStatus,
+      },
+    });
+
     await tx.businessApplication.update({
       where: { id: app.id },
       data: {
         status: "PAID",
-        formData: nextFormData,
       },
     });
-
-    const approvalRemarkBase =
-      `BPLO verified payment reference ${target.id} (${target.transactionNumber}) for ₱${target.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}.`;
-    const underpaidNote = isUnderpaid
-      ? ` Underpaid warning: Amount paid ₱${target.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}, total due ₱${totalDue.toLocaleString("en-PH", { minimumFractionDigits: 2 })}.`
-      : "";
-    const extraRemark = remarks?.trim() ? ` Remarks: ${remarks.trim()}` : "";
 
     await tx.applicationHistory.create({
       data: {
@@ -312,20 +373,24 @@ export async function approvePaymentReference(
         actorRole: "BPLO",
         fromStatus: "APPROVED_FOR_PAYMENT",
         toStatus: "PAID",
-        remarks: `${approvalRemarkBase}${underpaidNote}${extraRemark}`,
+        remarks:
+          `BPLO verified payment reference (${found.transactionNumber}) for ₱${found.amountPaid.toLocaleString("en-PH", {
+            minimumFractionDigits: 2,
+          })}.` + (remarks?.trim() ? ` Remarks: ${remarks.trim()}` : ""),
       },
     });
   });
 
   return {
-    paymentReferenceId: target.id,
+    paymentReferenceId: found.id,
     applicationId: app.id,
     applicationNumber: app.applicationNumber,
     previousStatus: "APPROVED_FOR_PAYMENT" as const,
     newStatus: "PAID" as const,
-    isUnderpaid,
-    totalAmountDue: totalDue,
-    amountPaid: target.amountPaid,
+    totalAmountDue: assessment.totalAmount,
+    releasePaymentAmount: requiredForRelease,
+    amountPaid: found.amountPaid,
+    remainingBalance,
   };
 }
 
@@ -340,10 +405,9 @@ export async function rejectPaymentReference(
   const found = await findReference(paymentReferenceId);
   if (!found) throw new Error("Payment reference not found");
 
-  const { app, refs, idx } = found;
-  const target = refs[idx];
+  const app = found.application;
 
-  if (target.status !== "PENDING") {
+  if (found.status !== "PENDING") {
     throw new Error("Only pending payment references can be rejected");
   }
 
@@ -351,22 +415,16 @@ export async function rejectPaymentReference(
     throw new Error("Application is not eligible for payment rejection");
   }
 
-  const nowIso = new Date().toISOString();
-  refs[idx] = {
-    ...target,
-    status: "REJECTED",
-    reviewerRemarks: reason,
-    reviewedAt: nowIso,
-    reviewedById: bploUserId,
-  };
-
-  const nextFormData = upsertPaymentReferencesInFormData(app.formData, refs);
+  const now = new Date();
 
   await prisma.$transaction(async (tx: any) => {
-    await tx.businessApplication.update({
-      where: { id: app.id },
+    await tx.paymentReference.update({
+      where: { id: found.id },
       data: {
-        formData: nextFormData,
+        status: "REJECTED",
+        reviewerRemarks: reason,
+        reviewedAt: now,
+        reviewedById: bploUserId,
       },
     });
 
@@ -377,15 +435,13 @@ export async function rejectPaymentReference(
         actorRole: "BPLO",
         fromStatus: "APPROVED_FOR_PAYMENT",
         toStatus: "APPROVED_FOR_PAYMENT",
-        remarks:
-          `BPLO rejected payment reference ${target.id} (${target.transactionNumber}). ` +
-          `Reason: ${reason}`,
+        remarks: `BPLO rejected payment reference (${found.transactionNumber}). Reason: ${reason}`,
       },
     });
   });
 
   return {
-    paymentReferenceId: target.id,
+    paymentReferenceId: found.id,
     applicationId: app.id,
     applicationNumber: app.applicationNumber,
     status: "APPROVED_FOR_PAYMENT" as const,

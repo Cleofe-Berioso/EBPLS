@@ -1,12 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi, isEditableStatus } from "@/lib/application-mappers";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
-import {
-  getLatestPaymentReference,
-  getPaymentReferencesFromFormData,
-  upsertPaymentReferencesInFormData,
-} from "@/lib/payment-reference";
-import { randomUUID } from "crypto";
 import type {
   ApplicantApplicationRow,
   ApplicationDocumentInput,
@@ -87,6 +81,9 @@ const REQUIRED_FIELD_KEYS: Array<keyof BusinessInfo> = [
   "lineOfBusiness",
   "businessActivity",
 ];
+
+const TIN_REGEX = /^\d{9,12}$/;
+const PH_MOBILE_REGEX = /^(\+63|0)9\d{9}$/;
 
 export class SubmitValidationError extends Error {
   detail: SubmitValidationErrorDetail;
@@ -224,6 +221,32 @@ function validateSubmitPayload(input: SaveApplicationInput, mergedDocuments: App
     const value = input.formData[key];
     return typeof value !== "string" || value.trim().length === 0;
   }).map((key) => String(key));
+
+  const tin = input.formData.tin.replace(/[^\d]/g, "");
+  if (!TIN_REGEX.test(tin)) {
+    missingFields.push("tin (must be 9 to 12 digits)");
+  }
+
+  const normalizedPhone = input.formData.phone.replace(/[\s-]/g, "");
+  if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
+    missingFields.push("phone (must be a valid Philippine mobile number)");
+  }
+
+  const email = input.formData.email.trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    missingFields.push("email (invalid format)");
+  }
+
+  const assetValue = Number(input.formData.assetSize.replace(/[₱,\s]/g, ""));
+  if (!Number.isFinite(assetValue) || assetValue < 0) {
+    missingFields.push("assetSize (must be a non-negative number)");
+  }
+
+  const employees = Number(input.formData.totalEmployees.replace(/[,\s]/g, ""));
+  if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
+    missingFields.push("totalEmployees (must be a non-negative integer)");
+  }
 
   if ((input.applicationType === "RENEWAL" || input.applicationType === "CLOSURE") && !input.businessRecordId) {
     missingFields.push("businessRecordId");
@@ -651,6 +674,10 @@ export async function getApplicantTopSummary(applicantId: string) {
     },
     include: {
       feeAssessment: true,
+      paymentReferences: {
+        orderBy: { submittedAt: "desc" },
+        take: 1,
+      },
     },
     orderBy: {
       updatedAt: "desc",
@@ -659,16 +686,17 @@ export async function getApplicantTopSummary(applicantId: string) {
 
   if (!application) return null;
 
-  const payment = getLatestPaymentReference(
-    application.formData,
-    application.id,
-    application.status
-  );
+  const payment = application.paymentReferences[0] ?? null;
 
   const fa = (application as any).feeAssessment as {
     assessmentNumber: string;
     status: string;
     paymentFrequency: string;
+    annualAssessedAmount: number;
+    releasePaymentAmount: number;
+    amountPaid: number;
+    remainingBalance: number;
+    paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
     mayorsPermitFee: number;
     regulatoryFees: number;
     additionalCharges: number;
@@ -691,6 +719,11 @@ export async function getApplicantTopSummary(applicantId: string) {
     topNumber: fa?.assessmentNumber ?? null,
     assessmentStatus: (fa?.status ?? null) as "DRAFT" | "GENERATED" | null,
     paymentFrequency: (fa?.paymentFrequency ?? null) as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null,
+    annualAssessedAmount: fa?.annualAssessedAmount ?? 0,
+    releasePaymentAmount: fa?.releasePaymentAmount ?? 0,
+    amountPaid: fa?.amountPaid ?? 0,
+    remainingBalance: fa?.remainingBalance ?? 0,
+    paymentStatus: fa?.paymentStatus ?? "UNPAID",
     mayorsPermitFee: fa?.mayorsPermitFee ?? 0,
     regulatoryFees: fa?.regulatoryFees ?? 0,
     additionalCharges: fa?.additionalCharges ?? 0,
@@ -708,10 +741,12 @@ export async function getApplicantTopSummary(applicantId: string) {
           id: payment.id,
           transactionNumber: payment.transactionNumber,
           amountPaid: payment.amountPaid,
-          submittedAt: payment.submittedAt,
+          paymentDate: payment.paymentDate.toISOString(),
+          submittedAt: payment.submittedAt.toISOString(),
           status: payment.status,
           reviewerRemarks: payment.reviewerRemarks,
-          reviewedAt: payment.reviewedAt,
+          reviewedAt: payment.reviewedAt ? payment.reviewedAt.toISOString() : null,
+          proofFileName: payment.proofFileName,
         }
       : null,
   };
@@ -721,7 +756,14 @@ export async function submitApplicantPaymentReference(
   applicantId: string,
   applicationId: string,
   transactionNumber: string,
-  amountPaid: number
+  amountPaid: number,
+  paymentDate: string,
+  proof: {
+    proofFileName: string;
+    proofStoragePath: string;
+    proofMimeType: string;
+    proofSizeBytes: number;
+  }
 ) {
   const application = await prisma.businessApplication.findFirst({
     where: {
@@ -736,12 +778,20 @@ export async function submitApplicantPaymentReference(
     throw new Error("Payment reference can only be submitted once the Tax Order of Payment has been generated");
   }
 
-  const existingReferences = getPaymentReferencesFromFormData(
-    application.formData,
-    application.id,
-    application.status
-  );
-  const latest = existingReferences.length > 0 ? existingReferences[existingReferences.length - 1] : null;
+  const duplicate = await prisma.paymentReference.findUnique({
+    where: { transactionNumber: transactionNumber.trim() },
+    select: { id: true },
+  });
+
+  if (duplicate) {
+    throw new Error("This OR number/payment reference has already been submitted. Please check your payment details.");
+  }
+
+  const latest = await prisma.paymentReference.findFirst({
+    where: { applicationId: application.id },
+    orderBy: { submittedAt: "desc" },
+    select: { status: true },
+  });
 
   if (latest?.status === "PENDING") {
     throw new Error("A payment reference is already pending verification");
@@ -751,26 +801,25 @@ export async function submitApplicantPaymentReference(
     throw new Error("Payment has already been verified and is read-only");
   }
 
-  const newReference = {
-    id: randomUUID(),
-    transactionNumber,
-    amountPaid: Math.round(Math.max(0, amountPaid) * 100) / 100,
-    submittedAt: new Date().toISOString(),
-    status: "PENDING" as const,
-    reviewerRemarks: null,
-    reviewedAt: null,
-    reviewedById: null,
-  };
-  const formData = upsertPaymentReferencesInFormData(application.formData, [
-    ...existingReferences,
-    newReference,
-  ]);
+  const parsedPaymentDate = new Date(paymentDate);
+  if (Number.isNaN(parsedPaymentDate.getTime())) {
+    throw new Error("paymentDate is required");
+  }
+
+  const normalizedAmountPaid = Math.round(Math.max(0, amountPaid) * 100) / 100;
 
   const updated = await prisma.$transaction(async (tx: any) => {
-    const row = await tx.businessApplication.update({
-      where: { id: application.id },
+    await tx.paymentReference.create({
       data: {
-        formData,
+        applicationId: application.id,
+        transactionNumber: transactionNumber.trim(),
+        amountPaid: normalizedAmountPaid,
+        paymentDate: parsedPaymentDate,
+        proofFileName: proof.proofFileName,
+        proofStoragePath: proof.proofStoragePath,
+        proofMimeType: proof.proofMimeType,
+        proofSizeBytes: proof.proofSizeBytes,
+        status: "PENDING",
       },
     });
 
@@ -781,11 +830,14 @@ export async function submitApplicantPaymentReference(
         actorRole: "APPLICANT",
         fromStatus: application.status,
         toStatus: application.status,
-        remarks: `Applicant submitted payment reference (${newReference.id}): ${transactionNumber}, Amount: ₱${newReference.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+        remarks: `Applicant submitted payment reference: ${transactionNumber.trim()}, Amount: ₱${normalizedAmountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
       },
     });
 
-    return row;
+    return tx.businessApplication.findUniqueOrThrow({
+      where: { id: application.id },
+      select: { id: true, applicationNumber: true, status: true },
+    });
   });
 
   return {

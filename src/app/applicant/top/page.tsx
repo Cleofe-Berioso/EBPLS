@@ -21,6 +21,11 @@ interface TopSummary {
   topNumber: string | null;
   assessmentStatus: "DRAFT" | "GENERATED" | null;
   paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null;
+  annualAssessedAmount: number;
+  releasePaymentAmount: number;
+  amountPaid: number;
+  remainingBalance: number;
+  paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
   mayorsPermitFee: number;
   regulatoryFees: number;
   additionalCharges: number;
@@ -37,17 +42,17 @@ interface TopSummary {
     id?: string;
     transactionNumber?: string;
     amountPaid?: number;
+    paymentDate?: string;
     submittedAt?: string;
     status?: "PENDING" | "VERIFIED" | "REJECTED";
     reviewerRemarks?: string | null;
     reviewedAt?: string | null;
+    proofFileName?: string;
   } | null;
 }
 
 function getAmountToPayToRelease(summary: TopSummary): number {
-  if (summary.paymentFrequency === "BI_ANNUAL") return summary.totalAmount / 2;
-  if (summary.paymentFrequency === "QUARTERLY") return summary.totalAmount / 4;
-  return summary.totalAmount;
+  return summary.releasePaymentAmount;
 }
 
 export default function TaxOrderOfPaymentPage() {
@@ -55,6 +60,8 @@ export default function TaxOrderOfPaymentPage() {
   const [loading, setLoading] = useState(true);
   const [transactionNumber, setTransactionNumber] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
+  const [paymentDate, setPaymentDate] = useState("");
+  const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [message, setMessage] = useState("");
 
   const paymentRef = summary?.paymentReference ?? null;
@@ -83,18 +90,20 @@ export default function TaxOrderOfPaymentPage() {
   }, []);
 
   async function submitReference() {
-    if (!summary || !transactionNumber.trim()) return;
+    if (!summary || !transactionNumber.trim() || !paymentDate || !paymentProof) return;
 
     const parsedAmount = parseFloat(amountPaid) || 0;
 
+    const payload = new FormData();
+    payload.append("applicationId", summary.applicationId);
+    payload.append("transactionNumber", transactionNumber.trim());
+    payload.append("amountPaid", String(parsedAmount));
+    payload.append("paymentDate", paymentDate);
+    payload.append("paymentProof", paymentProof);
+
     const response = await fetch("/api/applicant/top", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        applicationId: summary.applicationId,
-        transactionNumber: transactionNumber.trim(),
-        amountPaid: parsedAmount,
-      }),
+      body: payload,
     });
 
     const data = (await response.json()) as { error?: string };
@@ -112,16 +121,20 @@ export default function TaxOrderOfPaymentPage() {
               id: current.paymentReference?.id,
               transactionNumber: transactionNumber.trim(),
               amountPaid: parsedAmount,
+              paymentDate,
               submittedAt: new Date().toISOString(),
               status: "PENDING",
               reviewerRemarks: null,
               reviewedAt: null,
+              proofFileName: paymentProof.name,
             },
           }
         : current
     );
     setTransactionNumber("");
     setAmountPaid("");
+    setPaymentDate("");
+    setPaymentProof(null);
   }
 
   const paymentBanner = !summary
@@ -280,12 +293,33 @@ export default function TaxOrderOfPaymentPage() {
                     placeholder="0.00"
                   />
                 </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Payment Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
+                    value={paymentDate}
+                    onChange={(event) => setPaymentDate(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Payment Proof
+                  </label>
+                  <input
+                    type="file"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
+                    onChange={(event) => setPaymentProof(event.target.files?.[0] ?? null)}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     void submitReference();
                   }}
-                  disabled={!transactionNumber.trim() || !canSubmitPaymentReference}
+                  disabled={!transactionNumber.trim() || !paymentDate || !paymentProof || !canSubmitPaymentReference}
                   className={actionButtonStyles("primary", "md", "w-full")}
                 >
                   Submit Payment Reference

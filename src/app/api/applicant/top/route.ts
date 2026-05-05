@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getApplicantTopSummary, submitApplicantPaymentReference } from "@/lib/applications";
 import { requireApplicantSession } from "@/lib/applicant-api";
+import { storeApplicantDocument } from "@/lib/document-storage";
+import { removeApplicantDocument } from "@/lib/document-storage";
 
 export async function GET() {
   const session = await requireApplicantSession();
@@ -18,36 +20,61 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let payload: { applicationId?: string; transactionNumber?: string; amountPaid?: number };
-  try {
-    payload = (await req.json()) as {
-      applicationId?: string;
-      transactionNumber?: string;
-      amountPaid?: number;
-    };
-  } catch {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
+  const body = await req.formData();
+  const applicationId = body.get("applicationId");
+  const transactionNumber = body.get("transactionNumber");
+  const amountPaidRaw = body.get("amountPaid");
+  const paymentDate = body.get("paymentDate");
+  const proofFile = body.get("paymentProof");
 
-  if (!payload.applicationId || !payload.transactionNumber?.trim()) {
+  if (
+    typeof applicationId !== "string" ||
+    typeof transactionNumber !== "string" ||
+    typeof paymentDate !== "string" ||
+    !applicationId.trim() ||
+    !transactionNumber.trim() ||
+    !paymentDate.trim()
+  ) {
     return NextResponse.json(
-      { error: "applicationId and transactionNumber are required" },
+      { error: "applicationId, transactionNumber, paymentDate, and paymentProof are required" },
       { status: 400 }
     );
   }
 
-  const amountPaid =
-    typeof payload.amountPaid === "number" && payload.amountPaid > 0 ? payload.amountPaid : 0;
+  if (!(proofFile instanceof File)) {
+    return NextResponse.json(
+      { error: "applicationId, transactionNumber, paymentDate, and paymentProof are required" },
+      { status: 400 }
+    );
+  }
+
+  const amountPaid = Number(amountPaidRaw);
+  if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
+    return NextResponse.json({ error: "amountPaid must be greater than 0" }, { status: 400 });
+  }
 
   try {
-    const result = await submitApplicantPaymentReference(
-      session.user.id,
-      payload.applicationId,
-      payload.transactionNumber.trim(),
-      amountPaid
-    );
+    const storedProof = await storeApplicantDocument(proofFile);
+    try {
+      const result = await submitApplicantPaymentReference(
+        session.user.id,
+        applicationId.trim(),
+        transactionNumber.trim(),
+        amountPaid,
+        paymentDate.trim(),
+        {
+          proofFileName: storedProof.fileName,
+          proofStoragePath: storedProof.storagePath,
+          proofMimeType: storedProof.mimeType,
+          proofSizeBytes: storedProof.sizeBytes,
+        }
+      );
 
-    return NextResponse.json({ result });
+      return NextResponse.json({ result });
+    } catch (innerError) {
+      await removeApplicantDocument(storedProof.storagePath);
+      throw innerError;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to submit payment reference";
     const status = message === "Application not found" ? 404 : 400;

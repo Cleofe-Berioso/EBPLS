@@ -8,6 +8,7 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { MapLegendCard } from "@/components/ui/map-legend-card";
 import { SectionCard } from "@/components/ui/section-card";
+import { MAP_CATEGORY_META, type MapBusinessCategory } from "@/lib/business-map-categories";
 
 const LeafletBusinessMap = dynamic(
   () => import("@/components/maps/leaflet-business-map").then((mod) => mod.LeafletBusinessMap),
@@ -26,6 +27,10 @@ interface BploBusinessLocationRow {
   locationId: string;
   businessRecordId: string;
   businessName: string;
+  ownerName: string;
+  businessCategory: MapBusinessCategory;
+  businessCategoryLabel: string;
+  businessCategoryColor: string;
   applicationNumber: string;
   applicationType: "NEW" | "RENEWAL" | "CLOSURE";
   permitOrCertificateNumber: string | null;
@@ -40,27 +45,14 @@ interface BploBusinessLocationRow {
 
 const BPLO_MAP_LEGEND_GROUPS = [
   {
-    id: "location-status",
-    title: "Location Status",
-    items: [
-      { id: "pending", label: "Pending", color: "#2563eb", note: "Submitted pin waiting for BPLO review." },
-      { id: "verified", label: "Verified", color: "#15803d", note: "Accepted business location pin." },
-      {
-        id: "needs-correction",
-        label: "Needs Correction",
-        color: "#b45309",
-        note: "Returned to applicant with required remarks.",
-      },
-    ],
-  },
-  {
-    id: "application-type",
-    title: "Application Type",
-    items: [
-      { id: "new", label: "New", color: "#0f766e", note: "Initial business registration location." },
-      { id: "renewal", label: "Renewal", color: "#7c3aed", note: "Existing business renewal record." },
-      { id: "closure", label: "Closure", color: "#475569", note: "Closure-related business location record." },
-    ],
+    id: "business-category",
+    title: "Business Category",
+    items: Object.entries(MAP_CATEGORY_META).map(([key, meta]) => ({
+      id: key.toLowerCase(),
+      label: meta.label,
+      color: meta.color,
+      note: `Map marker color for ${meta.label} businesses.`,
+    })),
   },
 ];
 
@@ -80,6 +72,9 @@ export function BploBusinessMapClient() {
   const [rows, setRows] = useState<BploBusinessLocationRow[]>([]);
   const [typeFilter, setTypeFilter] = useState<ApplicationTypeFilter>("ALL");
   const [statusFilter, setStatusFilter] = useState<LocationStatusFilter>("ALL");
+  const [categoryFilter, setCategoryFilter] = useState<"ALL" | MapBusinessCategory>("ALL");
+  const [ownerFilter, setOwnerFilter] = useState("");
+  const [searchFilter, setSearchFilter] = useState("");
   const [returnRemarksById, setReturnRemarksById] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -90,7 +85,7 @@ export function BploBusinessMapClient() {
     setError(null);
 
     const response = await fetch(
-      `/api/bplo/business-map?type=${encodeURIComponent(typeFilter)}&status=${encodeURIComponent(statusFilter)}`,
+      `/api/bplo/business-map?type=${encodeURIComponent(typeFilter)}&status=${encodeURIComponent(statusFilter)}&category=${encodeURIComponent(categoryFilter)}&owner=${encodeURIComponent(ownerFilter)}&search=${encodeURIComponent(searchFilter)}`,
       { cache: "no-store" }
     );
 
@@ -108,7 +103,7 @@ export function BploBusinessMapClient() {
 
   useEffect(() => {
     void loadRows();
-  }, [typeFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [typeFilter, statusFilter, categoryFilter, ownerFilter, searchFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const markers = useMemo(
     () =>
@@ -123,6 +118,10 @@ export function BploBusinessMapClient() {
         address: row.address,
         barangay: row.barangay,
         status: row.status,
+        ownerName: row.ownerName,
+        businessCategory: row.businessCategory,
+        businessCategoryLabel: row.businessCategoryLabel,
+        businessCategoryColor: row.businessCategoryColor,
       })),
     [rows]
   );
@@ -288,6 +287,42 @@ export function BploBusinessMapClient() {
                 <option value="NEEDS_CORRECTION">Needs Correction</option>
               </select>
             </label>
+
+            <label className="space-y-1 text-sm">
+              <span className="font-medium text-slate-700">Business Category</span>
+              <select
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value as "ALL" | MapBusinessCategory)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700"
+              >
+                <option value="ALL">All</option>
+                {Object.entries(MAP_CATEGORY_META).map(([key, meta]) => (
+                  <option key={key} value={key}>
+                    {meta.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm">
+              <span className="font-medium text-slate-700">Owner / Operator</span>
+              <input
+                value={ownerFilter}
+                onChange={(event) => setOwnerFilter(event.target.value)}
+                placeholder="Search by owner name"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700"
+              />
+            </label>
+
+            <label className="space-y-1 text-sm">
+              <span className="font-medium text-slate-700">Business Name</span>
+              <input
+                value={searchFilter}
+                onChange={(event) => setSearchFilter(event.target.value)}
+                placeholder="Search by business name"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700"
+              />
+            </label>
           </FilterBar>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -363,6 +398,7 @@ export function BploBusinessMapClient() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 space-y-1.5 text-sm text-slate-700">
                         <p className="text-base font-semibold tracking-tight text-slate-900">{row.businessName}</p>
+                        <p className="text-xs text-slate-600">Owner: {row.ownerName}</p>
                         <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
                           {row.applicationNumber}
                         </p>
@@ -372,6 +408,12 @@ export function BploBusinessMapClient() {
                           </span>
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass(row.status)}`}>
                             {row.status}
+                          </span>
+                          <span
+                            className="inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                            style={{ borderColor: row.businessCategoryColor, color: row.businessCategoryColor }}
+                          >
+                            {row.businessCategoryLabel}
                           </span>
                         </div>
                       </div>

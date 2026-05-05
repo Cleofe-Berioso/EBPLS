@@ -189,6 +189,7 @@ export function RegisterForm() {
                   type="tel"
                   autoComplete="tel"
                   required
+                  pattern="^(\\+63|0)9\\d{9}$"
                   className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-green-600 focus:ring-2 focus:ring-green-100"
                   placeholder="09XX-XXX-XXXX"
                 />

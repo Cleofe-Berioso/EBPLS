@@ -1,4 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import {
+  inferMapBusinessCategory,
+  MAP_CATEGORY_META,
+  type MapBusinessCategory,
+} from "@/lib/business-map-categories";
 
 export const EB_MAGALONA_CENTER = {
   latitude: 10.878586296466974,
@@ -37,6 +42,10 @@ export interface BusinessLocationMapRow {
   locationId: string;
   businessRecordId: string;
   businessName: string;
+  ownerName: string;
+  businessCategory: MapBusinessCategory;
+  businessCategoryLabel: string;
+  businessCategoryColor: string;
   applicationNumber: string;
   applicationType: ApplicationType;
   permitOrCertificateNumber: string | null;
@@ -52,7 +61,17 @@ export interface BusinessLocationMapRow {
 export interface BusinessMapFilters {
   type?: "ALL" | ApplicationType;
   status?: "ALL" | LocationStatus;
+  owner?: string;
+  category?: "ALL" | MapBusinessCategory;
+  search?: string;
 }
+
+const VALID_BUSINESS_MAP_APP_STATUSES = [
+  "APPROVED_FOR_PAYMENT",
+  "PAID",
+  "FOR_RELEASE",
+  "RELEASED",
+] as const;
 
 function parseCoordinate(input: unknown, kind: "latitude" | "longitude"): number {
   const value = typeof input === "number" ? input : Number(input);
@@ -337,7 +356,7 @@ export async function listBploBusinessLocations(
       businessRecord: {
         applications: {
           some: {
-            status: "RELEASED",
+            status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
           },
         },
       },
@@ -355,9 +374,11 @@ export async function listBploBusinessLocations(
         select: {
           id: true,
           businessName: true,
+          ownerName: true,
+          lineOfBusiness: true,
           applications: {
             where: {
-              status: "RELEASED",
+              status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
             },
             orderBy: {
               updatedAt: "desc",
@@ -366,6 +387,7 @@ export async function listBploBusinessLocations(
             select: {
               applicationNumber: true,
               applicationType: true,
+              formData: true,
               permitIssuance: {
                 select: {
                   documentNumber: true,
@@ -386,10 +408,24 @@ export async function listBploBusinessLocations(
       const latestApplication = location.businessRecord.applications[0];
       if (!latestApplication) return null;
 
+      const lineOfBusiness =
+        typeof latestApplication.formData === "object" && latestApplication.formData
+          ? ((latestApplication.formData as Record<string, unknown>).lineOfBusiness as string | undefined)
+          : undefined;
+
+      const category = inferMapBusinessCategory(
+        (lineOfBusiness ?? location.businessRecord.lineOfBusiness ?? "").trim()
+      );
+      const categoryMeta = MAP_CATEGORY_META[category];
+
       return {
         locationId: location.id,
         businessRecordId: location.businessRecord.id,
         businessName: location.businessRecord.businessName,
+        ownerName: location.businessRecord.ownerName,
+        businessCategory: category,
+        businessCategoryLabel: categoryMeta.label,
+        businessCategoryColor: categoryMeta.color,
         applicationNumber: latestApplication.applicationNumber,
         applicationType: latestApplication.applicationType as ApplicationType,
         permitOrCertificateNumber: latestApplication.permitIssuance?.documentNumber ?? null,
@@ -404,11 +440,31 @@ export async function listBploBusinessLocations(
     })
     .filter((row: BusinessLocationMapRow | null): row is BusinessLocationMapRow => Boolean(row));
 
+  let filtered = rows;
+
   if (filters.type && filters.type !== "ALL") {
-    return rows.filter((row: BusinessLocationMapRow) => row.applicationType === filters.type);
+    filtered = filtered.filter((row: BusinessLocationMapRow) => row.applicationType === filters.type);
   }
 
-  return rows;
+  if (filters.category && filters.category !== "ALL") {
+    filtered = filtered.filter((row: BusinessLocationMapRow) => row.businessCategory === filters.category);
+  }
+
+  if (filters.owner?.trim()) {
+    const owner = filters.owner.trim().toLowerCase();
+    filtered = filtered.filter((row: BusinessLocationMapRow) => row.ownerName.toLowerCase().includes(owner));
+  }
+
+  if (filters.search?.trim()) {
+    const search = filters.search.trim().toLowerCase();
+    filtered = filtered.filter(
+      (row: BusinessLocationMapRow) =>
+        row.businessName.toLowerCase().includes(search) ||
+        row.ownerName.toLowerCase().includes(search)
+    );
+  }
+
+  return filtered;
 }
 
 export async function verifyBusinessLocation(

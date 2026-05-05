@@ -21,14 +21,18 @@ interface PaymentVerificationRow {
   applicantEmail: string;
   applicationType: "NEW" | "RENEWAL" | "CLOSURE";
   topNumber: string | null;
+  annualAssessedAmount: number;
+  releasePaymentAmount: number;
   totalAmountDue: number;
   amountPaid: number;
+  paymentDate: string;
   transactionNumber: string;
   submittedAt: string;
   paymentStatus: PaymentStatus;
   applicationStatus: string;
   reviewerRemarks: string | null;
   reviewedAt: string | null;
+  proofFileName: string;
 }
 
 interface PaymentVerificationDetail {
@@ -44,6 +48,11 @@ interface PaymentVerificationDetail {
   top: {
     assessmentNumber: string | null;
     paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null;
+    annualAssessedAmount: number;
+    releasePaymentAmount: number;
+    amountPaid: number;
+    remainingBalance: number;
+    paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
     mayorsPermitFee: number;
     regulatoryFees: number;
     additionalCharges: number;
@@ -155,7 +164,7 @@ export default function BploPaymentVerificationPage() {
   }, [activeTab, lists.pending, lists.verified, lists.rejected]);
 
   const isUnderpaid =
-    detail ? detail.row.amountPaid < detail.top.totalAmount : false;
+    detail ? detail.row.amountPaid < detail.top.releasePaymentAmount : false;
 
   async function verifySelected() {
     if (!detail || detail.row.paymentStatus !== "PENDING") return;
@@ -172,7 +181,7 @@ export default function BploPaymentVerificationPage() {
     );
     const data = (await response.json()) as {
       error?: string;
-      result?: { isUnderpaid?: boolean; totalAmountDue?: number; amountPaid?: number };
+      result?: { releasePaymentAmount?: number; amountPaid?: number; remainingBalance?: number };
     };
     if (!response.ok) {
       setStatusMessage({ kind: "error", text: data.error ?? "Unable to verify payment." });
@@ -181,10 +190,9 @@ export default function BploPaymentVerificationPage() {
     }
 
     const warning =
-      data.result?.isUnderpaid &&
-      typeof data.result.totalAmountDue === "number" &&
+      typeof data.result?.releasePaymentAmount === "number" &&
       typeof data.result.amountPaid === "number"
-        ? ` Underpaid warning: paid ${money(data.result.amountPaid)} vs due ${money(data.result.totalAmountDue)}.`
+        ? ` Verified payment ${money(data.result.amountPaid)} against required release payment ${money(data.result.releasePaymentAmount)}.`
         : "";
 
     setStatusMessage({
@@ -413,7 +421,7 @@ export default function BploPaymentVerificationPage() {
               {detail.row.paymentStatus === "PENDING" && isUnderpaid ? (
                 <InfoBanner
                   title="Underpaid amount detected"
-                  description={`Submitted payment is ${money(detail.row.amountPaid)} while the TOP total is ${money(detail.top.totalAmount)}. Approval still follows the existing logic, but review the amount carefully before verifying.`}
+                  description={`Submitted payment is ${money(detail.row.amountPaid)} while required release payment is ${money(detail.top.releasePaymentAmount)}.`}
                   variant="warning"
                 />
               ) : null}
@@ -437,8 +445,16 @@ export default function BploPaymentVerificationPage() {
               </div>
 
               <p className="text-xs text-slate-500">
-                View Document is not available in this phase because OR receipt upload is not enabled yet.
+                Payment proof submitted by the applicant: {detail.row.proofFileName}
               </p>
+              <a
+                href={`/api/bplo/payment-verification/${detail.row.paymentReferenceId}/proof`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Download Payment Proof
+              </a>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
                 <p className="text-sm font-semibold text-slate-900">BPLO Review Action</p>

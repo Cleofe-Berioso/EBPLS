@@ -75,6 +75,11 @@ export interface SavedAssessment {
   assessmentNumber: string;
   status: "DRAFT" | "GENERATED";
   paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY";
+  annualAssessedAmount: number;
+  releasePaymentAmount: number;
+  amountPaid: number;
+  remainingBalance: number;
+  paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
   mayorsPermitFee: number;
   regulatoryFees: number;
   additionalCharges: number;
@@ -134,6 +139,11 @@ function toSavedAssessment(row: {
   assessmentNumber: string;
   status: string;
   paymentFrequency: string;
+  annualAssessedAmount: number;
+  releasePaymentAmount: number;
+  amountPaid: number;
+  remainingBalance: number;
+  paymentStatus: string;
   mayorsPermitFee: number;
   regulatoryFees: number;
   additionalCharges: number;
@@ -155,6 +165,11 @@ function toSavedAssessment(row: {
     assessmentNumber: row.assessmentNumber,
     status: row.status as "DRAFT" | "GENERATED",
     paymentFrequency: row.paymentFrequency as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY",
+    annualAssessedAmount: row.annualAssessedAmount,
+    releasePaymentAmount: row.releasePaymentAmount,
+    amountPaid: row.amountPaid,
+    remainingBalance: row.remainingBalance,
+    paymentStatus: row.paymentStatus as "UNPAID" | "PARTIALLY_PAID" | "PAID",
     mayorsPermitFee: row.mayorsPermitFee,
     regulatoryFees: row.regulatoryFees,
     additionalCharges: row.additionalCharges,
@@ -284,6 +299,12 @@ function sanitizeFeeInput(input: AssessmentInput): AssessmentInput {
   };
 }
 
+function toReleasePaymentAmount(annualAssessedAmount: number, frequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY"): number {
+  if (frequency === "BI_ANNUAL") return Math.round((annualAssessedAmount / 2) * 100) / 100;
+  if (frequency === "QUARTERLY") return Math.round((annualAssessedAmount / 4) * 100) / 100;
+  return annualAssessedAmount;
+}
+
 export async function saveAssessmentDraft(
   applicationId: string,
   bploUserId: string,
@@ -302,6 +323,8 @@ export async function saveAssessmentDraft(
   const fees = sanitizeFeeInput(input);
   // Server recomputes total — never trust client total
   const totalAmount = sumFeeComponents(fees);
+  const annualAssessedAmount = totalAmount;
+  const releasePaymentAmount = toReleasePaymentAmount(annualAssessedAmount, fees.paymentFrequency);
 
   const existing = await prisma.feeAssessment.findUnique({
     where: { applicationId },
@@ -322,6 +345,11 @@ export async function saveAssessmentDraft(
       assessmentNumber,
       status: "DRAFT",
       paymentFrequency: fees.paymentFrequency,
+      annualAssessedAmount,
+      releasePaymentAmount,
+      amountPaid: 0,
+      remainingBalance: annualAssessedAmount,
+      paymentStatus: "UNPAID",
       mayorsPermitFee: fees.mayorsPermitFee,
       regulatoryFees: fees.regulatoryFees,
       additionalCharges: fees.additionalCharges,
@@ -337,6 +365,11 @@ export async function saveAssessmentDraft(
     },
     update: {
       paymentFrequency: fees.paymentFrequency,
+      annualAssessedAmount,
+      releasePaymentAmount,
+      amountPaid: 0,
+      remainingBalance: annualAssessedAmount,
+      paymentStatus: "UNPAID",
       mayorsPermitFee: fees.mayorsPermitFee,
       regulatoryFees: fees.regulatoryFees,
       additionalCharges: fees.additionalCharges,
@@ -374,6 +407,8 @@ export async function generateTop(
   const fees = sanitizeFeeInput(input);
   // Server recomputes total — never trust client
   const totalAmount = sumFeeComponents(fees);
+  const annualAssessedAmount = totalAmount;
+  const releasePaymentAmount = toReleasePaymentAmount(annualAssessedAmount, fees.paymentFrequency);
 
   return prisma.$transaction(async (tx: any) => {
     const application = await tx.businessApplication.findUnique({
@@ -405,6 +440,11 @@ export async function generateTop(
         assessmentNumber,
         status: "GENERATED",
         paymentFrequency: fees.paymentFrequency,
+        annualAssessedAmount,
+        releasePaymentAmount,
+        amountPaid: 0,
+        remainingBalance: annualAssessedAmount,
+        paymentStatus: "UNPAID",
         mayorsPermitFee: fees.mayorsPermitFee,
         regulatoryFees: fees.regulatoryFees,
         additionalCharges: fees.additionalCharges,
@@ -422,6 +462,11 @@ export async function generateTop(
       update: {
         status: "GENERATED",
         paymentFrequency: fees.paymentFrequency,
+        annualAssessedAmount,
+        releasePaymentAmount,
+        amountPaid: 0,
+        remainingBalance: annualAssessedAmount,
+        paymentStatus: "UNPAID",
         mayorsPermitFee: fees.mayorsPermitFee,
         regulatoryFees: fees.regulatoryFees,
         additionalCharges: fees.additionalCharges,

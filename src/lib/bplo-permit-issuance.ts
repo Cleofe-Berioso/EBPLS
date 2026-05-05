@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
-import { getPaymentReferencesFromFormData } from "@/lib/payment-reference";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -136,8 +135,7 @@ function findPaidDate(history: Array<{ toStatus: DbApplicationStatus; createdAt:
 }
 
 function toListRow(app: any): PermitIssuanceRow {
-  const refs = getPaymentReferencesFromFormData(app.formData, app.id, app.status);
-  const latestRef = refs.length > 0 ? refs[refs.length - 1] : null;
+  const latestRef = app.paymentReferences?.[0] ?? null;
 
   return {
     applicationId: app.id,
@@ -168,6 +166,14 @@ export async function listPermitIssuanceEntries(): Promise<PermitIssuanceLists> 
       applicant: { select: { name: true, email: true } },
       businessRecord: { select: { businessName: true } },
       feeAssessment: { select: { assessmentNumber: true } },
+      paymentReferences: {
+        orderBy: { submittedAt: "desc" },
+        take: 1,
+        select: {
+          transactionNumber: true,
+          status: true,
+        },
+      },
       history: { select: { toStatus: true, createdAt: true }, orderBy: { createdAt: "asc" } },
       permitIssuance: {
         include: {
@@ -197,7 +203,22 @@ export async function getPermitIssuanceDetail(applicationId: string): Promise<Pe
     include: {
       applicant: { select: { name: true, email: true } },
       businessRecord: { select: { businessName: true } },
-      feeAssessment: { select: { assessmentNumber: true, totalAmount: true } },
+      feeAssessment: {
+        select: {
+          assessmentNumber: true,
+          amountPaid: true,
+          releasePaymentAmount: true,
+        },
+      },
+      paymentReferences: {
+        where: { status: "VERIFIED" },
+        orderBy: { submittedAt: "desc" },
+        take: 1,
+        select: {
+          transactionNumber: true,
+          status: true,
+        },
+      },
       permitIssuance: {
         include: {
           preparedBy: { select: { name: true } },
@@ -209,8 +230,7 @@ export async function getPermitIssuanceDetail(applicationId: string): Promise<Pe
 
   if (!app) return null;
 
-  const refs = getPaymentReferencesFromFormData(app.formData, app.id, app.status);
-  const latestRef = refs.length > 0 ? refs[refs.length - 1] : null;
+  const latestRef = app.paymentReferences?.[0] ?? null;
   const docType = resolveDocumentType(app.applicationType as ApplicationType);
 
   return {
@@ -235,7 +255,7 @@ export async function getPermitIssuanceDetail(applicationId: string): Promise<Pe
     },
     paymentSummary: {
       topNumber: app.feeAssessment?.assessmentNumber ?? null,
-      totalAmountPaid: latestRef?.amountPaid ?? app.feeAssessment?.totalAmount ?? 0,
+      totalAmountPaid: app.feeAssessment?.amountPaid ?? 0,
       paymentReferenceNumber: latestRef?.transactionNumber ?? null,
       paymentVerificationStatus: latestRef?.status ?? null,
     },
@@ -355,6 +375,18 @@ export async function preparePermitIssuance(
       where: { id: applicationId },
       include: {
         applicant: { select: { email: true } },
+        feeAssessment: {
+          select: {
+            releasePaymentAmount: true,
+            amountPaid: true,
+          },
+        },
+        paymentReferences: {
+          where: { status: "VERIFIED" },
+          orderBy: { submittedAt: "desc" },
+          take: 1,
+          select: { id: true },
+        },
         permitIssuance: true,
       },
     });
@@ -364,10 +396,14 @@ export async function preparePermitIssuance(
       throw new Error("Only PAID applications can be prepared for release");
     }
 
-    const refs = getPaymentReferencesFromFormData(app.formData, app.id, app.status);
-    const latestRef = refs.length > 0 ? refs[refs.length - 1] : null;
-    if (!latestRef || latestRef.status !== "VERIFIED") {
+    if (!app.paymentReferences?.[0]) {
       throw new Error("Application payment reference must be VERIFIED before permit preparation");
+    }
+
+    const requiredReleasePayment = app.feeAssessment?.releasePaymentAmount ?? 0;
+    const amountPaid = app.feeAssessment?.amountPaid ?? 0;
+    if (requiredReleasePayment > 0 && amountPaid < requiredReleasePayment) {
+      throw new Error("Required release payment has not been completed");
     }
 
     const documentType = resolveDocumentType(app.applicationType as ApplicationType);

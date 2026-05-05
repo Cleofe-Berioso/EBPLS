@@ -47,6 +47,7 @@ model User {
   verifiedLocations  BusinessLocation[] @relation("LocationVerifiedBy")
   historyEntries ApplicationHistory[] @relation("HistoryActor")
   assessmentsComputed FeeAssessment[] @relation("AssessmentComputedBy")
+  reviewedPaymentReferences PaymentReference[] @relation("PaymentReviewedBy")
   permitsPrepared PermitIssuance[] @relation("PermitPreparedBy")
   permitsReleased PermitIssuance[] @relation("PermitReleasedBy")
   feeConfigurationUpdates FeeConfigurationItem[] @relation("FeeConfigUpdatedBy")
@@ -139,6 +140,7 @@ model BusinessApplication {
   applicant     User                @relation("ApplicantApplications", fields: [applicantId], references: [id], onDelete: Cascade)
   businessRecord BusinessRecord?    @relation(fields: [businessRecordId], references: [id], onDelete: SetNull)
   documents     ApplicationDocument[]
+  paymentReferences PaymentReference[]
   history       ApplicationHistory[]
   feeAssessment FeeAssessment?
   permitIssuance PermitIssuance?
@@ -217,6 +219,18 @@ enum FeeAssessmentStatus {
   GENERATED
 }
 
+enum PaymentReferenceStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum PaymentSettlementStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
 enum PaymentFrequency {
   ANNUAL
   BI_ANNUAL
@@ -229,6 +243,11 @@ model FeeAssessment {
   assessmentNumber      String              @unique
   status                FeeAssessmentStatus @default(DRAFT)
   paymentFrequency      PaymentFrequency    @default(ANNUAL)
+  annualAssessedAmount  Float               @default(0)
+  releasePaymentAmount  Float               @default(0)
+  amountPaid            Float               @default(0)
+  remainingBalance      Float               @default(0)
+  paymentStatus         PaymentSettlementStatus @default(UNPAID)
   mayorsPermitFee       Float               @default(0)
   regulatoryFees        Float               @default(0)
   additionalCharges     Float               @default(0)
@@ -249,6 +268,31 @@ model FeeAssessment {
   computedBy   User?               @relation("AssessmentComputedBy", fields: [computedById], references: [id], onDelete: SetNull)
 
   @@index([applicationId])
+}
+
+model PaymentReference {
+  id                String               @id @default(cuid())
+  applicationId     String
+  transactionNumber String               @unique
+  amountPaid        Float                @default(0)
+  paymentDate       DateTime
+  proofFileName     String
+  proofStoragePath  String
+  proofMimeType     String
+  proofSizeBytes    Int
+  status            PaymentReferenceStatus @default(PENDING)
+  reviewerRemarks   String?
+  submittedAt       DateTime             @default(now())
+  reviewedAt        DateTime?
+  reviewedById      String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  application BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  reviewedBy  User?               @relation("PaymentReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, submittedAt])
+  @@index([status, submittedAt])
 }
 
 model FeeConfigurationItem {

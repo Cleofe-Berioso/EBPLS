@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { name, email, password, confirmPassword } = body as Record<string, unknown>;
+  const { name, email, contactNumber, password, confirmPassword } = body as Record<string, unknown>;
 
   // ── Field presence validation ──────────────────────────────────────────────
   if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -19,6 +19,16 @@ export async function POST(req: NextRequest) {
 
   if (!email || typeof email !== "string" || email.trim().length === 0) {
     return NextResponse.json({ error: "Email address is required." }, { status: 400 });
+  }
+
+  if (!contactNumber || typeof contactNumber !== "string" || contactNumber.trim().length === 0) {
+    return NextResponse.json({ error: "Contact number is required." }, { status: 400 });
+  }
+
+  const normalizedContactNumber = contactNumber.replace(/[\s-]/g, "");
+  const mobileRegex = /^(\+63|0)9\d{9}$/;
+  if (!mobileRegex.test(normalizedContactNumber)) {
+    return NextResponse.json({ error: "Invalid Philippine mobile number format." }, { status: 400 });
   }
 
   // Basic email format check

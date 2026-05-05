@@ -10,6 +10,10 @@ export interface LeafletBusinessMarker {
   title: string;
   subtitle?: string;
   status?: string;
+  ownerName?: string;
+  businessCategory?: string;
+  businessCategoryLabel?: string;
+  businessCategoryColor?: string;
   applicationType?: string;
   permitOrCertificateNumber?: string | null;
   address?: string | null;
@@ -50,10 +54,8 @@ function MapClickHandler({
   return null;
 }
 
-function statusColor(status?: string): string {
-  if (status === "VERIFIED") return "#15803d";
-  if (status === "NEEDS_CORRECTION") return "#b45309";
-  return "#2563eb";
+function markerColor(marker: LeafletBusinessMarker): string {
+  return marker.businessCategoryColor ?? "#64748b";
 }
 
 function statusLabel(status?: string): string {
@@ -118,8 +120,8 @@ export function LeafletBusinessMap({
           center={[marker.latitude, marker.longitude]}
           radius={9}
           pathOptions={{
-            color: statusColor(marker.status),
-            fillColor: statusColor(marker.status),
+            color: markerColor(marker),
+            fillColor: markerColor(marker),
             fillOpacity: 0.85,
             weight: 2,
           }}
@@ -154,6 +156,14 @@ export function LeafletBusinessMap({
                 <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-600">
                   Saved Pin
                 </span>
+                {marker.businessCategoryLabel ? (
+                  <span
+                    className="inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide"
+                    style={{ borderColor: marker.businessCategoryColor, color: marker.businessCategoryColor }}
+                  >
+                    {marker.businessCategoryLabel}
+                  </span>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 {(marker.permitOrCertificateNumber || marker.barangay || marker.address) ? (
