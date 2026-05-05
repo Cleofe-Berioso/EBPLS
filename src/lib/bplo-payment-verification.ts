@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { toMoneyNumber } from "@/lib/money";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -100,15 +101,15 @@ function toRow(params: {
     businessRecord: { businessName: string } | null;
     feeAssessment: {
       assessmentNumber: string;
-      annualAssessedAmount: number;
-      releasePaymentAmount: number;
-      totalAmount: number;
+      annualAssessedAmount: any;
+      releasePaymentAmount: any;
+      totalAmount: any;
     } | null;
   };
   ref: {
     id: string;
     transactionNumber: string;
-    amountPaid: number;
+    amountPaid: any;
     paymentDate: Date;
     submittedAt: Date;
     status: "PENDING" | "VERIFIED" | "REJECTED";
@@ -127,10 +128,10 @@ function toRow(params: {
     applicantEmail: app.applicant.email,
     applicationType: app.applicationType,
     topNumber: app.feeAssessment?.assessmentNumber ?? null,
-    annualAssessedAmount: app.feeAssessment?.annualAssessedAmount ?? 0,
-    releasePaymentAmount: app.feeAssessment?.releasePaymentAmount ?? 0,
-    totalAmountDue: app.feeAssessment?.totalAmount ?? 0,
-    amountPaid: ref.amountPaid,
+    annualAssessedAmount: toMoneyNumber(app.feeAssessment?.annualAssessedAmount),
+    releasePaymentAmount: toMoneyNumber(app.feeAssessment?.releasePaymentAmount),
+    totalAmountDue: toMoneyNumber(app.feeAssessment?.totalAmount),
+    amountPaid: toMoneyNumber(ref.amountPaid),
     paymentDate: ref.paymentDate.toISOString(),
     transactionNumber: ref.transactionNumber,
     submittedAt: ref.submittedAt.toISOString(),
@@ -280,21 +281,21 @@ export async function getPaymentVerificationDetail(
     top: {
       assessmentNumber: app.feeAssessment?.assessmentNumber ?? null,
       paymentFrequency: app.feeAssessment?.paymentFrequency ?? null,
-      annualAssessedAmount: app.feeAssessment?.annualAssessedAmount ?? 0,
-      releasePaymentAmount: app.feeAssessment?.releasePaymentAmount ?? 0,
-      amountPaid: app.feeAssessment?.amountPaid ?? 0,
-      remainingBalance: app.feeAssessment?.remainingBalance ?? 0,
+      annualAssessedAmount: toMoneyNumber(app.feeAssessment?.annualAssessedAmount),
+      releasePaymentAmount: toMoneyNumber(app.feeAssessment?.releasePaymentAmount),
+      amountPaid: toMoneyNumber(app.feeAssessment?.amountPaid),
+      remainingBalance: toMoneyNumber(app.feeAssessment?.remainingBalance),
       paymentStatus: app.feeAssessment?.paymentStatus ?? "UNPAID",
-      mayorsPermitFee: app.feeAssessment?.mayorsPermitFee ?? 0,
-      regulatoryFees: app.feeAssessment?.regulatoryFees ?? 0,
-      additionalCharges: app.feeAssessment?.additionalCharges ?? 0,
-      penalties: app.feeAssessment?.penalties ?? 0,
-      surcharge: app.feeAssessment?.surcharge ?? 0,
-      interest: app.feeAssessment?.interest ?? 0,
-      closureCertificateFee: app.feeAssessment?.closureCertificateFee ?? 0,
-      arrears: app.feeAssessment?.arrears ?? 0,
-      otherCharges: app.feeAssessment?.otherCharges ?? 0,
-      totalAmount: app.feeAssessment?.totalAmount ?? 0,
+      mayorsPermitFee: toMoneyNumber(app.feeAssessment?.mayorsPermitFee),
+      regulatoryFees: toMoneyNumber(app.feeAssessment?.regulatoryFees),
+      additionalCharges: toMoneyNumber(app.feeAssessment?.additionalCharges),
+      penalties: toMoneyNumber(app.feeAssessment?.penalties),
+      surcharge: toMoneyNumber(app.feeAssessment?.surcharge),
+      interest: toMoneyNumber(app.feeAssessment?.interest),
+      closureCertificateFee: toMoneyNumber(app.feeAssessment?.closureCertificateFee),
+      arrears: toMoneyNumber(app.feeAssessment?.arrears),
+      otherCharges: toMoneyNumber(app.feeAssessment?.otherCharges),
+      totalAmount: toMoneyNumber(app.feeAssessment?.totalAmount),
       remarks: app.feeAssessment?.remarks ?? null,
     },
   };
@@ -323,8 +324,9 @@ export async function approvePaymentReference(
     throw new Error("Application is not eligible for payment verification");
   }
 
-  const requiredForRelease = assessment.releasePaymentAmount;
-  if (found.amountPaid < requiredForRelease) {
+  const requiredForRelease = toMoneyNumber(assessment.releasePaymentAmount);
+  const submittedAmount = toMoneyNumber(found.amountPaid);
+  if (submittedAmount < requiredForRelease) {
     throw new Error(
       `Amount paid is below required release payment amount (₱${requiredForRelease.toLocaleString("en-PH", {
         minimumFractionDigits: 2,
@@ -332,8 +334,11 @@ export async function approvePaymentReference(
     );
   }
 
-  const paidSoFar = Math.round((assessment.amountPaid + found.amountPaid) * 100) / 100;
-  const remainingBalance = Math.max(0, Math.round((assessment.annualAssessedAmount - paidSoFar) * 100) / 100);
+  const paidSoFar = Math.round((toMoneyNumber(assessment.amountPaid) + submittedAmount) * 100) / 100;
+  const remainingBalance = Math.max(
+    0,
+    Math.round((toMoneyNumber(assessment.annualAssessedAmount) - paidSoFar) * 100) / 100
+  );
   const paymentStatus =
     remainingBalance <= 0 ? "PAID" : paidSoFar > 0 ? "PARTIALLY_PAID" : "UNPAID";
 
@@ -374,7 +379,7 @@ export async function approvePaymentReference(
         fromStatus: "APPROVED_FOR_PAYMENT",
         toStatus: "PAID",
         remarks:
-          `BPLO verified payment reference (${found.transactionNumber}) for ₱${found.amountPaid.toLocaleString("en-PH", {
+          `BPLO verified payment reference (${found.transactionNumber}) for ₱${submittedAmount.toLocaleString("en-PH", {
             minimumFractionDigits: 2,
           })}.` + (remarks?.trim() ? ` Remarks: ${remarks.trim()}` : ""),
       },
@@ -387,9 +392,9 @@ export async function approvePaymentReference(
     applicationNumber: app.applicationNumber,
     previousStatus: "APPROVED_FOR_PAYMENT" as const,
     newStatus: "PAID" as const,
-    totalAmountDue: assessment.totalAmount,
+    totalAmountDue: toMoneyNumber(assessment.totalAmount),
     releasePaymentAmount: requiredForRelease,
-    amountPaid: found.amountPaid,
+    amountPaid: submittedAmount,
     remainingBalance,
   };
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { getPaymentReferencesFromFormData } from "@/lib/payment-reference";
+import { toMoneyNumber } from "@/lib/money";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -276,9 +277,9 @@ async function computeTotals() {
   let totalAssessedAmount = 0;
   let totalRevenueEstimate = 0;
   for (const row of feeRows) {
-    totalAssessedAmount += row.totalAmount;
+    totalAssessedAmount += toMoneyNumber(row.totalAmount);
     if (["PAID", "FOR_RELEASE", "RELEASED"].includes(row.application.status)) {
-      totalRevenueEstimate += row.totalAmount;
+      totalRevenueEstimate += toMoneyNumber(row.totalAmount);
     }
   }
 
@@ -370,6 +371,19 @@ export async function getSuperAdminApplicationDetail(
         orderBy: { uploadedAt: "asc" },
       },
       feeAssessment: true,
+      paymentReferences: {
+        orderBy: { submittedAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          transactionNumber: true,
+          amountPaid: true,
+          submittedAt: true,
+          status: true,
+          reviewerRemarks: true,
+          reviewedAt: true,
+        },
+      },
       permitIssuance: {
         include: {
           preparedBy: { select: { name: true } },
@@ -387,11 +401,20 @@ export async function getSuperAdminApplicationDetail(
 
   if (!row) return null;
 
-  const paymentRef = latestPaymentReference(
-    row.formData,
-    row.id,
-    row.status as DbApplicationStatus
-  );
+  const latestDbPaymentRef = row.paymentReferences[0] ?? null;
+  const paymentRef = latestDbPaymentRef
+    ? {
+        id: latestDbPaymentRef.id,
+        transactionNumber: latestDbPaymentRef.transactionNumber,
+        amountPaid: toMoneyNumber(latestDbPaymentRef.amountPaid),
+        submittedAt: latestDbPaymentRef.submittedAt.toISOString(),
+        status: latestDbPaymentRef.status as PaymentRefStatus,
+        reviewerRemarks: latestDbPaymentRef.reviewerRemarks,
+        reviewedAt: latestDbPaymentRef.reviewedAt
+          ? latestDbPaymentRef.reviewedAt.toISOString()
+          : null,
+      }
+    : latestPaymentReference(row.formData, row.id, row.status as DbApplicationStatus);
 
   const form = (row.formData ?? {}) as Record<string, unknown>;
   const formValue = (key: string) =>
@@ -444,16 +467,16 @@ export async function getSuperAdminApplicationDetail(
           | "BI_ANNUAL"
           | "QUARTERLY"
           | null) ?? null,
-      mayorsPermitFee: row.feeAssessment?.mayorsPermitFee ?? 0,
-      regulatoryFees: row.feeAssessment?.regulatoryFees ?? 0,
-      additionalCharges: row.feeAssessment?.additionalCharges ?? 0,
-      penalties: row.feeAssessment?.penalties ?? 0,
-      surcharge: row.feeAssessment?.surcharge ?? 0,
-      interest: row.feeAssessment?.interest ?? 0,
-      closureCertificateFee: row.feeAssessment?.closureCertificateFee ?? 0,
-      arrears: row.feeAssessment?.arrears ?? 0,
-      otherCharges: row.feeAssessment?.otherCharges ?? 0,
-      totalAmount: row.feeAssessment?.totalAmount ?? 0,
+      mayorsPermitFee: toMoneyNumber(row.feeAssessment?.mayorsPermitFee),
+      regulatoryFees: toMoneyNumber(row.feeAssessment?.regulatoryFees),
+      additionalCharges: toMoneyNumber(row.feeAssessment?.additionalCharges),
+      penalties: toMoneyNumber(row.feeAssessment?.penalties),
+      surcharge: toMoneyNumber(row.feeAssessment?.surcharge),
+      interest: toMoneyNumber(row.feeAssessment?.interest),
+      closureCertificateFee: toMoneyNumber(row.feeAssessment?.closureCertificateFee),
+      arrears: toMoneyNumber(row.feeAssessment?.arrears),
+      otherCharges: toMoneyNumber(row.feeAssessment?.otherCharges),
+      totalAmount: toMoneyNumber(row.feeAssessment?.totalAmount),
       remarks: row.feeAssessment?.remarks ?? null,
       generatedAt: row.feeAssessment?.generatedAt
         ? row.feeAssessment.generatedAt.toISOString()

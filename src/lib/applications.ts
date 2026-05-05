@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi, isEditableStatus } from "@/lib/application-mappers";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
+import { toMoneyNumber } from "@/lib/money";
 import type {
   ApplicantApplicationRow,
   ApplicationDocumentInput,
@@ -692,21 +693,21 @@ export async function getApplicantTopSummary(applicantId: string) {
     assessmentNumber: string;
     status: string;
     paymentFrequency: string;
-    annualAssessedAmount: number;
-    releasePaymentAmount: number;
-    amountPaid: number;
-    remainingBalance: number;
+    annualAssessedAmount: any;
+    releasePaymentAmount: any;
+    amountPaid: any;
+    remainingBalance: any;
     paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
-    mayorsPermitFee: number;
-    regulatoryFees: number;
-    additionalCharges: number;
-    penalties: number;
-    surcharge: number;
-    interest: number;
-    closureCertificateFee: number;
-    arrears: number;
-    otherCharges: number;
-    totalAmount: number;
+    mayorsPermitFee: any;
+    regulatoryFees: any;
+    additionalCharges: any;
+    penalties: any;
+    surcharge: any;
+    interest: any;
+    closureCertificateFee: any;
+    arrears: any;
+    otherCharges: any;
+    totalAmount: any;
     remarks: string | null;
     generatedAt: Date | null;
   } | null;
@@ -719,28 +720,28 @@ export async function getApplicantTopSummary(applicantId: string) {
     topNumber: fa?.assessmentNumber ?? null,
     assessmentStatus: (fa?.status ?? null) as "DRAFT" | "GENERATED" | null,
     paymentFrequency: (fa?.paymentFrequency ?? null) as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null,
-    annualAssessedAmount: fa?.annualAssessedAmount ?? 0,
-    releasePaymentAmount: fa?.releasePaymentAmount ?? 0,
-    amountPaid: fa?.amountPaid ?? 0,
-    remainingBalance: fa?.remainingBalance ?? 0,
+    annualAssessedAmount: toMoneyNumber(fa?.annualAssessedAmount),
+    releasePaymentAmount: toMoneyNumber(fa?.releasePaymentAmount),
+    amountPaid: toMoneyNumber(fa?.amountPaid),
+    remainingBalance: toMoneyNumber(fa?.remainingBalance),
     paymentStatus: fa?.paymentStatus ?? "UNPAID",
-    mayorsPermitFee: fa?.mayorsPermitFee ?? 0,
-    regulatoryFees: fa?.regulatoryFees ?? 0,
-    additionalCharges: fa?.additionalCharges ?? 0,
-    penalties: fa?.penalties ?? 0,
-    surcharge: fa?.surcharge ?? 0,
-    interest: fa?.interest ?? 0,
-    closureCertificateFee: fa?.closureCertificateFee ?? 0,
-    arrears: fa?.arrears ?? 0,
-    otherCharges: fa?.otherCharges ?? 0,
-    totalAmount: fa?.totalAmount ?? 0,
+    mayorsPermitFee: toMoneyNumber(fa?.mayorsPermitFee),
+    regulatoryFees: toMoneyNumber(fa?.regulatoryFees),
+    additionalCharges: toMoneyNumber(fa?.additionalCharges),
+    penalties: toMoneyNumber(fa?.penalties),
+    surcharge: toMoneyNumber(fa?.surcharge),
+    interest: toMoneyNumber(fa?.interest),
+    closureCertificateFee: toMoneyNumber(fa?.closureCertificateFee),
+    arrears: toMoneyNumber(fa?.arrears),
+    otherCharges: toMoneyNumber(fa?.otherCharges),
+    totalAmount: toMoneyNumber(fa?.totalAmount),
     remarks: fa?.remarks ?? null,
     generatedAt: fa?.generatedAt ? fa.generatedAt.toISOString() : null,
     paymentReference: payment
       ? {
           id: payment.id,
           transactionNumber: payment.transactionNumber,
-          amountPaid: payment.amountPaid,
+          amountPaid: toMoneyNumber(payment.amountPaid),
           paymentDate: payment.paymentDate.toISOString(),
           submittedAt: payment.submittedAt.toISOString(),
           status: payment.status,
@@ -830,7 +831,7 @@ export async function submitApplicantPaymentReference(
         actorRole: "APPLICANT",
         fromStatus: application.status,
         toStatus: application.status,
-        remarks: `Applicant submitted payment reference: ${transactionNumber.trim()}, Amount: ₱${normalizedAmountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+        remarks: `Applicant submitted payment reference: ${transactionNumber.trim()}, Amount: ₱${toMoneyNumber(normalizedAmountPaid).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
       },
     });
 

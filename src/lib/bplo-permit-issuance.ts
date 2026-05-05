@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { toMoneyNumber } from "@/lib/money";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -255,7 +256,7 @@ export async function getPermitIssuanceDetail(applicationId: string): Promise<Pe
     },
     paymentSummary: {
       topNumber: app.feeAssessment?.assessmentNumber ?? null,
-      totalAmountPaid: app.feeAssessment?.amountPaid ?? 0,
+      totalAmountPaid: toMoneyNumber(app.feeAssessment?.amountPaid),
       paymentReferenceNumber: latestRef?.transactionNumber ?? null,
       paymentVerificationStatus: latestRef?.status ?? null,
     },
@@ -400,8 +401,8 @@ export async function preparePermitIssuance(
       throw new Error("Application payment reference must be VERIFIED before permit preparation");
     }
 
-    const requiredReleasePayment = app.feeAssessment?.releasePaymentAmount ?? 0;
-    const amountPaid = app.feeAssessment?.amountPaid ?? 0;
+    const requiredReleasePayment = toMoneyNumber(app.feeAssessment?.releasePaymentAmount);
+    const amountPaid = toMoneyNumber(app.feeAssessment?.amountPaid);
     if (requiredReleasePayment > 0 && amountPaid < requiredReleasePayment) {
       throw new Error("Required release payment has not been completed");
     }

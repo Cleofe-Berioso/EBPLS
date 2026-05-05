@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { computeMayorsPermitFee, sumFeeComponents } from "@/lib/fee-computation";
 import { getRuntimeFeeSettings } from "@/lib/fee-settings";
+import { toMoneyNumber } from "@/lib/money";
 import type { BusinessInfo } from "@/lib/applicant-types";
 
 type DbApplicationStatus =
@@ -139,21 +140,21 @@ function toSavedAssessment(row: {
   assessmentNumber: string;
   status: string;
   paymentFrequency: string;
-  annualAssessedAmount: number;
-  releasePaymentAmount: number;
-  amountPaid: number;
-  remainingBalance: number;
+  annualAssessedAmount: any;
+  releasePaymentAmount: any;
+  amountPaid: any;
+  remainingBalance: any;
   paymentStatus: string;
-  mayorsPermitFee: number;
-  regulatoryFees: number;
-  additionalCharges: number;
-  penalties: number;
-  surcharge: number;
-  interest: number;
-  closureCertificateFee: number;
-  arrears: number;
-  otherCharges: number;
-  totalAmount: number;
+  mayorsPermitFee: any;
+  regulatoryFees: any;
+  additionalCharges: any;
+  penalties: any;
+  surcharge: any;
+  interest: any;
+  closureCertificateFee: any;
+  arrears: any;
+  otherCharges: any;
+  totalAmount: any;
   remarks: string | null;
   computedById: string | null;
   generatedAt: Date | null;
@@ -165,21 +166,21 @@ function toSavedAssessment(row: {
     assessmentNumber: row.assessmentNumber,
     status: row.status as "DRAFT" | "GENERATED",
     paymentFrequency: row.paymentFrequency as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY",
-    annualAssessedAmount: row.annualAssessedAmount,
-    releasePaymentAmount: row.releasePaymentAmount,
-    amountPaid: row.amountPaid,
-    remainingBalance: row.remainingBalance,
+    annualAssessedAmount: toMoneyNumber(row.annualAssessedAmount),
+    releasePaymentAmount: toMoneyNumber(row.releasePaymentAmount),
+    amountPaid: toMoneyNumber(row.amountPaid),
+    remainingBalance: toMoneyNumber(row.remainingBalance),
     paymentStatus: row.paymentStatus as "UNPAID" | "PARTIALLY_PAID" | "PAID",
-    mayorsPermitFee: row.mayorsPermitFee,
-    regulatoryFees: row.regulatoryFees,
-    additionalCharges: row.additionalCharges,
-    penalties: row.penalties,
-    surcharge: row.surcharge,
-    interest: row.interest,
-    closureCertificateFee: row.closureCertificateFee,
-    arrears: row.arrears,
-    otherCharges: row.otherCharges,
-    totalAmount: row.totalAmount,
+    mayorsPermitFee: toMoneyNumber(row.mayorsPermitFee),
+    regulatoryFees: toMoneyNumber(row.regulatoryFees),
+    additionalCharges: toMoneyNumber(row.additionalCharges),
+    penalties: toMoneyNumber(row.penalties),
+    surcharge: toMoneyNumber(row.surcharge),
+    interest: toMoneyNumber(row.interest),
+    closureCertificateFee: toMoneyNumber(row.closureCertificateFee),
+    arrears: toMoneyNumber(row.arrears),
+    otherCharges: toMoneyNumber(row.otherCharges),
+    totalAmount: toMoneyNumber(row.totalAmount),
     remarks: row.remarks,
     computedById: row.computedById,
     generatedAt: row.generatedAt ? row.generatedAt.toISOString() : null,

@@ -243,21 +243,21 @@ model FeeAssessment {
   assessmentNumber      String              @unique
   status                FeeAssessmentStatus @default(DRAFT)
   paymentFrequency      PaymentFrequency    @default(ANNUAL)
-  annualAssessedAmount  Float               @default(0)
-  releasePaymentAmount  Float               @default(0)
-  amountPaid            Float               @default(0)
-  remainingBalance      Float               @default(0)
+  annualAssessedAmount  Decimal             @default(0)
+  releasePaymentAmount  Decimal             @default(0)
+  amountPaid            Decimal             @default(0)
+  remainingBalance      Decimal             @default(0)
   paymentStatus         PaymentSettlementStatus @default(UNPAID)
-  mayorsPermitFee       Float               @default(0)
-  regulatoryFees        Float               @default(0)
-  additionalCharges     Float               @default(0)
-  penalties             Float               @default(0)
-  surcharge             Float               @default(0)
-  interest              Float               @default(0)
-  closureCertificateFee Float               @default(0)
-  arrears               Float               @default(0)
-  otherCharges          Float               @default(0)
-  totalAmount           Float               @default(0)
+  mayorsPermitFee       Decimal             @default(0)
+  regulatoryFees        Decimal             @default(0)
+  additionalCharges     Decimal             @default(0)
+  penalties             Decimal             @default(0)
+  surcharge             Decimal             @default(0)
+  interest              Decimal             @default(0)
+  closureCertificateFee Decimal             @default(0)
+  arrears               Decimal             @default(0)
+  otherCharges          Decimal             @default(0)
+  totalAmount           Decimal             @default(0)
   remarks               String?
   computedById          String?
   generatedAt           DateTime?
@@ -274,7 +274,7 @@ model PaymentReference {
   id                String               @id @default(cuid())
   applicationId     String
   transactionNumber String               @unique
-  amountPaid        Float                @default(0)
+  amountPaid        Decimal              @default(0)
   paymentDate       DateTime
   proofFileName     String
   proofStoragePath  String
@@ -299,7 +299,7 @@ model FeeConfigurationItem {
   id             String   @id @default(cuid())
   category       String
   classification String
-  amount         Float    @default(0)
+  amount         Decimal  @default(0)
   isActive       Boolean  @default(true)
   updatedById    String?
   createdAt      DateTime @default(now())
@@ -316,8 +316,8 @@ model SystemFeeSetting {
   renewalSurchargePercent     Float    @default(25)
   monthlyInterestPercent      Float    @default(2)
   liquorTobaccoAddOnPercent   Float    @default(25)
-  powerDistributionFixedFee   Float    @default(10000)
-  privatePortFixedFee         Float    @default(50000)
+  powerDistributionFixedFee   Decimal  @default(10000)
+  privatePortFixedFee         Decimal  @default(50000)
   updatedById                 String?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt

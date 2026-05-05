@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { toMoneyNumber } from "@/lib/money";
 
 export type FeeCategoryKey =
   | "MANUFACTURERS"
@@ -441,7 +442,7 @@ export async function listFeeConfigurationItems(): Promise<FeeConfigurationItemD
     id: item.id,
     category: item.category as FeeCategoryKey,
     classification: item.classification,
-    amount: item.amount,
+    amount: toMoneyNumber(item.amount),
     isActive: item.isActive,
     updatedAt: item.updatedAt.toISOString(),
   }));
@@ -485,7 +486,7 @@ export async function upsertFeeConfigurationItem(input: {
     id: row.id,
     category: row.category as FeeCategoryKey,
     classification: row.classification,
-    amount: row.amount,
+    amount: toMoneyNumber(row.amount),
     isActive: row.isActive,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -510,7 +511,7 @@ export async function updateFeeConfigurationItemById(input: {
     id: row.id,
     category: row.category as FeeCategoryKey,
     classification: row.classification,
-    amount: row.amount,
+    amount: toMoneyNumber(row.amount),
     isActive: row.isActive,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -534,8 +535,8 @@ export async function getOrCreateSystemFeeSetting(): Promise<SystemFeeSettingDto
     renewalSurchargePercent: row.renewalSurchargePercent,
     monthlyInterestPercent: row.monthlyInterestPercent,
     liquorTobaccoAddOnPercent: row.liquorTobaccoAddOnPercent,
-    powerDistributionFixedFee: row.powerDistributionFixedFee,
-    privatePortFixedFee: row.privatePortFixedFee,
+    powerDistributionFixedFee: toMoneyNumber(row.powerDistributionFixedFee),
+    privatePortFixedFee: toMoneyNumber(row.privatePortFixedFee),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -572,8 +573,8 @@ export async function updateSystemFeeSetting(input: {
     renewalSurchargePercent: row.renewalSurchargePercent,
     monthlyInterestPercent: row.monthlyInterestPercent,
     liquorTobaccoAddOnPercent: row.liquorTobaccoAddOnPercent,
-    powerDistributionFixedFee: row.powerDistributionFixedFee,
-    privatePortFixedFee: row.privatePortFixedFee,
+    powerDistributionFixedFee: toMoneyNumber(row.powerDistributionFixedFee),
+    privatePortFixedFee: toMoneyNumber(row.privatePortFixedFee),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -724,7 +725,7 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
   const feeOverrideRows = feeOverrides.map((row) => ({
     category: row.category as FeeCategoryKey,
     classification: row.classification,
-    amount: row.amount,
+    amount: toMoneyNumber(row.amount),
     updatedAt: row.updatedAt,
   }));
   const penaltiesUpdatedAt = new Date(penalties.updatedAt);
@@ -740,17 +741,17 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
     },
     fixed: {
       powerCompanyFixedFee: resolveFixedFeeAmount({
-        legacyAmount: penalties.powerDistributionFixedFee,
+        legacyAmount: toMoneyNumber(penalties.powerDistributionFixedFee),
         legacyUpdatedAt: penaltiesUpdatedAt,
         overrideRow: powerCompanyOverride,
       }),
       powerGenerationDistributionFixedFee: resolveFixedFeeAmount({
-        legacyAmount: penalties.powerDistributionFixedFee,
+        legacyAmount: toMoneyNumber(penalties.powerDistributionFixedFee),
         legacyUpdatedAt: penaltiesUpdatedAt,
         overrideRow: powerGenDistOverride,
       }),
       privatePortFixedFee: resolveFixedFeeAmount({
-        legacyAmount: penalties.privatePortFixedFee,
+        legacyAmount: toMoneyNumber(penalties.privatePortFixedFee),
         legacyUpdatedAt: penaltiesUpdatedAt,
         overrideRow: privatePortOverride,
       }),
