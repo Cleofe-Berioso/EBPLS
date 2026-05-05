@@ -77,6 +77,25 @@
 - Map list excludes draft/rejected/returned/incomplete operational records by using valid statuses only.
 - Category/color is derived from business line/category source and used consistently by markers and legend.
 - Filters: owner/operator, category, and business-name search.
+- Map also excludes any business record with `businessStatus = CLOSED` (closed businesses are hidden from the active official map).
+
+## 16. Closure Soft-Close Rules
+- Closure is a **soft-close operation**. Business records are never deleted from the database.
+- When a CLOSURE application reaches final BPLO release (_For Release → Released_):
+  - The related `BusinessRecord.businessStatus` is set to `CLOSED`.
+  - `BusinessRecord.closedAt` is stamped with the release timestamp.
+  - `BusinessRecord.closureApplicationId` is set to the ID of the closure application.
+- All historical records are preserved: applications, documents, payments, permits, activity history.
+- Closed businesses are **hidden** from:
+  - The applicant's business selector for renewal or new closure applications (`/api/applicant/business-records` returns ACTIVE only).
+  - The applicant's released business location list (cannot submit location for a closed business).
+  - The BPLO official business map (only ACTIVE businesses appear on the map).
+- Closed businesses remain **visible** in:
+  - Superadmin reports and read-only application views (all records are queryable).
+  - Applicant's own application history (`/applicant/my-applications` still shows closure application entries).
+  - Applicant profile (all business records including CLOSED are listed with status badge).
+- **Reopening requires a new formal application process.** There is no simple UI toggle to reactivate a closed business. The system does not support unsupervised reopening.
+- Server-side eligibility check (`assertEligibleBusinessRecord`) rejects submission against a CLOSED business with HTTP 403.
 
 ## 16. Superadmin Limitations
 - Superadmin cannot execute BPLO processing actions (approve/reject/assess/verify payment/release).

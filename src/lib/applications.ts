@@ -125,13 +125,14 @@ async function assertEligibleBusinessRecord(
     );
   }
 
-  const businessRecord = await prisma.businessRecord.findFirst({
+  const businessRecord = (await prisma.businessRecord.findFirst({
     where: {
       id: input.businessRecordId,
       applicantId,
     },
     select: {
       id: true,
+      businessStatus: true,
       location: {
         select: {
           status: true,
@@ -148,12 +149,24 @@ async function assertEligibleBusinessRecord(
         },
         take: 1,
       },
-    },
-  });
+    } as any,
+  })) as unknown as {
+    id: string;
+    businessStatus?: "ACTIVE" | "CLOSED" | null;
+    location?: { status: string } | null;
+    applications: Array<{ id: string }>;
+  } | null;
 
   if (!businessRecord) {
     throw new ApplicantEligibilityError(
       "Selected business record was not found for this applicant.",
+      403
+    );
+  }
+
+  if (businessRecord.businessStatus === "CLOSED") {
+    throw new ApplicantEligibilityError(
+      "This business has already been closed and cannot be submitted for renewal or closure again.",
       403
     );
   }
@@ -867,6 +880,8 @@ export async function listApplicantBusinessRecords(applicantId: string) {
     id: row.id,
     registrationNumber: row.registrationNumber,
     businessName: row.businessName,
+    businessStatus: row.businessStatus as "ACTIVE" | "CLOSED",
+    closedAt: row.closedAt ? (row.closedAt as Date).toISOString() : null,
     businessInfo: {
       businessType: row.businessType as BusinessInfo["businessType"],
       registrationNumber: row.registrationNumber,

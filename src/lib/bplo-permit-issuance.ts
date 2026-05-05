@@ -335,7 +335,18 @@ export async function getPermitIssuanceDetail(applicationId: string): Promise<Pe
 
 async function upsertBusinessRecordOnRelease(tx: any, app: any) {
   if (app.applicationType === "CLOSURE") {
-    // TODO: No "closed" status field exists in BusinessRecord schema yet.
+    // Soft-close: mark the related business record as CLOSED without deleting it.
+    // All historical applications, documents, payments, and permits are preserved.
+    if (app.businessRecordId) {
+      await tx.businessRecord.update({
+        where: { id: app.businessRecordId },
+        data: {
+          businessStatus: "CLOSED",
+          closedAt: new Date(),
+          closureApplicationId: app.id,
+        },
+      });
+    }
     return;
   }
 

@@ -86,6 +86,9 @@ model BusinessRecord {
   businessActivity   String?
   lineOfBusiness     String?
   assetSize          String?
+  businessStatus     BusinessRecordStatus @default(ACTIVE)
+  closedAt           DateTime?
+  closureApplicationId String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -94,6 +97,11 @@ model BusinessRecord {
   location     BusinessLocation?
 
   @@index([applicantId])
+}
+
+enum BusinessRecordStatus {
+  ACTIVE
+  CLOSED
 }
 
 enum BusinessLocationStatus {

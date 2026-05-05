@@ -35,7 +35,7 @@ flowchart LR
   UC20((Approve Payment))
   UC21((Reject Payment))
   UC22((Prepare Permit))
-  UC23((Release Permit))
+  UC23((Release Permit/Finalize Closure))
   UC24((Verify Business Location))
   UC25((View Business Map))
   UC26((Filter Map by Owner))
@@ -49,6 +49,7 @@ flowchart LR
   UC33((View Dashboard))
   UC34((View Activity Logs))
   UC35((View Applications Read-Only))
+  UC36((View Closed Business History))
 
   A --> UC1
   A --> UC2
@@ -84,6 +85,7 @@ flowchart LR
   S --> UC33
   S --> UC34
   S --> UC35
+  S --> UC36
 
   UC2 -. include .-> UC5
   UC3 -. include .-> UC5
@@ -94,6 +96,7 @@ flowchart LR
   UC14 -. extend .-> UC12
   UC15 -. extend .-> UC12
   UC23 -. include .-> UC19
+  UC23 -. extend .-> UC22
   UC25 -. include .-> UC26
   UC25 -. include .-> UC27
 ```

@@ -18,6 +18,7 @@
 - Role: APPLICANT, BPLO, SUPER_ADMIN
 - ApplicationType: NEW, RENEWAL, CLOSURE
 - ApplicationStatus: DRAFT, SUBMITTED, UNDER_REVIEW, ASSESSED, APPROVED_FOR_PAYMENT, PAID, FOR_RELEASE, RELEASED, RETURNED_FOR_CORRECTION, REJECTED
+- **BusinessRecordStatus: ACTIVE, CLOSED** ← soft-close lifecycle; CLOSED is set when BPLO releases a CLOSURE application
 - BusinessLocationStatus: PENDING, VERIFIED, NEEDS_CORRECTION
 - FeeAssessmentStatus: DRAFT, GENERATED
 - PaymentFrequency: ANNUAL, BI_ANNUAL, QUARTERLY
@@ -29,6 +30,15 @@
 ## Important Fields
 - FeeAssessment: `annualAssessedAmount`, `paymentFrequency`, `releasePaymentAmount`, `amountPaid`, `remainingBalance`, `paymentStatus`
 - PaymentReference: `transactionNumber`, `amountPaid`, `paymentDate`, `proofFileName`, `proofStoragePath`, `status`
+- **BusinessRecord (soft-closure fields):** `businessStatus` (ACTIVE|CLOSED), `closedAt` (DateTime?), `closureApplicationId` (String?) — set atomically on BPLO closure release; records are never deleted
+
+## Soft-Closure Note
+Closure is implemented as a status change on `BusinessRecord`, not a deletion. When a CLOSURE application is released:
+1. `BusinessRecord.businessStatus` → `CLOSED`
+2. `BusinessRecord.closedAt` → release timestamp
+3. `BusinessRecord.closureApplicationId` → closure application ID
+
+All child records (`BusinessApplication`, `ApplicationDocument`, `ApplicationHistory`, `FeeAssessment`, `PaymentReference`, `PermitIssuance`) are fully preserved with `onDelete: Cascade` from the application, not from the record.
 
 ## Mermaid ERD
 ```mermaid
@@ -60,6 +70,15 @@ erDiagram
     string email UK
     string role
   }
+  BusinessRecord {
+    string id PK
+    string applicantId FK
+    string registrationNumber UK
+    string businessName
+    string businessStatus
+    datetime closedAt
+    string closureApplicationId
+  }
   BusinessApplication {
     string id PK
     string applicationNumber UK
@@ -69,9 +88,6 @@ erDiagram
     string status
   }
   FeeAssessment {
-    string id PK
-    string applicationId UK, FK
-    string assessmentNumber UK
     string paymentFrequency
     float annualAssessedAmount
     float releasePaymentAmount

@@ -71,6 +71,7 @@ Outputs
 |---|---|---|---|---|---|
 | Prepare permit | BPLO | applicationId | PAID only, verified payment reference, required release payment completed | PermitIssuance upsert + app FOR_RELEASE | for-release permit |
 | Release permit | BPLO | applicationId | FOR_RELEASE + issuance exists | PermitIssuance + BusinessApplication + BusinessRecord + history | RELEASED |
+| **Soft-close on closure release** | **System (on release)** | **applicationType === CLOSURE + businessRecordId** | **FOR_RELEASE + CLOSURE type** | **BusinessRecord.businessStatus → CLOSED, closedAt set, closureApplicationId set (no deletion)** | **Business marked CLOSED; hidden from active lists/map; preserved for audit/history** |
 
 ### 7. Business Location Mapping
 | Process | Responsible Role | Input | Validation | Database Action | Output |

@@ -211,6 +211,7 @@ export async function listApplicantReleasedBusinessLocations(
   const records = await prisma.businessRecord.findMany({
     where: {
       applicantId,
+      businessStatus: "ACTIVE",
       applications: {
         some: {
           status: "RELEASED",
@@ -354,6 +355,7 @@ export async function listBploBusinessLocations(
     where: {
       status: statusFilter ?? undefined,
       businessRecord: {
+        businessStatus: "ACTIVE",
         applications: {
           some: {
             status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
