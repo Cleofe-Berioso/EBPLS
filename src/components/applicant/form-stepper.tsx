@@ -15,11 +15,11 @@ export function FormStepper({ steps, currentStep }: FormStepperProps) {
   const progress = ((currentStep + 1) / normalizedSteps.length) * 100;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="app-surface space-y-4 p-5">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-green-700">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
               Application Progress
             </p>
             <p className="text-sm text-slate-600">
@@ -35,7 +35,7 @@ export function FormStepper({ steps, currentStep }: FormStepperProps) {
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-100">
           <div
-            className="h-full rounded-full bg-green-600 transition-all"
+            className="h-full rounded-full bg-emerald-600 transition-all"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -50,9 +50,9 @@ export function FormStepper({ steps, currentStep }: FormStepperProps) {
               key={step.title}
               className={`rounded-2xl border px-4 py-4 text-sm ${
                 isActive
-                  ? "border-green-200 bg-green-50 text-green-900"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                   : isDone
-                    ? "border-green-200 bg-green-50/70 text-green-800"
+                    ? "border-emerald-200 bg-emerald-50/70 text-emerald-800"
                     : "border-slate-200 bg-slate-50 text-slate-700"
               }`}
             >
@@ -60,9 +60,9 @@ export function FormStepper({ steps, currentStep }: FormStepperProps) {
                 <span
                   className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
                     isActive
-                      ? "bg-green-600 text-white"
+                      ? "bg-emerald-600 text-white"
                       : isDone
-                        ? "bg-green-700 text-white"
+                        ? "bg-emerald-700 text-white"
                         : "bg-slate-100 text-slate-700"
                   }`}
                 >

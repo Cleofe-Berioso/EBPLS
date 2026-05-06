@@ -19,11 +19,26 @@ export async function GET(
       proofStoragePath: true,
       proofMimeType: true,
       proofFileName: true,
+      application: {
+        select: {
+          status: true,
+        },
+      },
     },
   });
 
   if (!reference) {
     return NextResponse.json({ error: "Payment reference not found" }, { status: 404 });
+  }
+
+  const allowedStatuses = new Set([
+    "APPROVED_FOR_PAYMENT",
+    "PAID",
+    "FOR_RELEASE",
+    "RELEASED",
+  ]);
+  if (!allowedStatuses.has(reference.application.status)) {
+    return NextResponse.json({ error: "Payment proof not available" }, { status: 403 });
   }
 
   try {

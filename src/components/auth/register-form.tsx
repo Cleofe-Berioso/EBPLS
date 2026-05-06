@@ -59,8 +59,8 @@ export function RegisterForm() {
   if (state.status === "success") {
     return (
       <div className="relative z-10 w-full max-w-md">
-        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/95 shadow-xl shadow-slate-900/10">
-          <div className="border-b border-slate-200 bg-slate-50 px-8 py-8 text-center">
+        <div className="overflow-hidden rounded-[26px] border border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10">
+          <div className="border-b border-slate-200 bg-slate-50/80 px-8 py-8 text-center">
             <div className="mb-4 flex justify-center">
               <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -71,7 +71,7 @@ export function RegisterForm() {
                 />
               </div>
             </div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-green-700">Municipality eBPLS</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Municipality eBPLS</p>
               <h1 className="mt-2 text-2xl font-semibold text-slate-900">Registration Successful</h1>
               <p className="mt-2 text-sm text-slate-600">Your applicant account is ready for sign in.</p>
           </div>
@@ -84,7 +84,7 @@ export function RegisterForm() {
             />
             <a
               href="/login"
-              className="inline-block w-full rounded-lg border border-green-700 bg-green-700 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-green-800"
+              className="inline-block w-full rounded-xl border border-emerald-700 bg-emerald-700 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-800"
             >
               Go to Login
             </a>
@@ -103,8 +103,8 @@ export function RegisterForm() {
 
   return (
     <div className="relative z-10 w-full max-w-md">
-      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/95 shadow-xl shadow-slate-900/10">
-        <div className="border-b border-slate-200 bg-slate-50 px-8 py-8 text-center">
+      <div className="overflow-hidden rounded-[26px] border border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10">
+        <div className="border-b border-slate-200 bg-slate-50/80 px-8 py-8 text-center">
           <div className="mb-4 flex justify-center">
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -115,7 +115,7 @@ export function RegisterForm() {
               />
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-green-700">Municipality eBPLS</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Municipality eBPLS</p>
           <h1 className="mt-2 text-2xl font-semibold text-slate-900">Create Account</h1>
           <p className="mt-2 text-sm text-slate-600">Register as an applicant to start filing and tracking permits.</p>
         </div>
@@ -143,7 +143,7 @@ export function RegisterForm() {
                   type="text"
                   autoComplete="name"
                   required
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-green-600 focus:ring-2 focus:ring-green-100"
+                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   placeholder="Juan dela Cruz"
                 />
               </div>
@@ -166,7 +166,7 @@ export function RegisterForm() {
                   type="email"
                   autoComplete="email"
                   required
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-green-600 focus:ring-2 focus:ring-green-100"
+                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   placeholder="your.email@example.com"
                 />
               </div>
@@ -190,7 +190,7 @@ export function RegisterForm() {
                   autoComplete="tel"
                   required
                   pattern="^(\\+63|0)9\\d{9}$"
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-green-600 focus:ring-2 focus:ring-green-100"
+                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   placeholder="09XX-XXX-XXXX"
                 />
               </div>
@@ -214,7 +214,7 @@ export function RegisterForm() {
                   autoComplete="new-password"
                   required
                   minLength={8}
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all focus:border-green-600 focus:ring-2 focus:ring-green-100"
+                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   placeholder="At least 8 characters"
                 />
                 <button
@@ -250,7 +250,7 @@ export function RegisterForm() {
                   autoComplete="new-password"
                   required
                   minLength={8}
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all focus:border-green-600 focus:ring-2 focus:ring-green-100"
+                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   placeholder="Re-enter your password"
                 />
                 <button
@@ -271,7 +271,7 @@ export function RegisterForm() {
             <button
               type="submit"
               disabled={state.status === "loading"}
-              className="w-full rounded-lg border border-green-700 bg-green-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-800 disabled:bg-green-400"
+              className="w-full rounded-xl border border-emerald-700 bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 disabled:bg-emerald-400"
             >
               {state.status === "loading" ? "Creating account…" : "Create Account"}
             </button>
@@ -282,7 +282,7 @@ export function RegisterForm() {
               Already have an account?{" "}
               <a
                 href="/login"
-                className="text-green-600 hover:text-green-700 font-medium"
+                className="text-emerald-600 hover:text-emerald-700 font-medium"
               >
                 Sign in
               </a>
@@ -303,7 +303,7 @@ export function RegisterForm() {
           Need account assistance? Contact BPLO at{" "}
           <a
             href="mailto:support@bplo.gov.ph"
-            className="text-green-600 hover:text-green-700"
+            className="text-emerald-600 hover:text-emerald-700"
           >
             support@bplo.gov.ph
           </a>

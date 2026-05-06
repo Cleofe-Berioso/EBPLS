@@ -22,7 +22,7 @@ export function Timeline({
   return (
     <ol className="space-y-3">
       {items.map((item, index) => (
-        <li key={item.id} className="relative rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+        <li key={item.id} className="relative rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <p className="text-sm font-semibold text-slate-900">{item.title}</p>

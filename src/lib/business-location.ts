@@ -488,6 +488,23 @@ export async function verifyBusinessLocation(
     throw new Error("Business location not found");
   }
 
+  const hasValidApplication = await prisma.businessRecord.findFirst({
+    where: {
+      id: existing.businessRecordId,
+      businessStatus: "ACTIVE",
+      applications: {
+        some: {
+          status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!hasValidApplication) {
+    throw new Error("Business location is not associated with a releasable business application");
+  }
+
   await prisma.businessLocation.update({
     where: {
       id: businessLocationId,
@@ -529,6 +546,25 @@ export async function returnBusinessLocationForCorrection(
 
   if (!existing) {
     throw new Error("Business location not found");
+  }
+
+  const hasValidApplication = await prisma.businessLocation.findFirst({
+    where: {
+      id: businessLocationId,
+      businessRecord: {
+        businessStatus: "ACTIVE",
+        applications: {
+          some: {
+            status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
+          },
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!hasValidApplication) {
+    throw new Error("Business location is not associated with a releasable business application");
   }
 
   await prisma.businessLocation.update({

@@ -16,7 +16,7 @@ export function FilterBar({
   contentClassName?: string;
 }) {
   return (
-    <section className={`rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6 ${className}`}>
+    <section className={`app-surface px-5 py-5 sm:px-6 ${className}`}>
       {(title || description || actions) ? (
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">

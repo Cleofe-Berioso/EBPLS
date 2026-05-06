@@ -14,7 +14,7 @@ export function DetailHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6 sm:py-6">
+    <header className="app-surface px-5 py-5 sm:px-6 sm:py-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">

@@ -76,13 +76,13 @@ export function BploReviewActions({ applicationId, currentStatus }: BploReviewAc
 
   return (
     <SectionCard title="Review Actions" description="Operational actions below follow the existing BPLO review workflow only.">
-      <div className="space-y-3">
+      <div className="space-y-4">
         <FormField
           label="Remarks"
           hint="Required for return and reject actions; stored in application history."
         >
           <textarea
-            className="w-full rounded-xl border border-slate-300 px-3 py-2"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
             rows={3}
             value={remarks}
             onChange={(event) => setRemarks(event.target.value)}
@@ -96,7 +96,8 @@ export function BploReviewActions({ applicationId, currentStatus }: BploReviewAc
           variant="readOnly"
         />
 
-        <div className="flex flex-wrap gap-2">
+        <div className="rounded-xl border border-slate-200 bg-slate-50/85 p-3">
+          <div className="flex flex-wrap gap-2">
           {actions.map((item) => (
             <button
               key={item.action}
@@ -108,6 +109,7 @@ export function BploReviewActions({ applicationId, currentStatus }: BploReviewAc
               {pendingAction === item.action ? "Processing..." : item.label}
             </button>
           ))}
+          </div>
         </div>
 
         {message ? (

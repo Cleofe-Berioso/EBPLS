@@ -277,6 +277,17 @@ export async function getPermitIssuanceDetail(applicationId: string): Promise<Pe
 
   if (!app) return null;
 
+  const PERMIT_ISSUANCE_VISIBLE: DbApplicationStatus[] = [
+    "APPROVED_FOR_PAYMENT",
+    "PAID",
+    "FOR_RELEASE",
+    "RELEASED",
+  ];
+
+  if (!PERMIT_ISSUANCE_VISIBLE.includes(app.status as DbApplicationStatus)) {
+    return null;
+  }
+
   const latestRef = app.paymentReferences?.[0] ?? null;
   const docType = resolveDocumentType(app.applicationType as ApplicationType);
 

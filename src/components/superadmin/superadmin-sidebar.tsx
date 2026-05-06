@@ -38,14 +38,14 @@ export function SuperAdminSidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white transition-all duration-200 lg:z-30 ${
+      className={`app-sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-200 lg:z-30 ${
         mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       } ${collapsed ? "w-20" : "w-72"}`}
     >
       <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Municipality eBPLS</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700">Municipality eBPLS</p>
             <div className={`mt-2 flex items-center gap-2 ${collapsed ? "lg:justify-center" : ""}`}>
               <ShieldCheck className="h-5 w-5 shrink-0 text-slate-600" />
               <h2 className={`text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Super Admin Portal</h2>
@@ -69,12 +69,12 @@ export function SuperAdminSidebar({
               onClick={onCloseMobile}
               className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition ${
                 active
-                  ? "bg-green-50 text-slate-950 ring-1 ring-green-100"
+                  ? "bg-indigo-50 text-indigo-900 ring-1 ring-indigo-100"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               } ${collapsed ? "lg:justify-center" : ""}`}
               title={collapsed ? item.label : undefined}
             >
-              <Icon className={`h-4 w-4 ${active ? "text-green-700" : "text-slate-400"}`} />
+              <Icon className={`h-4 w-4 ${active ? "text-indigo-700" : "text-slate-400"}`} />
               <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>
             </Link>
           );
@@ -82,7 +82,7 @@ export function SuperAdminSidebar({
       </nav>
 
       <div className={`border-t border-slate-200 px-4 py-4 ${collapsed ? "lg:hidden" : ""}`}>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-xs text-slate-700">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-xs text-slate-700 shadow-sm">
           <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">Workflow Guide</p>
           <p className="mt-2 leading-6">
           {"Applicant Application -> BPLO Application Queue -> Assessment and Fee -> Tax Order of Payment -> Pay Now -> Payment Verification -> Permit / Closure Release -> Business Location mapping update."}

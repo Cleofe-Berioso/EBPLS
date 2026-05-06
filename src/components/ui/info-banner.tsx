@@ -3,11 +3,11 @@ import type { ReactNode } from "react";
 type BannerVariant = "info" | "success" | "warning" | "danger" | "readOnly";
 
 const BANNER_STYLES: Record<BannerVariant, string> = {
-  info: "border-sky-200 bg-sky-50 text-sky-900",
-  success: "border-green-200 bg-green-50 text-green-900",
+  info: "border-blue-200 bg-blue-50 text-blue-900",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-900",
   warning: "border-amber-200 bg-amber-50 text-amber-900",
-  danger: "border-red-200 bg-red-50 text-red-900",
-  readOnly: "border-slate-200 bg-slate-50 text-slate-800",
+  danger: "border-rose-200 bg-rose-50 text-rose-900",
+  readOnly: "border-slate-200 bg-slate-100 text-slate-800",
 };
 
 export function InfoBanner({
@@ -22,7 +22,7 @@ export function InfoBanner({
   action?: ReactNode;
 }) {
   return (
-    <div className={`rounded-2xl border px-4 py-3.5 shadow-sm ${BANNER_STYLES[variant]}`}>
+    <div className={`rounded-2xl border px-4 py-3.5 ${BANNER_STYLES[variant]}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold tracking-tight">{title}</p>

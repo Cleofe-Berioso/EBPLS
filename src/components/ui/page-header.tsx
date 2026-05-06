@@ -16,25 +16,25 @@ export function PageHeader({
   eyebrowClassName?: string;
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:px-6">
+    <div className="ui-page-header app-surface flex flex-col gap-4 px-5 py-5 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:px-6">
       <div className="min-w-0 space-y-2">
         {eyebrow ? (
           <p
-            className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${
-              eyebrowClassName ?? "text-green-700"
+            className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${
+              eyebrowClassName ?? "text-emerald-700"
             }`}
           >
             {eyebrow}
           </p>
         ) : null}
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-          <h2 className="min-w-0 text-2xl font-semibold tracking-tight text-slate-900 md:text-[2rem]">
+          <h2 className="ui-page-title min-w-0 text-2xl font-semibold tracking-tight text-slate-900 md:text-[2rem]">
             {title}
           </h2>
           {badge ? <div className="shrink-0">{badge}</div> : null}
         </div>
         {description ? (
-          <p className="max-w-3xl text-sm leading-6 text-slate-600 md:text-[15px]">
+          <p className="ui-muted-text max-w-3xl text-sm leading-6 text-slate-600 md:text-[15px]">
             {description}
           </p>
         ) : null}

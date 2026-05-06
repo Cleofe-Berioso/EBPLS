@@ -30,12 +30,13 @@ export default async function BploDashboard() {
   ];
 
   return (
-    <section className="space-y-6">
+    <section className="bplo-dashboard space-y-6">
       <PageHeader
         eyebrow="BPLO"
         title="Dashboard"
         description="Operational overview of the application pipeline from intake, assessment, and payment verification to release."
         badge={<RoleBadge role="BPLO" />}
+        eyebrowClassName="text-[#1f3a5f]"
       />
 
       <InfoBanner
@@ -67,12 +68,12 @@ export default async function BploDashboard() {
             {pipelineRows.map((row) => (
               <div
                 key={row.status}
-                className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                className="flex items-center justify-between rounded-2xl border border-[#d8cfbb] bg-[#f4efe2] px-4 py-3"
               >
                 <div className="min-w-0">
                   <StatusBadge status={row.status} />
                 </div>
-                <span className="text-lg font-semibold text-slate-900">
+                <span className="font-serif text-lg font-semibold text-[#1f2f46]">
                   {row.value.toLocaleString("en-PH")}
                 </span>
               </div>
@@ -82,15 +83,15 @@ export default async function BploDashboard() {
 
         <SectionCard title="Urgent Work" description="Fast access to operational queues with immediate workload.">
           <div className="space-y-3">
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <div className="rounded-xl border border-[#d39a3a] bg-[#f8edd7] px-4 py-3 text-sm text-[#7b4e0f]">
               <p className="font-semibold">Returned for correction: {summary.returnedForCorrection}</p>
               <p className="mt-1">Review remarks and monitor resubmissions from applicants.</p>
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <div className="rounded-xl border border-[#5a7ea9] bg-[#eaf0f9] px-4 py-3 text-sm text-[#1f3a5f]">
               <p className="font-semibold">Submitted queue: {summary.submittedApplications}</p>
               <p className="mt-1">Move applications into review to keep intake flowing.</p>
             </div>
-            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+            <div className="rounded-xl border border-[#5c8d73] bg-[#e8f3ec] px-4 py-3 text-sm text-[#25563f]">
               <p className="font-semibold">Release queue: {summary.forRelease}</p>
               <p className="mt-1">Prepare or release documents for completed paid applications.</p>
             </div>
@@ -108,13 +109,13 @@ export default async function BploDashboard() {
         <SectionCard title="Recent Submissions" description="Most recently filed applications awaiting BPLO attention.">
           <div className="space-y-3">
             {recentSubmissions.map((row) => (
-              <article key={row.id} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <article key={row.id} className="rounded-xl border border-[#d8cfbb] bg-[#f4efe2] px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-900">{row.applicationNumber}</p>
+                  <p className="text-sm font-semibold text-[#1f2f46]">{row.applicationNumber}</p>
                   <StatusBadge status={row.status as any} />
                 </div>
-                <p className="mt-1 text-sm text-slate-700">{row.businessName}</p>
-                <p className="text-xs text-slate-500">{row.applicantName} · {row.dateSubmitted}</p>
+                <p className="mt-1 text-sm text-[#32415a]">{row.businessName}</p>
+                <p className="text-xs text-[#5b6577]">{row.applicantName} · {row.dateSubmitted}</p>
               </article>
             ))}
             {recentSubmissions.length === 0 ? (

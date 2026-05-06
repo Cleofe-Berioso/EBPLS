@@ -52,14 +52,14 @@ function formatDate(value: string): string {
 function statusBadge(status: UserStatus) {
   if (status === "ACTIVE") {
     return (
-      <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-green-900">
+      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-800">
         Active
       </span>
     );
   }
 
   return (
-    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
+    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-800">
       Disabled
     </span>
   );
@@ -279,12 +279,12 @@ export function SuperAdminUsersManager() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search name or email"
-          className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
         />
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
-          className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
         >
           <option value="ALL">All Roles</option>
           <option value="APPLICANT">Applicant</option>
@@ -294,7 +294,7 @@ export function SuperAdminUsersManager() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
         >
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
@@ -341,13 +341,13 @@ export function SuperAdminUsersManager() {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-700">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Name</th>
-                  <th className="px-4 py-3 font-semibold">Email</th>
-                  <th className="px-4 py-3 font-semibold">Role</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Created Date</th>
-                  <th className="px-4 py-3 font-semibold">Last Updated</th>
-                  <th className="px-4 py-3 font-semibold">Action</th>
+                  <th className="px-4 py-3.5 font-semibold">Name</th>
+                  <th className="px-4 py-3.5 font-semibold">Email</th>
+                  <th className="px-4 py-3.5 font-semibold">Role</th>
+                  <th className="px-4 py-3.5 font-semibold">Status</th>
+                  <th className="px-4 py-3.5 font-semibold">Created Date</th>
+                  <th className="px-4 py-3.5 font-semibold">Last Updated</th>
+                  <th className="px-4 py-3.5 font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -356,16 +356,16 @@ export function SuperAdminUsersManager() {
                   const canResetPassword = user.role === "BPLO";
 
                   return (
-                    <tr key={user.id} className="align-top hover:bg-slate-50/60">
-                      <td className="px-4 py-3 font-medium text-slate-900">{user.name}</td>
-                      <td className="max-w-[16rem] break-all px-4 py-3 text-slate-600">{user.email}</td>
-                      <td className="px-4 py-3">
+                    <tr key={user.id} className="align-top hover:bg-slate-50/70">
+                      <td className="px-4 py-3.5 font-medium text-slate-900">{user.name}</td>
+                      <td className="max-w-[16rem] break-all px-4 py-3.5 text-slate-600">{user.email}</td>
+                      <td className="px-4 py-3.5">
                         <RoleBadge role={user.role} />
                       </td>
-                      <td className="px-4 py-3">{statusBadge(user.status)}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatDate(user.createdAt)}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatDate(user.updatedAt)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5">{statusBadge(user.status)}</td>
+                      <td className="px-4 py-3.5 text-slate-600">{formatDate(user.createdAt)}</td>
+                      <td className="px-4 py-3.5 text-slate-600">{formatDate(user.updatedAt)}</td>
+                      <td className="px-4 py-3.5">
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -428,7 +428,7 @@ export function SuperAdminUsersManager() {
                 const canResetPassword = user.role === "BPLO";
 
                 return (
-                  <article key={user.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <article key={user.id} className="app-surface p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-900">{user.name}</p>
@@ -495,8 +495,8 @@ export function SuperAdminUsersManager() {
       />
 
       {showCreateBplo ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="app-surface w-full max-w-lg p-5">
             <h3 className="text-lg font-semibold text-slate-900">Create BPLO Account</h3>
             <p className="mt-1 text-sm text-slate-600">Role is fixed to BPLO for controlled account provisioning.</p>
 
@@ -507,7 +507,7 @@ export function SuperAdminUsersManager() {
                   value={createForm.name}
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
                   required
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
                 />
               </div>
 
@@ -518,7 +518,7 @@ export function SuperAdminUsersManager() {
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
                   required
                   type="email"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
                 />
               </div>
 
@@ -531,7 +531,7 @@ export function SuperAdminUsersManager() {
                     required
                     minLength={8}
                     type="password"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
                   />
                 </div>
                 <div>
@@ -542,7 +542,7 @@ export function SuperAdminUsersManager() {
                     required
                     minLength={8}
                     type="password"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
                   />
                 </div>
               </div>
@@ -552,7 +552,7 @@ export function SuperAdminUsersManager() {
                 <input
                   value="BPLO"
                   disabled
-                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm font-semibold text-slate-700"
                 />
               </div>
 
@@ -572,10 +572,10 @@ export function SuperAdminUsersManager() {
       ) : null}
 
       {viewedUser ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="app-surface w-full max-w-md p-5">
             <h3 className="text-lg font-semibold text-slate-900">User Details</h3>
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50/85 p-3 text-sm text-slate-700">
               <p><span className="font-semibold">Name:</span> {viewedUser.name}</p>
               <p><span className="font-semibold">Email:</span> {viewedUser.email}</p>
               <p><span className="font-semibold">Role:</span> {viewedUser.role}</p>
@@ -600,8 +600,8 @@ export function SuperAdminUsersManager() {
       ) : null}
 
       {showResetPassword && resetUser ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="app-surface w-full max-w-lg p-5">
             <h3 className="text-lg font-semibold text-slate-900">Reset Temporary Password</h3>
             <p className="mt-1 text-sm text-slate-600">Set a temporary password for {resetUser.email}.</p>
 
@@ -614,7 +614,7 @@ export function SuperAdminUsersManager() {
                   required
                   minLength={8}
                   type="password"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
                 />
               </div>
               <div>
@@ -625,7 +625,7 @@ export function SuperAdminUsersManager() {
                   required
                   minLength={8}
                   type="password"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
                 />
               </div>
 

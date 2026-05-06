@@ -11,16 +11,16 @@ export const DISPLAY_STATUS_FLOW: ApplicationStatus[] = [
 ];
 
 const STATUS_STYLES: Record<ApplicationStatus, string> = {
-  Draft: "border border-slate-200 bg-slate-100 text-slate-700",
-  Submitted: "border border-blue-200 bg-blue-50 text-blue-800",
-  "Under Review": "border border-amber-200 bg-amber-50 text-amber-800",
-  Assessed: "border border-indigo-200 bg-indigo-50 text-indigo-800",
-  "Approved for Payment": "border border-sky-200 bg-sky-50 text-sky-800",
-  Paid: "border border-emerald-200 bg-emerald-50 text-emerald-800",
-  "For Release": "border border-lime-200 bg-lime-50 text-lime-800",
-  Released: "border border-green-200 bg-green-50 text-green-800",
-  "Returned for Correction": "border border-orange-200 bg-orange-50 text-orange-800",
-  Rejected: "border border-red-200 bg-red-50 text-red-800",
+  Draft: "border-slate-300 bg-slate-100 text-slate-700",
+  Submitted: "border-blue-200 bg-blue-50 text-blue-700",
+  "Under Review": "border-amber-200 bg-amber-50 text-amber-700",
+  Assessed: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  "Approved for Payment": "border-sky-200 bg-sky-50 text-sky-700",
+  Paid: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  "For Release": "border-teal-200 bg-teal-50 text-teal-700",
+  Released: "border-emerald-300 bg-emerald-100 text-emerald-800",
+  "Returned for Correction": "border-orange-200 bg-orange-50 text-orange-700",
+  Rejected: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
 export function getStatusBadgeClass(status: ApplicationStatus): string {
@@ -66,7 +66,7 @@ export function getStatusBanner(status: ApplicationStatus) {
 export function StatusBadge({ status }: { status: ApplicationStatus }) {
   return (
     <span
-      className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-center text-[11px] font-semibold leading-4 ${getStatusBadgeClass(status)}`}
+      className={`ui-status-badge inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.04em] leading-4 ${getStatusBadgeClass(status)}`}
     >
       {status}
     </span>

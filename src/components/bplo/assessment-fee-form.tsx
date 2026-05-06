@@ -35,7 +35,7 @@ function SummaryTile({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/85 p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
       {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
@@ -59,14 +59,14 @@ function FeeInput({
   hint?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2 text-sm">
+    <div className="flex items-center justify-between gap-3 py-2.5 text-sm">
       <div className="flex-1">
         <span className="font-medium text-slate-800">{label}</span>
         {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
       </div>
       <div className="w-40">
         {readOnly ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right text-slate-700">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/85 px-3 py-2 text-right text-slate-700">
             ₱ {value.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
           </div>
         ) : (
@@ -77,7 +77,7 @@ function FeeInput({
             step="0.01"
             value={value}
             onChange={(e) => onChange?.(parseFloat(e.target.value) || 0)}
-            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-right text-sm focus:border-green-500 focus:outline-none"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-right text-sm focus:border-emerald-500 focus:outline-none"
           />
         )}
       </div>
@@ -274,27 +274,27 @@ export function AssessmentFeeForm({ detail }: Props) {
       <SectionCard title="System-Computed Suggestion" description="System-generated fee suggestion based on the current application classification.">
         <div className="space-y-3 text-sm">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
               <p className="text-xs uppercase tracking-wide text-blue-700">Detected Category</p>
               <p className="mt-1 font-semibold text-blue-900">{suggested.detectedCategory}</p>
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
               <p className="text-xs uppercase tracking-wide text-blue-700">Special Rule</p>
               <p className="mt-1 font-semibold text-blue-900">{suggested.specialRuleApplied ?? "None"}</p>
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
               <p className="text-xs uppercase tracking-wide text-blue-700">Asset Classification</p>
               <p className="mt-1 font-semibold text-blue-900">{suggested.assetClassification}</p>
               <p className="text-xs text-blue-700">Fee: ₱{suggested.assetBasedFee.toLocaleString("en-PH")}</p>
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
               <p className="text-xs uppercase tracking-wide text-blue-700">Worker Classification</p>
               <p className="mt-1 font-semibold text-blue-900">{suggested.workerClassification}</p>
               <p className="text-xs text-blue-700">Fee: ₱{suggested.workerBasedFee.toLocaleString("en-PH")}</p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
             <p className="text-sm text-blue-900">
               <strong>Selected Classification:</strong> {suggested.selectedClassification}
             </p>
@@ -303,7 +303,7 @@ export function AssessmentFeeForm({ detail }: Props) {
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/85 p-4 text-sm text-slate-700">
             {suggested.computation}
           </div>
 
@@ -449,7 +449,7 @@ export function AssessmentFeeForm({ detail }: Props) {
 
       <SectionCard title="TOP Details" description="Configure payment schedule and remarks before generating the TOP.">
         {savedAssessment ? (
-          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/85 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Assessment / TOP Number</p>
             <p className="font-mono font-semibold text-slate-900">{savedAssessment.assessmentNumber}</p>
             {savedAssessment.generatedAt ? (
@@ -498,7 +498,7 @@ export function AssessmentFeeForm({ detail }: Props) {
               value={paymentFrequency}
               onChange={(e) => setPaymentFrequency(e.target.value as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY")}
               disabled={isTopGenerated}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-800"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-800"
             >
               {Object.entries(PAYMENT_FREQ_LABELS).map(([val, label]) => (
                 <option key={val} value={val}>
@@ -517,7 +517,7 @@ export function AssessmentFeeForm({ detail }: Props) {
               onChange={(e) => setRemarks(e.target.value)}
               rows={3}
               disabled={isTopGenerated}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-800"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-800"
               placeholder="Reason for fee adjustments, assessment notes, etc."
             />
           </FormField>
@@ -564,7 +564,7 @@ export function AssessmentFeeForm({ detail }: Props) {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-3 text-sm font-medium text-green-700">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-medium text-emerald-700">
               TOP generated and locked for this assessment.
             </div>
             <Link href="/bplo/assessment-fees" className={actionButtonStyles("ghost", "md")}>

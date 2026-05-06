@@ -228,6 +228,7 @@ export async function getApplicationForAssessment(
   });
 
   if (!row) return null;
+  if (row.status !== "ASSESSED") return null;
 
   const lineOfBusiness = resolveField(row.formData, "lineOfBusiness");
   const assetSize = resolveField(row.formData, "assetSize");

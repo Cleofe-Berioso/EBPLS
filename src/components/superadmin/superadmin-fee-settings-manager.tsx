@@ -64,11 +64,11 @@ function formatAmount(value: number): string {
 
 function extensionStatus(extension: RenewalExtension) {
   return extension.isActive ? (
-    <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-green-900">
+    <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-800">
       Enabled
     </span>
   ) : (
-    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-700">
       Disabled
     </span>
   );
@@ -444,12 +444,12 @@ export function SuperAdminFeeSettingsManager() {
         title="Fee Table Maintenance"
         description="Configure Mayor's Permit Fee entries by business category and valid classification. Fixed-fee categories such as Power and Private Port are maintained here."
       >
-        <form className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-5" onSubmit={saveFeeItem}>
+        <form className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/85 p-4 md:grid-cols-2 xl:grid-cols-5" onSubmit={saveFeeItem}>
           <FormField label="Business Category" required>
             <select
               value={feeForm.category}
               onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
               {categories.length === 0 ? <option value="">No categories available</option> : null}
               {categories.map((item) => (
@@ -462,7 +462,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={feeForm.classification}
               onChange={(e) => setFeeForm((prev) => ({ ...prev, classification: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
               {classificationOptions.length === 0 ? <option value="">No classifications available</option> : null}
               {classificationOptions.map((classification) => (
@@ -478,7 +478,7 @@ export function SuperAdminFeeSettingsManager() {
               step="0.01"
               value={feeForm.amount}
               onChange={(e) => setFeeForm((prev) => ({ ...prev, amount: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             />
           </FormField>
 
@@ -486,7 +486,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={feeForm.isActive ? "ACTIVE" : "INACTIVE"}
               onChange={(e) => setFeeForm((prev) => ({ ...prev, isActive: e.target.value === "ACTIVE" }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
@@ -513,29 +513,29 @@ export function SuperAdminFeeSettingsManager() {
                 <table className="min-w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-700">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Category</th>
-                      <th className="px-4 py-3 font-semibold">Classification</th>
-                      <th className="px-4 py-3 font-semibold">Amount</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Updated At</th>
-                      <th className="px-4 py-3 font-semibold">Action</th>
+                      <th className="px-4 py-3.5 font-semibold">Category</th>
+                      <th className="px-4 py-3.5 font-semibold">Classification</th>
+                      <th className="px-4 py-3.5 font-semibold">Amount</th>
+                      <th className="px-4 py-3.5 font-semibold">Status</th>
+                      <th className="px-4 py-3.5 font-semibold">Updated At</th>
+                      <th className="px-4 py-3.5 font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {feeItems.map((item) => (
-                      <tr key={item.id} className="align-top hover:bg-slate-50/60">
-                        <td className="px-4 py-3 font-medium text-slate-900">{categoryLabelMap.get(item.category) ?? item.category}</td>
-                        <td className="px-4 py-3 text-slate-700">{item.classification}</td>
-                        <td className="px-4 py-3 text-slate-700">{formatAmount(item.amount)}</td>
-                        <td className="px-4 py-3">
+                      <tr key={item.id} className="align-top hover:bg-slate-50/70">
+                        <td className="px-4 py-3.5 font-medium text-slate-900">{categoryLabelMap.get(item.category) ?? item.category}</td>
+                        <td className="px-4 py-3.5 text-slate-700">{item.classification}</td>
+                        <td className="px-4 py-3.5 text-slate-700">{formatAmount(item.amount)}</td>
+                        <td className="px-4 py-3.5">
                           {item.isActive ? (
-                            <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-green-900">Active</span>
+                            <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-800">Active</span>
                           ) : (
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Inactive</span>
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-700">Inactive</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{formatDate(item.updatedAt)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3.5 text-slate-600">{formatDate(item.updatedAt)}</td>
+                        <td className="px-4 py-3.5">
                           <button
                             type="button"
                             className={actionButtonStyles(item.isActive ? "warning" : "secondary", "sm")}
@@ -558,7 +558,7 @@ export function SuperAdminFeeSettingsManager() {
               ) : (
                 <div className="space-y-3 p-4">
                   {feeItems.map((item) => (
-                    <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <article key={item.id} className="app-surface p-4">
                       <p className="text-sm font-semibold text-slate-900">{categoryLabelMap.get(item.category) ?? item.category}</p>
                       <p className="text-xs text-slate-600">{item.classification}</p>
                       <p className="mt-1 text-sm text-slate-700">{formatAmount(item.amount)}</p>
@@ -566,9 +566,9 @@ export function SuperAdminFeeSettingsManager() {
                       <div className="mt-3 flex items-center justify-between gap-2">
                         <div>
                           {item.isActive ? (
-                            <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-green-900">Active</span>
+                            <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-800">Active</span>
                           ) : (
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Inactive</span>
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-700">Inactive</span>
                           )}
                         </div>
                         <button
@@ -600,7 +600,7 @@ export function SuperAdminFeeSettingsManager() {
               step="0.01"
               value={penaltyForm.renewalSurchargePercent}
               onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalSurchargePercent: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             />
           </FormField>
 
@@ -611,7 +611,7 @@ export function SuperAdminFeeSettingsManager() {
               step="0.01"
               value={penaltyForm.monthlyInterestPercent}
               onChange={(e) => setPenaltyForm((prev) => ({ ...prev, monthlyInterestPercent: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             />
           </FormField>
 
@@ -622,7 +622,7 @@ export function SuperAdminFeeSettingsManager() {
               step="0.01"
               value={penaltyForm.liquorTobaccoAddOnPercent}
               onChange={(e) => setPenaltyForm((prev) => ({ ...prev, liquorTobaccoAddOnPercent: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             />
           </FormField>
 
@@ -638,12 +638,12 @@ export function SuperAdminFeeSettingsManager() {
         title="Renewal Extension Settings"
         description="Create, enable, and disable extension periods with surcharge/interest waiver rules."
       >
-        <form className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={createExtension}>
+        <form className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/85 p-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={createExtension}>
           <FormField label="Extension Title" required>
             <input
               value={extensionForm.title}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             />
           </FormField>
 
@@ -652,7 +652,7 @@ export function SuperAdminFeeSettingsManager() {
               type="date"
               value={extensionForm.startDate}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, startDate: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             />
           </FormField>
 
@@ -661,7 +661,7 @@ export function SuperAdminFeeSettingsManager() {
               type="date"
               value={extensionForm.endDate}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, endDate: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             />
           </FormField>
 
@@ -669,7 +669,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={extensionForm.waiveSurcharge ? "YES" : "NO"}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, waiveSurcharge: e.target.value === "YES" }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
               <option value="YES">Yes</option>
               <option value="NO">No</option>
@@ -680,7 +680,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={extensionForm.waiveInterest ? "YES" : "NO"}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, waiveInterest: e.target.value === "YES" }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
               <option value="YES">Yes</option>
               <option value="NO">No</option>
@@ -691,7 +691,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={extensionForm.isActive ? "ENABLED" : "DISABLED"}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, isActive: e.target.value === "ENABLED" }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
               <option value="ENABLED">Enabled</option>
               <option value="DISABLED">Disabled</option>
@@ -702,7 +702,7 @@ export function SuperAdminFeeSettingsManager() {
             <input
               value={extensionForm.remarks}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, remarks: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
             />
           </FormField>
 
@@ -726,27 +726,27 @@ export function SuperAdminFeeSettingsManager() {
                 <table className="min-w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-700">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Title</th>
-                      <th className="px-4 py-3 font-semibold">Period</th>
-                      <th className="px-4 py-3 font-semibold">Waive Surcharge</th>
-                      <th className="px-4 py-3 font-semibold">Waive Interest</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Updated</th>
-                      <th className="px-4 py-3 font-semibold">Action</th>
+                      <th className="px-4 py-3.5 font-semibold">Title</th>
+                      <th className="px-4 py-3.5 font-semibold">Period</th>
+                      <th className="px-4 py-3.5 font-semibold">Waive Surcharge</th>
+                      <th className="px-4 py-3.5 font-semibold">Waive Interest</th>
+                      <th className="px-4 py-3.5 font-semibold">Status</th>
+                      <th className="px-4 py-3.5 font-semibold">Updated</th>
+                      <th className="px-4 py-3.5 font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {extensions.map((item) => (
-                      <tr key={item.id} className="align-top hover:bg-slate-50/60">
-                        <td className="px-4 py-3 font-medium text-slate-900">{item.title}</td>
-                        <td className="px-4 py-3 text-slate-700">
+                      <tr key={item.id} className="align-top hover:bg-slate-50/70">
+                        <td className="px-4 py-3.5 font-medium text-slate-900">{item.title}</td>
+                        <td className="px-4 py-3.5 text-slate-700">
                           {new Date(item.startDate).toLocaleDateString("en-PH")} - {new Date(item.endDate).toLocaleDateString("en-PH")}
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{item.waiveSurcharge ? "Yes" : "No"}</td>
-                        <td className="px-4 py-3 text-slate-700">{item.waiveInterest ? "Yes" : "No"}</td>
-                        <td className="px-4 py-3">{extensionStatus(item)}</td>
-                        <td className="px-4 py-3 text-slate-600">{formatDate(item.updatedAt)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3.5 text-slate-700">{item.waiveSurcharge ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3.5 text-slate-700">{item.waiveInterest ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3.5">{extensionStatus(item)}</td>
+                        <td className="px-4 py-3.5 text-slate-600">{formatDate(item.updatedAt)}</td>
+                        <td className="px-4 py-3.5">
                           <button
                             type="button"
                             onClick={() => void toggleExtension(item)}
@@ -769,7 +769,7 @@ export function SuperAdminFeeSettingsManager() {
               ) : (
                 <div className="space-y-3 p-4">
                   {extensions.map((item) => (
-                    <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <article key={item.id} className="app-surface p-4">
                       <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                       <p className="mt-1 text-xs text-slate-600">
                         {new Date(item.startDate).toLocaleDateString("en-PH")} - {new Date(item.endDate).toLocaleDateString("en-PH")}
@@ -802,7 +802,7 @@ export function SuperAdminFeeSettingsManager() {
         ) : (
           <div className="space-y-2">
             {recentUpdates.map((item, index) => (
-              <div key={`${item.type}-${index}-${item.updatedAt}`} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <div key={`${item.type}-${index}-${item.updatedAt}`} className="rounded-xl border border-slate-200 bg-slate-50/85 px-4 py-3 text-sm text-slate-700">
                 <p className="font-semibold text-slate-900">{item.type}</p>
                 <p className="mt-1">{item.message}</p>
                 <p className="mt-1 text-xs text-slate-500">{formatDate(item.updatedAt)}</p>

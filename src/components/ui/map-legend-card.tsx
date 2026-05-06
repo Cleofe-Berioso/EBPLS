@@ -26,7 +26,7 @@ export function MapLegendCard({
   footer?: ReactNode;
 }) {
   return (
-    <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <aside className="app-surface p-5">
       <p className="text-sm font-semibold text-slate-900">{title}</p>
       {subtitle ? <p className="mt-1 text-xs leading-5 text-slate-500">{subtitle}</p> : null}
       <div className="mt-3 space-y-3">

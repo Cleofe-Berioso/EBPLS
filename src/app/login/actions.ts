@@ -12,14 +12,25 @@ export async function loginAction(
   formData: FormData
 ): Promise<LoginState> {
   try {
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    if (!email || !password) {
+      return { error: "Invalid email or password." };
+    }
+
     await signIn("credentials", {
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
+      email,
+      password,
       redirectTo: "/auth/redirect",
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      return { error: "Invalid email or password. Please try again." };
+      if (error.type === "CredentialsSignin") {
+        return { error: "Invalid email or password." };
+      }
+
+      return { error: "Unable to sign in right now. Please try again." };
     }
     // Re-throw NEXT_REDIRECT — Next.js uses this for successful navigation
     throw error;

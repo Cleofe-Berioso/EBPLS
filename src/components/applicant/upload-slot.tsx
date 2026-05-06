@@ -25,13 +25,13 @@ export function UploadSlot({
     <div
       className={`block rounded-2xl border border-dashed p-4 transition-colors ${
         fileName
-          ? "border-green-400 bg-green-50/80"
-          : "border-green-300 bg-green-50/40"
+          ? "border-emerald-300 bg-emerald-50/85"
+          : "border-slate-300 bg-slate-50/70"
       } ${disabled ? "bg-slate-50" : ""}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <span className="text-sm font-medium text-green-900">
+          <span className="text-sm font-medium text-slate-900">
             {label}
             {required ? <span className="text-red-600"> *</span> : null}
           </span>
@@ -42,7 +42,7 @@ export function UploadSlot({
         <span
           className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
             fileName
-              ? "border border-green-200 bg-white text-green-700"
+              ? "border border-emerald-200 bg-white text-emerald-700"
               : "border border-slate-300 bg-white text-slate-700"
           }`}
         >
@@ -52,7 +52,7 @@ export function UploadSlot({
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label
           htmlFor={inputId}
-          className="inline-flex cursor-pointer items-center rounded-md bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
+          className="inline-flex cursor-pointer items-center rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800"
         >
           {fileName ? "Replace File" : "Choose File"}
         </label>

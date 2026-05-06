@@ -14,8 +14,16 @@ type AuthUser = {
   role: Role;
 };
 
+const configuredSecret =
+  process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim();
+
+const authSecret =
+  configuredSecret ||
+  (process.env.NODE_ENV === "development" ? "dev-only-auth-secret-change-me" : undefined);
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
+  secret: authSecret,
   providers: [
     Credentials({
       credentials: {
@@ -28,19 +36,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!email || !password) return null;
 
-        const user = await getUserByEmail(email);
-        if (!user) return null;
-        if (!user.isActive) return null;
+        try {
+          const normalizedEmail = email.trim().toLowerCase();
+          const user = await getUserByEmail(normalizedEmail);
 
-        const passwordMatch = await bcrypt.compare(password, user.passwordHash);
-        if (!passwordMatch) return null;
+          if (!user || !user.isActive) return null;
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        };
+          const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+          if (!passwordMatch) return null;
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          };
+        } catch (error) {
+          // Keep auth failures opaque to clients; only log unexpected server-side errors.
+          console.error("Credentials authorize failed unexpectedly", error);
+          return null;
+        }
       },
     }),
     Google({

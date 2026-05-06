@@ -14,6 +14,13 @@ type DbApplicationStatus =
   | "RETURNED_FOR_CORRECTION"
   | "REJECTED";
 
+const BPLO_PAYMENT_VISIBLE_STATUSES: DbApplicationStatus[] = [
+  "APPROVED_FOR_PAYMENT",
+  "PAID",
+  "FOR_RELEASE",
+  "RELEASED",
+];
+
 export interface PaymentVerificationRow {
   paymentReferenceId: string;
   applicationId: string;
@@ -245,6 +252,9 @@ export async function getPaymentVerificationDetail(
   if (!found) return null;
 
   const app = found.application;
+  if (!BPLO_PAYMENT_VISIBLE_STATUSES.includes(app.status as DbApplicationStatus)) {
+    return null;
+  }
 
   return {
     row: toRow({
