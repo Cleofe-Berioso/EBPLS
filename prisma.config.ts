@@ -6,4 +6,7 @@ export default defineConfig({
     // Relative path — libsql on Windows doesn't handle absolute file:/// URIs correctly
     url: "file:./prisma/dev.db",
   },
+  migrations: {
+    seed: "ts-node ./prisma/seed.ts",
+  },
 });

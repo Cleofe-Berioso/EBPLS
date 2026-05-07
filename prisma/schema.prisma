@@ -53,6 +53,7 @@ model User {
   feeConfigurationUpdates FeeConfigurationItem[] @relation("FeeConfigUpdatedBy")
   systemFeeSettingUpdates SystemFeeSetting[] @relation("SystemFeeSettingUpdatedBy")
   renewalExtensionUpdates RenewalExtension[] @relation("RenewalExtensionUpdatedBy")
+  smsDeliveryLogs SmsDeliveryLog[] @relation("SmsDeliveryLogApplicant")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -152,6 +153,7 @@ model BusinessApplication {
   history       ApplicationHistory[]
   feeAssessment FeeAssessment?
   permitIssuance PermitIssuance?
+  smsDeliveryLogs SmsDeliveryLog[]
 
   @@index([applicantId, createdAt])
   @@index([applicantId, status])
@@ -243,6 +245,31 @@ enum PaymentFrequency {
   ANNUAL
   BI_ANNUAL
   QUARTERLY
+}
+
+enum SmsDeliveryStatus {
+  SKIPPED
+  SENT
+  FAILED
+}
+
+model SmsDeliveryLog {
+  id               String            @id @default(cuid())
+  applicationId    String
+  applicantId      String?
+  phoneNumber      String?
+  provider         String
+  status           SmsDeliveryStatus
+  messageBody      String
+  providerResponse String?
+  createdAt        DateTime          @default(now())
+
+  application BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicant   User?               @relation("SmsDeliveryLogApplicant", fields: [applicantId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+  @@index([applicantId, createdAt])
+  @@index([status, createdAt])
 }
 
 model FeeAssessment {

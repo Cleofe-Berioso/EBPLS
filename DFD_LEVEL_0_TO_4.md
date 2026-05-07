@@ -21,7 +21,7 @@ Process: eBPLS System
 ### Outputs
 | External Entity | Outputs |
 |---|---|
-| Applicant | Application status updates; application number; TOP details (assessment number, amount, payment frequency); payment verification result; permit / closure certificate document number + release confirmation; correction remarks; business location verification result; notifications |
+| Applicant | Application status updates; application number; TOP details (assessment number, amount, payment frequency); payment verification result; permit / closure certificate document number + release confirmation; Release Notification Details (SMS); correction remarks; business location verification result; notifications |
 | BPLO | Application queues filtered by status; full application detail + uploaded documents; auto-computed fee suggestions; payment verification queue (pending / verified / rejected buckets); permit issuance queue (paid / for-release / released / blocked buckets); business map with location pins + category/status filters |
 | Superadmin | Dashboard summary (status counts, revenue estimates); application list + full detail (view-only); activity / history log; reports (status distribution, type counts, revenue, permit counts, BPLO activity); user directory with role + active status |
 
@@ -33,7 +33,7 @@ Process: eBPLS System
 3. Dynamic Document Upload
 4. BPLO Review and Assessment
 5. Payment Submission and Verification
-6. Permit Issuance and Release
+6. Permit Issuance, Release, and SMS Notification
 7. Business Location Mapping
 8. Superadmin Configuration and Monitoring
 
@@ -322,6 +322,13 @@ Business permit validity: **December 31 of the issuance year**. Closure certific
 | Prepare permit | applicationId | Application must be `PAID`; at least one `VERIFIED` payment ref must exist; `amountPaid ≥ releasePaymentAmount` | `PermitIssuance` create with status `FOR_RELEASE` and sequential document number; `BusinessApplication.status = FOR_RELEASE`; history | Permit document number assigned; for-release status |
 | Release permit | applicationId | Application must be `FOR_RELEASE`; `PermitIssuance` record must exist | `PermitIssuance.status = RELEASED`, `releasedAt` set; `BusinessApplication.status = RELEASED`; `upsertBusinessRecordOnRelease()` called; history | Permit / certificate released |
 
+#### 6.3.1 Release SMS Notification (applies to NEW, RENEWAL, CLOSURE)
+
+| Process | Trigger | Input | Validation | Database Action | Output |
+|---|---|---|---|---|---|
+| Generate Release SMS | `BusinessApplication.status` changes to `FOR_RELEASE` or `RELEASED` | applicationId | Application type must be `NEW`, `RENEWAL`, or `CLOSURE`; applicant mobile number available | Build Release Notification Details payload (reference number, business name, release status, claim/release instructions) | Release Notification Details |
+| Send Release SMS to Applicant | After Generate Release SMS | Release Notification Details | SMS payload must include required fields | Persist SMS Delivery Log with delivery result (queued/sent/failed) and timestamp | Applicant receives release-stage SMS; BPLO can view SMS Delivery Log |
+
 #### 6.4 `upsertBusinessRecordOnRelease` — Side Effects on Release
 
 | Application Type | Business Record Action |
@@ -331,6 +338,46 @@ Business permit validity: **December 31 of the issuance year**. Closure certific
 | `CLOSURE` | Set `BusinessRecord.businessStatus = CLOSED`; record `closedAt = now()`; record `closureApplicationId`; all history, documents, assessments, and permits preserved (no hard-delete) |
 
 A `CLOSED` business record cannot be submitted for renewal or closure again.
+
+#### 6.5 DFD Level 2 Decomposition - Permit/Certificate Release Subprocess
+
+Subprocess decomposition under Process 6:
+- 6.1 Prepare permit/certificate (`PAID` -> `FOR_RELEASE`)
+- 6.2 Release permit/certificate (`FOR_RELEASE` -> `RELEASED`)
+- 6.3 Generate Release SMS
+- 6.4 Send Release SMS to Applicant
+- 6.5 Write SMS Delivery Log
+
+`Generate Release SMS` and `Send Release SMS to Applicant` are internal eBPLS processes and do not introduce a new external actor.
+
+#### 6.6 DFD Level 3 Trigger Points - Status-Based SMS Events
+
+| Trigger Event | Status Transition | Internal Process | Output to Applicant |
+|---|---|---|---|
+| BPLO marks application For Release | `PAID` -> `FOR_RELEASE` | Generate Release SMS -> Send Release SMS to Applicant | SMS with release status `FOR_RELEASE` and claim instructions |
+| BPLO marks application Released | `FOR_RELEASE` -> `RELEASED` | Generate Release SMS -> Send Release SMS to Applicant | SMS final confirmation with release status `RELEASED` |
+
+The trigger executes every time the application is marked `FOR_RELEASE` or `RELEASED`.
+
+#### 6.7 DFD Level 4 Detailed Data Flow - Release SMS
+
+| Step | Process | Data In | Data Store Interaction | Data Out |
+|---|---|---|---|---|
+| 1 | Detect release-stage status change | applicationId, new status (`FOR_RELEASE` or `RELEASED`) | Read `BusinessApplication`, `BusinessRecord`, `User` (applicant contact) | Release event context |
+| 2 | Generate Release SMS | Release event context | Read document metadata (`PermitIssuance` document number/type); compose Release Notification Details | Release Notification Details |
+| 3 | Send Release SMS to Applicant | Release Notification Details | Write SMS Delivery Log entry (applicationId, status, message body, recipient, sentAt, provider response) | SMS dispatch result |
+| 4 | Expose delivery trace | SMS dispatch result | Read SMS Delivery Log for BPLO/system audit | SMS Delivery Log view |
+
+Release Notification Details contains:
+- Application reference number
+- Business name
+- Release status (`FOR_RELEASE` or `RELEASED`)
+- Claim/release instructions
+
+Coverage of release-stage SMS is mandatory for:
+- New Business Permit release
+- Renewal Business Permit release
+- Closure Certificate release
 
 ---
 

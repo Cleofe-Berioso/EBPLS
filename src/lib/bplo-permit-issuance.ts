@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { toMoneyNumber } from "@/lib/money";
+import { sendReleaseStatusSms } from "@/lib/sms";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -122,6 +123,14 @@ function resolveFormValue(formData: unknown, key: string): string {
   const maybe = (formData ?? {}) as Record<string, unknown>;
   const value = maybe[key];
   return typeof value === "string" && value.trim() ? value.trim() : "-";
+}
+
+function resolveApplicantPhone(formData: unknown): string | null {
+  const maybe = (formData ?? {}) as Record<string, unknown>;
+  const rawPhone = maybe.phone;
+  if (typeof rawPhone !== "string") return null;
+  const trimmed = rawPhone.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function dateIsoOrNull(date: Date | null | undefined): string | null {
@@ -439,11 +448,12 @@ export async function preparePermitIssuance(
   bploUserId: string,
   remarks?: string
 ) {
-  return prisma.$transaction(async (tx: any) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     const app = await tx.businessApplication.findUnique({
       where: { id: applicationId },
       include: {
-        applicant: { select: { email: true } },
+        applicant: { select: { name: true, email: true } },
+        businessRecord: { select: { businessName: true, phone: true } },
         feeAssessment: {
           select: {
             releasePaymentAmount: true,
@@ -519,14 +529,38 @@ export async function preparePermitIssuance(
       },
     });
 
+    const businessName = resolveBusinessName(app.formData, app.businessRecord?.businessName ?? null);
+    const toPhone = resolveApplicantPhone(app.formData) ?? app.businessRecord?.phone ?? null;
+
     return {
       applicationId,
+      applicationNumber: app.applicationNumber,
       documentNumber: issuance.documentNumber,
       documentType: issuance.documentType as IssuanceDocumentType,
       status: issuance.status,
       newApplicationStatus: "FOR_RELEASE" as const,
+      smsContext: {
+        applicationId,
+        applicantId: app.applicantId,
+        applicationNumber: app.applicationNumber,
+        applicantName: app.applicant.name,
+        businessName,
+        status: "FOR_RELEASE" as const,
+        toPhone,
+      },
     };
   });
+
+  const smsDelivery = await sendReleaseStatusSms(result.smsContext);
+  return {
+    applicationId: result.applicationId,
+    applicationNumber: result.applicationNumber,
+    documentNumber: result.documentNumber,
+    documentType: result.documentType,
+    status: result.status,
+    newApplicationStatus: result.newApplicationStatus,
+    smsDelivery,
+  };
 }
 
 export async function releasePermitIssuance(
@@ -534,11 +568,12 @@ export async function releasePermitIssuance(
   bploUserId: string,
   remarks?: string
 ) {
-  return prisma.$transaction(async (tx: any) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     const app = await tx.businessApplication.findUnique({
       where: { id: applicationId },
       include: {
-        applicant: { select: { email: true } },
+        applicant: { select: { name: true, email: true } },
+        businessRecord: { select: { businessName: true, phone: true } },
         permitIssuance: true,
       },
     });
@@ -580,11 +615,34 @@ export async function releasePermitIssuance(
       },
     });
 
+    const businessName = resolveBusinessName(app.formData, app.businessRecord?.businessName ?? null);
+    const toPhone = resolveApplicantPhone(app.formData) ?? app.businessRecord?.phone ?? null;
+
     return {
       applicationId,
+      applicationNumber: app.applicationNumber,
       documentNumber: app.permitIssuance.documentNumber,
       status: "RELEASED" as const,
       newApplicationStatus: "RELEASED" as const,
+      smsContext: {
+        applicationId,
+        applicantId: app.applicantId,
+        applicationNumber: app.applicationNumber,
+        applicantName: app.applicant.name,
+        businessName,
+        status: "RELEASED" as const,
+        toPhone,
+      },
     };
   });
+
+  const smsDelivery = await sendReleaseStatusSms(result.smsContext);
+  return {
+    applicationId: result.applicationId,
+    applicationNumber: result.applicationNumber,
+    documentNumber: result.documentNumber,
+    status: result.status,
+    newApplicationStatus: result.newApplicationStatus,
+    smsDelivery,
+  };
 }
