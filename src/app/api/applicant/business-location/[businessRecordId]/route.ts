@@ -45,6 +45,7 @@ export async function POST(
     if (
       message.includes("latitude") ||
       message.includes("longitude") ||
+      message.includes("businessLocationAddress") ||
       message.includes("Verified location")
     ) {
       return NextResponse.json({ error: message }, { status: 422 });

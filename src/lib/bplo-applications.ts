@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { assertStatusTransition } from "@/lib/application-status";
 import type { BusinessInfo } from "@/lib/applicant-types";
 
 type DbApplicationStatus =
@@ -14,16 +15,19 @@ type DbApplicationStatus =
   | "RETURNED_FOR_CORRECTION"
   | "REJECTED";
 
-const BPLO_VISIBLE_STATUSES: DbApplicationStatus[] = [
+/**
+ * Centralized allowlist of statuses visible in BPLO Application Queue.
+ * Only review-stage applications should appear in the queue:
+ * - SUBMITTED: awaiting initial review
+ * - UNDER_REVIEW: currently being reviewed by BPLO
+ * - RETURNED_FOR_CORRECTION: awaiting applicant resubmission
+ * 
+ * Excluded: ASSESSED, APPROVED_FOR_PAYMENT, PAID, FOR_RELEASE, RELEASED, REJECTED
+ */
+export const BPLO_QUEUE_REVIEW_STATUSES: DbApplicationStatus[] = [
   "SUBMITTED",
   "UNDER_REVIEW",
-  "ASSESSED",
-  "APPROVED_FOR_PAYMENT",
-  "PAID",
-  "FOR_RELEASE",
-  "RELEASED",
   "RETURNED_FOR_CORRECTION",
-  "REJECTED",
 ];
 
 export type BploReviewAction =
@@ -50,13 +54,7 @@ interface BploQueueFilters {
     | "ALL"
     | "SUBMITTED"
     | "UNDER_REVIEW"
-    | "ASSESSED"
-    | "APPROVED_FOR_PAYMENT"
-    | "PAID"
-    | "FOR_RELEASE"
-    | "RELEASED"
-    | "RETURNED_FOR_CORRECTION"
-    | "REJECTED";
+    | "RETURNED_FOR_CORRECTION";
 }
 
 function toDateOnly(date: Date | null): string {
@@ -89,35 +87,26 @@ function remarksRequired(action: BploReviewAction): boolean {
 }
 
 export async function getBploDashboardSummary() {
-  const statuses: DbApplicationStatus[] = [
-    "SUBMITTED",
-    "UNDER_REVIEW",
-    "RETURNED_FOR_CORRECTION",
-    "ASSESSED",
-    "APPROVED_FOR_PAYMENT",
-    "PAID",
-    "FOR_RELEASE",
-    "RELEASED",
-  ];
-
-  const counts = await Promise.all(
-    statuses.map(async (status) => ({
-      status,
-      count: await prisma.businessApplication.count({ where: { status } }),
-    }))
-  );
-
-  const byStatus = Object.fromEntries(counts.map((row) => [row.status, row.count])) as Record<DbApplicationStatus, number>;
+  const [submittedApplications, underReview, returnedForCorrection, assessedApplications, paidApplications, forRelease, releasedPermits, pendingPaymentVerification] = await Promise.all([
+    prisma.businessApplication.count({ where: { status: "SUBMITTED" } }),
+    prisma.businessApplication.count({ where: { status: "UNDER_REVIEW" } }),
+    prisma.businessApplication.count({ where: { status: "RETURNED_FOR_CORRECTION" } }),
+    prisma.businessApplication.count({ where: { status: "ASSESSED" } }),
+    prisma.businessApplication.count({ where: { status: "PAID" } }),
+    prisma.businessApplication.count({ where: { status: "FOR_RELEASE" } }),
+    prisma.businessApplication.count({ where: { status: "RELEASED" } }),
+    prisma.paymentReference.count({ where: { status: "PENDING" } }),
+  ]);
 
   return {
-    submittedApplications: byStatus.SUBMITTED ?? 0,
-    underReview: byStatus.UNDER_REVIEW ?? 0,
-    returnedForCorrection: byStatus.RETURNED_FOR_CORRECTION ?? 0,
-    assessedApplications: byStatus.ASSESSED ?? 0,
-    approvedForPayment: byStatus.APPROVED_FOR_PAYMENT ?? 0,
-    paidApplications: byStatus.PAID ?? 0,
-    forRelease: byStatus.FOR_RELEASE ?? 0,
-    releasedPermits: byStatus.RELEASED ?? 0,
+    submittedApplications,
+    underReview,
+    returnedForCorrection,
+    assessedApplications,
+    approvedForPayment: pendingPaymentVerification,
+    paidApplications,
+    forRelease,
+    releasedPermits,
   };
 }
 
@@ -141,10 +130,14 @@ export async function listRecentBploSubmissions(limit = 5): Promise<BploQueueRow
 
 export async function listBploApplications(filters: BploQueueFilters = {}, limit?: number): Promise<BploQueueRow[]> {
   const normalizedSearch = filters.search?.trim();
+  const requestedStatus =
+    filters.status && filters.status !== "ALL" && BPLO_QUEUE_REVIEW_STATUSES.includes(filters.status)
+      ? filters.status
+      : undefined;
   const rows = await prisma.businessApplication.findMany({
     where: {
+      status: requestedStatus ? requestedStatus : { in: BPLO_QUEUE_REVIEW_STATUSES },
       ...(filters.type && filters.type !== "ALL" ? { applicationType: filters.type } : {}),
-      ...(filters.status && filters.status !== "ALL" ? { status: filters.status } : {}),
       ...(normalizedSearch
         ? {
             OR: [
@@ -272,7 +265,7 @@ export async function getBploApplicationDocument(applicationId: string, document
     throw new Error("Application not found");
   }
 
-  if (!BPLO_VISIBLE_STATUSES.includes(application.status as DbApplicationStatus)) {
+  if (!BPLO_QUEUE_REVIEW_STATUSES.includes(application.status as DbApplicationStatus)) {
     throw new Error("Application is not available for BPLO review");
   }
 
@@ -323,6 +316,7 @@ export async function applyBploReviewAction(
     }
 
     const nextStatus = getNextStatus(action);
+    assertStatusTransition(current.status, nextStatus);
 
     const updated = await tx.businessApplication.update({
       where: { id: current.id },

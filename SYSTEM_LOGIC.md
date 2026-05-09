@@ -1,122 +1,108 @@
 # eBPLS System Logic
 
+## Implementation Status
+This document reflects completed implementation updates, including registration and nationality handling, renewal field locks, dynamic documents, BPLO queue scoping, assessment and TOP visibility, payment verification rules, closure assessment rules, and business map cleanup.
+
 ## 1. User Roles and Permissions
-- Applicant: submit applications/documents/location/payment proof; view own TOP/status/history only.
-- BPLO: review/return/reject, assess fees, generate TOP, verify payments, prepare/release permits, verify locations, view business map/reports.
-- Superadmin: dashboard/reports/activities, users, settings (fees/penalties/extensions), applications read-only.
+- Applicant: submit applications, required documents, business location, and payment proof; view own TOP and status history.
+- BPLO: review queue actions, assess fees, generate TOP, verify payments, prepare and release permits, review map locations.
+- Superadmin: monitoring and configuration only; no BPLO workflow execution actions.
 
 ## 2. Application Types
 - NEW
 - RENEWAL
 - CLOSURE
 
-## 3. Applicant Eligibility Rules
-- NEW: no prior business record required.
-- RENEWAL/CLOSURE: must reference applicant-owned business record and pass eligibility checks.
+## 3. Registration Number Logic by Business Type
+- Sole Proprietorship uses DTI Registration Number.
+- Partnership uses SEC Registration Number.
+- Corporation uses SEC Registration Number.
+- Cooperative uses CDA Registration Number.
 
-## 4. Dynamic Document Upload Rules
-- Required document list is resolved from `required-documents.ts`.
-- Requirements are application-type aware and conditionally augmented by form context.
-- Applicant forms render upload slots from resolved required docs.
-- Applicant can upload/replace/delete while application is editable.
-- BPLO can download uploaded application documents during review.
+## 4. Nationality Logic
+- Corporation keeps nationality selectable.
+- Non-corporation business types are normalized to Filipino.
 
-## 5. BPLO Review Rules
-- Valid flow: Submitted -> Under Review -> Assessed.
-- BPLO can return for correction or reject from review states.
-- Status transitions are server validated.
+## 5. Sex Field Logic
+- Business and application data includes optional sex.
+- In renewal, sex remains editable and is not part of locked renewal fields.
 
-## 6. Return/Reject Rules
-- Return and reject require BPLO remarks.
-- Returned applications are editable by applicant and can be resubmitted.
+## 6. Renewal Locked Fields
+For renewal applications, these fields are locked from prior business record data:
+- businessName
+- businessType
+- registrationNumber
+- tin
+- ownerName
+- tradeName
+- nationality
 
-## 7. Fee Computation Rules
-- Backend computes annual assessed fee from category, asset bracket, worker bracket, and configured fee tables.
-- Higher-fee classification between asset-based and worker-based paths is selected.
-- Fixed categories and configured overrides are supported.
+## 7. Dynamic Document Rules
+- Required documents are resolved dynamically by application type and business context.
+- NEW uses base requirements plus business type rules, ownership rules, and market or agriculture conditional requirements.
+- RENEWAL uses renewal-specific requirements plus market or agriculture conditional requirements.
+- CLOSURE uses closure-required documents.
+- Applicant forms render only relevant document upload slots from the resolved set.
 
-## 8. Size Classification Rules
-- Asset and worker counts are bucketed to explicit fee tiers.
-- If resulting tiers differ, the higher corresponding fee wins.
+## 8. BPLO Application Queue Rules
+- BPLO queue includes review-stage statuses only:
+  - SUBMITTED
+  - UNDER_REVIEW
+  - RETURNED_FOR_CORRECTION
+- Queue excludes non-review stages such as ASSESSED, APPROVED_FOR_PAYMENT, PAID, FOR_RELEASE, RELEASED, and REJECTED.
 
-## 9. Payment Frequency Rules
-- Annual assessed amount is always stored as full annual value.
-- Release payment amount:
-  - ANNUAL: annualAssessedAmount
-  - BI_ANNUAL: annualAssessedAmount / 2
-  - QUARTERLY: annualAssessedAmount / 4
+## 9. Assessment and TOP Rules
+- BPLO assessment supports itemized fee line items.
+- Each line item requires fee description and amount.
+- Draft assessment remains internal to BPLO and is not visible to applicant.
+- TOP is visible to applicant only after assessment is generated and application moves to APPROVED_FOR_PAYMENT.
 
-## 10. Required Release Payment Rules
-- Payment verification approval requires submitted amount >= releasePaymentAmount.
-- Approval updates fee tracking (`amountPaid`, `remainingBalance`, `paymentStatus`) and application to Paid.
-- Permit preparation requires verified payment and required release payment completed.
-
-## 11. Payment Proof Upload Rules
+## 10. Payment Verification Rules
 - Applicant payment submission requires:
-  - OR/reference number
-  - amount paid
-  - payment date
-  - payment proof file
-- Proof is persisted and downloadable by BPLO.
+  - OR Number or Official Receipt Number
+  - Official Receipt or Payment Proof upload
+- Required payment fields are validated server-side.
+- Payment is BPLO-verified.
+- Application status changes to PAID only after BPLO approves the payment reference.
 
-## 12. OR/Reference Uniqueness Rule
-- `PaymentReference.transactionNumber` is globally unique at DB level.
-- API checks duplicates before create.
-- Duplicate response message:
-  - This OR number/payment reference has already been submitted. Please check your payment details.
+## 11. Closure Assessment Rules
+- Closure Certificate Fee is fixed at 100.
+- BPLO manually encodes Payment Dues or Pending Fee for closure.
+- Closure TOP reflects fixed closure certificate fee plus pending dues and total amount.
+- Closure assessment path bypasses New or Renewal mayor's permit fee computation logic.
 
-## 13. Permit Preparation and Release Rules
-- Prepare: only from Paid, with verified payment and required release payment met.
-- Release: only from For Release with issuance record.
+## 12. Business Location and Business Map Rules
+- Applicant business location submission remains tied to eligible released business records.
+- BPLO map shows active map records only.
+- BPLO map application filter scope is NEW and RENEWAL.
+- Business category on map is derived from business classification.
+- Closure is removed from BPLO map category and application filter logic.
+- Location Status was removed from BPLO map filter UI.
+- Marker rendering remains active after cleanup.
 
-## 14. Business Location Rules
-- Applicant submits coordinates for eligible released business records.
-- BPLO verifies or returns with correction remarks.
-
-## 15. Business Map Category/Color/Filter Rules
-- Map list excludes draft/rejected/returned/incomplete operational records by using valid statuses only.
-- Category/color is derived from business line/category source and used consistently by markers and legend.
-- Filters: owner/operator, category, and business-name search.
-- Map also excludes any business record with `businessStatus = CLOSED` (closed businesses are hidden from the active official map).
-
-## 16. Closure Soft-Close Rules
-- Closure is a **soft-close operation**. Business records are never deleted from the database.
-- When a CLOSURE application reaches final BPLO release (_For Release → Released_):
-  - The related `BusinessRecord.businessStatus` is set to `CLOSED`.
-  - `BusinessRecord.closedAt` is stamped with the release timestamp.
-  - `BusinessRecord.closureApplicationId` is set to the ID of the closure application.
-- All historical records are preserved: applications, documents, payments, permits, activity history.
-- Closed businesses are **hidden** from:
-  - The applicant's business selector for renewal or new closure applications (`/api/applicant/business-records` returns ACTIVE only).
-  - The applicant's released business location list (cannot submit location for a closed business).
-  - The BPLO official business map (only ACTIVE businesses appear on the map).
-- Closed businesses remain **visible** in:
-  - Superadmin reports and read-only application views (all records are queryable).
-  - Applicant's own application history (`/applicant/my-applications` still shows closure application entries).
-  - Applicant profile (all business records including CLOSED are listed with status badge).
-- **Reopening requires a new formal application process.** There is no simple UI toggle to reactivate a closed business. The system does not support unsupervised reopening.
-- Server-side eligibility check (`assertEligibleBusinessRecord`) rejects submission against a CLOSED business with HTTP 403.
-
-## 16. Superadmin Limitations
-- Superadmin cannot execute BPLO processing actions (approve/reject/assess/verify payment/release).
-- Superadmin remains configuration + monitoring role.
-
-## 17. Government-ready Data Validation Rules
-- TIN: validated numeric format.
-- Contact number: Philippine mobile format validation.
-- Email: validated format.
-- Asset value: non-negative numeric.
-- Employee count: non-negative integer.
-- Coordinates: numeric range validation.
-- Application type and payment frequency: enum constrained.
-
-## 18. Status Lifecycle
+## 13. Payment and Permit Lifecycle
 Main lifecycle:
-- Draft -> Submitted -> Under Review -> Assessed -> Approved for Payment -> Paid -> For Release -> Released
+- DRAFT
+- SUBMITTED
+- UNDER_REVIEW
+- ASSESSED
+- APPROVED_FOR_PAYMENT
+- PAID
+- FOR_RELEASE
+- RELEASED
 
 Alternative states:
-- Returned for Correction
-- Rejected
-- Payment Rejected (payment reference state)
-- Location Returned (Needs Correction)
-- Location Verified
+- RETURNED_FOR_CORRECTION
+- REJECTED
+- Payment reference REJECTED
+- Location NEEDS_CORRECTION
+- Location VERIFIED
+
+## 14. Closure Soft-Close Rules
+- Closure is a soft-close update and does not delete business records.
+- On released closure applications:
+  - BusinessRecord.businessStatus becomes CLOSED.
+  - BusinessRecord.closedAt is set.
+  - BusinessRecord.closureApplicationId is set.
+- Closed businesses are excluded from active applicant selectors and active BPLO map views.
+- Historical records remain available for audit and reporting.

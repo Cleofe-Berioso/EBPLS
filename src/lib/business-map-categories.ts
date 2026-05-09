@@ -1,31 +1,37 @@
 export type MapBusinessCategory =
-  | "FOOD"
-  | "RETAIL"
-  | "SERVICES"
-  | "INDUSTRIAL"
-  | "TRANSPORT"
+  | "SOLE_PROPRIETORSHIP"
+  | "PARTNERSHIP"
+  | "CORPORATION"
+  | "COOPERATIVE"
   | "OTHER";
 
 export const MAP_CATEGORY_META: Record<
   MapBusinessCategory,
   { label: string; color: string }
 > = {
-  FOOD: { label: "Food", color: "#dc2626" },
-  RETAIL: { label: "Retail", color: "#2563eb" },
-  SERVICES: { label: "Services", color: "#0891b2" },
-  INDUSTRIAL: { label: "Industrial", color: "#7c3aed" },
-  TRANSPORT: { label: "Transport", color: "#16a34a" },
+  SOLE_PROPRIETORSHIP: { label: "Sole Proprietorship", color: "#0f766e" },
+  PARTNERSHIP: { label: "Partnership", color: "#2563eb" },
+  CORPORATION: { label: "Corporation", color: "#7c3aed" },
+  COOPERATIVE: { label: "Cooperative", color: "#ca8a04" },
   OTHER: { label: "Other", color: "#64748b" },
 };
 
-export function inferMapBusinessCategory(lineOfBusiness: string): MapBusinessCategory {
-  const normalized = lineOfBusiness.toLowerCase();
+export function inferMapBusinessCategory(input: {
+  businessType?: string | null;
+  lineOfBusiness?: string | null;
+}): MapBusinessCategory {
+  const businessType = (input.businessType ?? "").toLowerCase().trim();
+  const lineOfBusiness = (input.lineOfBusiness ?? "").toLowerCase().trim();
 
-  if (/(restaurant|cafe|eatery|food|carinderia|canteen|bakery)/.test(normalized)) return "FOOD";
-  if (/(retail|wholesale|store|shop|trading|merchandise|grocery|hardware)/.test(normalized)) return "RETAIL";
-  if (/(transport|trucking|logistic|delivery|courier|taxi|bus)/.test(normalized)) return "TRANSPORT";
-  if (/(manufactur|industrial|factory|processing|plant)/.test(normalized)) return "INDUSTRIAL";
-  if (/(service|contractor|consult|repair|clinic|salon|spa|financial)/.test(normalized)) return "SERVICES";
+  if (/(sole|single)/.test(businessType)) return "SOLE_PROPRIETORSHIP";
+  if (/partnership/.test(businessType)) return "PARTNERSHIP";
+  if (/(corporation|corporate|inc\.?|corp\.?)/.test(businessType)) return "CORPORATION";
+  if (/cooperative|coop/.test(businessType)) return "COOPERATIVE";
+
+  // Fallback keeps category usable for legacy records where businessType was not saved.
+  if (/partnership/.test(lineOfBusiness)) return "PARTNERSHIP";
+  if (/(corporation|corporate|inc\.?|corp\.?)/.test(lineOfBusiness)) return "CORPORATION";
+  if (/cooperative|coop/.test(lineOfBusiness)) return "COOPERATIVE";
 
   return "OTHER";
 }

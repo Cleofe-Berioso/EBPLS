@@ -14,12 +14,12 @@ const STATUS_STYLES: Record<ApplicationStatus, string> = {
   Draft: "border-slate-300 bg-slate-100 text-slate-700",
   Submitted: "border-blue-200 bg-blue-50 text-blue-700",
   "Under Review": "border-amber-200 bg-amber-50 text-amber-700",
-  Assessed: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  "Approved for Payment": "border-sky-200 bg-sky-50 text-sky-700",
+  Assessed: "border-amber-200 bg-amber-50 text-amber-700",
+  "Approved for Payment": "border-emerald-200 bg-emerald-50 text-emerald-700",
   Paid: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  "For Release": "border-teal-200 bg-teal-50 text-teal-700",
-  Released: "border-emerald-300 bg-emerald-100 text-emerald-800",
-  "Returned for Correction": "border-orange-200 bg-orange-50 text-orange-700",
+  "For Release": "border-emerald-200 bg-emerald-50 text-emerald-700",
+  Released: "border-slate-300 bg-slate-100 text-slate-700",
+  "Returned for Correction": "border-rose-200 bg-rose-50 text-rose-700",
   Rejected: "border-rose-200 bg-rose-50 text-rose-700",
 };
 

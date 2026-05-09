@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleMarker, MapContainer, Popup, TileLayer, useMapEvents } from "react-leaflet";
+import { useEffect } from "react";
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { EB_MAGALONA_BOUNDS } from "@/lib/business-location";
 
 export interface LeafletBusinessMarker {
@@ -54,28 +55,23 @@ function MapClickHandler({
   return null;
 }
 
+function MapRecenter({ selectedPosition }: { selectedPosition?: [number, number] | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!selectedPosition) return;
+    map.setView(selectedPosition, map.getZoom());
+  }, [map, selectedPosition]);
+
+  return null;
+}
+
 function markerColor(marker: LeafletBusinessMarker): string {
   return marker.businessCategoryColor ?? "#64748b";
 }
 
-function statusLabel(status?: string): string {
-  if (!status) return "Pending";
-  return status
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function statusTone(status?: string): string {
-  if (status === "VERIFIED") return "border-green-200 bg-green-50 text-green-800";
-  if (status === "NEEDS_CORRECTION") return "border-amber-200 bg-amber-50 text-amber-900";
-  return "border-blue-200 bg-blue-50 text-blue-800";
-}
-
 function typeTone(applicationType?: string): string {
   if (applicationType === "RENEWAL") return "border-violet-200 bg-violet-50 text-violet-700";
-  if (applicationType === "CLOSURE") return "border-slate-200 bg-slate-100 text-slate-700";
   return "border-teal-200 bg-teal-50 text-teal-700";
 }
 
@@ -83,7 +79,6 @@ function typeLabel(applicationType?: string): string | null {
   if (!applicationType) return null;
   if (applicationType === "NEW") return "New";
   if (applicationType === "RENEWAL") return "Renewal";
-  if (applicationType === "CLOSURE") return "Closure";
   return applicationType;
 }
 
@@ -113,6 +108,7 @@ export function LeafletBusinessMap({
       />
 
       <MapClickHandler onSelectPosition={onSelectPosition} />
+      <MapRecenter selectedPosition={selectedPosition} />
 
       {markers.map((marker) => (
         <CircleMarker
@@ -142,15 +138,6 @@ export function LeafletBusinessMap({
                     )}`}
                   >
                     {typeLabel(marker.applicationType)}
-                  </span>
-                ) : null}
-                {marker.status ? (
-                  <span
-                    className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${statusTone(
-                      marker.status
-                    )}`}
-                  >
-                    {statusLabel(marker.status)}
                   </span>
                 ) : null}
                 <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-600">
@@ -202,22 +189,26 @@ export function LeafletBusinessMap({
       ))}
 
       {selectedPosition ? (
-        <CircleMarker
-          center={selectedPosition}
-          radius={10}
-          pathOptions={{
-            color: "#dc2626",
-            fillColor: "#dc2626",
-            fillOpacity: 0.9,
-            weight: 2,
-          }}
+        <Marker
+          position={selectedPosition}
+          draggable={Boolean(onSelectPosition)}
+          eventHandlers={
+            onSelectPosition
+              ? {
+                  dragend(event) {
+                    const next = event.target.getLatLng();
+                    onSelectPosition({ latitude: next.lat, longitude: next.lng });
+                  },
+                }
+              : undefined
+          }
         >
           <Popup className="leaflet-business-map-popup">
             <div className="min-w-[240px] space-y-3 text-sm">
               <div className="space-y-1.5">
                 <p className="text-base font-semibold tracking-tight text-slate-900">{selectedLabel}</p>
                 <p className="text-sm leading-5 text-slate-600">
-                  Current applicant-selected map pin within the EB Magalona map boundary.
+                  Click map or drag marker to set exact business location pin.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -236,7 +227,7 @@ export function LeafletBusinessMap({
               </div>
             </div>
           </Popup>
-        </CircleMarker>
+        </Marker>
       ) : null}
     </MapContainer>
   );

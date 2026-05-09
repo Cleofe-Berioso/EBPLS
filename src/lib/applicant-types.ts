@@ -1,11 +1,19 @@
 export type BusinessType =
   | "Sole Proprietorship"
-  | "One Person Corporation"
   | "Partnership"
   | "Corporation"
   | "Cooperative";
 
+export type PaymentFrequencyOption = "ANNUAL" | "BI_ANNUAL" | "QUARTERLY";
+
 export type PropertyOwnership = "Owned" | "Not Owned";
+
+export interface FeeLineItemInput {
+  id?: string;
+  description: string;
+  amount: number;
+  isSystemGenerated?: boolean;
+}
 
 export type ApplicationStatus =
   | "Draft"
@@ -72,13 +80,21 @@ export interface ApplicantApplicationRow {
 export interface BusinessInfo {
   businessType: BusinessType;
   registrationNumber: string;
+  paymentFrequency: PaymentFrequencyOption;
   tin: string;
   businessName: string;
   tradeName: string;
   ownerName: string;
+  sex?: string;
   nationality: string;
   email: string;
   phone: string;
+  country?: string;
+  countryCode?: string;
+  province?: string;
+  provinceCode?: string;
+  cityMunicipality?: string;
+  streetAddress?: string;
   mainOfficeAddress: string;
   businessAddress: string;
   sameAsMainOffice: boolean;
@@ -96,4 +112,7 @@ export interface BusinessInfo {
   businessActivity: string;
   lineOfBusiness: string;
   assetSize: string;
+  isMarket: boolean;
+  isAgriculture: boolean;
+  isLiquorOrTobacco?: boolean;
 }

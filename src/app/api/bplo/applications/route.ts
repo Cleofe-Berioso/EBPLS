@@ -17,13 +17,7 @@ export async function GET(req: Request) {
         | "ALL"
         | "SUBMITTED"
         | "UNDER_REVIEW"
-        | "ASSESSED"
-        | "APPROVED_FOR_PAYMENT"
-        | "PAID"
-        | "FOR_RELEASE"
-        | "RELEASED"
         | "RETURNED_FOR_CORRECTION"
-        | "REJECTED"
         | null
     ) ?? "ALL",
   });

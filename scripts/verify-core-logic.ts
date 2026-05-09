@@ -16,3 +16,5 @@ assert(toReleasePaymentAmount(annual, "BI_ANNUAL") === 3000, "Bi-annual frequenc
 assert(toReleasePaymentAmount(annual, "QUARTERLY") === 1500, "Quarterly frequency failed");
 
 console.log("verify-core-logic: PASS");
+
+export {};

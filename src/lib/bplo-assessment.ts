@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
-import { computeMayorsPermitFee, sumFeeComponents } from "@/lib/fee-computation";
+import { assertStatusTransition } from "@/lib/application-status";
+import { computeMayorsPermitFee } from "@/lib/fee-computation";
 import { getRuntimeFeeSettings } from "@/lib/fee-settings";
 import { toMoneyNumber } from "@/lib/money";
-import type { BusinessInfo } from "@/lib/applicant-types";
+import type { BusinessInfo, FeeLineItemInput } from "@/lib/applicant-types";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -16,6 +17,16 @@ type DbApplicationStatus =
   | "RELEASED"
   | "RETURNED_FOR_CORRECTION"
   | "REJECTED";
+
+type PaymentFrequency = "ANNUAL" | "BI_ANNUAL" | "QUARTERLY";
+const PAYMENT_FREQUENCIES: PaymentFrequency[] = ["ANNUAL", "BI_ANNUAL", "QUARTERLY"];
+
+const MAYORS_PERMIT_FEE_LABEL = "Mayor's Permit Fee";
+const REGULATORY_FEES_LABEL = "Regulatory Fees";
+const RENEWAL_SURCHARGE_LABEL = "Renewal Surcharge";
+const RENEWAL_INTEREST_LABEL = "Renewal Interest";
+const LIQUOR_TOBACCO_SURCHARGE_LABEL = "Liquor/Tobacco Surcharge (25%)";
+const CLOSURE_CERTIFICATE_FEE_LABEL = "Closure Certificate Fee";
 
 export interface AssessmentFeeRow {
   id: string;
@@ -31,28 +42,34 @@ export interface AssessmentFeeRow {
   assessmentStatus: "DRAFT" | "GENERATED" | null;
 }
 
+export interface AssessmentLineItem {
+  id: string;
+  description: string;
+  amount: number;
+  sortOrder: number;
+  isSystemGenerated: boolean;
+}
+
 export interface AssessmentDetail {
-  // Application summary
   id: string;
   applicationNumber: string;
   applicationType: "NEW" | "RENEWAL" | "CLOSURE";
   status: string;
   rawStatus: DbApplicationStatus;
   submittedAt: string | null;
-  // Applicant
   applicant: { id: string; name: string; email: string };
-  // Business info
   businessName: string;
   lineOfBusiness: string;
   assetSize: string;
   totalEmployees: string;
   businessType: string;
   businessActivity: string;
-  // Computed fees suggestion
+  applicantPaymentFrequency: PaymentFrequency | null;
   suggestedFees: {
     mayorsPermitFee: number;
     regulatoryFees: number;
     surcharge: number;
+    liquorTobaccoSurcharge: number;
     interest: number;
     closureCertificateFee: number;
     computation: string;
@@ -66,8 +83,9 @@ export interface AssessmentDetail {
     workerBasedFee: number;
     selectedMayorPermitFee: number;
     specialRuleApplied: string | null;
+    overdueMonths: number;
   };
-  // Existing assessment if any
+  suggestedLineItems: AssessmentLineItem[];
   assessment: SavedAssessment | null;
 }
 
@@ -75,7 +93,7 @@ export interface SavedAssessment {
   id: string;
   assessmentNumber: string;
   status: "DRAFT" | "GENERATED";
-  paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY";
+  paymentFrequency: PaymentFrequency;
   annualAssessedAmount: number;
   releasePaymentAmount: number;
   amountPaid: number;
@@ -87,6 +105,7 @@ export interface SavedAssessment {
   penalties: number;
   surcharge: number;
   interest: number;
+  closurePaymentDues: number;
   closureCertificateFee: number;
   arrears: number;
   otherCharges: number;
@@ -96,20 +115,22 @@ export interface SavedAssessment {
   generatedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  lineItems: AssessmentLineItem[];
 }
 
 export interface AssessmentInput {
-  paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY";
-  mayorsPermitFee: number;
-  regulatoryFees: number;
-  additionalCharges: number;
-  penalties: number;
-  surcharge: number;
-  interest: number;
-  closureCertificateFee: number;
-  arrears: number;
-  otherCharges: number;
+  lineItems: FeeLineItemInput[];
+  closurePaymentDues?: number;
   remarks?: string;
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function clampMoney(value: unknown): number {
+  const parsed = typeof value === "number" ? value : parseFloat(String(value ?? "0"));
+  return Number.isFinite(parsed) && parsed > 0 ? roundMoney(parsed) : 0;
 }
 
 function resolveBusinessName(formData: unknown, fallback: string | null): string {
@@ -119,8 +140,13 @@ function resolveBusinessName(formData: unknown, fallback: string | null): string
 
 function resolveField(formData: unknown, key: keyof BusinessInfo): string {
   const form = formData as Partial<BusinessInfo>;
-  const val = form[key];
-  return (typeof val === "string" ? val : null) ?? "-";
+  const value = form[key];
+  return (typeof value === "string" ? value : null) ?? "-";
+}
+
+function resolveLiquorOrTobacco(formData: unknown): boolean {
+  const maybeForm = formData as Partial<BusinessInfo>;
+  return Boolean(maybeForm.isLiquorOrTobacco);
 }
 
 function toDateOnly(date: Date | null): string {
@@ -131,41 +157,25 @@ function toDateOnly(date: Date | null): string {
 async function generateAssessmentNumber(dbClient: any = prisma): Promise<string> {
   const year = new Date().getFullYear();
   const count = await dbClient.feeAssessment.count();
-  const seq = String(count + 1).padStart(5, "0");
-  return `TOP-${year}-${seq}`;
+  return `TOP-${year}-${String(count + 1).padStart(5, "0")}`;
 }
 
-function toSavedAssessment(row: {
-  id: string;
-  assessmentNumber: string;
-  status: string;
-  paymentFrequency: string;
-  annualAssessedAmount: any;
-  releasePaymentAmount: any;
-  amountPaid: any;
-  remainingBalance: any;
-  paymentStatus: string;
-  mayorsPermitFee: any;
-  regulatoryFees: any;
-  additionalCharges: any;
-  penalties: any;
-  surcharge: any;
-  interest: any;
-  closureCertificateFee: any;
-  arrears: any;
-  otherCharges: any;
-  totalAmount: any;
-  remarks: string | null;
-  computedById: string | null;
-  generatedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): SavedAssessment {
+function toAssessmentLineItem(row: any): AssessmentLineItem {
+  return {
+    id: row.id,
+    description: row.description,
+    amount: toMoneyNumber(row.amount),
+    sortOrder: row.sortOrder,
+    isSystemGenerated: row.isSystemGenerated,
+  };
+}
+
+function toSavedAssessment(row: any): SavedAssessment {
   return {
     id: row.id,
     assessmentNumber: row.assessmentNumber,
     status: row.status as "DRAFT" | "GENERATED",
-    paymentFrequency: row.paymentFrequency as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY",
+    paymentFrequency: row.paymentFrequency as PaymentFrequency,
     annualAssessedAmount: toMoneyNumber(row.annualAssessedAmount),
     releasePaymentAmount: toMoneyNumber(row.releasePaymentAmount),
     amountPaid: toMoneyNumber(row.amountPaid),
@@ -177,6 +187,7 @@ function toSavedAssessment(row: {
     penalties: toMoneyNumber(row.penalties),
     surcharge: toMoneyNumber(row.surcharge),
     interest: toMoneyNumber(row.interest),
+    closurePaymentDues: toMoneyNumber(row.closurePaymentDues),
     closureCertificateFee: toMoneyNumber(row.closureCertificateFee),
     arrears: toMoneyNumber(row.arrears),
     otherCharges: toMoneyNumber(row.otherCharges),
@@ -186,7 +197,319 @@ function toSavedAssessment(row: {
     generatedAt: row.generatedAt ? row.generatedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    lineItems: (row.lineItems ?? []).map(toAssessmentLineItem),
   };
+}
+
+function monthDifference(startDate: Date, endDate: Date): number {
+  const yearDiff = endDate.getUTCFullYear() - startDate.getUTCFullYear();
+  const monthDiff = endDate.getUTCMonth() - startDate.getUTCMonth();
+  const rawMonths = yearDiff * 12 + monthDiff;
+  return endDate.getUTCDate() > startDate.getUTCDate() ? rawMonths + 1 : rawMonths;
+}
+
+function resolvePermitExpirationDate(application: any): Date | null {
+  const directDate = application.businessRecord?.permitExpirationDate ?? null;
+  if (directDate) {
+    return directDate;
+  }
+
+  const latestReleased = application.businessRecord?.applications?.[0]?.permitIssuance?.releasedAt ?? null;
+  if (!latestReleased) {
+    return null;
+  }
+
+  return new Date(Date.UTC(latestReleased.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
+}
+
+function resolveOverdueMonths(application: any): number {
+  if (application.applicationType !== "RENEWAL") {
+    return 0;
+  }
+
+  const expirationDate = resolvePermitExpirationDate(application);
+  if (!expirationDate) {
+    return 0;
+  }
+
+  const now = new Date();
+  if (now <= expirationDate) {
+    return 0;
+  }
+
+  return Math.max(0, monthDifference(expirationDate, now));
+}
+
+function buildSuggestedLineItems(
+  applicationType: "NEW" | "RENEWAL" | "CLOSURE",
+  suggestedFees: AssessmentDetail["suggestedFees"]
+): AssessmentLineItem[] {
+  const items: AssessmentLineItem[] = [];
+
+  if (applicationType !== "CLOSURE") {
+    items.push({
+      id: `${MAYORS_PERMIT_FEE_LABEL}-suggested`,
+      description: MAYORS_PERMIT_FEE_LABEL,
+      amount: suggestedFees.mayorsPermitFee,
+      sortOrder: items.length,
+      isSystemGenerated: false,
+    });
+
+    if (suggestedFees.regulatoryFees > 0) {
+      items.push({
+        id: `${REGULATORY_FEES_LABEL}-suggested`,
+        description: REGULATORY_FEES_LABEL,
+        amount: suggestedFees.regulatoryFees,
+        sortOrder: items.length,
+        isSystemGenerated: false,
+      });
+    }
+
+    if (suggestedFees.liquorTobaccoSurcharge > 0) {
+      items.push({
+        id: `${LIQUOR_TOBACCO_SURCHARGE_LABEL}-system`,
+        description: LIQUOR_TOBACCO_SURCHARGE_LABEL,
+        amount: suggestedFees.liquorTobaccoSurcharge,
+        sortOrder: items.length,
+        isSystemGenerated: true,
+      });
+    }
+  }
+
+  if (applicationType === "RENEWAL" && suggestedFees.overdueMonths > 12) {
+    items.push({
+      id: `${RENEWAL_SURCHARGE_LABEL}-system`,
+      description: RENEWAL_SURCHARGE_LABEL,
+      amount: suggestedFees.surcharge,
+      sortOrder: items.length,
+      isSystemGenerated: true,
+    });
+    items.push({
+      id: `${RENEWAL_INTEREST_LABEL}-system`,
+      description: RENEWAL_INTEREST_LABEL,
+      amount: suggestedFees.interest,
+      sortOrder: items.length,
+      isSystemGenerated: true,
+    });
+  }
+
+  if (applicationType === "CLOSURE") {
+    items.push({
+      id: `${CLOSURE_CERTIFICATE_FEE_LABEL}-system`,
+      description: CLOSURE_CERTIFICATE_FEE_LABEL,
+      amount: suggestedFees.closureCertificateFee,
+      sortOrder: items.length,
+      isSystemGenerated: true,
+    });
+  }
+
+  return items;
+}
+
+function toReleasePaymentAmount(annualAssessedAmount: number, frequency: PaymentFrequency): number {
+  // TOP release now requires full payment amount regardless of installment preference metadata.
+  void frequency;
+  return annualAssessedAmount;
+}
+
+function resolveApplicantPaymentFrequency(formData: unknown): PaymentFrequency | null {
+  const maybeForm = (formData ?? {}) as Record<string, unknown>;
+  const raw = maybeForm.paymentFrequency;
+  if (typeof raw !== "string") return null;
+  const normalized = raw.trim() as PaymentFrequency;
+  return PAYMENT_FREQUENCIES.includes(normalized) ? normalized : null;
+}
+
+function validateCustomLineItems(lineItems: FeeLineItemInput[]): void {
+  const customItems = lineItems.filter((item) => !item.isSystemGenerated);
+  customItems.forEach((item, index) => {
+    const trimmedDesc = item.description?.trim() ?? "";
+    if (!trimmedDesc) {
+      throw new Error(`Custom fee item #${index + 1} has an empty description. Please enter a fee description.`);
+    }
+    if (item.amount <= 0) {
+      throw new Error(`Custom fee item #${index + 1} "${trimmedDesc}" has an amount of ${item.amount}. Amount must be greater than 0.`);
+    }
+  });
+}
+
+function sanitizeCustomLineItems(lineItems: FeeLineItemInput[]): Array<{ description: string; amount: number }> {
+  return lineItems
+    .filter((item) => !item.isSystemGenerated)
+    .map((item) => ({
+      description: item.description.trim(),
+      amount: clampMoney(item.amount),
+    }));
+}
+
+function buildAutomaticRenewalCharges(baseMayorPermitFee: number, overdueMonths: number, settings: any) {
+  if (overdueMonths <= 12 || baseMayorPermitFee <= 0) {
+    return { surcharge: 0, interest: 0 };
+  }
+
+  const surchargeRate = typeof settings?.lateRenewalSurchargeRate === "number"
+    ? settings.lateRenewalSurchargeRate
+    : 0.25;
+  const interestRate = typeof settings?.lateRenewalMonthlyInterestRate === "number"
+    ? settings.lateRenewalMonthlyInterestRate
+    : 0.02;
+
+  return {
+    surcharge: roundMoney(baseMayorPermitFee * surchargeRate),
+    interest: roundMoney(baseMayorPermitFee * interestRate * overdueMonths),
+  };
+}
+
+function buildAutomaticLiquorTobaccoSurcharge(
+  applicationType: "NEW" | "RENEWAL" | "CLOSURE",
+  baseMayorPermitFee: number,
+  isLiquorOrTobacco: boolean,
+  settings: any
+) {
+  if (applicationType === "CLOSURE") {
+    return 0;
+  }
+
+  if (!isLiquorOrTobacco || baseMayorPermitFee <= 0) {
+    return 0;
+  }
+
+  const percent = typeof settings?.penalties?.liquorTobaccoAddOnPercent === "number"
+    ? settings.penalties.liquorTobaccoAddOnPercent
+    : 25;
+
+  return roundMoney(baseMayorPermitFee * (percent / 100));
+}
+
+function buildAssessmentTotals(
+  applicationType: "NEW" | "RENEWAL" | "CLOSURE",
+  customLineItems: Array<{ description: string; amount: number }>,
+  isLiquorOrTobacco: boolean,
+  closurePaymentDues: number,
+  overdueMonths: number,
+  runtimeSettings: any
+) {
+  const isClosure = applicationType === "CLOSURE";
+  const mayorLine = isClosure
+    ? undefined
+    : customLineItems.find((item) => item.description === MAYORS_PERMIT_FEE_LABEL);
+  const regulatoryLine = isClosure
+    ? undefined
+    : customLineItems.find((item) => item.description === REGULATORY_FEES_LABEL);
+  const automaticRenewal = isClosure
+    ? { surcharge: 0, interest: 0 }
+    : buildAutomaticRenewalCharges(mayorLine?.amount ?? 0, overdueMonths, runtimeSettings);
+  const liquorTobaccoSurcharge = buildAutomaticLiquorTobaccoSurcharge(
+    applicationType,
+    mayorLine?.amount ?? 0,
+    isLiquorOrTobacco,
+    runtimeSettings
+  );
+
+  const systemLineItems: Array<{ description: string; amount: number; isSystemGenerated: boolean }> = [];
+  if (!isClosure && liquorTobaccoSurcharge > 0) {
+    systemLineItems.push({
+      description: LIQUOR_TOBACCO_SURCHARGE_LABEL,
+      amount: liquorTobaccoSurcharge,
+      isSystemGenerated: true,
+    });
+  }
+  if (applicationType === "RENEWAL" && overdueMonths > 12) {
+    systemLineItems.push({
+      description: RENEWAL_SURCHARGE_LABEL,
+      amount: automaticRenewal.surcharge,
+      isSystemGenerated: true,
+    });
+    systemLineItems.push({
+      description: RENEWAL_INTEREST_LABEL,
+      amount: automaticRenewal.interest,
+      isSystemGenerated: true,
+    });
+  }
+  if (isClosure) {
+    systemLineItems.push({
+      description: CLOSURE_CERTIFICATE_FEE_LABEL,
+      amount: 100,
+      isSystemGenerated: true,
+    });
+  }
+
+  const allLineItems = [
+    ...customLineItems.map((item) => ({ ...item, isSystemGenerated: false })),
+    ...systemLineItems,
+  ].filter((item) => item.amount > 0);
+
+  const totalCustom = customLineItems.reduce((sum, item) => sum + item.amount, 0);
+  const totalSystem = systemLineItems.reduce((sum, item) => sum + item.amount, 0);
+  const totalAmount = roundMoney(totalCustom + totalSystem + closurePaymentDues);
+
+  const knownCustomAmount = [mayorLine?.amount ?? 0, regulatoryLine?.amount ?? 0].reduce((sum, item) => sum + item, 0);
+  const uncategorizedCustomAmount = roundMoney(totalCustom - knownCustomAmount);
+
+  return {
+    lineItems: allLineItems,
+    mayorsPermitFee: isClosure ? 0 : mayorLine?.amount ?? 0,
+    regulatoryFees: isClosure ? 0 : regulatoryLine?.amount ?? 0,
+    additionalCharges: 0,
+    penalties: 0,
+    surcharge: roundMoney(automaticRenewal.surcharge + liquorTobaccoSurcharge),
+    interest: automaticRenewal.interest,
+    closurePaymentDues,
+    closureCertificateFee: isClosure ? 100 : 0,
+    arrears: 0,
+    otherCharges: uncategorizedCustomAmount,
+    totalAmount,
+  };
+}
+
+function sanitizeAssessmentInput(input: AssessmentInput): AssessmentInput {
+  return {
+    lineItems: input.lineItems ?? [],
+    closurePaymentDues: clampMoney(input.closurePaymentDues),
+    remarks: input.remarks?.trim() ?? undefined,
+  };
+}
+
+function ensureTopHasPayableItems(applicationType: "NEW" | "RENEWAL" | "CLOSURE", totals: ReturnType<typeof buildAssessmentTotals>) {
+  if (totals.totalAmount > 0) {
+    return;
+  }
+
+  if (applicationType === "CLOSURE") {
+    throw new Error("Closure assessment must include at least the fixed closure certificate fee or payment dues.");
+  }
+
+  throw new Error("Assessment must include at least one fee item before generating the Tax Order of Payment.");
+}
+
+async function getAssessmentApplication(applicationId: string, dbClient: any = prisma) {
+  return dbClient.businessApplication.findUnique({
+    where: { id: applicationId },
+    include: {
+      applicant: { select: { id: true, name: true, email: true } },
+      businessRecord: {
+        include: {
+          applications: {
+            where: { status: "RELEASED" },
+            orderBy: { updatedAt: "desc" },
+            take: 1,
+            include: {
+              permitIssuance: {
+                select: { releasedAt: true },
+              },
+            },
+          },
+        },
+      },
+      feeAssessment: {
+        include: {
+          lineItems: {
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+      },
+    },
+  });
 }
 
 export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[]> {
@@ -215,20 +538,11 @@ export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[
   }));
 }
 
-export async function getApplicationForAssessment(
-  applicationId: string
-): Promise<AssessmentDetail | null> {
-  const row = await prisma.businessApplication.findUnique({
-    where: { id: applicationId },
-    include: {
-      applicant: { select: { id: true, name: true, email: true } },
-      businessRecord: true,
-      feeAssessment: true,
-    },
-  });
-
-  if (!row) return null;
-  if (row.status !== "ASSESSED") return null;
+export async function getApplicationForAssessment(applicationId: string): Promise<AssessmentDetail | null> {
+  const row = await getAssessmentApplication(applicationId);
+  if (!row || row.status !== "ASSESSED") {
+    return null;
+  }
 
   const lineOfBusiness = resolveField(row.formData, "lineOfBusiness");
   const assetSize = resolveField(row.formData, "assetSize");
@@ -236,14 +550,57 @@ export async function getApplicationForAssessment(
   const businessActivity = resolveField(row.formData, "businessActivity");
   const businessType = resolveField(row.formData, "businessType");
   const businessName = resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null);
-
+  const overdueMonths = resolveOverdueMonths(row);
   const runtimeSettings = await getRuntimeFeeSettings();
-  const suggestedFees = computeMayorsPermitFee({
-    applicationType: row.applicationType as "NEW" | "RENEWAL" | "CLOSURE",
-    lineOfBusiness: lineOfBusiness !== "-" ? lineOfBusiness : null,
-    assetSize: assetSize !== "-" ? assetSize : null,
-    totalEmployees: totalEmployees !== "-" ? totalEmployees : null,
-  }, runtimeSettings);
+  const isLiquorOrTobacco = resolveLiquorOrTobacco(row.formData);
+
+  const computed = computeMayorsPermitFee(
+    {
+      applicationType: row.applicationType as "NEW" | "RENEWAL" | "CLOSURE",
+      lineOfBusiness: lineOfBusiness !== "-" ? lineOfBusiness : null,
+      assetSize: assetSize !== "-" ? assetSize : null,
+      totalEmployees: totalEmployees !== "-" ? totalEmployees : null,
+    },
+    runtimeSettings
+  );
+
+  const automaticRenewal = buildAutomaticRenewalCharges(
+    computed.selectedMayorPermitFee,
+    overdueMonths,
+    runtimeSettings
+  );
+  const automaticLiquorTobaccoSurcharge = buildAutomaticLiquorTobaccoSurcharge(
+    row.applicationType,
+    computed.mayorsPermitFee,
+    isLiquorOrTobacco,
+    runtimeSettings
+  );
+
+  const suggestedFees = {
+    mayorsPermitFee: computed.mayorsPermitFee,
+    regulatoryFees: computed.regulatoryFees,
+    surcharge: automaticRenewal.surcharge,
+    liquorTobaccoSurcharge: automaticLiquorTobaccoSurcharge,
+    interest: automaticRenewal.interest,
+    closureCertificateFee: row.applicationType === "CLOSURE" ? 100 : computed.closureCertificateFee,
+    computation: computed.computation,
+    category: computed.category,
+    sizeClassification: computed.sizeClassification,
+    detectedCategory: computed.detectedCategory,
+    assetClassification: computed.assetClassification,
+    workerClassification: computed.workerClassification,
+    selectedClassification: computed.selectedClassification,
+    assetBasedFee: computed.assetBasedFee,
+    workerBasedFee: computed.workerBasedFee,
+    selectedMayorPermitFee: computed.selectedMayorPermitFee,
+    specialRuleApplied:
+      automaticLiquorTobaccoSurcharge > 0
+        ? `${computed.specialRuleApplied ? `${computed.specialRuleApplied} | ` : ""}Liquor/Tobacco surcharge applies at assessment based on Mayor's Permit Fee`
+        : overdueMonths > 12
+          ? `Late renewal beyond 1 year (${overdueMonths} months overdue)`
+          : computed.specialRuleApplied,
+    overdueMonths,
+  };
 
   return {
     id: row.id,
@@ -259,52 +616,176 @@ export async function getApplicationForAssessment(
     totalEmployees,
     businessType,
     businessActivity,
-    suggestedFees: {
-      mayorsPermitFee: suggestedFees.mayorsPermitFee,
-      regulatoryFees: suggestedFees.regulatoryFees,
-      surcharge: suggestedFees.surcharge,
-      interest: suggestedFees.interest,
-      closureCertificateFee: suggestedFees.closureCertificateFee,
-      computation: suggestedFees.computation,
-      category: suggestedFees.category,
-      sizeClassification: suggestedFees.sizeClassification,
-      detectedCategory: suggestedFees.detectedCategory,
-      assetClassification: suggestedFees.assetClassification,
-      workerClassification: suggestedFees.workerClassification,
-      selectedClassification: suggestedFees.selectedClassification,
-      assetBasedFee: suggestedFees.assetBasedFee,
-      workerBasedFee: suggestedFees.workerBasedFee,
-      selectedMayorPermitFee: suggestedFees.selectedMayorPermitFee,
-      specialRuleApplied: suggestedFees.specialRuleApplied,
-    },
+    applicantPaymentFrequency: resolveApplicantPaymentFrequency(row.formData),
+    suggestedFees,
+    suggestedLineItems: buildSuggestedLineItems(row.applicationType, suggestedFees),
     assessment: row.feeAssessment ? toSavedAssessment(row.feeAssessment) : null,
   };
 }
 
-function sanitizeFeeInput(input: AssessmentInput): AssessmentInput {
-  function clamp(val: unknown): number {
-    const n = typeof val === "number" ? val : parseFloat(String(val ?? "0"));
-    return isNaN(n) || n < 0 ? 0 : Math.round(n * 100) / 100;
-  }
-  return {
-    paymentFrequency: input.paymentFrequency,
-    mayorsPermitFee: clamp(input.mayorsPermitFee),
-    regulatoryFees: clamp(input.regulatoryFees),
-    additionalCharges: clamp(input.additionalCharges),
-    penalties: clamp(input.penalties),
-    surcharge: clamp(input.surcharge),
-    interest: clamp(input.interest),
-    closureCertificateFee: clamp(input.closureCertificateFee),
-    arrears: clamp(input.arrears),
-    otherCharges: clamp(input.otherCharges),
-    remarks: input.remarks?.trim() ?? undefined,
-  };
-}
+async function persistAssessment(
+  applicationId: string,
+  bploUserId: string,
+  input: AssessmentInput,
+  mode: "DRAFT" | "GENERATED"
+): Promise<SavedAssessment> {
+  const sanitized = sanitizeAssessmentInput(input);
 
-function toReleasePaymentAmount(annualAssessedAmount: number, frequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY"): number {
-  if (frequency === "BI_ANNUAL") return Math.round((annualAssessedAmount / 2) * 100) / 100;
-  if (frequency === "QUARTERLY") return Math.round((annualAssessedAmount / 4) * 100) / 100;
-  return annualAssessedAmount;
+  return prisma.$transaction(async (tx: any) => {
+    const application = await getAssessmentApplication(applicationId, tx);
+    if (!application) {
+      throw new Error("Application not found");
+    }
+
+    if (application.status !== "ASSESSED") {
+      throw new Error(
+        mode === "GENERATED"
+          ? `Tax Order of Payment can only be generated for ASSESSED applications. Current status: ${application.status}`
+          : "Assessment can only be saved for ASSESSED applications"
+      );
+    }
+
+    const existing = application.feeAssessment
+      ? {
+          id: application.feeAssessment.id,
+          assessmentNumber: application.feeAssessment.assessmentNumber,
+          status: application.feeAssessment.status,
+        }
+      : null;
+
+    if (existing?.status === "GENERATED" && mode === "DRAFT") {
+      throw new Error("Tax Order of Payment has already been generated. Cannot revert to draft.");
+    }
+
+    const runtimeSettings = await getRuntimeFeeSettings();
+    const applicantPaymentFrequency = resolveApplicantPaymentFrequency(application.formData);
+    if (!applicantPaymentFrequency) {
+      throw new Error("Payment frequency must be selected by the applicant before assessment finalization.");
+    }
+
+    validateCustomLineItems(sanitized.lineItems);
+    const customLineItems = sanitizeCustomLineItems(sanitized.lineItems);
+    const overdueMonths = resolveOverdueMonths(application);
+    const isLiquorOrTobacco = resolveLiquorOrTobacco(application.formData);
+    const totals = buildAssessmentTotals(
+      application.applicationType,
+      customLineItems,
+      isLiquorOrTobacco,
+      clampMoney(sanitized.closurePaymentDues),
+      overdueMonths,
+      runtimeSettings
+    );
+
+    if (mode === "GENERATED") {
+      ensureTopHasPayableItems(application.applicationType, totals);
+    }
+
+    const annualAssessedAmount = totals.totalAmount;
+    const releasePaymentAmount = toReleasePaymentAmount(annualAssessedAmount, applicantPaymentFrequency);
+    const assessmentNumber = existing?.assessmentNumber ?? (await generateAssessmentNumber(tx));
+    const now = new Date();
+
+    const saved = await tx.feeAssessment.upsert({
+      where: { applicationId },
+      create: {
+        applicationId,
+        assessmentNumber,
+        status: mode,
+        paymentFrequency: applicantPaymentFrequency,
+        annualAssessedAmount,
+        releasePaymentAmount,
+        amountPaid: 0,
+        remainingBalance: annualAssessedAmount,
+        paymentStatus: "UNPAID",
+        mayorsPermitFee: totals.mayorsPermitFee,
+        regulatoryFees: totals.regulatoryFees,
+        additionalCharges: totals.additionalCharges,
+        penalties: totals.penalties,
+        surcharge: totals.surcharge,
+        interest: totals.interest,
+        closurePaymentDues: totals.closurePaymentDues,
+        closureCertificateFee: totals.closureCertificateFee,
+        arrears: totals.arrears,
+        otherCharges: totals.otherCharges,
+        totalAmount: totals.totalAmount,
+        remarks: sanitized.remarks ?? null,
+        computedById: bploUserId,
+        generatedAt: mode === "GENERATED" ? now : null,
+      },
+      update: {
+        status: mode,
+        paymentFrequency: applicantPaymentFrequency,
+        annualAssessedAmount,
+        releasePaymentAmount,
+        amountPaid: 0,
+        remainingBalance: annualAssessedAmount,
+        paymentStatus: "UNPAID",
+        mayorsPermitFee: totals.mayorsPermitFee,
+        regulatoryFees: totals.regulatoryFees,
+        additionalCharges: totals.additionalCharges,
+        penalties: totals.penalties,
+        surcharge: totals.surcharge,
+        interest: totals.interest,
+        closurePaymentDues: totals.closurePaymentDues,
+        closureCertificateFee: totals.closureCertificateFee,
+        arrears: totals.arrears,
+        otherCharges: totals.otherCharges,
+        totalAmount: totals.totalAmount,
+        remarks: sanitized.remarks ?? null,
+        computedById: bploUserId,
+        generatedAt: mode === "GENERATED" ? now : null,
+      },
+    });
+
+    await tx.feeAssessmentLineItem.deleteMany({
+      where: { feeAssessmentId: saved.id },
+    });
+
+    if (totals.lineItems.length > 0) {
+      await tx.feeAssessmentLineItem.createMany({
+        data: totals.lineItems.map((item, index) => ({
+          feeAssessmentId: saved.id,
+          description: item.description,
+          amount: item.amount,
+          sortOrder: index,
+          isSystemGenerated: item.isSystemGenerated,
+        })),
+      });
+    }
+
+    if (mode === "GENERATED") {
+      assertStatusTransition(application.status, "APPROVED_FOR_PAYMENT");
+      await tx.businessApplication.update({
+        where: { id: applicationId },
+        data: { status: "APPROVED_FOR_PAYMENT" },
+      });
+    }
+
+    await tx.applicationHistory.create({
+      data: {
+        applicationId,
+        actorId: bploUserId,
+        actorRole: "BPLO",
+        fromStatus: application.status,
+        toStatus: mode === "GENERATED" ? "APPROVED_FOR_PAYMENT" : application.status,
+        remarks:
+          mode === "GENERATED"
+            ? `Tax Order of Payment generated. TOP No.: ${assessmentNumber}, Total Amount Due: ₱${totals.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+            : `Assessment draft saved. Assessment No.: ${assessmentNumber}, Total: ₱${totals.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+      },
+    });
+
+    const savedWithLineItems = await tx.feeAssessment.findUniqueOrThrow({
+      where: { id: saved.id },
+      include: {
+        lineItems: {
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    });
+
+    return toSavedAssessment(savedWithLineItems);
+  });
 }
 
 export async function saveAssessmentDraft(
@@ -312,93 +793,7 @@ export async function saveAssessmentDraft(
   bploUserId: string,
   input: AssessmentInput
 ): Promise<SavedAssessment> {
-  const application = await prisma.businessApplication.findUnique({
-    where: { id: applicationId },
-    select: { id: true, status: true },
-  });
-
-  if (!application) throw new Error("Application not found");
-  if (application.status !== "ASSESSED") {
-    throw new Error("Assessment can only be saved for ASSESSED applications");
-  }
-
-  const fees = sanitizeFeeInput(input);
-  // Server recomputes total — never trust client total
-  const totalAmount = sumFeeComponents(fees);
-  const annualAssessedAmount = totalAmount;
-  const releasePaymentAmount = toReleasePaymentAmount(annualAssessedAmount, fees.paymentFrequency);
-
-  const existing = await prisma.feeAssessment.findUnique({
-    where: { applicationId },
-    select: { id: true, assessmentNumber: true, status: true },
-  });
-
-  // Cannot amend a GENERATED TOP (use generate-top to create a new one if needed)
-  if (existing?.status === "GENERATED") {
-    throw new Error("Tax Order of Payment has already been generated. Cannot revert to draft.");
-  }
-
-  const assessmentNumber = existing?.assessmentNumber ?? (await generateAssessmentNumber());
-
-  const saved = await prisma.feeAssessment.upsert({
-    where: { applicationId },
-    create: {
-      applicationId,
-      assessmentNumber,
-      status: "DRAFT",
-      paymentFrequency: fees.paymentFrequency,
-      annualAssessedAmount,
-      releasePaymentAmount,
-      amountPaid: 0,
-      remainingBalance: annualAssessedAmount,
-      paymentStatus: "UNPAID",
-      mayorsPermitFee: fees.mayorsPermitFee,
-      regulatoryFees: fees.regulatoryFees,
-      additionalCharges: fees.additionalCharges,
-      penalties: fees.penalties,
-      surcharge: fees.surcharge,
-      interest: fees.interest,
-      closureCertificateFee: fees.closureCertificateFee,
-      arrears: fees.arrears,
-      otherCharges: fees.otherCharges,
-      totalAmount,
-      remarks: fees.remarks ?? null,
-      computedById: bploUserId,
-    },
-    update: {
-      paymentFrequency: fees.paymentFrequency,
-      annualAssessedAmount,
-      releasePaymentAmount,
-      amountPaid: 0,
-      remainingBalance: annualAssessedAmount,
-      paymentStatus: "UNPAID",
-      mayorsPermitFee: fees.mayorsPermitFee,
-      regulatoryFees: fees.regulatoryFees,
-      additionalCharges: fees.additionalCharges,
-      penalties: fees.penalties,
-      surcharge: fees.surcharge,
-      interest: fees.interest,
-      closureCertificateFee: fees.closureCertificateFee,
-      arrears: fees.arrears,
-      otherCharges: fees.otherCharges,
-      totalAmount,
-      remarks: fees.remarks ?? null,
-      computedById: bploUserId,
-    },
-  });
-
-  await prisma.applicationHistory.create({
-    data: {
-      applicationId,
-      actorId: bploUserId,
-      actorRole: "BPLO",
-      fromStatus: "ASSESSED",
-      toStatus: "ASSESSED",
-      remarks: `Assessment draft saved. Assessment No.: ${assessmentNumber}, Total: ₱${totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
-    },
-  });
-
-  return toSavedAssessment(saved);
+  return persistAssessment(applicationId, bploUserId, input, "DRAFT");
 }
 
 export async function generateTop(
@@ -406,102 +801,5 @@ export async function generateTop(
   bploUserId: string,
   input: AssessmentInput
 ): Promise<SavedAssessment> {
-  const fees = sanitizeFeeInput(input);
-  // Server recomputes total — never trust client
-  const totalAmount = sumFeeComponents(fees);
-  const annualAssessedAmount = totalAmount;
-  const releasePaymentAmount = toReleasePaymentAmount(annualAssessedAmount, fees.paymentFrequency);
-
-  return prisma.$transaction(async (tx: any) => {
-    const application = await tx.businessApplication.findUnique({
-      where: { id: applicationId },
-      select: { id: true, status: true },
-    });
-
-    if (!application) throw new Error("Application not found");
-    // Only ASSESSED applications can have TOP generated
-    if (application.status !== "ASSESSED") {
-      throw new Error(
-        "Tax Order of Payment can only be generated for ASSESSED applications. Current status: " +
-          application.status
-      );
-    }
-
-    const existing = await tx.feeAssessment.findUnique({
-      where: { applicationId },
-      select: { id: true, assessmentNumber: true, status: true },
-    });
-
-    const assessmentNumber = existing?.assessmentNumber ?? (await generateAssessmentNumber(tx));
-    const now = new Date();
-
-    const generated = await tx.feeAssessment.upsert({
-      where: { applicationId },
-      create: {
-        applicationId,
-        assessmentNumber,
-        status: "GENERATED",
-        paymentFrequency: fees.paymentFrequency,
-        annualAssessedAmount,
-        releasePaymentAmount,
-        amountPaid: 0,
-        remainingBalance: annualAssessedAmount,
-        paymentStatus: "UNPAID",
-        mayorsPermitFee: fees.mayorsPermitFee,
-        regulatoryFees: fees.regulatoryFees,
-        additionalCharges: fees.additionalCharges,
-        penalties: fees.penalties,
-        surcharge: fees.surcharge,
-        interest: fees.interest,
-        closureCertificateFee: fees.closureCertificateFee,
-        arrears: fees.arrears,
-        otherCharges: fees.otherCharges,
-        totalAmount,
-        remarks: fees.remarks ?? null,
-        computedById: bploUserId,
-        generatedAt: now,
-      },
-      update: {
-        status: "GENERATED",
-        paymentFrequency: fees.paymentFrequency,
-        annualAssessedAmount,
-        releasePaymentAmount,
-        amountPaid: 0,
-        remainingBalance: annualAssessedAmount,
-        paymentStatus: "UNPAID",
-        mayorsPermitFee: fees.mayorsPermitFee,
-        regulatoryFees: fees.regulatoryFees,
-        additionalCharges: fees.additionalCharges,
-        penalties: fees.penalties,
-        surcharge: fees.surcharge,
-        interest: fees.interest,
-        closureCertificateFee: fees.closureCertificateFee,
-        arrears: fees.arrears,
-        otherCharges: fees.otherCharges,
-        totalAmount,
-        remarks: fees.remarks ?? null,
-        computedById: bploUserId,
-        generatedAt: now,
-      },
-    });
-
-    // Transition application: ASSESSED → APPROVED_FOR_PAYMENT
-    await tx.businessApplication.update({
-      where: { id: applicationId },
-      data: { status: "APPROVED_FOR_PAYMENT" },
-    });
-
-    await tx.applicationHistory.create({
-      data: {
-        applicationId,
-        actorId: bploUserId,
-        actorRole: "BPLO",
-        fromStatus: "ASSESSED",
-        toStatus: "APPROVED_FOR_PAYMENT",
-        remarks: `Tax Order of Payment generated. TOP No.: ${assessmentNumber}, Total Amount Due: ₱${totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
-      },
-    });
-
-    return toSavedAssessment(generated);
-  });
+  return persistAssessment(applicationId, bploUserId, input, "GENERATED");
 }

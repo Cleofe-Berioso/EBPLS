@@ -40,14 +40,14 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
             type="search"
             name="search"
             defaultValue={params.search ?? ""}
-            placeholder="Search application number or applicant email"
+            placeholder="Search by application number or applicant email"
             className="w-full max-w-md rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
           <button type="submit" className={actionButtonStyles("readOnly", "sm")}>
             Search
           </button>
           <Link href="/superadmin/applications" className={actionButtonStyles("secondary", "sm")}>
-            Reset
+            Reset Filters
           </Link>
         </form>
       </FilterBar>
@@ -58,8 +58,8 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
         table={rows.length === 0 ? (
           <div className="p-5">
             <EmptyState
-              title="No records available yet"
-              description="This section will populate as applications are processed and matched to the current search."
+              title="No applications found"
+              description="Try a different application number or applicant email."
             />
           </div>
         ) : (
@@ -112,8 +112,8 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
         mobile={rows.length === 0 ? (
           <div className="p-5">
             <EmptyState
-              title="No records available yet"
-              description="This section will populate as applications are processed and matched to the current search."
+              title="No applications found"
+              description="Try a different application number or applicant email."
             />
           </div>
         ) : (

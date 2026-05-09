@@ -7,7 +7,7 @@ export default function ClosureApplicationPage() {
       <PageHeader
         eyebrow="Applicant"
         title="Closure Application"
-        description="Prepare closure requirements, review the settlement preview, and submit the closure request."
+        description="Prepare closure requirements and submit the closure request for BPLO and MTO assessment."
       />
       <ClosureApplicationForm />
     </section>

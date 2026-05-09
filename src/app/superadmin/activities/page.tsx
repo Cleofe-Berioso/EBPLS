@@ -67,7 +67,7 @@ export default async function SuperAdminActivitiesPage({ searchParams }: PagePro
           <input
             name="transition"
             defaultValue={params.transition ?? ""}
-            placeholder="Status transition (e.g. PAID->FOR_RELEASE)"
+            placeholder="Status change (e.g. PAID->FOR_RELEASE)"
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
           />
           <input
@@ -79,12 +79,12 @@ export default async function SuperAdminActivitiesPage({ searchParams }: PagePro
           <input
             name="applicationNumber"
             defaultValue={params.applicationNumber ?? ""}
-            placeholder="Application number"
+            placeholder="Search by application number"
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
           />
           <div className="flex flex-wrap gap-2 md:col-span-4">
             <button type="submit" className={actionButtonStyles("readOnly", "sm")}>
-              Apply Filters
+              Search
             </button>
           </div>
         </form>
@@ -92,12 +92,12 @@ export default async function SuperAdminActivitiesPage({ searchParams }: PagePro
 
       <ResponsiveDataTable
         title="Activity Timeline"
-        description={`${activities.length} activity record${activities.length === 1 ? "" : "s"} matched the current filters.`}
+        description={`${activities.length} activity record${activities.length === 1 ? "" : "s"} match${activities.length === 1 ? "es" : ""} your filters.`}
         table={activities.length === 0 ? (
           <div className="p-5">
             <EmptyState
-              title="No records available yet"
-              description="This section will populate as applications are processed and history entries are recorded."
+              title="No activity yet"
+              description="Activity entries will appear here once workflow changes are recorded."
             />
           </div>
         ) : (

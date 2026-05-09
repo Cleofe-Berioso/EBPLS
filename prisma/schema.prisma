@@ -67,6 +67,7 @@ model BusinessRecord {
   businessName       String
   tradeName          String
   ownerName          String
+  sex                String?
   nationality        String
   email              String
   phone              String
@@ -87,6 +88,9 @@ model BusinessRecord {
   businessActivity   String?
   lineOfBusiness     String?
   assetSize          String?
+  isMarket           Boolean  @default(false)
+  isAgriculture      Boolean  @default(false)
+  permitExpirationDate DateTime?
   businessStatus     BusinessRecordStatus @default(ACTIVE)
   closedAt           DateTime?
   closureApplicationId String?
@@ -289,6 +293,7 @@ model FeeAssessment {
   penalties             Decimal             @default(0)
   surcharge             Decimal             @default(0)
   interest              Decimal             @default(0)
+  closurePaymentDues    Decimal             @default(0)
   closureCertificateFee Decimal             @default(0)
   arrears               Decimal             @default(0)
   otherCharges          Decimal             @default(0)
@@ -301,8 +306,24 @@ model FeeAssessment {
 
   application  BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   computedBy   User?               @relation("AssessmentComputedBy", fields: [computedById], references: [id], onDelete: SetNull)
+  lineItems    FeeAssessmentLineItem[]
 
   @@index([applicationId])
+}
+
+model FeeAssessmentLineItem {
+  id               String        @id @default(cuid())
+  feeAssessmentId  String
+  description      String
+  amount           Decimal       @default(0)
+  sortOrder        Int           @default(0)
+  isSystemGenerated Boolean      @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  feeAssessment FeeAssessment @relation(fields: [feeAssessmentId], references: [id], onDelete: Cascade)
+
+  @@index([feeAssessmentId, sortOrder])
 }
 
 model PaymentReference {

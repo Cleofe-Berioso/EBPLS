@@ -16,6 +16,7 @@ export const EB_MAGALONA_BOUNDS = {
 } as const;
 
 type ApplicationType = "NEW" | "RENEWAL" | "CLOSURE";
+type BusinessMapApplicationType = "NEW" | "RENEWAL";
 type LocationStatus = "PENDING" | "VERIFIED" | "NEEDS_CORRECTION";
 
 export interface ApplicantBusinessLocationRow {
@@ -47,7 +48,7 @@ export interface BusinessLocationMapRow {
   businessCategoryLabel: string;
   businessCategoryColor: string;
   applicationNumber: string;
-  applicationType: ApplicationType;
+  applicationType: BusinessMapApplicationType;
   permitOrCertificateNumber: string | null;
   latitude: number;
   longitude: number;
@@ -59,8 +60,7 @@ export interface BusinessLocationMapRow {
 }
 
 export interface BusinessMapFilters {
-  type?: "ALL" | ApplicationType;
-  status?: "ALL" | LocationStatus;
+  type?: "ALL" | BusinessMapApplicationType;
   owner?: string;
   category?: "ALL" | MapBusinessCategory;
   search?: string;
@@ -279,6 +279,10 @@ export async function submitApplicantBusinessLocation(
   const address = toOptionalTrimmedString(payload.address);
   const barangay = toOptionalTrimmedString(payload.barangay);
 
+  if (!address) {
+    throw new Error("businessLocationAddress is required");
+  }
+
   const record = await prisma.businessRecord.findFirst({
     where: {
       id: businessRecordId,
@@ -349,16 +353,14 @@ export async function submitApplicantBusinessLocation(
 export async function listBploBusinessLocations(
   filters: BusinessMapFilters = {}
 ): Promise<BusinessLocationMapRow[]> {
-  const statusFilter = filters.status && filters.status !== "ALL" ? filters.status : null;
-
   const locations = await prisma.businessLocation.findMany({
     where: {
-      status: statusFilter ?? undefined,
       businessRecord: {
         businessStatus: "ACTIVE",
         applications: {
           some: {
             status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
+            applicationType: { in: ["NEW", "RENEWAL"] },
           },
         },
       },
@@ -381,6 +383,7 @@ export async function listBploBusinessLocations(
           applications: {
             where: {
               status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
+              applicationType: { in: ["NEW", "RENEWAL"] },
             },
             orderBy: {
               updatedAt: "desc",
@@ -415,9 +418,15 @@ export async function listBploBusinessLocations(
           ? ((latestApplication.formData as Record<string, unknown>).lineOfBusiness as string | undefined)
           : undefined;
 
-      const category = inferMapBusinessCategory(
-        (lineOfBusiness ?? location.businessRecord.lineOfBusiness ?? "").trim()
-      );
+      const businessType =
+        typeof latestApplication.formData === "object" && latestApplication.formData
+          ? ((latestApplication.formData as Record<string, unknown>).businessType as string | undefined)
+          : undefined;
+
+      const category = inferMapBusinessCategory({
+        businessType: businessType ?? null,
+        lineOfBusiness: (lineOfBusiness ?? location.businessRecord.lineOfBusiness ?? "").trim(),
+      });
       const categoryMeta = MAP_CATEGORY_META[category];
 
       return {
@@ -429,7 +438,7 @@ export async function listBploBusinessLocations(
         businessCategoryLabel: categoryMeta.label,
         businessCategoryColor: categoryMeta.color,
         applicationNumber: latestApplication.applicationNumber,
-        applicationType: latestApplication.applicationType as ApplicationType,
+        applicationType: latestApplication.applicationType as BusinessMapApplicationType,
         permitOrCertificateNumber: latestApplication.permitIssuance?.documentNumber ?? null,
         latitude: location.latitude,
         longitude: location.longitude,

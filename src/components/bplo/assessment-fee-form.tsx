@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AssessmentDetail, SavedAssessment } from "@/lib/bplo-assessment";
+import type { AssessmentDetail, AssessmentLineItem, SavedAssessment } from "@/lib/bplo-assessment";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -13,17 +13,13 @@ interface Props {
   detail: AssessmentDetail;
 }
 
-const PAYMENT_FREQ_LABELS: Record<string, string> = {
+type PaymentFrequency = "ANNUAL" | "BI_ANNUAL" | "QUARTERLY";
+
+const PAYMENT_FREQ_LABELS: Record<PaymentFrequency, string> = {
   ANNUAL: "Annual",
-  BI_ANNUAL: "Bi-Annual (semi-annual)",
+  BI_ANNUAL: "Bi-Annual",
   QUARTERLY: "Quarterly",
 };
-
-function getReleasePaymentAmount(totalAmount: number, paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY") {
-  if (paymentFrequency === "BI_ANNUAL") return totalAmount / 2;
-  if (paymentFrequency === "QUARTERLY") return totalAmount / 4;
-  return totalAmount;
-}
 
 function SummaryTile({
   label,
@@ -43,134 +39,131 @@ function SummaryTile({
   );
 }
 
-function FeeInput({
-  label,
-  name,
-  value,
-  onChange,
-  readOnly,
-  hint,
-}: {
-  label: string;
-  name: string;
-  value: number;
-  onChange?: (val: number) => void;
-  readOnly?: boolean;
-  hint?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-2.5 text-sm">
-      <div className="flex-1">
-        <span className="font-medium text-slate-800">{label}</span>
-        {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
-      </div>
-      <div className="w-40">
-        {readOnly ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50/85 px-3 py-2 text-right text-slate-700">
-            ₱ {value.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-          </div>
-        ) : (
-          <input
-            type="number"
-            name={name}
-            min="0"
-            step="0.01"
-            value={value}
-            onChange={(e) => onChange?.(parseFloat(e.target.value) || 0)}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-right text-sm focus:border-emerald-500 focus:outline-none"
-          />
-        )}
-      </div>
-    </div>
-  );
+function emptyLineItem(index: number): AssessmentLineItem {
+  return {
+    id: `draft-${index}`,
+    description: "",
+    amount: 0,
+    sortOrder: index,
+    isSystemGenerated: false,
+  };
+}
+
+function getReleasePaymentAmount(totalAmount: number, frequency: PaymentFrequency) {
+  void frequency;
+  return totalAmount;
+}
+
+function normalizeLineItems(lineItems: AssessmentLineItem[]) {
+  return lineItems.map((item, index) => ({ ...item, sortOrder: index }));
 }
 
 export function AssessmentFeeForm({ detail }: Props) {
   const router = useRouter();
   const existing = detail.assessment;
-  const suggested = detail.suggestedFees;
+  const initialLineItems = existing?.lineItems.length
+    ? existing.lineItems
+    : detail.suggestedLineItems.length
+      ? detail.suggestedLineItems
+      : [emptyLineItem(0)];
 
-  const [paymentFrequency, setPaymentFrequency] = useState<"ANNUAL" | "BI_ANNUAL" | "QUARTERLY">(
-    existing?.paymentFrequency ?? "ANNUAL"
-  );
-  const [mayorsPermitFee, setMayorsPermitFee] = useState(
-    existing?.mayorsPermitFee ?? suggested.mayorsPermitFee
-  );
-  const [regulatoryFees, setRegulatoryFees] = useState(
-    existing?.regulatoryFees ?? suggested.regulatoryFees
-  );
-  const [additionalCharges, setAdditionalCharges] = useState(existing?.additionalCharges ?? 0);
-  const [penalties, setPenalties] = useState(existing?.penalties ?? 0);
-  const [surcharge, setSurcharge] = useState(existing?.surcharge ?? suggested.surcharge);
-  const [interest, setInterest] = useState(existing?.interest ?? suggested.interest);
-  const [closureCertificateFee, setClosureCertificateFee] = useState(
-    existing?.closureCertificateFee ?? suggested.closureCertificateFee
-  );
-  const [arrears, setArrears] = useState(existing?.arrears ?? 0);
-  const [otherCharges, setOtherCharges] = useState(existing?.otherCharges ?? 0);
+  const [lineItems, setLineItems] = useState<AssessmentLineItem[]>(normalizeLineItems(initialLineItems));
+  const [closurePaymentDues, setClosurePaymentDues] = useState(existing?.closurePaymentDues ?? 0);
   const [remarks, setRemarks] = useState(existing?.remarks ?? "");
-
+  const [savedAssessment, setSavedAssessment] = useState<SavedAssessment | null>(existing);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
-  const [savedAssessment, setSavedAssessment] = useState<SavedAssessment | null>(existing);
 
-  const totalAmount =
-    mayorsPermitFee +
-    regulatoryFees +
-    additionalCharges +
-    penalties +
-    surcharge +
-    interest +
-    closureCertificateFee +
-    arrears +
-    otherCharges;
-  const annualAssessedAmount = totalAmount;
-  const releasePaymentAmount = getReleasePaymentAmount(annualAssessedAmount, paymentFrequency);
+  const editableLineItems = lineItems.filter((item) => !item.isSystemGenerated);
+  const systemLineItems = lineItems.filter((item) => item.isSystemGenerated);
+  const lineItemSubtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+  const totalAmount = lineItemSubtotal + closurePaymentDues;
+  const paymentFrequency = savedAssessment?.paymentFrequency ?? detail.applicantPaymentFrequency ?? "ANNUAL";
+  const releasePaymentAmount = getReleasePaymentAmount(totalAmount, paymentFrequency);
   const amountPaid = savedAssessment?.amountPaid ?? 0;
-  const remainingBalance = Math.max(0, annualAssessedAmount - amountPaid);
-
+  const remainingBalance = Math.max(0, totalAmount - amountPaid);
   const isTopGenerated = savedAssessment?.status === "GENERATED";
-  const overridesSuggested =
-    mayorsPermitFee !== suggested.mayorsPermitFee ||
-    regulatoryFees !== suggested.regulatoryFees ||
-    surcharge !== suggested.surcharge ||
-    interest !== suggested.interest ||
-    closureCertificateFee !== suggested.closureCertificateFee;
+
+  function syncSavedAssessment(saved: SavedAssessment | null) {
+    setSavedAssessment(saved);
+    if (!saved) {
+      return;
+    }
+
+    setLineItems(normalizeLineItems(saved.lineItems.length ? saved.lineItems : lineItems));
+    setClosurePaymentDues(saved.closurePaymentDues);
+    setRemarks(saved.remarks ?? "");
+  }
+
+  function addLineItem() {
+    setLineItems((current) => normalizeLineItems([...current, emptyLineItem(current.length)]));
+  }
+
+  function updateLineItem(index: number, next: Partial<AssessmentLineItem>) {
+    setLineItems((current) =>
+      normalizeLineItems(
+        current.map((item, itemIndex) =>
+          itemIndex === index
+            ? {
+                ...item,
+                ...next,
+              }
+            : item
+        )
+      )
+    );
+  }
+
+  function removeLineItem(index: number) {
+    setLineItems((current) => normalizeLineItems(current.filter((_, itemIndex) => itemIndex !== index)));
+  }
 
   function buildPayload() {
     return {
-      paymentFrequency,
-      mayorsPermitFee,
-      regulatoryFees,
-      additionalCharges,
-      penalties,
-      surcharge,
-      interest,
-      closureCertificateFee,
-      arrears,
-      otherCharges,
+      lineItems,
+      closurePaymentDues,
       remarks: remarks.trim() || undefined,
     };
+  }
+
+  const displayPaymentFrequency = savedAssessment?.paymentFrequency ?? detail.applicantPaymentFrequency;
+
+  async function submit(url: string, key: "saved" | "generated") {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload()),
+    });
+
+    const data = (await response.json()) as {
+      saved?: SavedAssessment;
+      generated?: SavedAssessment;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      setStatusMessage({ kind: "error", text: data.error ?? "Unable to save assessment." });
+      return;
+    }
+
+    const nextAssessment = data[key] ?? null;
+    syncSavedAssessment(nextAssessment);
+    setStatusMessage({
+      kind: "success",
+      text:
+        key === "generated"
+          ? `Tax Order of Payment generated. TOP No.: ${nextAssessment?.assessmentNumber ?? ""}.`
+          : "Assessment draft saved successfully.",
+    });
+    router.refresh();
   }
 
   async function handleSaveDraft() {
     setIsSaving(true);
     setStatusMessage(null);
     try {
-      const res = await fetch(`/api/bplo/assessment-fees/${detail.id}/draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPayload()),
-      });
-      const data = (await res.json()) as { saved?: SavedAssessment; error?: string };
-      if (!res.ok) {
-        setStatusMessage({ kind: "error", text: data.error ?? "Failed to save draft." });
-        return;
-      }
-      setSavedAssessment(data.saved ?? null);
-      setStatusMessage({ kind: "success", text: "Assessment draft saved successfully." });
-      router.refresh();
+      await submit(`/api/bplo/assessment-fees/${detail.id}/draft`, "saved");
     } catch {
       setStatusMessage({ kind: "error", text: "Network error. Please try again." });
     } finally {
@@ -181,30 +174,16 @@ export function AssessmentFeeForm({ detail }: Props) {
   async function handleGenerateTop() {
     if (
       !confirm(
-        "Generate Tax Order of Payment?\n\nThis will lock the assessment fields, create the TOP number, and move the application to Approved for Payment."
+        "Generate Tax Order of Payment?\n\nThis will lock the assessment, create the TOP number, and move the application to Approved for Payment."
       )
     ) {
       return;
     }
+
     setIsGenerating(true);
     setStatusMessage(null);
     try {
-      const res = await fetch(`/api/bplo/assessment-fees/${detail.id}/generate-top`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPayload()),
-      });
-      const data = (await res.json()) as { generated?: SavedAssessment; error?: string };
-      if (!res.ok) {
-        setStatusMessage({ kind: "error", text: data.error ?? "Failed to generate TOP." });
-        return;
-      }
-      setSavedAssessment(data.generated ?? null);
-      setStatusMessage({
-        kind: "success",
-        text: `Tax Order of Payment generated. TOP No.: ${data.generated?.assessmentNumber ?? ""}. Application is now Approved for Payment.`,
-      });
-      router.refresh();
+      await submit(`/api/bplo/assessment-fees/${detail.id}/generate-top`, "generated");
     } catch {
       setStatusMessage({ kind: "error", text: "Network error. Please try again." });
     } finally {
@@ -216,9 +195,17 @@ export function AssessmentFeeForm({ detail }: Props) {
     <div className="space-y-6">
       <InfoBanner
         title="Assessment workspace"
-        description="Review the system-suggested computation, adjust BPLO-editable fee fields when needed, then generate the TOP using the existing route behavior."
+        description="Build the Tax Order of Payment using auditable fee line items. System-generated penalties and closure fees stay locked."
         variant="info"
       />
+
+      {statusMessage ? (
+        <InfoBanner
+          title={statusMessage.kind === "success" ? "Assessment update" : "Assessment issue"}
+          description={statusMessage.text}
+          variant={statusMessage.kind === "success" ? "success" : "danger"}
+        />
+      ) : null}
 
       <SectionCard title="Application Summary" description="Current assessment target and applicant record.">
         <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
@@ -246,332 +233,185 @@ export function AssessmentFeeForm({ detail }: Props) {
         </div>
       </SectionCard>
 
-      <SectionCard title="Business Classification" description="Assessment basis pulled from the current application form data.">
-        <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-5">
-          <div>
-            <span className="text-slate-500">Line of Business</span>
-            <p className="font-medium text-slate-900">{detail.lineOfBusiness}</p>
-          </div>
-          <div>
-            <span className="text-slate-500">Business Activity</span>
-            <p className="font-medium text-slate-900">{detail.businessActivity}</p>
-          </div>
-          <div>
-            <span className="text-slate-500">Business Type</span>
-            <p className="font-medium text-slate-900">{detail.businessType}</p>
-          </div>
-          <div>
-            <span className="text-slate-500">Asset Size</span>
-            <p className="font-medium text-slate-900">{detail.assetSize}</p>
-          </div>
-          <div>
-            <span className="text-slate-500">Total Employees</span>
-            <p className="font-medium text-slate-900">{detail.totalEmployees}</p>
-          </div>
+      <SectionCard title="System Guidance" description="Assessment basis from the current application and automatic penalty rules.">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryTile label="Line of Business" value={detail.lineOfBusiness} />
+          <SummaryTile label="Detected Category" value={detail.suggestedFees.detectedCategory} />
+          <SummaryTile label="Suggested Mayor's Fee" value={`₱ ${detail.suggestedFees.selectedMayorPermitFee.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
+          <SummaryTile
+            label="Late Renewal Rule"
+            value={
+              detail.applicationType === "RENEWAL" && detail.suggestedFees.overdueMonths > 12
+                ? `${detail.suggestedFees.overdueMonths} months overdue`
+                : "Not triggered"
+            }
+            helper="Automatic surcharge and interest apply only beyond 1 year overdue."
+          />
+        </div>
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/85 p-4 text-sm text-slate-700">
+          {detail.suggestedFees.computation}
         </div>
       </SectionCard>
 
-      <SectionCard title="System-Computed Suggestion" description="System-generated fee suggestion based on the current application classification.">
-        <div className="space-y-3 text-sm">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
-              <p className="text-xs uppercase tracking-wide text-blue-700">Detected Category</p>
-              <p className="mt-1 font-semibold text-blue-900">{suggested.detectedCategory}</p>
-            </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
-              <p className="text-xs uppercase tracking-wide text-blue-700">Special Rule</p>
-              <p className="mt-1 font-semibold text-blue-900">{suggested.specialRuleApplied ?? "None"}</p>
-            </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
-              <p className="text-xs uppercase tracking-wide text-blue-700">Asset Classification</p>
-              <p className="mt-1 font-semibold text-blue-900">{suggested.assetClassification}</p>
-              <p className="text-xs text-blue-700">Fee: ₱{suggested.assetBasedFee.toLocaleString("en-PH")}</p>
-            </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
-              <p className="text-xs uppercase tracking-wide text-blue-700">Worker Classification</p>
-              <p className="mt-1 font-semibold text-blue-900">{suggested.workerClassification}</p>
-              <p className="text-xs text-blue-700">Fee: ₱{suggested.workerBasedFee.toLocaleString("en-PH")}</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3">
-            <p className="text-sm text-blue-900">
-              <strong>Selected Classification:</strong> {suggested.selectedClassification}
-            </p>
-            <p className="mt-1 text-sm text-blue-900">
-              <strong>Suggested Mayor&apos;s Permit Fee:</strong> ₱{suggested.selectedMayorPermitFee.toLocaleString("en-PH")}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50/85 p-4 text-sm text-slate-700">
-            {suggested.computation}
-          </div>
-
-          <p className="text-xs text-slate-500">
-            This is the system-suggested fee. You may override it below, but any adjustment should be recorded in remarks.
-          </p>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="BPLO Editable Fees" description="Review the computed suggestion, then adjust only the editable fields needed for final TOP generation.">
+      <SectionCard
+        title="Fee Line Items"
+        description="Add BPLO fee items, then review the system-generated items below."
+        action={
+          !isTopGenerated ? (
+            <button type="button" onClick={addLineItem} className={actionButtonStyles("secondary", "md")}>
+              Add Item
+            </button>
+          ) : undefined
+        }
+      >
         {isTopGenerated ? (
           <div className="mb-4">
             <InfoBanner
               title="TOP already generated"
-              description="Fee fields are locked because the Tax Order of Payment has already been generated."
+              description="Fee items are locked because the Tax Order of Payment has already been generated."
               variant="success"
             />
           </div>
         ) : null}
 
-        {!isTopGenerated ? (
-          <div className="mb-4">
-            <InfoBanner
-              title="Editable assessment area"
-              description="These values are the BPLO working copy. Save draft to continue later or generate the TOP once the assessment is final."
-              variant="info"
-            />
-          </div>
-        ) : null}
+        <div className="space-y-3">
+          {editableLineItems.map((item) => {
+            const actualIndex = lineItems.findIndex((candidate) => candidate.id === item.id);
+            return (
+              <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1fr_180px_auto]">
+                <input
+                  value={item.description}
+                  disabled={isTopGenerated}
+                  onChange={(event) => updateLineItem(actualIndex, { description: event.target.value })}
+                  placeholder="Fee description"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={item.amount}
+                  disabled={isTopGenerated}
+                  onChange={(event) => updateLineItem(actualIndex, { amount: Number(event.target.value) || 0 })}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-right text-sm focus:border-emerald-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={isTopGenerated}
+                  onClick={() => removeLineItem(actualIndex)}
+                  className={actionButtonStyles("ghost", "md")}
+                >
+                  Remove
+                </button>
+              </div>
+            );
+          })}
 
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
-          <SummaryTile
-            label="Suggested Total"
-            value={`₱ ${(
-              suggested.mayorsPermitFee +
-              suggested.regulatoryFees +
-              suggested.surcharge +
-              suggested.interest +
-              suggested.closureCertificateFee
-            ).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
-            helper="Computed baseline from the current classification"
-          />
-          <SummaryTile
-            label="Working Total"
-            value={`₱ ${totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
-            helper="Current editable total used for draft and TOP generation"
-          />
-          <SummaryTile
-            label="Override Status"
-            value={overridesSuggested ? "Adjusted" : "Using suggested fees"}
-            helper={
-              overridesSuggested
-                ? "Record the reason for any adjustment in remarks."
-                : "No suggested fee adjustments detected."
-            }
-          />
-        </div>
-
-        <div className="divide-y divide-slate-100">
-          <FeeInput
-            label="Mayor's Permit Fee"
-            name="mayorsPermitFee"
-            value={mayorsPermitFee}
-            onChange={isTopGenerated ? undefined : setMayorsPermitFee}
-            readOnly={isTopGenerated}
-            hint={`Suggested: ₱${suggested.mayorsPermitFee.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
-          />
-          <FeeInput
-            label="Regulatory Fees"
-            name="regulatoryFees"
-            value={regulatoryFees}
-            onChange={isTopGenerated ? undefined : setRegulatoryFees}
-            readOnly={isTopGenerated}
-            hint={`Suggested: ₱${suggested.regulatoryFees.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
-          />
-          <FeeInput
-            label="Additional Charges"
-            name="additionalCharges"
-            value={additionalCharges}
-            onChange={isTopGenerated ? undefined : setAdditionalCharges}
-            readOnly={isTopGenerated}
-          />
-          <FeeInput
-            label="Penalties"
-            name="penalties"
-            value={penalties}
-            onChange={isTopGenerated ? undefined : setPenalties}
-            readOnly={isTopGenerated}
-          />
-          {detail.applicationType === "RENEWAL" ? (
-            <>
-              <FeeInput
-                label="Surcharge (25% — late renewal)"
-                name="surcharge"
-                value={surcharge}
-                onChange={isTopGenerated ? undefined : setSurcharge}
-                readOnly={isTopGenerated}
-                hint="Set to 0 if renewal is not late"
-              />
-              <FeeInput
-                label="Interest (2% per month — late renewal)"
-                name="interest"
-                value={interest}
-                onChange={isTopGenerated ? undefined : setInterest}
-                readOnly={isTopGenerated}
-                hint="Set to 0 if not applicable"
-              />
-            </>
+          {editableLineItems.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+              No BPLO-entered fee items yet.
+            </div>
           ) : null}
-          {detail.applicationType === "CLOSURE" ? (
-            <>
-              <FeeInput
-                label="Closure Certificate Fee"
-                name="closureCertificateFee"
-                value={closureCertificateFee}
-                onChange={isTopGenerated ? undefined : setClosureCertificateFee}
-                readOnly={isTopGenerated}
-                hint="Minimum ₱100.00 for closure applications"
-              />
-              <FeeInput
-                label="Arrears"
-                name="arrears"
-                value={arrears}
-                onChange={isTopGenerated ? undefined : setArrears}
-                readOnly={isTopGenerated}
-              />
-            </>
-          ) : null}
-          <FeeInput
-            label="Other Charges"
-            name="otherCharges"
-            value={otherCharges}
-            onChange={isTopGenerated ? undefined : setOtherCharges}
-            readOnly={isTopGenerated}
-          />
-        </div>
 
-        <div className="mt-4 flex justify-between border-t border-slate-200 pt-3 text-sm font-semibold text-slate-900">
-          <span>Total Amount Due</span>
-          <span>₱ {totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="TOP Details" description="Configure payment schedule and remarks before generating the TOP.">
-        {savedAssessment ? (
-          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/85 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Assessment / TOP Number</p>
-            <p className="font-mono font-semibold text-slate-900">{savedAssessment.assessmentNumber}</p>
-            {savedAssessment.generatedAt ? (
-              <p className="mt-1 text-xs text-slate-500">
-                Generated: {new Date(savedAssessment.generatedAt).toLocaleString("en-PH")}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <SummaryTile
-              label="Annual Assessed Amount"
-              value={`₱ ${annualAssessedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
-              helper="Full annual assessment basis"
-            />
-            <SummaryTile
-              label="Payment Frequency"
-              value={PAYMENT_FREQ_LABELS[paymentFrequency]}
-              helper="TOP release schedule"
-            />
-            <SummaryTile
-              label="Required Release Payment"
-              value={`₱ ${releasePaymentAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
-              helper="Amount required to move toward release"
-            />
-            <SummaryTile
-              label="Amount Paid"
-              value={`₱ ${amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
-              helper="Verified payment total recorded in TOP"
-            />
-            <SummaryTile
-              label="Remaining Balance"
-              value={`₱ ${remainingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
-              helper="Outstanding annual balance"
-            />
-          </div>
-
-          <FormField
-            label="Payment Frequency"
-            hint="This setting follows existing TOP behavior and does not alter fee computation logic."
-            required
-          >
-            <select
-              value={paymentFrequency}
-              onChange={(e) => setPaymentFrequency(e.target.value as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY")}
-              disabled={isTopGenerated}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-800"
-            >
-              {Object.entries(PAYMENT_FREQ_LABELS).map(([val, label]) => (
-                <option key={val} value={val}>
-                  {label}
-                </option>
+          {systemLineItems.length > 0 ? (
+            <div className="space-y-3 pt-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">System-generated items</p>
+              {systemLineItems.map((item) => (
+                <div key={item.id} className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 md:grid-cols-[1fr_180px]">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{item.description}</p>
+                    <p className="text-xs text-slate-600">Automatically computed and not editable.</p>
+                  </div>
+                  <div className="rounded-xl border border-amber-300 bg-white px-3 py-2 text-right text-sm font-medium text-slate-800">
+                    ₱ {item.amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
               ))}
-            </select>
-          </FormField>
-
-          <FormField
-            label="Remarks"
-            hint="Required when overriding suggested fees; used for BPLO audit trail only."
-          >
-            <textarea
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              rows={3}
-              disabled={isTopGenerated}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-800"
-              placeholder="Reason for fee adjustments, assessment notes, etc."
-            />
-          </FormField>
+            </div>
+          ) : null}
         </div>
       </SectionCard>
 
-      {statusMessage ? (
-        <InfoBanner
-          title={statusMessage.kind === "success" ? "Assessment update" : "Assessment error"}
-          description={statusMessage.text}
-          variant={statusMessage.kind === "success" ? "success" : "danger"}
-        />
+      {detail.applicationType === "CLOSURE" ? (
+        <SectionCard
+          title="Closure Charges"
+          description="Payment dues are BPLO-entered. The fixed closure certificate fee of ₱100 is added automatically."
+        >
+          <FormField label="Payment Dues / Pending Fee" hint="Enter any outstanding payment dues or pending fees for the business before closure release.">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={closurePaymentDues}
+              disabled={isTopGenerated}
+              onChange={(event) => setClosurePaymentDues(Number(event.target.value) || 0)}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-right text-sm focus:border-emerald-500 focus:outline-none"
+            />
+          </FormField>
+        </SectionCard>
       ) : null}
 
-      <SectionCard title="TOP Generation Action" description="Save draft for ongoing review, or generate the TOP when this assessment is final.">
-        {!isTopGenerated ? (
-          <div className="space-y-4">
-            <InfoBanner
-              title="Generating the TOP will lock this assessment"
-              description="Once generated, the TOP number is created, fee fields become read-only, and the application moves to Approved for Payment."
-              variant="warning"
+      <SectionCard title="TOP Summary" description="Assessment totals are recalculated on the server during draft save and TOP generation.">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryTile
+            label="Payment Frequency"
+            value={displayPaymentFrequency ? PAYMENT_FREQ_LABELS[displayPaymentFrequency] : "Not selected"}
+            helper="Applicant-selected frequency (read-only for BPLO)."
+          />
+          <SummaryTile label="Total Amount" value={`₱ ${totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
+          <SummaryTile label="Total Amount to Pay" value={`₱ ${releasePaymentAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
+          <SummaryTile label="Remaining Balance" value={`₱ ${remainingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
+        </div>
+
+        <div className="mt-4">
+          <FormField label="Remarks" hint="Explain manual adjustments or special cases for audit review.">
+            <textarea
+              rows={4}
+              value={remarks}
+              disabled={isTopGenerated}
+              onChange={(event) => setRemarks(event.target.value)}
+              className="w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none"
             />
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => { void handleSaveDraft(); }}
-                disabled={isSaving || isGenerating}
-                className={actionButtonStyles("secondary", "md")}
-              >
-                {isSaving ? "Saving..." : "Save Assessment Draft"}
-              </button>
-              <button
-                type="button"
-                onClick={() => { void handleGenerateTop(); }}
-                disabled={isSaving || isGenerating}
-                className={actionButtonStyles("primary", "md")}
-              >
-                {isGenerating ? "Generating..." : "Generate Tax Order of Payment"}
-              </button>
-              <Link href="/bplo/assessment-fees" className={actionButtonStyles("ghost", "md")}>
-                Back to Queue
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-medium text-emerald-700">
-              TOP generated and locked for this assessment.
-            </div>
+          </FormField>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Actions"
+        description="Save the draft to continue later, or generate the Tax Order of Payment to move the application forward."
+        action={
+          <div className="flex flex-wrap gap-2">
             <Link href="/bplo/assessment-fees" className={actionButtonStyles("ghost", "md")}>
               Back to Queue
             </Link>
+            {!isTopGenerated ? (
+              <button
+                type="button"
+                disabled={isSaving || isGenerating}
+                onClick={() => {
+                  void handleSaveDraft();
+                }}
+                className={actionButtonStyles("secondary", "md")}
+              >
+                Save Draft
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={isTopGenerated || isSaving || isGenerating}
+              onClick={() => {
+                void handleGenerateTop();
+              }}
+              className={actionButtonStyles("primary", "md")}
+            >
+              Generate TOP
+            </button>
           </div>
-        )}
+        }
+      >
+        <p className="text-sm text-slate-600">
+          Applicant payment submission becomes available only after TOP generation. Payment verification and permit issuance continue in their own modules.
+        </p>
       </SectionCard>
     </div>
   );

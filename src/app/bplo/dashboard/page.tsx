@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardCheck, FileClock, FileWarning, PackageCheck, Wallet } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, FileWarning, PackageCheck, Wallet } from "lucide-react";
 import {
   getBploApplicationTypeSummary,
   getBploDashboardSummary,
@@ -7,10 +7,8 @@ import {
 } from "@/lib/bplo-applications";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
 import { StatusBadge } from "@/components/applicant/status-badge";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { RoleBadge } from "@/components/ui/role-badge";
 
@@ -19,7 +17,43 @@ export default async function BploDashboard() {
   const typeSummary = await getBploApplicationTypeSummary();
   const recentSubmissions = await listRecentBploSubmissions();
 
+  const actionRequiredQueues = [
+    {
+      title: "Returned for Correction",
+      description: "Review applicant resubmissions and remarks.",
+      count: summary.returnedForCorrection,
+      href: "/bplo/applications",
+      tone: "red" as const,
+      icon: <FileWarning className="h-4 w-4" />,
+    },
+    {
+      title: "Submitted Queue",
+      description: "New applications waiting for BPLO review.",
+      count: summary.submittedApplications,
+      href: "/bplo/applications",
+      tone: "blue" as const,
+      icon: <ClipboardCheck className="h-4 w-4" />,
+    },
+    {
+      title: "Payment Verification",
+      description: "Payments waiting for verification or confirmation.",
+      count: summary.approvedForPayment,
+      href: "/bplo/payment-verification",
+      tone: "amber" as const,
+      icon: <Wallet className="h-4 w-4" />,
+    },
+    {
+      title: "For Release",
+      description: "Approved documents ready for release preparation.",
+      count: summary.forRelease,
+      href: "/bplo/permit-issuance",
+      tone: "green" as const,
+      icon: <PackageCheck className="h-4 w-4" />,
+    },
+  ];
+
   const pipelineRows = [
+    { status: "Draft" as const, value: "N/A" },
     { status: "Submitted" as const, value: summary.submittedApplications },
     { status: "Under Review" as const, value: summary.underReview },
     { status: "Assessed" as const, value: summary.assessedApplications },
@@ -29,121 +63,155 @@ export default async function BploDashboard() {
     { status: "Released" as const, value: summary.releasedPermits },
   ];
 
+  const toneColors: Record<string, { bg: string; border: string; text: string; icon: string }> = {
+    red: {
+      bg: "bg-rose-50",
+      border: "border-rose-200",
+      text: "text-rose-900",
+      icon: "text-rose-600",
+    },
+    blue: {
+      bg: "bg-blue-50",
+      border: "border-blue-200",
+      text: "text-blue-900",
+      icon: "text-blue-600",
+    },
+    amber: {
+      bg: "bg-amber-50",
+      border: "border-amber-200",
+      text: "text-amber-900",
+      icon: "text-amber-600",
+    },
+    green: {
+      bg: "bg-emerald-50",
+      border: "border-emerald-200",
+      text: "text-emerald-900",
+      icon: "text-emerald-600",
+    },
+  };
+
   return (
-    <section className="bplo-dashboard space-y-6">
+    <section className="bplo-dashboard mx-auto w-full max-w-7xl space-y-6">
       <PageHeader
         eyebrow="BPLO"
-        title="Dashboard"
-        description="Operational overview of the application pipeline from intake, assessment, and payment verification to release."
+        title="BPLO Dashboard"
+        description="Quick overview of applications that need BPLO attention."
         badge={<RoleBadge role="BPLO" />}
         eyebrowClassName="text-[#1f3a5f]"
       />
 
-      <InfoBanner
-        title="Queue-focused operational view"
-        description="Use this dashboard to monitor intake, Tax Order of Payment readiness, payment verification workload, and release queue volume."
-        variant="info"
-      />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <DashboardSummaryCard title="New Applications" value={String(typeSummary.totalNew)} subtitle="All new application records" tone="blue" />
-        <DashboardSummaryCard title="Renewal Applications" value={String(typeSummary.totalRenewal)} subtitle="All renewal application records" tone="amber" />
-        <DashboardSummaryCard title="Closure Applications" value={String(typeSummary.totalClosure)} subtitle="All closure application records" tone="slate" />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <DashboardSummaryCard title="Submitted" value={String(summary.submittedApplications)} subtitle="New intake queue" icon={<ClipboardCheck className="h-5 w-5" />} tone="blue" />
-        <DashboardSummaryCard title="Under Review" value={String(summary.underReview)} subtitle="Currently being evaluated" icon={<FileClock className="h-5 w-5" />} tone="amber" />
-        <DashboardSummaryCard title="Returned" value={String(summary.returnedForCorrection)} subtitle="Needs applicant correction" icon={<FileWarning className="h-5 w-5" />} tone="red" />
-        <DashboardSummaryCard title="Assessed" value={String(summary.assessedApplications)} subtitle="Ready for TOP generation" icon={<Wallet className="h-5 w-5" />} tone="green" />
-        <DashboardSummaryCard title="For Release" value={String(summary.forRelease)} subtitle="Prepared documents awaiting release" icon={<PackageCheck className="h-5 w-5" />} tone="amber" />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <SectionCard
-          title="Workflow Pipeline"
-          description="Submitted -> Under Review -> Assessed -> Approved for Payment -> Paid -> For Release -> Released"
-        >
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {pipelineRows.map((row) => (
+      {/* Action Required Section */}
+      <SectionCard
+        title="Action Required Now"
+        description="Priority queues requiring immediate BPLO attention"
+      >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {actionRequiredQueues.map((queue) => {
+            const colors = toneColors[queue.tone];
+            return (
               <div
-                key={row.status}
-                className="flex items-center justify-between rounded-2xl border border-[#d8cfbb] bg-[#f4efe2] px-4 py-3"
+                key={queue.title}
+                className={`flex flex-col rounded-xl border ${colors.border} ${colors.bg} p-4 transition-shadow hover:shadow-sm`}
               >
-                <div className="min-w-0">
-                  <StatusBadge status={row.status} />
+                <div className="mb-2 flex items-start gap-2">
+                  <div className={`mt-0.5 flex-shrink-0 ${colors.icon}`}>{queue.icon}</div>
+                  <h4 className={`text-sm font-semibold ${colors.text}`}>{queue.title}</h4>
                 </div>
-                <span className="font-serif text-lg font-semibold text-[#1f2f46]">
-                  {row.value.toLocaleString("en-PH")}
-                </span>
+                <p className={`mb-3 text-2xl font-bold ${colors.text}`}>{queue.count}</p>
+                <p className={`mb-4 flex-grow text-xs ${colors.text} opacity-75`}>{queue.description}</p>
+                <Link href={queue.href} className={actionButtonStyles("primary", "sm", "w-full")}>
+                  View Queue
+                </Link>
               </div>
-            ))}
-          </div>
-        </SectionCard>
+            );
+          })}
+        </div>
+      </SectionCard>
 
-        <SectionCard title="Urgent Work" description="Fast access to operational queues with immediate workload.">
-          <div className="space-y-3">
-            <div className="rounded-xl border border-[#d39a3a] bg-[#f8edd7] px-4 py-3 text-sm text-[#7b4e0f]">
-              <p className="font-semibold">Returned for correction: {summary.returnedForCorrection}</p>
-              <p className="mt-1">Review remarks and monitor resubmissions from applicants.</p>
-            </div>
-            <div className="rounded-xl border border-[#5a7ea9] bg-[#eaf0f9] px-4 py-3 text-sm text-[#1f3a5f]">
-              <p className="font-semibold">Submitted queue: {summary.submittedApplications}</p>
-              <p className="mt-1">Move applications into review to keep intake flowing.</p>
-            </div>
-            <div className="rounded-xl border border-[#5c8d73] bg-[#e8f3ec] px-4 py-3 text-sm text-[#25563f]">
-              <p className="font-semibold">Release queue: {summary.forRelease}</p>
-              <p className="mt-1">Prepare or release documents for completed paid applications.</p>
-            </div>
-            <div className="grid gap-2">
-              <Link href="/bplo/applications" className={actionButtonStyles("primary", "sm", "w-full")}>Review Applications Queue</Link>
-              <Link href="/bplo/assessment-fees" className={actionButtonStyles("secondary", "sm", "w-full")}>Open Assessment & Fees</Link>
-              <Link href="/bplo/payment-verification" className={actionButtonStyles("secondary", "sm", "w-full")}>Open Payment Verification</Link>
-              <Link href="/bplo/permit-issuance" className={actionButtonStyles("secondary", "sm", "w-full")}>Open Permit Issuance</Link>
-            </div>
-          </div>
-        </SectionCard>
-      </div>
+      {/* Key Metrics Section */}
+      <SectionCard title="Key Metrics" description="Application totals and workload indicators.">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <DashboardSummaryCard
+            title="New Applications"
+            value={String(typeSummary.totalNew)}
+            subtitle="Total new business permit applications"
+            tone="blue"
+          />
+          <DashboardSummaryCard
+            title="Renewal Applications"
+            value={String(typeSummary.totalRenewal)}
+            subtitle="Total renewal applications"
+            tone="amber"
+          />
+          <DashboardSummaryCard
+            title="Closure Applications"
+            value={String(typeSummary.totalClosure)}
+            subtitle="Total closure requests"
+            tone="slate"
+          />
+          <DashboardSummaryCard
+            title="Action Required"
+            value={String(summary.returnedForCorrection + summary.submittedApplications + summary.approvedForPayment + summary.forRelease)}
+            subtitle="Returned, submitted, payment, and release queues"
+            tone="red"
+          />
+        </div>
+      </SectionCard>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Recent Submissions" description="Most recently filed applications awaiting BPLO attention.">
-          <div className="space-y-3">
-            {recentSubmissions.map((row) => (
-              <article key={row.id} className="rounded-xl border border-[#d8cfbb] bg-[#f4efe2] px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-[#1f2f46]">{row.applicationNumber}</p>
-                  <StatusBadge status={row.status as any} />
+      {/* Workflow Pipeline Section */}
+      <SectionCard
+        title="Workflow Overview"
+        description="Draft -> Submitted -> Under Review -> Assessed -> Approved for Payment -> Paid -> For Release -> Released"
+      >
+        <p className="mb-3 text-xs text-slate-600">
+          Returned for Correction is tracked separately in the Action Required Now section.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {pipelineRows.map((row) => (
+            <div
+              key={row.status}
+              className="flex flex-col rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 transition-shadow hover:shadow-sm"
+            >
+              <div className="mb-2">
+                <StatusBadge status={row.status as any} />
+              </div>
+              <p className="text-2xl font-bold text-slate-900">
+                {typeof row.value === "number" ? row.value.toLocaleString("en-PH") : row.value}
+              </p>
+              <p className="text-xs text-slate-500">applications</p>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      {/* Recent Submissions Section */}
+      <SectionCard title="Recent Activity" description="Most recently filed applications from existing queue data.">
+        <div className="space-y-3">
+          {recentSubmissions.length > 0 ? (
+            recentSubmissions.map((row) => (
+              <article key={row.id} className="flex items-start justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 transition-shadow hover:shadow-sm">
+                <div className="min-w-0 flex-grow">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{row.applicationNumber}</p>
+                    <StatusBadge status={row.status as any} />
+                  </div>
+                  <p className="mt-1 text-sm text-slate-700">{row.businessName}</p>
+                  <p className="text-xs text-slate-500">{row.applicantName} · {row.dateSubmitted}</p>
                 </div>
-                <p className="mt-1 text-sm text-[#32415a]">{row.businessName}</p>
-                <p className="text-xs text-[#5b6577]">{row.applicantName} · {row.dateSubmitted}</p>
+                <Link href={`/bplo/applications`} className={actionButtonStyles("secondary", "sm")}>
+                  View
+                </Link>
               </article>
-            ))}
-            {recentSubmissions.length === 0 ? (
-              <EmptyState
-                title="No recent submissions"
-                description="This section will populate as new applications are filed."
-              />
-            ) : null}
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Operational Shortcuts" description="Direct links to active queue modules.">
-          <div className="grid gap-3 md:grid-cols-2">
-            <Link href="/bplo/applications" className={actionButtonStyles("primary", "md", "w-full")}>
-              Review Applications
-            </Link>
-            <Link href="/bplo/assessment-fees" className={actionButtonStyles("primary", "md", "w-full")}>
-              Assessment & Fees
-            </Link>
-            <Link href="/bplo/payment-verification" className={actionButtonStyles("primary", "md", "w-full")}>
-              Payment Verification
-            </Link>
-            <Link href="/bplo/permit-issuance" className={actionButtonStyles("primary", "md", "w-full")}>
-              Permit Issuance
-            </Link>
-          </div>
-        </SectionCard>
-      </div>
+            ))
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center">
+              <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+              <p className="text-sm font-medium text-slate-900">No recent submissions</p>
+              <p className="text-xs text-slate-500">Newly filed applications will appear here</p>
+            </div>
+          )}
+        </div>
+      </SectionCard>
     </section>
   );
 }

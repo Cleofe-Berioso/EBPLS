@@ -2,6 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi, isEditableStatus } from "@/lib/application-mappers";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
 import { toMoneyNumber } from "@/lib/money";
+import {
+  applyLockedBusinessFields,
+  isCorporation,
+  isCorporationOwnershipClassification,
+  normalizeBusinessInfo,
+} from "@/lib/business-rules";
 import type {
   ApplicantApplicationRow,
   ApplicationDocumentInput,
@@ -85,6 +91,7 @@ const REQUIRED_FIELD_KEYS: Array<keyof BusinessInfo> = [
 
 const TIN_REGEX = /^\d{9,12}$/;
 const PH_MOBILE_REGEX = /^(\+63|0)9\d{9}$/;
+const ALLOWED_PAYMENT_FREQUENCIES = ["ANNUAL", "BI_ANNUAL", "QUARTERLY"] as const;
 
 export class SubmitValidationError extends Error {
   detail: SubmitValidationErrorDetail;
@@ -186,6 +193,15 @@ function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function resolveBusinessName(formData: unknown, fallback: string | null): string {
+  const data = (formData ?? {}) as Record<string, unknown>;
+  const fromForm =
+    typeof data.businessName === "string" && data.businessName.trim().length > 0
+      ? data.businessName.trim()
+      : null;
+  return fromForm ?? fallback ?? "-";
+}
+
 function mapApplicationToRow(app: ApplicationWithDocs): ApplicantApplicationRow {
   const formData = app.formData as unknown as Partial<BusinessInfo>;
 
@@ -230,34 +246,119 @@ function sanitizeDocuments(documents: SaveApplicationInput["documents"]) {
     }));
 }
 
-function validateSubmitPayload(input: SaveApplicationInput, mergedDocuments: ApplicationDocumentInput[]) {
+function buildBusinessInfoFromRecord(record: any): BusinessInfo {
+  return normalizeBusinessInfo({
+    businessType: record.businessType as BusinessInfo["businessType"],
+    registrationNumber: record.registrationNumber,
+    paymentFrequency: "ANNUAL",
+    tin: record.tin,
+    businessName: record.businessName,
+    tradeName: record.tradeName,
+    ownerName: record.ownerName,
+    sex: record.sex ?? undefined,
+    nationality: record.nationality,
+    email: record.email,
+    phone: record.phone,
+    mainOfficeAddress: record.mainOfficeAddress,
+    businessAddress: record.businessAddress,
+    sameAsMainOffice: record.sameAsMainOffice,
+    businessArea: record.businessArea ?? "",
+    totalFloorArea: record.totalFloorArea ?? "",
+    totalEmployees: record.totalEmployees ?? "",
+    maleEmployees: record.maleEmployees ?? "",
+    femaleEmployees: record.femaleEmployees ?? "",
+    employeesWithinMunicipality: record.employeesWithinMunicipality ?? "",
+    deliveryVehicles: record.deliveryVehicles ?? "",
+    propertyOwnership: (record.propertyOwnership as BusinessInfo["propertyOwnership"]) ?? "Owned",
+    taxDeclarationNumber: record.taxDeclarationNumber ?? "",
+    propertyIdentificationNumber: record.propertyIdentificationNumber ?? "",
+    taxIncentives: record.taxIncentives ?? "",
+    businessActivity: record.businessActivity ?? "",
+    lineOfBusiness: record.lineOfBusiness ?? "",
+    assetSize: record.assetSize ?? "",
+    isMarket: Boolean(record.isMarket),
+    isAgriculture: Boolean(record.isAgriculture),
+  });
+}
+
+async function getApplicantBusinessRecordSource(applicantId: string, businessRecordId?: string | null) {
+  if (!businessRecordId) {
+    return null;
+  }
+
+  const record = await prisma.businessRecord.findFirst({
+    where: {
+      id: businessRecordId,
+      applicantId,
+    },
+  });
+
+  return record ? buildBusinessInfoFromRecord(record) : null;
+}
+
+function validateSubmitPayload(
+  input: SaveApplicationInput,
+  normalizedFormData: BusinessInfo,
+  mergedDocuments: ApplicationDocumentInput[]
+) {
   const missingFields = REQUIRED_FIELD_KEYS.filter((key) => {
-    const value = input.formData[key];
+    const value = normalizedFormData[key];
     return typeof value !== "string" || value.trim().length === 0;
   }).map((key) => String(key));
 
-  const tin = input.formData.tin.replace(/[^\d]/g, "");
+  const tin = normalizedFormData.tin.replace(/[^\d]/g, "");
   if (!TIN_REGEX.test(tin)) {
     missingFields.push("tin (must be 9 to 12 digits)");
   }
 
-  const normalizedPhone = input.formData.phone.replace(/[\s-]/g, "");
+  const normalizedNationality = normalizedFormData.nationality.trim();
+  if (isCorporation(normalizedFormData.businessType)) {
+    if (!isCorporationOwnershipClassification(normalizedNationality)) {
+      missingFields.push("nationality (select a corporation ownership classification)");
+    }
+  } else if (normalizedNationality.length === 0) {
+    missingFields.push("nationality");
+  }
+
+  if (!ALLOWED_PAYMENT_FREQUENCIES.includes(normalizedFormData.paymentFrequency)) {
+    missingFields.push("paymentFrequency (must be ANNUAL, BI_ANNUAL, or QUARTERLY)");
+  }
+
+  const normalizedPhone = normalizedFormData.phone.replace(/[\s-]/g, "");
   if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
     missingFields.push("phone (must be a valid Philippine mobile number)");
   }
 
-  const email = input.formData.email.trim();
+  const email = normalizedFormData.email.trim();
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     missingFields.push("email (invalid format)");
   }
 
-  const assetValue = Number(input.formData.assetSize.replace(/[₱,\s]/g, ""));
+  const assetValue = Number(normalizedFormData.assetSize.replace(/[₱,\s]/g, ""));
   if (!Number.isFinite(assetValue) || assetValue < 0) {
     missingFields.push("assetSize (must be a non-negative number)");
   }
 
-  const employees = Number(input.formData.totalEmployees.replace(/[,\s]/g, ""));
+  if (input.applicationType === "NEW") {
+    const requiredAddressFields: Array<keyof BusinessInfo> = [
+      "country",
+      "countryCode",
+      "province",
+      "provinceCode",
+      "cityMunicipality",
+      "streetAddress",
+    ];
+
+    for (const key of requiredAddressFields) {
+      const value = normalizedFormData[key];
+      if (typeof value !== "string" || value.trim().length === 0) {
+        missingFields.push(String(key));
+      }
+    }
+  }
+
+  const employees = Number(normalizedFormData.totalEmployees.replace(/[,\s]/g, ""));
   if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
     missingFields.push("totalEmployees (must be a non-negative integer)");
   }
@@ -268,7 +369,7 @@ function validateSubmitPayload(input: SaveApplicationInput, mergedDocuments: App
 
   const requiredDocs = resolveRequiredDocuments({
     applicationType: input.applicationType,
-    formData: input.formData,
+    formData: normalizedFormData,
   });
 
   const missingDocuments = getMissingRequiredDocuments(
@@ -412,8 +513,15 @@ export async function saveApplicantApplication(applicantId: string, input: SaveA
     ),
   ];
 
+  const sourceBusinessInfo = await getApplicantBusinessRecordSource(applicantId, input.businessRecordId);
+  const normalizedFormData = applyLockedBusinessFields(
+    input.applicationType,
+    input.formData,
+    sourceBusinessInfo
+  );
+
   if (input.mode === "SUBMIT") {
-    validateSubmitPayload(input, mergedDocuments);
+    validateSubmitPayload(input, normalizedFormData, mergedDocuments);
   }
 
   if (existing) {
@@ -424,7 +532,7 @@ export async function saveApplicantApplication(applicantId: string, input: SaveA
           applicationType: input.applicationType,
           businessRecordId: input.businessRecordId ?? null,
           status: nextStatus,
-          formData: input.formData,
+          formData: normalizedFormData,
           submittedAt: input.mode === "SUBMIT" ? new Date() : null,
         },
       });
@@ -473,7 +581,7 @@ export async function saveApplicantApplication(applicantId: string, input: SaveA
         businessRecordId: input.businessRecordId ?? null,
         applicationType: input.applicationType,
         status: nextStatus,
-        formData: input.formData,
+        formData: normalizedFormData,
         submittedAt: input.mode === "SUBMIT" ? new Date() : null,
       },
     });
@@ -682,12 +790,25 @@ export async function getApplicantTopSummary(applicantId: string) {
   const applications = await prisma.businessApplication.findMany({
     where: {
       applicantId,
-      status: {
-        in: ["APPROVED_FOR_PAYMENT", "PAID", "FOR_RELEASE", "RELEASED"],
+      feeAssessment: {
+        is: {
+          status: "GENERATED",
+        },
       },
     },
     include: {
-      feeAssessment: true,
+      businessRecord: {
+        select: {
+          businessName: true,
+        },
+      },
+      feeAssessment: {
+        include: {
+          lineItems: {
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+      },
       paymentReferences: {
         orderBy: { submittedAt: "desc" },
         take: 1,
@@ -718,14 +839,22 @@ export async function getApplicantTopSummary(applicantId: string) {
       closureCertificateFee: any;
       arrears: any;
       otherCharges: any;
+      closurePaymentDues: any;
       totalAmount: any;
       remarks: string | null;
       generatedAt: Date | null;
+      lineItems: Array<{
+        id: string;
+        description: string;
+        amount: any;
+        isSystemGenerated: boolean;
+      }>;
     } | null;
 
     return {
       applicationId: application.id,
       applicationNumber: application.applicationNumber,
+      businessName: resolveBusinessName(application.formData, application.businessRecord?.businessName ?? null),
       applicationType: application.applicationType as string,
       status: mapDbStatusToUi(application.status),
       rawStatus: application.status,
@@ -743,16 +872,24 @@ export async function getApplicantTopSummary(applicantId: string) {
       penalties: toMoneyNumber(fa?.penalties),
       surcharge: toMoneyNumber(fa?.surcharge),
       interest: toMoneyNumber(fa?.interest),
+      closurePaymentDues: toMoneyNumber(fa?.closurePaymentDues),
       closureCertificateFee: toMoneyNumber(fa?.closureCertificateFee),
       arrears: toMoneyNumber(fa?.arrears),
       otherCharges: toMoneyNumber(fa?.otherCharges),
       totalAmount: toMoneyNumber(fa?.totalAmount),
       remarks: fa?.remarks ?? null,
       generatedAt: fa?.generatedAt ? fa.generatedAt.toISOString() : null,
+      lineItems: (fa?.lineItems ?? []).map((item) => ({
+        id: item.id,
+        description: item.description,
+        amount: toMoneyNumber(item.amount),
+        isSystemGenerated: item.isSystemGenerated,
+      })),
       paymentReference: payment
         ? {
             id: payment.id,
             transactionNumber: payment.transactionNumber,
+            officialReceiptNumber: payment.transactionNumber,
             amountPaid: toMoneyNumber(payment.amountPaid),
             paymentDate: payment.paymentDate.toISOString(),
             submittedAt: payment.submittedAt.toISOString(),
@@ -766,9 +903,9 @@ export async function getApplicantTopSummary(applicantId: string) {
   });
 
   return {
-    activeSummary:
-      summaries.find((summary: { rawStatus: string }) => summary.rawStatus === "APPROVED_FOR_PAYMENT") ??
-      summaries[0],
+    activeSummary: summaries.find(
+      (summary: { rawStatus: string }) => summary.rawStatus === "APPROVED_FOR_PAYMENT"
+    ) ?? summaries[0],
     records: summaries,
   };
 }
@@ -777,8 +914,6 @@ export async function submitApplicantPaymentReference(
   applicantId: string,
   applicationId: string,
   transactionNumber: string,
-  amountPaid: number,
-  paymentDate: string,
   proof: {
     proofFileName: string;
     proofStoragePath: string;
@@ -791,6 +926,9 @@ export async function submitApplicantPaymentReference(
       id: applicationId,
       applicantId,
     },
+    include: {
+      feeAssessment: true,
+    },
   });
 
   if (!application) throw new Error("Application not found");
@@ -799,13 +937,17 @@ export async function submitApplicantPaymentReference(
     throw new Error("Payment reference can only be submitted once the Tax Order of Payment has been generated");
   }
 
+  if (!application.feeAssessment || application.feeAssessment.status !== "GENERATED") {
+    throw new Error("Generated TOP is required before submitting payment reference");
+  }
+
   const duplicate = await prisma.paymentReference.findUnique({
     where: { transactionNumber: transactionNumber.trim() },
     select: { id: true },
   });
 
   if (duplicate) {
-    throw new Error("This OR number/payment reference has already been submitted. Please check your payment details.");
+    throw new Error("This OR number has already been submitted. Please check your payment details.");
   }
 
   const latest = await prisma.paymentReference.findFirst({
@@ -815,19 +957,19 @@ export async function submitApplicantPaymentReference(
   });
 
   if (latest?.status === "PENDING") {
-    throw new Error("A payment reference is already pending verification");
+    throw new Error("An OR submission is already pending verification");
   }
 
   if (latest?.status === "VERIFIED") {
     throw new Error("Payment has already been verified and is read-only");
   }
 
-  const parsedPaymentDate = new Date(paymentDate);
-  if (Number.isNaN(parsedPaymentDate.getTime())) {
-    throw new Error("paymentDate is required");
-  }
+  const parsedPaymentDate = new Date();
 
-  const normalizedAmountPaid = Math.round(Math.max(0, amountPaid) * 100) / 100;
+  const normalizedAmountPaid = Math.round(Math.max(0, toMoneyNumber(application.feeAssessment.totalAmount)) * 100) / 100;
+  if (normalizedAmountPaid <= 0) {
+    throw new Error("TOP amount is invalid for payment submission");
+  }
 
   const updated = await prisma.$transaction(async (tx: any) => {
     await tx.paymentReference.create({
@@ -851,7 +993,7 @@ export async function submitApplicantPaymentReference(
         actorRole: "APPLICANT",
         fromStatus: application.status,
         toStatus: application.status,
-        remarks: `Applicant submitted payment reference: ${transactionNumber.trim()}, Amount: ₱${toMoneyNumber(normalizedAmountPaid).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+        remarks: `Applicant submitted OR number ${transactionNumber.trim()} with amount ₱${toMoneyNumber(normalizedAmountPaid).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
       },
     });
 
@@ -885,6 +1027,7 @@ export async function listApplicantBusinessRecords(applicantId: string) {
     businessInfo: {
       businessType: row.businessType as BusinessInfo["businessType"],
       registrationNumber: row.registrationNumber,
+      paymentFrequency: "ANNUAL",
       tin: row.tin,
       businessName: row.businessName,
       tradeName: row.tradeName,
@@ -909,6 +1052,9 @@ export async function listApplicantBusinessRecords(applicantId: string) {
       businessActivity: row.businessActivity ?? "",
       lineOfBusiness: row.lineOfBusiness ?? "",
       assetSize: row.assetSize ?? "",
+      isMarket: Boolean(row.isMarket),
+      isAgriculture: Boolean(row.isAgriculture),
     } satisfies BusinessInfo,
+    permitExpirationDate: row.permitExpirationDate ? (row.permitExpirationDate as Date).toISOString() : null,
   }));
 }

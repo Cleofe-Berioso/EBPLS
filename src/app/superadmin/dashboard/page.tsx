@@ -17,36 +17,24 @@ export default async function SuperAdminDashboard() {
   const totalRenewal = reports.applicationsByType.find((row) => row.type === "RENEWAL")?.count ?? 0;
   const totalClosure = reports.applicationsByType.find((row) => row.type === "CLOSURE")?.count ?? 0;
 
-  const primaryCards = [
+  const systemTotalsCards = [
     {
-      title: "Total New",
+      title: "New Applications",
       value: totalNew.toLocaleString("en-PH"),
       subtitle: "New application records",
       tone: "blue" as const,
     },
     {
-      title: "Total Renewal",
+      title: "Renewal Applications",
       value: totalRenewal.toLocaleString("en-PH"),
       subtitle: "Renewal application records",
       tone: "amber" as const,
     },
     {
-      title: "Total Closure",
+      title: "Closure Applications",
       value: totalClosure.toLocaleString("en-PH"),
       subtitle: "Closure application records",
       tone: "slate" as const,
-    },
-    {
-      title: "Total Applications",
-      value: summary.totalApplications.toLocaleString("en-PH"),
-      subtitle: "All workflow records currently stored",
-      tone: "slate" as const,
-    },
-    {
-      title: "Released Applications",
-      value: summary.byStatus.RELEASED.toLocaleString("en-PH"),
-      subtitle: "Applications already released",
-      tone: "green" as const,
     },
     {
       title: "Total Users",
@@ -54,15 +42,10 @@ export default async function SuperAdminDashboard() {
       subtitle: "Applicant, BPLO, and Super Admin accounts",
       tone: "slate" as const,
     },
-    {
-      title: "BPLO Activity Count",
-      value: reports.bploActivityCount.toLocaleString("en-PH"),
-      subtitle: "Recorded BPLO history actions",
-      tone: "blue" as const,
-    },
   ];
 
-  const workflowRows: Array<{ status: ApplicationStatus; value: number }> = [
+  const mainWorkflowRows: Array<{ status: ApplicationStatus; value: number }> = [
+    { status: "Draft", value: summary.byStatus.DRAFT },
     { status: "Submitted", value: summary.byStatus.SUBMITTED },
     { status: "Under Review", value: summary.byStatus.UNDER_REVIEW },
     { status: "Assessed", value: summary.byStatus.ASSESSED },
@@ -73,12 +56,14 @@ export default async function SuperAdminDashboard() {
     { status: "Paid", value: summary.byStatus.PAID },
     { status: "For Release", value: summary.byStatus.FOR_RELEASE },
     { status: "Released", value: summary.byStatus.RELEASED },
+  ];
+
+  const exceptionStatuses: Array<{ status: ApplicationStatus; value: number }> = [
     {
       status: "Returned for Correction",
       value: summary.byStatus.RETURNED_FOR_CORRECTION,
     },
     { status: "Rejected", value: summary.byStatus.REJECTED },
-    { status: "Draft", value: summary.byStatus.DRAFT },
   ];
 
   return (
@@ -86,36 +71,44 @@ export default async function SuperAdminDashboard() {
       <PageHeader
         eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
-        title="Oversight Dashboard"
-        description="View-only monitoring across applicant submissions, BPLO processing, payment verification, and permit issuance."
-        badge={<RoleBadge role="VIEW_ONLY" label="View-Only Monitoring" />}
+        title="SuperAdmin Dashboard"
+        description="System statistics, workflow overview, and audit visibility."
+        badge={<RoleBadge role="VIEW_ONLY" label="Read-Only Monitoring" />}
       />
 
       <InfoBanner
-        title="View-only oversight dashboard"
-        description="Super Admin can monitor workflow, permit issuance, users, and BPLO activity without approve, reject, assess, verify, prepare, or release controls."
+        title="Audit View Only"
+        description="SuperAdmin can view this application but cannot approve, reject, assess fees, verify payments, or release permits."
         variant="readOnly"
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {primaryCards.map((card) => (
-          <StatCard
-            key={card.title}
-            title={card.title}
-            value={card.value}
-            subtitle={card.subtitle}
-            tone={card.tone}
-          />
-        ))}
-      </div>
+      <SectionCard
+        title="System Totals"
+        description="Core application and user statistics for system-wide oversight."
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {systemTotalsCards.map((card) => (
+            <StatCard
+              key={card.title}
+              title={card.title}
+              value={card.value}
+              subtitle={card.subtitle}
+              tone={card.tone}
+            />
+          ))}
+        </div>
+      </SectionCard>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <SectionCard
-          title="Workflow Snapshot"
-          description="Current application counts grouped by status for read-only oversight."
-        >
+      <SectionCard
+        title="Workflow Status"
+        description="Exact application workflow statuses with current counts for read-only oversight."
+      >
+        <div>
+          <p className="mb-4 text-sm text-slate-600">
+            Draft → Submitted → Under Review → Assessed → Approved for Payment → Paid → For Release → Released
+          </p>
           <div className="grid gap-3 md:grid-cols-2">
-            {workflowRows.map((row) => (
+            {mainWorkflowRows.map((row) => (
               <div
                 key={row.status}
                 className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
@@ -129,25 +122,57 @@ export default async function SuperAdminDashboard() {
               </div>
             ))}
           </div>
-        </SectionCard>
+        </div>
+      </SectionCard>
 
-        <SectionCard
-          title="Oversight Notes"
-          description="Key monitoring notes for read-only oversight and reporting."
-        >
-          <div className="space-y-3 text-sm text-slate-700">
+      <SectionCard
+        title="Exception / Action-Required States"
+        description="Applications requiring action or indicating final negative outcome."
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          {exceptionStatuses.map((row) => (
+            <div
+              key={row.status}
+              className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <StatusBadge status={row.status} />
+              </div>
+              <span className="text-lg font-semibold text-slate-900">
+                {row.value.toLocaleString("en-PH")}
+              </span>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Audit Summary"
+        description="System activity overview for monitoring and audit purposes."
+      >
+        <div className="space-y-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              Applicant and BPLO operational workflows remain unchanged. This dashboard surfaces read-only oversight metrics.
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Applications</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {summary.totalApplications.toLocaleString("en-PH")}
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              Monitoring emphasis: application types, overall volume, releases, user counts, and BPLO activity logs.
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Released Applications</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {summary.byStatus.RELEASED.toLocaleString("en-PH")}
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              Super Admin remains view-only for operations. No approve, reject, assess, verify, prepare, or release controls are exposed here.
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">BPLO Activity Count</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {reports.bploActivityCount.toLocaleString("en-PH")}
+              </p>
             </div>
           </div>
-        </SectionCard>
-      </div>
+        </div>
+      </SectionCard>
     </section>
   );
 }

@@ -69,6 +69,10 @@ export default function BusinessLocationPage() {
   const [address, setAddress] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isCenteringFromAddress, setIsCenteringFromAddress] = useState(false);
+  const [geoWarning, setGeoWarning] = useState<string | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -177,7 +181,17 @@ export default function BusinessLocationPage() {
   }, [records, selectedBusinessRecordId]);
 
   async function saveLocation() {
-    if (!selectedRecord || !selectedCoords) return;
+    if (!selectedRecord) return;
+
+    if (!selectedCoords) {
+      setError("Pin the exact business location on the map before saving.");
+      return;
+    }
+
+    if (address.trim().length === 0) {
+      setError("Business Location Address is required before submission.");
+      return;
+    }
 
     setIsSaving(true);
     setError(null);
@@ -208,6 +222,83 @@ export default function BusinessLocationPage() {
     setSuccess("Business location submitted successfully.");
     await loadBusinesses();
     setIsSaving(false);
+  }
+
+  function handleUseCurrentLocation() {
+    if (!selectedRecord?.canEditLocation) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeoError("Current location is unavailable on this device. You can still pin manually on the map.");
+      return;
+    }
+
+    setIsLocating(true);
+    setGeoError(null);
+    setGeoWarning("Only use this if you are currently at the actual business location.");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setSelectedCoords({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setIsLocating(false);
+      },
+      () => {
+        setGeoError("Unable to get current location. You can click or drag pin manually.");
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  }
+
+  async function handleCenterFromAddress() {
+    if (!selectedRecord?.canEditLocation) return;
+
+    const query = [address.trim(), barangay.trim(), selectedRecord.businessName.trim(), "EB Magalona"]
+      .filter((part) => part.length > 0)
+      .join(", ");
+
+    if (!query) {
+      setGeoError("Enter Business Location Address first, then center map from address.");
+      return;
+    }
+
+    setIsCenteringFromAddress(true);
+    setGeoError(null);
+    setGeoWarning("Map centered from address. Confirm exact site by clicking map or dragging pin.");
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
+        {
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("geocode failed");
+      }
+
+      const result = (await response.json()) as Array<{ lat: string; lon: string }>;
+      const first = result[0];
+      if (!first) {
+        setGeoError("Address center could not be found. Place pin manually on map.");
+        setIsCenteringFromAddress(false);
+        return;
+      }
+
+      setSelectedCoords({ latitude: Number(first.lat), longitude: Number(first.lon) });
+    } catch {
+      setGeoError("Address center could not be loaded. Place pin manually on map.");
+    } finally {
+      setIsCenteringFromAddress(false);
+    }
   }
 
   const mapMarkers = records
@@ -400,11 +491,50 @@ export default function BusinessLocationPage() {
                       title={selectedRecord.canEditLocation ? "Click to place or update the map pin" : "Verified location is read-only"}
                       description={
                         selectedRecord.canEditLocation
-                          ? "Click within the EB Magalona map area to set the exact business point. The existing save behavior and server-side coordinate validation remain unchanged."
+                          ? "Click map, drag marker, or use helper buttons to set exact business point."
                           : "This location is currently locked because BPLO has verified it. It becomes editable again only if BPLO returns it for correction."
                       }
                       variant={selectedRecord.canEditLocation ? "info" : "readOnly"}
                     />
+
+                    {selectedRecord.canEditLocation ? (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleUseCurrentLocation}
+                          disabled={isLocating}
+                          className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isLocating ? "Locating..." : "Use My Current Location"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleCenterFromAddress();
+                          }}
+                          disabled={isCenteringFromAddress}
+                          className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isCenteringFromAddress ? "Centering..." : "Center Map from Address"}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {geoWarning ? (
+                      <InfoBanner
+                        title="Pin accuracy reminder"
+                        description={geoWarning}
+                        variant="warning"
+                      />
+                    ) : null}
+
+                    {geoError ? (
+                      <InfoBanner
+                        title="Location helper issue"
+                        description={geoError}
+                        variant="warning"
+                      />
+                    ) : null}
 
                     <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
                       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -546,7 +676,7 @@ export default function BusinessLocationPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="font-medium text-slate-700">Address / Landmark</span>
+                    <span className="font-medium text-slate-700">Business Location Address</span>
                     <input
                       type="text"
                       value={address}
@@ -573,14 +703,14 @@ export default function BusinessLocationPage() {
                     <p className="text-sm font-semibold text-slate-900">Location submission</p>
                     <p className="text-sm text-slate-600">
                       {selectedRecord.canEditLocation
-                        ? "Save keeps the existing applicant submission flow unchanged."
+                        ? "Business Location Address, latitude, and longitude are required before save."
                         : "This record stays read-only until BPLO returns it for correction."}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={saveLocation}
-                    disabled={!selectedRecord.canEditLocation || !selectedCoords || isSaving}
+                    disabled={!selectedRecord.canEditLocation || !selectedCoords || address.trim().length === 0 || isSaving}
                     className="inline-flex items-center rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600"
                   >
                     {isSaving ? "Saving..." : "Save Location"}

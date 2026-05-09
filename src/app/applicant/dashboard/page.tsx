@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { Receipt } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { listApplicantApplications, listApplicantNotifications } from "@/lib/applications";
 import { listApplicantReleasedBusinessLocations } from "@/lib/business-location";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
-import { StatusBadge } from "@/components/applicant/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
@@ -21,8 +19,6 @@ interface DashboardNotification {
   remarks: string | null;
   createdAt: string;
 }
-
-const TOP_READY_STATUSES = ["Approved for Payment", "Paid", "For Release", "Released"];
 
 function getPriorityRank(status: string, releasedWithLocation: boolean): number {
   if (status === "Returned for Correction") return 1;
@@ -62,18 +58,18 @@ function getNextActionForStatus(input: {
 
   if (input.status === "Submitted") {
     return {
-      label: "Wait for BPLO review",
+      label: "No immediate action required",
       detail: "Your application was submitted and is queued for BPLO review.",
       href: "/applicant/my-applications",
-      cta: "Open My Applications",
+      cta: "View All Applications",
       variant: "info",
     };
   }
 
   if (input.status === "Under Review") {
     return {
-      label: "BPLO is reviewing your application",
-      detail: "Your application is currently under BPLO review.",
+      label: "No immediate action required",
+      detail: "BPLO is currently reviewing your application.",
       href: "/applicant/my-applications",
       cta: "Track progress",
       variant: "info",
@@ -92,7 +88,7 @@ function getNextActionForStatus(input: {
 
   if (input.status === "Assessed") {
     return {
-      label: "Wait for Tax Order of Payment generation",
+      label: "No immediate action required",
       detail: "BPLO assessment is complete. Wait for Tax Order of Payment to be generated.",
       href: "/applicant/my-applications",
       cta: "View status",
@@ -112,7 +108,7 @@ function getNextActionForStatus(input: {
 
   if (input.status === "Paid") {
     return {
-      label: "Wait for permit/certificate preparation",
+      label: "No immediate action required",
       detail: "Payment has been verified. BPLO will proceed with permit or certificate preparation.",
       href: "/applicant/my-applications",
       cta: "View status",
@@ -122,8 +118,8 @@ function getNextActionForStatus(input: {
 
   if (input.status === "For Release") {
     return {
-      label: "Permit/certificate is ready for release",
-      detail: "Your permit or certificate is in the release stage.",
+      label: "No immediate action required",
+      detail: "Your permit or certificate is in the release stage and awaiting final release processing.",
       href: "/applicant/my-applications",
       cta: "View release status",
       variant: "info",
@@ -161,42 +157,6 @@ function getNextActionForStatus(input: {
   };
 }
 
-function getLatestTopStatus(status: string | null): {
-  value: string;
-  subtitle: string;
-  tone: "green" | "blue" | "amber" | "slate";
-} {
-  if (!status) {
-    return {
-      value: "No application selected",
-      subtitle: "No latest application record is available yet.",
-      tone: "slate",
-    };
-  }
-
-  if (status === "Approved for Payment") {
-    return {
-      value: "TOP available",
-      subtitle: "This application can now submit OR Number / eGov Transaction Number.",
-      tone: "amber",
-    };
-  }
-
-  if (status === "Paid" || status === "For Release" || status === "Released") {
-    return {
-      value: "Payment stage completed",
-      subtitle: "This application already completed Tax Order of Payment processing.",
-      tone: "green",
-    };
-  }
-
-  return {
-    value: "Pending assessment",
-    subtitle: "This application is waiting for BPLO assessment or TOP generation.",
-    tone: "blue",
-  };
-}
-
 export default async function ApplicantDashboard() {
   const session = await auth();
   const applications = session?.user?.id ? await listApplicantApplications(session.user.id) : [];
@@ -209,11 +169,9 @@ export default async function ApplicantDashboard() {
     locationRows.filter((row) => row.location !== null).map((row) => row.applicationNumber)
   );
 
-  const latest = applications[0];
   const pendingCount = applications.filter((item) => item.status !== "Released" && item.status !== "Rejected").length;
   const needsActionCount = applications.filter((item) => item.status === "Returned for Correction").length;
-  const activePermits = applications.filter((item) => item.status === "Released").length;
-  const hasAccountTopAvailability = applications.some((item) => TOP_READY_STATUSES.includes(item.status));
+  const releasedCount = applications.filter((item) => item.status === "Released").length;
 
   const prioritized = applications
     .map((item, index) => {
@@ -244,54 +202,18 @@ export default async function ApplicantDashboard() {
         variant: "info" as const,
       };
 
-  const latestTopStatus = getLatestTopStatus(latest?.status ?? null);
-
-  const latestHasLocationSubmitted = latest
-    ? locationSubmittedByApplicationNumber.has(latest.applicationNumber)
-    : false;
-
-  const releaseLocationStatus = !latest
-    ? {
-        value: "No release yet",
-        subtitle: "Business Location follows permit or certificate release.",
-        tone: "slate" as const,
-      }
-    : latest.status === "Released" && !latestHasLocationSubmitted
-      ? {
-          value: "Business Location not submitted",
-          subtitle: "Submit Business Location for your released record.",
-          tone: "amber" as const,
-        }
-      : latest.status === "Released" && latestHasLocationSubmitted
-        ? {
-            value: "Business Location submitted",
-            subtitle: "You can review your submitted Business Location details.",
-            tone: "green" as const,
-          }
-        : latest.status === "For Release"
-          ? {
-              value: "Ready for release",
-              subtitle: "Permit or certificate is in the release stage.",
-              tone: "amber" as const,
-            }
-          : {
-              value: "Not yet released",
-              subtitle: "Business Location becomes available after release.",
-              tone: "blue" as const,
-            };
-
-  const recentNotifications = (notifications as DashboardNotification[]).slice(0, 3);
+  const recentNotifications = (notifications as DashboardNotification[]).slice(0, 5);
 
   return (
     <section className="space-y-6">
       <PageHeader
         eyebrow="Applicant"
-        title="Dashboard"
-        description={`Welcome, ${session?.user?.name ?? "Applicant"}. Review your next required action, latest application status, and filing updates.`}
+        title="My Dashboard"
+        description="See your application status, updates, and next steps."
         badge={<RoleBadge role="APPLICANT" />}
       />
 
-      <SectionCard title="Next Required Action" description="Based on your highest-priority application status.">
+      <SectionCard title="Your Next Action" description="Based on your highest-priority application status.">
         <InfoBanner
           title={nextAction.label}
           description={nextAction.detail}
@@ -307,77 +229,18 @@ export default async function ApplicantDashboard() {
         />
       </SectionCard>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <DashboardSummaryCard title="Active Permits" value={String(activePermits)} subtitle="Released application records" tone="green" />
-        <DashboardSummaryCard title="Pending Applications" value={String(pendingCount)} subtitle="Applications still in progress" tone="blue" />
-        <DashboardSummaryCard title="Needs Action" value={String(needsActionCount)} subtitle="Returned for correction" tone="amber" />
-        <DashboardSummaryCard
-          title="TOP Availability"
-          value={hasAccountTopAvailability ? "Available" : "Pending"}
-          subtitle={
-            hasAccountTopAvailability
-              ? "At least one application has a Tax Order of Payment."
-              : "No application has a Tax Order of Payment yet."
-          }
-          icon={<Receipt className="h-5 w-5" />}
-          tone="slate"
-        />
-      </div>
-
-      <SectionCard title="Latest Application" description="Your most recently updated application record.">
-        {latest ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{latest.applicationNumber}</p>
-                <p className="mt-1 truncate text-sm text-slate-600">{latest.businessName}</p>
-                <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                  {latest.applicationType} application
-                </p>
-              </div>
-              <StatusBadge status={latest.status} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link href={`/applicant/my-applications/${latest.id}`} className={actionButtonStyles("primary", "sm")}>
-                View details
-              </Link>
-              <Link href="/applicant/my-applications" className={actionButtonStyles("secondary", "sm")}>
-                Open tracker
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <EmptyState
-            title="No applications yet"
-            description="Start a new, renewal, or closure application to begin your filing workflow."
-            action={
-              <Link href="/applicant/application" className={actionButtonStyles("primary", "sm")}>
-                Start application
-              </Link>
-            }
-          />
-        )}
+      <SectionCard title="Application Summary" description="Quick overview of your current applications.">
+        <div className="grid gap-4 md:grid-cols-3">
+          <DashboardSummaryCard title="Active Applications" value={String(pendingCount)} subtitle="Applications still in progress" tone="blue" />
+          <DashboardSummaryCard title="Needs Action" value={String(needsActionCount)} subtitle="Returned for correction" tone="amber" />
+          <DashboardSummaryCard title="Completed / Released" value={String(releasedCount)} subtitle="Released application records" tone="green" />
+        </div>
       </SectionCard>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <DashboardSummaryCard
-          title="Latest Application TOP Status"
-          value={latestTopStatus.value}
-          subtitle={latestTopStatus.subtitle}
-          tone={latestTopStatus.tone}
-        />
-        <DashboardSummaryCard
-          title="Release / Business Location Status"
-          value={releaseLocationStatus.value}
-          subtitle={releaseLocationStatus.subtitle}
-          tone={releaseLocationStatus.tone}
-        />
-      </div>
-
-      <SectionCard title="Recent Notifications" description="Latest updates from your application history.">
+      <SectionCard title="Recent Updates" description="Latest updates from your application history.">
         {recentNotifications.length === 0 ? (
           <EmptyState
-            title="No recent notifications."
+            title="No updates yet"
             description="Updates will appear here as BPLO processes your applications."
           />
         ) : (
@@ -396,16 +259,13 @@ export default async function ApplicantDashboard() {
         )}
       </SectionCard>
 
-      <SectionCard title="Quick Actions" description="Start a new filing using the application type below.">
-        <div className="grid gap-3 md:grid-cols-3">
-          <Link href="/applicant/application/new" className={actionButtonStyles("primary", "md", "w-full")}>
-            New Application
+      <SectionCard title="Primary Actions" description="Choose your next primary action.">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Link href="/applicant/application" className={actionButtonStyles("primary", "md", "w-full")}>
+            File New Application
           </Link>
-          <Link href="/applicant/application/renewal" className={actionButtonStyles("primary", "md", "w-full")}>
-            Renewal Application
-          </Link>
-          <Link href="/applicant/application/closure" className={actionButtonStyles("primary", "md", "w-full")}>
-            Closure Application
+          <Link href="/applicant/my-applications" className={actionButtonStyles("secondary", "md", "w-full")}>
+            View All Applications
           </Link>
         </div>
         <p className="mt-3 text-sm text-slate-600">

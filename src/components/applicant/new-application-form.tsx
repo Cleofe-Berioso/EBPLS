@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
+import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
+import {
+  isCorporation,
+  isCorporationOwnershipClassification,
+} from "@/lib/business-rules";
 import type {
   ApplicationDocumentInput,
   BusinessInfo,
@@ -11,7 +16,7 @@ import type {
   SaveApplicationInput,
   SubmitValidationErrorDetail,
 } from "@/lib/applicant-types";
-import { resolveRequiredDocuments } from "@/lib/required-documents";
+import { normalizeDocumentName, resolveRequiredDocuments } from "@/lib/required-documents";
 import { BusinessInformationFields } from "@/components/applicant/business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
@@ -34,8 +39,8 @@ const steps = [
     description: "Upload all required clearances and supporting files.",
   },
   {
-    title: "Assessment Preview",
-    description: "Review the estimated fee breakdown before final review.",
+    title: "Assessment Notice",
+    description: "Final fees are assessed by BPLO after application review.",
   },
   {
     title: "Review and Submit",
@@ -63,6 +68,81 @@ const operationFields: Array<{
   { label: "Line of Business", key: "lineOfBusiness" },
   { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos." },
 ];
+
+const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
+  businessType: "Business Type",
+  registrationNumber: "Registration Number",
+  tin: "TIN",
+  businessName: "Business Name",
+  tradeName: "Trade Name",
+  ownerName: "Owner / President Name",
+  nationality: "Nationality",
+  email: "Email",
+  phone: "Contact Number",
+  country: "Country",
+  countryCode: "Country Code",
+  province: "Province",
+  provinceCode: "Province Code",
+  cityMunicipality: "City / Municipality",
+  streetAddress: "Street Address",
+  mainOfficeAddress: "Main Office Address",
+  businessAddress: "Business Address",
+  businessArea: "Business Area",
+  totalFloorArea: "Total Floor Area",
+  totalEmployees: "Total Employees",
+  maleEmployees: "Male Employees",
+  femaleEmployees: "Female Employees",
+  employeesWithinMunicipality: "Employees Residing within Municipality",
+  deliveryVehicles: "Delivery Vehicles",
+  taxIncentives: "Tax Incentives",
+  businessActivity: "Business Activity",
+  lineOfBusiness: "Line of Business",
+  assetSize: "Asset Size",
+  taxDeclarationNumber: "Tax Declaration Number",
+  propertyIdentificationNumber: "Property Identification Number",
+};
+
+const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
+  0: [
+    "businessType",
+    "registrationNumber",
+    "tin",
+    "businessName",
+    "ownerName",
+    "nationality",
+    "email",
+    "phone",
+    "country",
+    "countryCode",
+    "province",
+    "provinceCode",
+    "cityMunicipality",
+    "streetAddress",
+    "mainOfficeAddress",
+  ],
+  1: [
+    "businessArea",
+    "totalFloorArea",
+    "totalEmployees",
+    "maleEmployees",
+    "femaleEmployees",
+    "employeesWithinMunicipality",
+    "deliveryVehicles",
+    "taxIncentives",
+    "businessActivity",
+    "lineOfBusiness",
+    "assetSize",
+  ],
+};
+
+function normalizeBusinessInfo(next: BusinessInfo): BusinessInfo {
+  const normalized = normalizeBusinessInfoRules(next);
+  if (!normalized.sameAsMainOffice) return normalized;
+  return {
+    ...normalized,
+    businessAddress: normalized.mainOfficeAddress,
+  };
+}
 
 function ReviewStat({
   label,
@@ -121,14 +201,16 @@ function FieldCard({
   value,
   onChange,
   helperText,
+  error,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   helperText?: string;
+  error?: string;
 }) {
   return (
-    <FormField label={label} required hint={helperText}>
+    <FormField label={label} required hint={helperText} error={error}>
       <input
         className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
         value={value}
@@ -152,6 +234,7 @@ export function NewApplicationForm() {
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
 
   const requiredDocs = useMemo(
     () =>
@@ -162,7 +245,12 @@ export function NewApplicationForm() {
     [info]
   );
 
-  const uploadedRequiredCount = requiredDocs.filter((doc) => uploadedDocuments[doc]).length;
+  const getUploadedDocumentForRequiredName = (requiredName: string) =>
+    Object.values(uploadedDocuments).find(
+      (doc) => normalizeDocumentName(doc.documentName) === normalizeDocumentName(requiredName)
+    );
+
+  const uploadedRequiredCount = requiredDocs.filter((doc) => getUploadedDocumentForRequiredName(doc)).length;
 
   useEffect(() => {
     let active = true;
@@ -182,7 +270,13 @@ export function NewApplicationForm() {
       if (!active || !response.ok || !data.application) return;
 
       setApplicationId(data.application.id);
-      setInfo(data.application.formData);
+      setInfo(
+        normalizeBusinessInfo({
+          ...defaultBusinessInfo,
+          ...data.application.formData,
+          paymentFrequency: data.application.formData.paymentFrequency ?? "ANNUAL",
+        })
+      );
       setUploadedDocuments(
         data.application.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
           acc[doc.documentName] = doc;
@@ -197,7 +291,65 @@ export function NewApplicationForm() {
     };
   }, [editId]);
 
+  function applyInfoChange(next: BusinessInfo) {
+    setInfo(normalizeBusinessInfo(next));
+  }
+
+  function validateCurrentStep(currentStep: number): boolean {
+    const normalizedInfo = normalizeBusinessInfo(info);
+    const requiredFields = STEP_REQUIRED_FIELDS[currentStep] ?? [];
+    const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+
+    for (const key of requiredFields) {
+      const value = normalizedInfo[key];
+      if (typeof value !== "string" || value.trim().length === 0) {
+        if (key === "mainOfficeAddress") {
+          nextErrors[key] = "Fill in Country, Province, City/Municipality, and Street Address to auto-generate.";
+        } else if (key === "countryCode") {
+          nextErrors[key] = "Select a country from the dropdown.";
+        } else if (key === "provinceCode") {
+          nextErrors[key] = "Select a province/state from the dropdown.";
+        } else {
+          nextErrors[key] = `${FIELD_LABELS[key] ?? key} is required.`;
+        }
+      }
+    }
+
+    if (!normalizedInfo.sameAsMainOffice && normalizedInfo.businessAddress.trim().length === 0) {
+      nextErrors.businessAddress = "Business Address is required.";
+    }
+
+    if (
+      isCorporation(normalizedInfo.businessType) &&
+      !isCorporationOwnershipClassification(normalizedInfo.nationality)
+    ) {
+      nextErrors.nationality =
+        "Corporation Nationality / Ownership Classification is required.";
+    }
+
+    if (currentStep === 1 && normalizedInfo.propertyOwnership === "Owned") {
+      if (normalizedInfo.taxDeclarationNumber.trim().length === 0) {
+        nextErrors.taxDeclarationNumber = "Tax Declaration Number is required for owned properties.";
+      }
+      if (normalizedInfo.propertyIdentificationNumber.trim().length === 0) {
+        nextErrors.propertyIdentificationNumber = "Property Identification Number is required for owned properties.";
+      }
+    }
+
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
   function next() {
+    if (!validateCurrentStep(step)) {
+      setStatusMessage({
+        kind: "error",
+        text: "Complete required fields before moving to the next step.",
+      });
+      return;
+    }
+
+    setStatusMessage(null);
     setStep((current) => Math.min(current + 1, steps.length - 1));
   }
 
@@ -209,6 +361,7 @@ export function NewApplicationForm() {
     setSubmitting(true);
     setStatusMessage(null);
     setValidationDetail(null);
+    setFieldErrors({});
 
     const payload: SaveApplicationInput = {
       applicationId,
@@ -352,7 +505,12 @@ export function NewApplicationForm() {
           title="Business Information"
           description="Fields marked with an asterisk are required for draft saving and final submission."
         >
-          <BusinessInformationFields value={info} onChange={setInfo} />
+          <BusinessInformationFields
+            value={info}
+            onChange={applyInfoChange}
+            fieldErrors={fieldErrors}
+            enableCascadingAddress
+          />
         </SectionCard>
       ) : null}
 
@@ -374,11 +532,48 @@ export function NewApplicationForm() {
                   label={field.label}
                   value={info[field.key] as string}
                   helperText={field.helperText}
+                  error={fieldErrors[field.key]}
                   onChange={(value) =>
-                    setInfo((current) => ({ ...current, [field.key]: value }))
+                    setInfo((current) => normalizeBusinessInfo({ ...current, [field.key]: value }))
                   }
                 />
               ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={info.isMarket}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isMarket: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-slate-900">Market business</span>
+                  Mark this if the business operates inside a public market or market stall so Market Clearance becomes required.
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={info.isAgriculture}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isAgriculture: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-slate-900">Agriculture-related business</span>
+                  Mark this if the business requires Department of Agriculture clearance.
+                </span>
+              </label>
             </div>
           </SectionCard>
 
@@ -395,10 +590,12 @@ export function NewApplicationForm() {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
                   value={info.propertyOwnership}
                   onChange={(event) =>
-                    setInfo((current) => ({
-                      ...current,
-                      propertyOwnership: event.target.value as PropertyOwnership,
-                    }))
+                    setInfo((current) =>
+                      normalizeBusinessInfo({
+                        ...current,
+                        propertyOwnership: event.target.value as PropertyOwnership,
+                      })
+                    )
                   }
                 >
                   <option>Owned</option>
@@ -417,18 +614,22 @@ export function NewApplicationForm() {
                   <FieldCard
                     label="Tax Declaration Number"
                     value={info.taxDeclarationNumber}
+                    error={fieldErrors.taxDeclarationNumber}
                     onChange={(value) =>
-                      setInfo((current) => ({ ...current, taxDeclarationNumber: value }))
+                      setInfo((current) => normalizeBusinessInfo({ ...current, taxDeclarationNumber: value }))
                     }
                   />
                   <FieldCard
                     label="Property Identification Number"
                     value={info.propertyIdentificationNumber}
+                    error={fieldErrors.propertyIdentificationNumber}
                     onChange={(value) =>
-                      setInfo((current) => ({
-                        ...current,
-                        propertyIdentificationNumber: value,
-                      }))
+                      setInfo((current) =>
+                        normalizeBusinessInfo({
+                          ...current,
+                          propertyIdentificationNumber: value,
+                        })
+                      )
                     }
                   />
                 </>
@@ -450,22 +651,25 @@ export function NewApplicationForm() {
             description="Required files may vary based on business type and property ownership."
           >
             <div className="grid gap-3 md:grid-cols-2">
-              {requiredDocs.map((doc) => (
-                <UploadSlot
-                  key={doc}
-                  label={doc}
-                  required
-                  helperText="Prepare a clear file copy before uploading."
-                  disabled={submitting}
-                  fileName={uploadedDocuments[doc]?.fileName}
-                  onFileChange={(file) => {
-                    void handleDocumentUpload(doc, file);
-                  }}
-                  onRemove={() => {
-                    void handleDocumentDelete(doc);
-                  }}
-                />
-              ))}
+              {requiredDocs.map((doc) => {
+                const uploadedDoc = getUploadedDocumentForRequiredName(doc);
+                return (
+                  <UploadSlot
+                    key={doc}
+                    label={doc}
+                    required
+                    helperText="Prepare a clear file copy before uploading."
+                    disabled={submitting}
+                    fileName={uploadedDoc?.fileName}
+                    onFileChange={(file) => {
+                      void handleDocumentUpload(doc, file);
+                    }}
+                    onRemove={() => {
+                      void handleDocumentDelete(uploadedDoc?.documentName ?? doc);
+                    }}
+                  />
+                );
+              })}
             </div>
           </SectionCard>
         </div>
@@ -473,38 +677,55 @@ export function NewApplicationForm() {
 
       {step === 3 ? (
         <div className="space-y-4">
-          <InfoBanner
-            title="Assessment preview only"
-            description="These estimated amounts are shown for applicant guidance. Final assessment is still determined during BPLO fee assessment."
-            variant="warning"
-          />
           <SectionCard
-            title="Assessment Preview"
-            description="Use this section to review the current estimated amounts before final review."
+            title="Preferred Payment Frequency"
+            description="Choose how you prefer to pay the assessed fees. Final payment details are confirmed after BPLO assessment."
           >
-            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-gray-800">
-              <div className="flex justify-between py-1">
-                <span>Mayor&apos;s Permit Fee</span>
-                <span>Php 2,000.00</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span>Regulatory Fees</span>
-                <span>Php 1,250.00</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span>Additional Charges</span>
-                <span>Php 500.00</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span>Penalties</span>
-                <span>Php 0.00</span>
-              </div>
-              <div className="mt-2 flex justify-between border-t border-green-200 pt-2 font-semibold text-green-800">
-                <span>Total Amount</span>
-                <span>Php 3,750.00</span>
-              </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                <input
+                  type="radio"
+                  name="paymentFrequency"
+                  value="ANNUAL"
+                  checked={info.paymentFrequency === "ANNUAL"}
+                  onChange={() =>
+                    setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "ANNUAL" }))
+                  }
+                />
+                Annual
+              </label>
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                <input
+                  type="radio"
+                  name="paymentFrequency"
+                  value="BI_ANNUAL"
+                  checked={info.paymentFrequency === "BI_ANNUAL"}
+                  onChange={() =>
+                    setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "BI_ANNUAL" }))
+                  }
+                />
+                Bi-Annual
+              </label>
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                <input
+                  type="radio"
+                  name="paymentFrequency"
+                  value="QUARTERLY"
+                  checked={info.paymentFrequency === "QUARTERLY"}
+                  onChange={() =>
+                    setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "QUARTERLY" }))
+                  }
+                />
+                Quarterly
+              </label>
             </div>
           </SectionCard>
+
+          <InfoBanner
+            title="BPLO assessment"
+            description="Fees will be assessed by BPLO after application review."
+            variant="info"
+          />
         </div>
       ) : null}
 
@@ -554,6 +775,40 @@ export function NewApplicationForm() {
                 value={`${uploadedRequiredCount} / ${requiredDocs.length}`}
                 helper="Uploaded required document count"
               />
+              <ReviewStat
+                label="Payment Frequency"
+                value={
+                  info.paymentFrequency === "ANNUAL"
+                    ? "Annual"
+                    : info.paymentFrequency === "BI_ANNUAL"
+                      ? "Bi-Annual"
+                      : "Quarterly"
+                }
+                helper="Applicant preference for assessed fee payment"
+              />
+              <ReviewStat label="Country" value={info.country?.trim() || "-"} />
+              <ReviewStat label="Province" value={info.province?.trim() || "-"} />
+              <ReviewStat
+                label="City / Municipality"
+                value={info.cityMunicipality?.trim() || "-"}
+              />
+              <ReviewStat
+                label="Street Address"
+                value={info.streetAddress?.trim() || "-"}
+              />
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">Main Office Address</p>
+              <p className="mt-1">{info.mainOfficeAddress || "-"}</p>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">Business Address</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {info.sameAsMainOffice ? "Same as Main Office Address" : "Separate from Main Office Address"}
+              </p>
+              <p className="mt-1">{info.businessAddress || "-"}</p>
             </div>
 
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">

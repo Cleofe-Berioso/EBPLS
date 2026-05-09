@@ -365,8 +365,41 @@ async function withPrismaRetry<T>(label: string, fn: () => Promise<T>, retries =
   }
 }
 
-async function main() {
-  console.log("Seeding database...");
+function buildBusinessInfo(overrides: Record<string, unknown> = {}) {
+  return {
+    businessType: "Sole Proprietorship",
+    registrationNumber: "",
+    paymentFrequency: "ANNUAL",
+    tin: "123456789000",
+    businessName: "Debug Business",
+    tradeName: "Debug Trade",
+    ownerName: "Debug Owner",
+    nationality: "Filipino",
+    email: "applicant@example.com",
+    phone: "+639123456789",
+    mainOfficeAddress: "Poblacion, Enrique B. Magalona, Negros Occidental",
+    businessAddress: "Poblacion, Enrique B. Magalona, Negros Occidental",
+    sameAsMainOffice: true,
+    businessArea: "120",
+    totalFloorArea: "200",
+    totalEmployees: "12",
+    maleEmployees: "7",
+    femaleEmployees: "5",
+    employeesWithinMunicipality: "9",
+    deliveryVehicles: "2",
+    propertyOwnership: "Owned",
+    taxDeclarationNumber: "TD-DBG-001",
+    propertyIdentificationNumber: "PIN-DBG-001",
+    taxIncentives: "None",
+    businessActivity: "Retail and wholesale of general merchandise",
+    lineOfBusiness: "Trading",
+    assetSize: "5000000",
+    ...overrides,
+  };
+}
+
+async function seedBaseData() {
+  console.log("Seeding base data...");
 
   const users = [
     {
@@ -549,12 +582,6 @@ async function main() {
   });
 
   if (applicant) {
-    await withPrismaRetry("delete applicant applications", () =>
-      prisma.businessApplication.deleteMany({
-        where: { applicantId: applicant.id },
-      })
-    );
-
     await withPrismaRetry("upsert default business record", () =>
       prisma.businessRecord.upsert({
         where: {
@@ -623,6 +650,887 @@ async function main() {
     console.log("  ✓ Seeded default applicant business record");
   }
 
+  console.log("Base seed complete");
+}
+
+async function syncDebugHistory(
+  applicationId: string,
+  events: Array<{
+    actorId: string;
+    actorRole: "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+    fromStatus: string | null;
+    toStatus: string;
+    remarks: string;
+  }>
+) {
+  await withPrismaRetry(`clear debug history ${applicationId}`, () =>
+    prisma.applicationHistory.deleteMany({
+      where: {
+        applicationId,
+        remarks: {
+          startsWith: "[DEBUG-SEED]",
+        },
+      },
+    })
+  );
+
+  const baseTime = new Date("2026-05-01T08:00:00.000Z").getTime();
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    await withPrismaRetry(`create debug history ${applicationId}#${i + 1}`, () =>
+      prisma.applicationHistory.create({
+        data: {
+          applicationId,
+          actorId: event.actorId,
+          actorRole: event.actorRole,
+          fromStatus: event.fromStatus,
+          toStatus: event.toStatus,
+          remarks: `[DEBUG-SEED] ${event.remarks}`,
+          createdAt: new Date(baseTime + i * 60_000),
+        },
+      })
+    );
+  }
+}
+
+async function seedUiDebugData() {
+  console.log("Seeding debug UI data...");
+
+  const [applicant, bplo, superAdmin] = await Promise.all([
+    prisma.user.findUnique({ where: { email: "applicant@example.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "bplo@example.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "superadmin@example.com" }, select: { id: true } }),
+  ]);
+
+  if (!applicant?.id || !bplo?.id || !superAdmin?.id) {
+    throw new Error("Debug seed requires base users to exist.");
+  }
+
+  const debugRecords = [
+    {
+      registrationNumber: "DTI-2026-0001",
+      businessType: "Sole Proprietorship",
+      businessName: "DTI Debug Trading",
+      tradeName: "DTI Debug",
+      ownerName: "Debug Sole Owner",
+      nationality: "Filipino",
+      email: "applicant@example.com",
+      phone: "+639111000001",
+      mainOfficeAddress: "DTI Main Office Address",
+      businessAddress: "DTI Main Office Address",
+      sameAsMainOffice: true,
+      businessActivity: "General retail",
+      lineOfBusiness: "Trading",
+      assetSize: "2000000",
+      businessStatus: "ACTIVE",
+      closedAt: null,
+      closureApplicationId: null,
+    },
+    {
+      registrationNumber: "SEC-2026-0001",
+      businessType: "Corporation",
+      businessName: "SEC Corp Debug",
+      tradeName: "SEC Corp",
+      ownerName: "Debug Corporate President",
+      nationality: "Japanese",
+      email: "applicant@example.com",
+      phone: "+639111000002",
+      mainOfficeAddress: "SEC Main Office Address",
+      businessAddress: "SEC Branch Address",
+      sameAsMainOffice: false,
+      businessActivity: "Professional services",
+      lineOfBusiness: "Services",
+      assetSize: "7500000",
+      businessStatus: "ACTIVE",
+      closedAt: null,
+      closureApplicationId: null,
+    },
+    {
+      registrationNumber: "SEC-2026-0002",
+      businessType: "Partnership",
+      businessName: "SEC Partnership Debug",
+      tradeName: "SEC Partner",
+      ownerName: "Debug Managing Partner",
+      nationality: "Korean",
+      email: "applicant@example.com",
+      phone: "+639111000003",
+      mainOfficeAddress: "SEC Partnership Main Address",
+      businessAddress: "SEC Partnership Main Address",
+      sameAsMainOffice: true,
+      businessActivity: "Wholesale",
+      lineOfBusiness: "Distribution",
+      assetSize: "4500000",
+      businessStatus: "ACTIVE",
+      closedAt: null,
+      closureApplicationId: null,
+    },
+    {
+      registrationNumber: "CDA-2026-0001",
+      businessType: "Cooperative",
+      businessName: "CDA Cooperative Debug",
+      tradeName: "CDA Coop",
+      ownerName: "Debug Cooperative Chair",
+      nationality: "Filipino",
+      email: "applicant@example.com",
+      phone: "+639111000004",
+      mainOfficeAddress: "CDA Main Office Address",
+      businessAddress: "CDA Main Office Address",
+      sameAsMainOffice: true,
+      businessActivity: "Agriculture cooperative",
+      lineOfBusiness: "Cooperative",
+      assetSize: "3500000",
+      businessStatus: "ACTIVE",
+      closedAt: null,
+      closureApplicationId: null,
+    },
+  ];
+
+  const recordsByReg = new Map<string, { id: string }>();
+  for (const record of debugRecords) {
+    const upserted = await withPrismaRetry(`upsert debug business record ${record.registrationNumber}`, () =>
+      prisma.businessRecord.upsert({
+        where: { registrationNumber: record.registrationNumber },
+        update: {
+          applicantId: applicant.id,
+          businessType: record.businessType,
+          tin: `TIN-${record.registrationNumber}`,
+          businessName: record.businessName,
+          tradeName: record.tradeName,
+          ownerName: record.ownerName,
+          nationality: record.nationality,
+          email: record.email,
+          phone: record.phone,
+          mainOfficeAddress: record.mainOfficeAddress,
+          businessAddress: record.businessAddress,
+          sameAsMainOffice: record.sameAsMainOffice,
+          businessArea: "150",
+          totalFloorArea: "250",
+          totalEmployees: "18",
+          maleEmployees: "10",
+          femaleEmployees: "8",
+          employeesWithinMunicipality: "12",
+          deliveryVehicles: "3",
+          propertyOwnership: "Owned",
+          taxDeclarationNumber: `TD-${record.registrationNumber}`,
+          propertyIdentificationNumber: `PIN-${record.registrationNumber}`,
+          taxIncentives: "None",
+          businessActivity: record.businessActivity,
+          lineOfBusiness: record.lineOfBusiness,
+          assetSize: record.assetSize,
+          businessStatus: record.businessStatus,
+          closedAt: record.closedAt,
+          closureApplicationId: record.closureApplicationId,
+        },
+        create: {
+          applicantId: applicant.id,
+          businessType: record.businessType,
+          registrationNumber: record.registrationNumber,
+          tin: `TIN-${record.registrationNumber}`,
+          businessName: record.businessName,
+          tradeName: record.tradeName,
+          ownerName: record.ownerName,
+          nationality: record.nationality,
+          email: record.email,
+          phone: record.phone,
+          mainOfficeAddress: record.mainOfficeAddress,
+          businessAddress: record.businessAddress,
+          sameAsMainOffice: record.sameAsMainOffice,
+          businessArea: "150",
+          totalFloorArea: "250",
+          totalEmployees: "18",
+          maleEmployees: "10",
+          femaleEmployees: "8",
+          employeesWithinMunicipality: "12",
+          deliveryVehicles: "3",
+          propertyOwnership: "Owned",
+          taxDeclarationNumber: `TD-${record.registrationNumber}`,
+          propertyIdentificationNumber: `PIN-${record.registrationNumber}`,
+          taxIncentives: "None",
+          businessActivity: record.businessActivity,
+          lineOfBusiness: record.lineOfBusiness,
+          assetSize: record.assetSize,
+          businessStatus: record.businessStatus,
+          closedAt: record.closedAt,
+          closureApplicationId: record.closureApplicationId,
+        },
+        select: { id: true },
+      })
+    );
+    recordsByReg.set(record.registrationNumber, upserted as { id: string });
+  }
+
+  const debugApplications = [
+    {
+      applicationNumber: "NEW-DRAFT-001",
+      applicationType: "NEW",
+      status: "DRAFT",
+      businessRecordRegistration: "DTI-2026-0001",
+      formData: buildBusinessInfo({
+        businessType: "Sole Proprietorship",
+        registrationNumber: "DTI-2026-0001",
+        businessName: "NEW-DRAFT-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "NEW-SUBMITTED-001",
+      applicationType: "NEW",
+      status: "SUBMITTED",
+      businessRecordRegistration: "SEC-2026-0001",
+      formData: buildBusinessInfo({
+        businessType: "Corporation",
+        registrationNumber: "SEC-2026-0001",
+        nationality: "Japanese",
+        sameAsMainOffice: false,
+        mainOfficeAddress: "SEC Main Office Address",
+        businessAddress: "SEC Branch Address",
+        businessName: "NEW-SUBMITTED-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "NEW-UNDER-REVIEW-001",
+      applicationType: "NEW",
+      status: "UNDER_REVIEW",
+      businessRecordRegistration: "SEC-2026-0002",
+      formData: buildBusinessInfo({
+        businessType: "Partnership",
+        registrationNumber: "SEC-2026-0002",
+        nationality: "Korean",
+        businessName: "NEW-UNDER-REVIEW-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "RENEWAL-ASSESSED-001",
+      applicationType: "RENEWAL",
+      status: "ASSESSED",
+      businessRecordRegistration: "CDA-2026-0001",
+      formData: buildBusinessInfo({
+        businessType: "Cooperative",
+        registrationNumber: "CDA-2026-0001",
+        paymentFrequency: "BI_ANNUAL",
+        businessName: "RENEWAL-ASSESSED-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "NEW-APPROVED-PAYMENT-001",
+      applicationType: "NEW",
+      status: "APPROVED_FOR_PAYMENT",
+      businessRecordRegistration: "DTI-2026-0001",
+      formData: buildBusinessInfo({
+        registrationNumber: "DTI-2026-0001",
+        paymentFrequency: "ANNUAL",
+        businessName: "NEW-APPROVED-PAYMENT-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "RENEWAL-PAID-001",
+      applicationType: "RENEWAL",
+      status: "PAID",
+      businessRecordRegistration: "SEC-2026-0002",
+      formData: buildBusinessInfo({
+        businessType: "Partnership",
+        registrationNumber: "SEC-2026-0002",
+        paymentFrequency: "BI_ANNUAL",
+        businessName: "RENEWAL-PAID-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "NEW-FOR-RELEASE-001",
+      applicationType: "NEW",
+      status: "FOR_RELEASE",
+      businessRecordRegistration: "SEC-2026-0001",
+      formData: buildBusinessInfo({
+        businessType: "Corporation",
+        registrationNumber: "SEC-2026-0001",
+        paymentFrequency: "QUARTERLY",
+        businessName: "NEW-FOR-RELEASE-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "NEW-RELEASED-001",
+      applicationType: "NEW",
+      status: "RELEASED",
+      businessRecordRegistration: "DTI-2026-0001",
+      formData: buildBusinessInfo({
+        registrationNumber: "DTI-2026-0001",
+        paymentFrequency: "ANNUAL",
+        businessName: "NEW-RELEASED-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "NEW-RETURNED-001",
+      applicationType: "NEW",
+      status: "RETURNED_FOR_CORRECTION",
+      businessRecordRegistration: "CDA-2026-0001",
+      formData: buildBusinessInfo({
+        businessType: "Cooperative",
+        registrationNumber: "CDA-2026-0001",
+        businessName: "NEW-RETURNED-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "NEW-REJECTED-001",
+      applicationType: "NEW",
+      status: "REJECTED",
+      businessRecordRegistration: "SEC-2026-0001",
+      formData: buildBusinessInfo({
+        businessType: "Corporation",
+        registrationNumber: "SEC-2026-0001",
+        businessName: "NEW-REJECTED-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "CLOSURE-SUBMITTED-001",
+      applicationType: "CLOSURE",
+      status: "SUBMITTED",
+      businessRecordRegistration: "SEC-2026-0002",
+      formData: buildBusinessInfo({
+        businessType: "Partnership",
+        registrationNumber: "SEC-2026-0002",
+        businessName: "CLOSURE-SUBMITTED-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "CLOSURE-RELEASED-001",
+      applicationType: "CLOSURE",
+      status: "RELEASED",
+      businessRecordRegistration: "SEC-2026-0002",
+      formData: buildBusinessInfo({
+        businessType: "Partnership",
+        registrationNumber: "SEC-2026-0002",
+        businessName: "CLOSURE-RELEASED-001 Business",
+      }),
+    },
+    {
+      applicationNumber: "DRAFT-MISSING-REGISTRATION",
+      applicationType: "NEW",
+      status: "DRAFT",
+      businessRecordRegistration: null,
+      formData: buildBusinessInfo({
+        registrationNumber: "",
+        businessName: "Draft Missing Registration",
+      }),
+    },
+    {
+      applicationNumber: "DRAFT-MISSING-NATIONALITY",
+      applicationType: "NEW",
+      status: "DRAFT",
+      businessRecordRegistration: null,
+      formData: buildBusinessInfo({
+        nationality: "",
+        businessName: "Draft Missing Nationality",
+      }),
+    },
+    {
+      applicationNumber: "DRAFT-MISSING-BUSINESS-ADDRESS",
+      applicationType: "NEW",
+      status: "DRAFT",
+      businessRecordRegistration: null,
+      formData: buildBusinessInfo({
+        sameAsMainOffice: false,
+        businessAddress: "",
+        businessName: "Draft Missing Business Address",
+      }),
+    },
+    {
+      applicationNumber: "DRAFT-MISSING-PAYMENT-FREQUENCY",
+      applicationType: "NEW",
+      status: "DRAFT",
+      businessRecordRegistration: null,
+      formData: buildBusinessInfo({
+        paymentFrequency: undefined,
+        businessName: "Draft Missing Payment Frequency",
+      }),
+    },
+    {
+      applicationNumber: "DRAFT-MISSING-DOCUMENTS",
+      applicationType: "NEW",
+      status: "DRAFT",
+      businessRecordRegistration: null,
+      formData: buildBusinessInfo({
+        businessName: "Draft Missing Documents",
+      }),
+    },
+  ] as const;
+
+  const applicationsByNumber = new Map<string, { id: string; status: string }>();
+  for (const app of debugApplications) {
+    const linkedRecord = app.businessRecordRegistration
+      ? recordsByReg.get(app.businessRecordRegistration)
+      : null;
+
+    const submittedAt = app.status === "DRAFT" ? null : new Date("2026-05-01T09:00:00.000Z");
+
+    const upserted = await withPrismaRetry(`upsert debug application ${app.applicationNumber}`, () =>
+      prisma.businessApplication.upsert({
+        where: { applicationNumber: app.applicationNumber },
+        update: {
+          applicantId: applicant.id,
+          businessRecordId: linkedRecord?.id ?? null,
+          applicationType: app.applicationType,
+          status: app.status,
+          formData: app.formData,
+          submittedAt,
+        },
+        create: {
+          applicationNumber: app.applicationNumber,
+          applicantId: applicant.id,
+          businessRecordId: linkedRecord?.id ?? null,
+          applicationType: app.applicationType,
+          status: app.status,
+          formData: app.formData,
+          submittedAt,
+        },
+        select: { id: true, status: true },
+      })
+    );
+
+    applicationsByNumber.set(app.applicationNumber, upserted as { id: string; status: string });
+  }
+
+  const assessmentSeeds = [
+    {
+      applicationNumber: "NEW-APPROVED-PAYMENT-001",
+      assessmentNumber: "TOP-DBG-ANNUAL-001",
+      paymentFrequency: "ANNUAL",
+      status: "GENERATED",
+      annualAssessedAmount: 12000,
+      releasePaymentAmount: 12000,
+      amountPaid: 0,
+      remainingBalance: 12000,
+      paymentStatus: "UNPAID",
+      mayorsPermitFee: 8000,
+      regulatoryFees: 2500,
+      additionalCharges: 500,
+      penalties: 0,
+      surcharge: 500,
+      interest: 500,
+      closureCertificateFee: 0,
+      arrears: 0,
+      otherCharges: 0,
+      totalAmount: 12000,
+      remarks: "[DEBUG-SEED] Annual payment frequency sample",
+    },
+    {
+      applicationNumber: "RENEWAL-ASSESSED-001",
+      assessmentNumber: "TOP-DBG-BIANNUAL-001",
+      paymentFrequency: "BI_ANNUAL",
+      status: "DRAFT",
+      annualAssessedAmount: 9000,
+      releasePaymentAmount: 4500,
+      amountPaid: 0,
+      remainingBalance: 9000,
+      paymentStatus: "UNPAID",
+      mayorsPermitFee: 5000,
+      regulatoryFees: 2500,
+      additionalCharges: 500,
+      penalties: 500,
+      surcharge: 250,
+      interest: 250,
+      closureCertificateFee: 0,
+      arrears: 0,
+      otherCharges: 0,
+      totalAmount: 9000,
+      remarks: "[DEBUG-SEED] Bi-annual payment frequency sample",
+    },
+    {
+      applicationNumber: "NEW-FOR-RELEASE-001",
+      assessmentNumber: "TOP-DBG-QUARTERLY-001",
+      paymentFrequency: "QUARTERLY",
+      status: "GENERATED",
+      annualAssessedAmount: 8000,
+      releasePaymentAmount: 2000,
+      amountPaid: 2000,
+      remainingBalance: 6000,
+      paymentStatus: "PARTIALLY_PAID",
+      mayorsPermitFee: 4500,
+      regulatoryFees: 2500,
+      additionalCharges: 500,
+      penalties: 250,
+      surcharge: 125,
+      interest: 125,
+      closureCertificateFee: 0,
+      arrears: 0,
+      otherCharges: 0,
+      totalAmount: 8000,
+      remarks: "[DEBUG-SEED] Quarterly payment frequency sample",
+    },
+    {
+      applicationNumber: "CLOSURE-RELEASED-001",
+      assessmentNumber: "TOP-DBG-CLOSURE-001",
+      paymentFrequency: "ANNUAL",
+      status: "GENERATED",
+      annualAssessedAmount: 1000,
+      releasePaymentAmount: 1000,
+      amountPaid: 1000,
+      remainingBalance: 0,
+      paymentStatus: "PAID",
+      mayorsPermitFee: 0,
+      regulatoryFees: 0,
+      additionalCharges: 0,
+      penalties: 250,
+      surcharge: 0,
+      interest: 0,
+      closureCertificateFee: 100,
+      arrears: 500,
+      otherCharges: 150,
+      totalAmount: 1000,
+      remarks: "[DEBUG-SEED] Closure fee sample",
+    },
+  ];
+
+  for (const seed of assessmentSeeds) {
+    const app = applicationsByNumber.get(seed.applicationNumber);
+    if (!app) continue;
+
+    await withPrismaRetry(`upsert debug fee assessment ${seed.applicationNumber}`, () =>
+      prisma.feeAssessment.upsert({
+        where: { applicationId: app.id },
+        update: {
+          assessmentNumber: seed.assessmentNumber,
+          status: seed.status,
+          paymentFrequency: seed.paymentFrequency,
+          annualAssessedAmount: seed.annualAssessedAmount,
+          releasePaymentAmount: seed.releasePaymentAmount,
+          amountPaid: seed.amountPaid,
+          remainingBalance: seed.remainingBalance,
+          paymentStatus: seed.paymentStatus,
+          mayorsPermitFee: seed.mayorsPermitFee,
+          regulatoryFees: seed.regulatoryFees,
+          additionalCharges: seed.additionalCharges,
+          penalties: seed.penalties,
+          surcharge: seed.surcharge,
+          interest: seed.interest,
+          closureCertificateFee: seed.closureCertificateFee,
+          arrears: seed.arrears,
+          otherCharges: seed.otherCharges,
+          totalAmount: seed.totalAmount,
+          remarks: seed.remarks,
+          computedById: bplo.id,
+          generatedAt: seed.status === "GENERATED" ? new Date("2026-05-02T08:00:00.000Z") : null,
+        },
+        create: {
+          applicationId: app.id,
+          assessmentNumber: seed.assessmentNumber,
+          status: seed.status,
+          paymentFrequency: seed.paymentFrequency,
+          annualAssessedAmount: seed.annualAssessedAmount,
+          releasePaymentAmount: seed.releasePaymentAmount,
+          amountPaid: seed.amountPaid,
+          remainingBalance: seed.remainingBalance,
+          paymentStatus: seed.paymentStatus,
+          mayorsPermitFee: seed.mayorsPermitFee,
+          regulatoryFees: seed.regulatoryFees,
+          additionalCharges: seed.additionalCharges,
+          penalties: seed.penalties,
+          surcharge: seed.surcharge,
+          interest: seed.interest,
+          closureCertificateFee: seed.closureCertificateFee,
+          arrears: seed.arrears,
+          otherCharges: seed.otherCharges,
+          totalAmount: seed.totalAmount,
+          remarks: seed.remarks,
+          computedById: bplo.id,
+          generatedAt: seed.status === "GENERATED" ? new Date("2026-05-02T08:00:00.000Z") : null,
+        },
+      })
+    );
+  }
+
+  const releasedPermitApp = applicationsByNumber.get("NEW-RELEASED-001");
+  if (releasedPermitApp) {
+    await withPrismaRetry("upsert debug permit issuance NEW-RELEASED-001", () =>
+      prisma.permitIssuance.upsert({
+        where: { applicationId: releasedPermitApp.id },
+        update: {
+          documentNumber: "DBG-BP-NEW-RELEASED-001",
+          documentType: "BUSINESS_PERMIT",
+          status: "RELEASED",
+          issuedAt: new Date("2026-05-03T08:00:00.000Z"),
+          releasedAt: new Date("2026-05-04T08:00:00.000Z"),
+          preparedById: bplo.id,
+          releasedById: bplo.id,
+          remarks: "[DEBUG-SEED] Released business permit sample",
+        },
+        create: {
+          applicationId: releasedPermitApp.id,
+          documentNumber: "DBG-BP-NEW-RELEASED-001",
+          documentType: "BUSINESS_PERMIT",
+          status: "RELEASED",
+          issuedAt: new Date("2026-05-03T08:00:00.000Z"),
+          releasedAt: new Date("2026-05-04T08:00:00.000Z"),
+          preparedById: bplo.id,
+          releasedById: bplo.id,
+          remarks: "[DEBUG-SEED] Released business permit sample",
+        },
+      })
+    );
+  }
+
+  const releasedClosureApp = applicationsByNumber.get("CLOSURE-RELEASED-001");
+  if (releasedClosureApp) {
+    await withPrismaRetry("upsert debug permit issuance CLOSURE-RELEASED-001", () =>
+      prisma.permitIssuance.upsert({
+        where: { applicationId: releasedClosureApp.id },
+        update: {
+          documentNumber: "DBG-CC-CLOSURE-RELEASED-001",
+          documentType: "CLOSURE_CERTIFICATE",
+          status: "RELEASED",
+          issuedAt: new Date("2026-05-03T08:00:00.000Z"),
+          releasedAt: new Date("2026-05-04T09:00:00.000Z"),
+          preparedById: bplo.id,
+          releasedById: bplo.id,
+          remarks: "[DEBUG-SEED] Released closure certificate sample",
+        },
+        create: {
+          applicationId: releasedClosureApp.id,
+          documentNumber: "DBG-CC-CLOSURE-RELEASED-001",
+          documentType: "CLOSURE_CERTIFICATE",
+          status: "RELEASED",
+          issuedAt: new Date("2026-05-03T08:00:00.000Z"),
+          releasedAt: new Date("2026-05-04T09:00:00.000Z"),
+          preparedById: bplo.id,
+          releasedById: bplo.id,
+          remarks: "[DEBUG-SEED] Released closure certificate sample",
+        },
+      })
+    );
+
+    const closureBusinessRecord = recordsByReg.get("SEC-2026-0002");
+    if (closureBusinessRecord) {
+      await withPrismaRetry("mark closure business record closed", () =>
+        prisma.businessRecord.update({
+          where: { id: closureBusinessRecord.id },
+          data: {
+            businessStatus: "CLOSED",
+            closedAt: new Date(),
+            closureApplicationId: releasedClosureApp.id,
+          },
+        })
+      );
+    }
+  }
+
+  const historyPlan: Record<string, Array<{
+    actorId: string;
+    actorRole: "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+    fromStatus: string | null;
+    toStatus: string;
+    remarks: string;
+  }>> = {
+    "NEW-DRAFT-001": [
+      {
+        actorId: applicant.id,
+        actorRole: "APPLICANT",
+        fromStatus: null,
+        toStatus: "DRAFT",
+        remarks: "Applicant saved draft application",
+      },
+    ],
+    "NEW-SUBMITTED-001": [
+      {
+        actorId: applicant.id,
+        actorRole: "APPLICANT",
+        fromStatus: "DRAFT",
+        toStatus: "SUBMITTED",
+        remarks: "Applicant submitted application",
+      },
+    ],
+    "NEW-UNDER-REVIEW-001": [
+      {
+        actorId: applicant.id,
+        actorRole: "APPLICANT",
+        fromStatus: "DRAFT",
+        toStatus: "SUBMITTED",
+        remarks: "Applicant submitted application",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "SUBMITTED",
+        toStatus: "UNDER_REVIEW",
+        remarks: "BPLO marked application under review",
+      },
+    ],
+    "RENEWAL-ASSESSED-001": [
+      {
+        actorId: applicant.id,
+        actorRole: "APPLICANT",
+        fromStatus: "DRAFT",
+        toStatus: "SUBMITTED",
+        remarks: "Applicant submitted renewal",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "SUBMITTED",
+        toStatus: "UNDER_REVIEW",
+        remarks: "BPLO started review",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "UNDER_REVIEW",
+        toStatus: "ASSESSED",
+        remarks: "BPLO completed assessment",
+      },
+    ],
+    "NEW-APPROVED-PAYMENT-001": [
+      {
+        actorId: applicant.id,
+        actorRole: "APPLICANT",
+        fromStatus: "DRAFT",
+        toStatus: "SUBMITTED",
+        remarks: "Applicant submitted application",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "SUBMITTED",
+        toStatus: "UNDER_REVIEW",
+        remarks: "BPLO started review",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "UNDER_REVIEW",
+        toStatus: "ASSESSED",
+        remarks: "BPLO completed assessment",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "ASSESSED",
+        toStatus: "APPROVED_FOR_PAYMENT",
+        remarks: "BPLO generated TOP",
+      },
+    ],
+    "RENEWAL-PAID-001": [
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "APPROVED_FOR_PAYMENT",
+        toStatus: "PAID",
+        remarks: "BPLO verified payment",
+      },
+    ],
+    "NEW-FOR-RELEASE-001": [
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "PAID",
+        toStatus: "FOR_RELEASE",
+        remarks: "BPLO prepared permit for release",
+      },
+    ],
+    "NEW-RELEASED-001": [
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "FOR_RELEASE",
+        toStatus: "RELEASED",
+        remarks: "BPLO released business permit",
+      },
+    ],
+    "NEW-RETURNED-001": [
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "UNDER_REVIEW",
+        toStatus: "RETURNED_FOR_CORRECTION",
+        remarks: "BPLO returned application for correction",
+      },
+    ],
+    "NEW-REJECTED-001": [
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "UNDER_REVIEW",
+        toStatus: "REJECTED",
+        remarks: "BPLO rejected application",
+      },
+    ],
+    "CLOSURE-SUBMITTED-001": [
+      {
+        actorId: applicant.id,
+        actorRole: "APPLICANT",
+        fromStatus: "DRAFT",
+        toStatus: "SUBMITTED",
+        remarks: "Applicant submitted closure application",
+      },
+    ],
+    "CLOSURE-RELEASED-001": [
+      {
+        actorId: applicant.id,
+        actorRole: "APPLICANT",
+        fromStatus: "DRAFT",
+        toStatus: "SUBMITTED",
+        remarks: "Applicant submitted closure application",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "SUBMITTED",
+        toStatus: "UNDER_REVIEW",
+        remarks: "BPLO started closure review",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "UNDER_REVIEW",
+        toStatus: "ASSESSED",
+        remarks: "BPLO assessed closure",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "ASSESSED",
+        toStatus: "APPROVED_FOR_PAYMENT",
+        remarks: "BPLO generated closure TOP",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "APPROVED_FOR_PAYMENT",
+        toStatus: "PAID",
+        remarks: "BPLO verified closure payment",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "PAID",
+        toStatus: "FOR_RELEASE",
+        remarks: "BPLO prepared closure certificate",
+      },
+      {
+        actorId: bplo.id,
+        actorRole: "BPLO",
+        fromStatus: "FOR_RELEASE",
+        toStatus: "RELEASED",
+        remarks: "BPLO released closure certificate",
+      },
+    ],
+  };
+
+  for (const [applicationNumber, events] of Object.entries(historyPlan)) {
+    const app = applicationsByNumber.get(applicationNumber);
+    if (!app) continue;
+    await syncDebugHistory(app.id, events);
+  }
+
+  console.log("Debug seed complete");
+}
+
+async function main() {
+  console.log("Seeding database...");
+
+  await seedBaseData();
+
+  if (process.env.SEED_DEBUG === "true") {
+    await seedUiDebugData();
+  } else {
+    console.log("Debug seed skipped unless SEED_DEBUG=true");
+  }
+
   console.log("Seeding complete.");
 }
 
@@ -634,3 +1542,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+export {};

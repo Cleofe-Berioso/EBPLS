@@ -20,13 +20,13 @@ export function ApplicantLayoutClient({
 
   return (
     <div className="app-shell bg-transparent text-slate-900">
-      <div
-        aria-hidden="true"
-        onClick={() => setMobileOpen(false)}
-        className={`fixed inset-0 z-40 bg-slate-900/30 transition-opacity lg:hidden ${
-          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
-      />
+      {mobileOpen ? (
+        <div
+          aria-hidden="true"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/30 transition-opacity lg:hidden"
+        />
+      ) : null}
 
       <ApplicantSidebar
         mobileOpen={mobileOpen}

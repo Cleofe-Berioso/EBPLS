@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 
 export const metadata: Metadata = {
@@ -7,7 +8,29 @@ export const metadata: Metadata = {
     "Sign in to the Electronic Business Permits and Licensing System (eBPLS).",
 };
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function getSingleParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
+  }
+  return value ?? "";
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = searchParams ? await searchParams : {};
+  const email = getSingleParam(params.email).trim();
+  const hasPasswordQuery = Object.prototype.hasOwnProperty.call(params, "password");
+
+  if (hasPasswordQuery) {
+    if (email) {
+      redirect(`/login?email=${encodeURIComponent(email)}`);
+    }
+    redirect("/login");
+  }
+
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-900 p-4 md:p-6">
       <div
@@ -19,7 +42,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-black/10" />
       </div>
 
-      <LoginForm />
+      <LoginForm initialEmail={email} />
     </main>
   );
 }

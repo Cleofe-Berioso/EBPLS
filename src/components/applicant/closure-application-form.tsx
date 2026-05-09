@@ -29,10 +29,6 @@ const steps = [
     description: "Attach closure documents and proof of ceased operations.",
   },
   {
-    title: "Estimated Closure Balance Preview",
-    description: "Review the estimated closure-related charges.",
-  },
-  {
     title: "Review and Submit",
     description: "Confirm the closure package before final validation.",
   },
@@ -137,7 +133,11 @@ export function ClosureApplicationForm() {
       if (data.records[0] && !selectedBusinessId) {
         setSelectedBusinessId(data.records[0].id);
         setSelectedBusinessName(data.records[0].businessName);
-        setSelectedBusinessInfo(data.records[0].businessInfo);
+        setSelectedBusinessInfo({
+          ...defaultBusinessInfo,
+          ...data.records[0].businessInfo,
+          paymentFrequency: data.records[0].businessInfo.paymentFrequency ?? "ANNUAL",
+        });
       }
     }
 
@@ -166,7 +166,11 @@ export function ClosureApplicationForm() {
       if (!active || !response.ok || !data.application) return;
 
       setApplicationId(data.application.id);
-      setSelectedBusinessInfo(data.application.formData);
+      setSelectedBusinessInfo({
+        ...defaultBusinessInfo,
+        ...data.application.formData,
+        paymentFrequency: data.application.formData.paymentFrequency ?? "ANNUAL",
+      });
       setSelectedBusinessName(data.application.formData.businessName);
       if (data.application.businessRecordId) setSelectedBusinessId(data.application.businessRecordId);
       setUploadedDocuments(
@@ -184,6 +188,20 @@ export function ClosureApplicationForm() {
   }, [editId]);
 
   function next() {
+    if (step === 0 && !selectedBusinessId) {
+      setStatusMessage({ kind: "error", text: "Select an existing business record before proceeding." });
+      return;
+    }
+
+    if (step === 1 && requiredDocs.length > 0 && uploadedRequiredCount < requiredDocs.length) {
+      setStatusMessage({
+        kind: "error",
+        text: "Upload all required closure documents before moving to review.",
+      });
+      return;
+    }
+
+    setStatusMessage(null);
     setStep((current) => Math.min(current + 1, steps.length - 1));
   }
 
@@ -351,7 +369,11 @@ export function ClosureApplicationForm() {
                     const selected = records.find((item) => item.id === selectedId);
                     if (selected) {
                       setSelectedBusinessName(selected.businessName);
-                      setSelectedBusinessInfo(selected.businessInfo);
+                      setSelectedBusinessInfo({
+                        ...defaultBusinessInfo,
+                        ...selected.businessInfo,
+                        paymentFrequency: selected.businessInfo.paymentFrequency ?? "ANNUAL",
+                      });
                     }
                   }}
                 >
@@ -410,46 +432,6 @@ export function ClosureApplicationForm() {
 
       {step === 2 ? (
         <div className="space-y-4">
-          <InfoBanner
-            title="Preview only — final closure settlement happens later"
-            description="This is an estimated preview only. Final closure charges will be validated by BPLO during assessment."
-            variant="warning"
-          />
-          <SectionCard
-            title="Estimated Closure Balance Preview"
-            description="Use this screen to understand possible closure-related amounts before final submission."
-          >
-            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-gray-800">
-                <div className="flex justify-between py-1">
-                  <span>Tax Dues</span>
-                  <span>To be assessed by BPLO</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span>Closure Certificate Fee</span>
-                  <span>To be assessed by BPLO</span>
-                </div>
-                <div className="mt-2 flex justify-between border-t border-green-200 pt-2 font-semibold text-green-800">
-                  <span>Estimated Total</span>
-                  <span>To be assessed by BPLO</span>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p className="font-semibold">Closure reminder</p>
-                <ul className="mt-2 space-y-1">
-                  <li>• Closure submission does not immediately release the certificate.</li>
-                  <li>• Outstanding balances may still be validated during BPLO review.</li>
-                  <li>• Final release still follows the existing assessment, payment, and issuance flow.</li>
-                </ul>
-              </div>
-            </div>
-          </SectionCard>
-        </div>
-      ) : null}
-
-      {step === 3 ? (
-        <div className="space-y-4">
           <SectionCard
             title="Review and Submit"
             description="Confirm the selected business and uploaded closure requirements before running final validation."
@@ -501,7 +483,7 @@ export function ClosureApplicationForm() {
               <ul className="mt-2 space-y-1">
                 <li>• Make sure the selected business record is the one being closed.</li>
                 <li>• Confirm each closure requirement has a clear uploaded file.</li>
-                <li>• Review the estimated closure balance preview as guidance only.</li>
+                <li>• Fees will be assessed by BPLO after application review.</li>
               </ul>
             </div>
           </SectionCard>

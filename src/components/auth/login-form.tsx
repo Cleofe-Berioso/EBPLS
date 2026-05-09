@@ -1,46 +1,12 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useActionState, useState } from "react";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { googleSignInAction } from "@/app/login/actions";
+import { googleSignInAction, loginAction } from "@/app/login/actions";
 
-export function LoginForm() {
-  const router = useRouter();
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
+export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
+  const [state, formAction, isPending] = useActionState(loginAction, null);
   const [showPassword, setShowPassword] = useState(false);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setErrorMessage(null);
-    setIsPending(true);
-
-    try {
-      const formData = new FormData(event.currentTarget);
-      const email = String(formData.get("email") ?? "").trim();
-      const password = String(formData.get("password") ?? "");
-
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (!result || result.error) {
-        setErrorMessage("Invalid email or password.");
-        return;
-      }
-
-      router.push("/auth/redirect");
-      router.refresh();
-    } catch {
-      setErrorMessage("Unable to sign in right now. Please try again.");
-    } finally {
-      setIsPending(false);
-    }
-  }
 
   return (
     <div className="relative z-10 w-full max-w-md">
@@ -62,13 +28,13 @@ export function LoginForm() {
         </div>
 
         <div className="p-8">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {errorMessage && (
+          <form action={formAction} className="space-y-5">
+            {state?.error && (
               <div
                 role="alert"
                 className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
               >
-                {errorMessage}
+                {state.error}
               </div>
             )}
 
@@ -88,6 +54,7 @@ export function LoginForm() {
                   name="email"
                   type="email"
                   autoComplete="email"
+                  defaultValue={initialEmail}
                   required
                   className="block w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 bg-slate-50/50"
                   placeholder="your.email@example.com"

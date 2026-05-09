@@ -1,272 +1,127 @@
-# eBPLS ERD (Aligned to prisma/schema.prisma)
+# eBPLS ERD and Data Semantics
 
 ## Database
-- Provider: `sqlite`
-- ORM schema source: `prisma/schema.prisma`
+- Provider: sqlite
+- ORM schema source: prisma/schema.prisma
 
-## Models, Keys, and Constraints
+## Core Models and Key Constraints
 
-### Core Identity
-- `User`
-  - PK: `id`
-  - Unique: `email`
-  - Enums: `role` (`Role`)
+### User
+- Primary key: id
+- Unique: email
+- Role enum: APPLICANT, BPLO, SUPER_ADMIN
 
-### Business Domain
-- `BusinessRecord`
-  - PK: `id`
-  - Unique: `registrationNumber`
-  - FK: `applicantId -> User.id` (`onDelete: Cascade`)
-  - Enum: `businessStatus` (`BusinessRecordStatus`)
-  - Soft-close fields: `closedAt`, `closureApplicationId`
-  - Index: `[applicantId]`
+### BusinessRecord
+- Primary key: id
+- Unique: registrationNumber
+- Foreign key: applicantId to User.id
+- Key business fields include businessType, registrationNumber, tin, ownerName, tradeName, nationality, and optional sex
+- Status enum: ACTIVE, CLOSED
+- Soft-close tracking fields: closedAt, closureApplicationId
 
-- `BusinessLocation`
-  - PK: `id`
-  - Unique: `businessRecordId`
-  - FK: `businessRecordId -> BusinessRecord.id` (`onDelete: Cascade`)
-  - FK: `submittedById -> User.id` (`onDelete: Restrict`)
-  - FK: `verifiedById -> User.id` (`onDelete: SetNull`)
-  - Enum: `status` (`BusinessLocationStatus`)
-  - Indexes: `[status]`, `[submittedById]`, `[verifiedById]`
+### BusinessApplication
+- Primary key: id
+- Unique: applicationNumber
+- Foreign keys: applicantId to User.id, optional businessRecordId to BusinessRecord.id
+- Enums: applicationType and status
+- formData JSON stores application form payload used by workflow logic
 
-- `BusinessApplication`
-  - PK: `id`
-  - Unique: `applicationNumber`
-  - FK: `applicantId -> User.id` (`onDelete: Cascade`)
-  - FK: `businessRecordId -> BusinessRecord.id` (`onDelete: SetNull`, optional)
-  - Enums: `applicationType` (`ApplicationType`), `status` (`ApplicationStatus`)
-  - JSON: `formData`
-  - Indexes: `[applicantId, createdAt]`, `[applicantId, status]`
+### ApplicationDocument
+- Primary key: id
+- Foreign key: applicationId to BusinessApplication.id
+- Stores required supporting documents per resolved document rules
 
-### Documents and History
-- `ApplicationDocument`
-  - PK: `id`
-  - FK: `applicationId -> BusinessApplication.id` (`onDelete: Cascade`)
-  - Index: `[applicationId]`
+### ApplicationHistory
+- Primary key: id
+- Foreign keys: applicationId to BusinessApplication.id, optional actorId to User.id
+- Captures fromStatus, toStatus, remarks, actor role, and timestamps
 
-- `ApplicationHistory`
-  - PK: `id`
-  - FK: `applicationId -> BusinessApplication.id` (`onDelete: Cascade`)
-  - FK: `actorId -> User.id` (`onDelete: SetNull`, optional)
-  - Enums: `actorRole` (`Role`), `fromStatus`/`toStatus` (`ApplicationStatus`)
-  - Index: `[applicationId, createdAt]`
+### FeeAssessment
+- Primary key: id
+- Unique: applicationId and assessmentNumber
+- Foreign keys: applicationId to BusinessApplication.id, optional computedById to User.id
+- Stores assessment state, fee totals, payment settlement fields, and closure fields
+- Closure-specific columns include closurePaymentDues and closureCertificateFee
 
-### Assessment, Payment, and Permit
-- `FeeAssessment`
-  - PK: `id`
-  - Unique: `applicationId`, `assessmentNumber`
-  - FK: `applicationId -> BusinessApplication.id` (`onDelete: Cascade`)
-  - FK: `computedById -> User.id` (`onDelete: SetNull`, optional)
-  - Enums: `status` (`FeeAssessmentStatus`), `paymentFrequency` (`PaymentFrequency`), `paymentStatus` (`PaymentSettlementStatus`)
-  - Monetary fields use `Decimal`
-  - Index: `[applicationId]`
+### PaymentReference
+- Primary key: id
+- Unique: transactionNumber
+- Foreign keys: applicationId to BusinessApplication.id, optional reviewedById to User.id
+- Status enum: PENDING, VERIFIED, REJECTED
+- Stores payment reference number and uploaded proof metadata
 
-- `PaymentReference`
-  - PK: `id`
-  - Unique: `transactionNumber`
-  - FK: `applicationId -> BusinessApplication.id` (`onDelete: Cascade`)
-  - FK: `reviewedById -> User.id` (`onDelete: SetNull`, optional)
-  - Enum: `status` (`PaymentReferenceStatus`)
-  - Indexes: `[applicationId, submittedAt]`, `[status, submittedAt]`
+### PermitIssuance
+- Primary key: id
+- Unique: applicationId and documentNumber
+- Foreign keys: applicationId to BusinessApplication.id, preparedById to User.id, optional releasedById to User.id
+- Document type enum supports business permit and closure certificate issuance
 
-- `PermitIssuance`
-  - PK: `id`
-  - Unique: `applicationId`, `documentNumber`
-  - FK: `applicationId -> BusinessApplication.id` (`onDelete: Cascade`)
-  - FK: `preparedById -> User.id` (`onDelete: Restrict`)
-  - FK: `releasedById -> User.id` (`onDelete: SetNull`, optional)
-  - Enums: `documentType` (`PermitDocumentType`), `status` (`PermitIssuanceStatus`)
-  - Indexes: `[status]`, `[applicationId, status]`
+### BusinessLocation
+- Primary key: id
+- Unique: businessRecordId
+- Foreign keys: businessRecordId to BusinessRecord.id, submittedById to User.id, optional verifiedById to User.id
+- Status enum: PENDING, VERIFIED, NEEDS_CORRECTION
 
-### Configuration
-- `FeeConfigurationItem`
-  - PK: `id`
-  - Unique composite: `[category, classification]`
-  - FK: `updatedById -> User.id` (`onDelete: SetNull`, optional)
-  - Index: `[category, isActive]`
+## Logic-Aligned Data Notes
 
-- `SystemFeeSetting`
-  - PK: `id`
-  - FK: `updatedById -> User.id` (`onDelete: SetNull`, optional)
+### Registration Number Semantics
+- registrationNumber meaning is businessType-dependent:
+  - Sole Proprietorship: DTI registration number
+  - Partnership: SEC registration number
+  - Corporation: SEC registration number
+  - Cooperative: CDA registration number
 
-- `RenewalExtension`
-  - PK: `id`
-  - FK: `updatedById -> User.id` (`onDelete: SetNull`, optional)
-  - Index: `[isActive, startDate, endDate]`
+### Nationality and Sex Semantics
+- nationality is normalized to Filipino for non-corporation form payloads.
+- optional sex is supported in business/application data and retained through renewal edits.
 
-## Enums
-- `Role`: `APPLICANT`, `BPLO`, `SUPER_ADMIN`
-- `ApplicationType`: `NEW`, `RENEWAL`, `CLOSURE`
-- `ApplicationStatus`: `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `ASSESSED`, `APPROVED_FOR_PAYMENT`, `PAID`, `FOR_RELEASE`, `RELEASED`, `RETURNED_FOR_CORRECTION`, `REJECTED`
-- `BusinessRecordStatus`: `ACTIVE`, `CLOSED`
-- `BusinessLocationStatus`: `PENDING`, `VERIFIED`, `NEEDS_CORRECTION`
-- `FeeAssessmentStatus`: `DRAFT`, `GENERATED`
-- `PaymentFrequency`: `ANNUAL`, `BI_ANNUAL`, `QUARTERLY`
-- `PaymentReferenceStatus`: `PENDING`, `VERIFIED`, `REJECTED`
-- `PaymentSettlementStatus`: `UNPAID`, `PARTIALLY_PAID`, `PAID`
-- `PermitDocumentType`: `BUSINESS_PERMIT`, `CLOSURE_CERTIFICATE`
-- `PermitIssuanceStatus`: `PREPARED`, `FOR_RELEASE`, `RELEASED`
+### Renewal Lock Semantics
+- Renewal flow locks these business info fields from source record:
+  - businessName
+  - businessType
+  - registrationNumber
+  - tin
+  - ownerName
+  - tradeName
+  - nationality
+- sex is intentionally not in renewal locked fields.
 
-## Important Database Semantics
+### Dynamic Document Semantics
+- Required documents are resolved by applicationType plus businessType, property ownership, and market or agriculture conditions.
+- Only relevant document names are presented and validated in submit checks.
 
-### Soft Closure (Business Lifecycle)
-Closure is a status change on `BusinessRecord`, not a delete.
+### BPLO Queue Semantics
+- BPLO review queue reads only SUBMITTED, UNDER_REVIEW, and RETURNED_FOR_CORRECTION statuses.
+- Assessed, payment, releasing, released, and rejected stages are excluded from review queue.
 
-When a closure application is released:
-1. `BusinessRecord.businessStatus` -> `CLOSED`
-2. `BusinessRecord.closedAt` -> release timestamp
-3. `BusinessRecord.closureApplicationId` -> releasing closure application id
+### Assessment and TOP Visibility Semantics
+- FeeAssessment supports draft and generated states.
+- Applicant TOP view is available only after generated assessment and approved-for-payment transition.
+- Draft assessment values remain BPLO-internal.
 
-This preserves historical data for audit/reporting.
+### Payment Verification Semantics
+- PaymentReference requires transactionNumber and proof metadata.
+- OR number uniqueness is enforced by unique transactionNumber.
+- Application becomes PAID only after BPLO verification.
 
-### Monetary Storage
-- `FeeAssessment` monetary columns are `Decimal`
-- `PaymentReference.amountPaid` is `Decimal`
-- `SystemFeeSetting.powerDistributionFixedFee` and `privatePortFixedFee` are `Decimal`
+### Closure Assessment Semantics
+- closureCertificateFee is fixed to 100 for closure flows.
+- closurePaymentDues is BPLO-entered and included in closure total computation.
+- Closure path is separated from New and Renewal mayor's permit fee path.
 
-## Mermaid ERD
-```mermaid
-erDiagram
-  User ||--o{ BusinessApplication : applicant
-  User ||--o{ BusinessRecord : owns
-  User ||--o{ BusinessLocation : submittedBy
-  User ||--o{ BusinessLocation : verifiedBy
-  User ||--o{ ApplicationHistory : actor
-  User ||--o{ FeeAssessment : computedBy
-  User ||--o{ PaymentReference : reviewedBy
-  User ||--o{ PermitIssuance : preparedBy
-  User ||--o{ PermitIssuance : releasedBy
-  User ||--o{ FeeConfigurationItem : updatedBy
-  User ||--o{ SystemFeeSetting : updatedBy
-  User ||--o{ RenewalExtension : updatedBy
+### Business Map Semantics
+- BPLO business map rows are filtered to active business records and NEW or RENEWAL application scope.
+- Map business category is classification-derived.
+- Closure is excluded from BPLO map category and application filter logic.
+- Location status remains a business location data field but is removed from BPLO map filter UI scope.
 
-  BusinessRecord ||--o{ BusinessApplication : referencedBy
-  BusinessRecord ||--o| BusinessLocation : hasOne
-
-  BusinessApplication ||--o{ ApplicationDocument : has
-  BusinessApplication ||--o{ ApplicationHistory : has
-  BusinessApplication ||--o{ PaymentReference : has
-  BusinessApplication ||--o| FeeAssessment : hasOne
-  BusinessApplication ||--o| PermitIssuance : hasOne
-
-  User {
-    string id PK
-    string email UK
-    string role
-    boolean isActive
-  }
-
-  BusinessRecord {
-    string id PK
-    string applicantId FK
-    string registrationNumber UK
-    string businessName
-    string businessStatus
-    datetime closedAt
-    string closureApplicationId
-  }
-
-  BusinessLocation {
-    string id PK
-    string businessRecordId FK_UK
-    float latitude
-    float longitude
-    string status
-    string submittedById FK
-    string verifiedById FK
-  }
-
-  BusinessApplication {
-    string id PK
-    string applicationNumber UK
-    string applicantId FK
-    string businessRecordId FK
-    string applicationType
-    string status
-    json formData
-  }
-
-  ApplicationDocument {
-    string id PK
-    string applicationId FK
-    string documentName
-    string storagePath
-    string mimeType
-    int sizeBytes
-  }
-
-  ApplicationHistory {
-    string id PK
-    string applicationId FK
-    string actorId FK
-    string actorRole
-    string fromStatus
-    string toStatus
-    string remarks
-  }
-
-  FeeAssessment {
-    string id PK
-    string applicationId FK_UK
-    string assessmentNumber UK
-    string status
-    string paymentFrequency
-    decimal annualAssessedAmount
-    decimal releasePaymentAmount
-    decimal amountPaid
-    decimal remainingBalance
-    string paymentStatus
-    decimal totalAmount
-  }
-
-  PaymentReference {
-    string id PK
-    string applicationId FK
-    string transactionNumber UK
-    decimal amountPaid
-    datetime paymentDate
-    string proofStoragePath
-    string status
-  }
-
-  PermitIssuance {
-    string id PK
-    string applicationId FK_UK
-    string documentNumber UK
-    string documentType
-    string status
-    string preparedById FK
-    string releasedById FK
-  }
-
-  FeeConfigurationItem {
-    string id PK
-    string category
-    string classification
-    decimal amount
-    boolean isActive
-    string updatedById FK
-  }
-
-  SystemFeeSetting {
-    string id PK
-    float renewalSurchargePercent
-    float monthlyInterestPercent
-    float liquorTobaccoAddOnPercent
-    decimal powerDistributionFixedFee
-    decimal privatePortFixedFee
-    string updatedById FK
-  }
-
-  RenewalExtension {
-    string id PK
-    string title
-    datetime startDate
-    datetime endDate
-    boolean isActive
-    boolean waiveSurcharge
-    boolean waiveInterest
-    string updatedById FK
-  }
-```
+## Enums in Use
+- ApplicationType: NEW, RENEWAL, CLOSURE
+- ApplicationStatus: DRAFT, SUBMITTED, UNDER_REVIEW, ASSESSED, APPROVED_FOR_PAYMENT, PAID, FOR_RELEASE, RELEASED, RETURNED_FOR_CORRECTION, REJECTED
+- BusinessRecordStatus: ACTIVE, CLOSED
+- BusinessLocationStatus: PENDING, VERIFIED, NEEDS_CORRECTION
+- FeeAssessmentStatus: DRAFT, GENERATED
+- PaymentReferenceStatus: PENDING, VERIFIED, REJECTED
+- PaymentSettlementStatus: UNPAID, PARTIALLY_PAID, PAID
+- PermitDocumentType: BUSINESS_PERMIT, CLOSURE_CERTIFICATE
+- PermitIssuanceStatus: PREPARED, FOR_RELEASE, RELEASED

@@ -1,19 +1,233 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import type { BusinessInfo } from "@/lib/applicant-types";
-import { getRegistrationLabel } from "@/lib/applicant-mock";
+import {
+  CORPORATION_OWNERSHIP_CLASSIFICATIONS,
+  getRegistrationHelperText,
+  getRegistrationLabel,
+  isCorporation,
+  isCorporationOwnershipClassification,
+  resolveNationalityOnBusinessTypeChange,
+} from "@/lib/business-rules";
+import type { AddressOption } from "@/lib/address-types";
+import { loadCities, loadCountries, loadStates } from "@/lib/address-client";
 import { FormField } from "@/components/ui/form-field";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 interface BusinessInformationFieldsProps {
   value: BusinessInfo;
   onChange: (next: BusinessInfo) => void;
   lockedFields?: Array<keyof BusinessInfo>;
+  fieldErrors?: Partial<Record<keyof BusinessInfo, string>>;
+  enableCascadingAddress?: boolean;
 }
+
+const NATIONALITY_OPTIONS = [
+  "Afghan",
+  "Albanian",
+  "Algerian",
+  "American",
+  "Andorran",
+  "Angolan",
+  "Antiguan and Barbudan",
+  "Argentine",
+  "Armenian",
+  "Australian",
+  "Austrian",
+  "Azerbaijani",
+  "Bahamian",
+  "Bahraini",
+  "Bangladeshi",
+  "Barbadian",
+  "Belarusian",
+  "Belgian",
+  "Belizean",
+  "Beninese",
+  "Bhutanese",
+  "Bolivian",
+  "Bosnian and Herzegovinian",
+  "Botswanan",
+  "Brazilian",
+  "British",
+  "Bruneian",
+  "Bulgarian",
+  "Burkinabe",
+  "Burundian",
+  "Cabo Verdean",
+  "Cambodian",
+  "Cameroonian",
+  "Canadian",
+  "Central African",
+  "Chadian",
+  "Chilean",
+  "Chinese",
+  "Colombian",
+  "Comorian",
+  "Congolese",
+  "Costa Rican",
+  "Croatian",
+  "Cuban",
+  "Cypriot",
+  "Czech",
+  "Danish",
+  "Djiboutian",
+  "Dominican",
+  "Dutch",
+  "East Timorese",
+  "Ecuadorean",
+  "Egyptian",
+  "Emirati",
+  "Equatorial Guinean",
+  "Eritrean",
+  "Estonian",
+  "Eswatini",
+  "Ethiopian",
+  "Fijian",
+  "Filipino",
+  "Finnish",
+  "French",
+  "Gabonese",
+  "Gambian",
+  "Georgian",
+  "German",
+  "Ghanaian",
+  "Greek",
+  "Grenadian",
+  "Guatemalan",
+  "Guinean",
+  "Guinea-Bissauan",
+  "Guyanese",
+  "Haitian",
+  "Honduran",
+  "Hungarian",
+  "Icelandic",
+  "Indian",
+  "Indonesian",
+  "Iranian",
+  "Iraqi",
+  "Irish",
+  "Israeli",
+  "Italian",
+  "Ivorian",
+  "Jamaican",
+  "Japanese",
+  "Jordanian",
+  "Kazakh",
+  "Kenyan",
+  "Kiribati",
+  "Korean",
+  "Kuwaiti",
+  "Kyrgyz",
+  "Lao",
+  "Latvian",
+  "Lebanese",
+  "Liberian",
+  "Libyan",
+  "Liechtensteiner",
+  "Lithuanian",
+  "Luxembourger",
+  "Malagasy",
+  "Malawian",
+  "Malaysian",
+  "Maldivian",
+  "Malian",
+  "Maltese",
+  "Marshallese",
+  "Mauritanian",
+  "Mauritian",
+  "Mexican",
+  "Micronesian",
+  "Moldovan",
+  "Monacan",
+  "Mongolian",
+  "Montenegrin",
+  "Moroccan",
+  "Mozambican",
+  "Myanmar",
+  "Namibian",
+  "Nauruan",
+  "Nepalese",
+  "New Zealander",
+  "Nicaraguan",
+  "Nigerian",
+  "Nigerien",
+  "North Korean",
+  "North Macedonian",
+  "Norwegian",
+  "Omani",
+  "Pakistani",
+  "Palauan",
+  "Palestinian",
+  "Panamanian",
+  "Papua New Guinean",
+  "Paraguayan",
+  "Peruvian",
+  "Polish",
+  "Portuguese",
+  "Qatari",
+  "Romanian",
+  "Russian",
+  "Rwandan",
+  "Saint Kitts and Nevis",
+  "Saint Lucian",
+  "Saint Vincent and the Grenadines",
+  "Samoan",
+  "San Marinese",
+  "Sao Tomean",
+  "Saudi",
+  "Senegalese",
+  "Serbian",
+  "Seychellois",
+  "Sierra Leonean",
+  "Singaporean",
+  "Slovak",
+  "Slovenian",
+  "Solomon Islander",
+  "Somali",
+  "South African",
+  "South Korean",
+  "South Sudanese",
+  "Spanish",
+  "Sri Lankan",
+  "Sudanese",
+  "Surinamese",
+  "Swedish",
+  "Swiss",
+  "Syrian",
+  "Taiwanese",
+  "Tajik",
+  "Tanzanian",
+  "Thai",
+  "Togolese",
+  "Tongan",
+  "Trinidadian and Tobagonian",
+  "Tunisian",
+  "Turkish",
+  "Turkmen",
+  "Tuvaluan",
+  "Ugandan",
+  "Ukrainian",
+  "Uruguayan",
+  "Uzbek",
+  "Vanuatuan",
+  "Venezuelan",
+  "Vietnamese",
+  "Yemeni",
+  "Zambian",
+  "Zimbabwean",
+] as const;
+
+const NATIONALITY_SELECT_OPTIONS: AddressOption[] = NATIONALITY_OPTIONS.map((nationality) => ({
+  value: nationality,
+  label: nationality,
+  name: nationality,
+}));
 
 function fieldLocked(lockedFields: Array<keyof BusinessInfo>, key: keyof BusinessInfo) {
   return lockedFields.includes(key);
 }
-
 function fieldClasses(locked: boolean) {
   return `w-full rounded-xl border px-3 py-3 text-sm transition-colors ${
     locked
@@ -21,10 +235,8 @@ function fieldClasses(locked: boolean) {
       : "border-slate-300 bg-white text-slate-900 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-100"
   }`;
 }
-
 function LockedHint({ visible }: { visible: boolean }) {
   if (!visible) return null;
-
   return (
     <p className="mt-1 text-xs text-slate-600">
       Pulled from the existing business record.
@@ -36,15 +248,123 @@ export function BusinessInformationFields({
   value,
   onChange,
   lockedFields = [],
+  fieldErrors = {},
+  enableCascadingAddress = false,
 }: BusinessInformationFieldsProps) {
   const registrationLabel = getRegistrationLabel(value.businessType);
+  const registrationHelperText = getRegistrationHelperText(value.businessType);
+  const corporation = isCorporation(value.businessType);
+  const nationalityLocked = fieldLocked(lockedFields, "nationality");
+  const corporationClassificationSelected = isCorporationOwnershipClassification(value.nationality);
+  const selectedCountry = (value.country ?? "").trim();
+  const selectedCountryCode = (value.countryCode ?? "").trim();
+  const selectedProvince = (value.province ?? "").trim();
+  const selectedProvinceCode = (value.provinceCode ?? "").trim();
 
+  const [countryOptions, setCountryOptions] = useState<AddressOption[]>([]);
+  const [countryLoading, setCountryLoading] = useState(false);
+  const [countryError, setCountryError] = useState<string | undefined>();
+  const [provinceOptions, setProvinceOptions] = useState<AddressOption[]>([]);
+  const [provinceLoading, setProvinceLoading] = useState(false);
+  const [provinceError, setProvinceError] = useState<string | undefined>();
+  const [cityOptions, setCityOptions] = useState<AddressOption[]>([]);
+  const [cityLoading, setCityLoading] = useState(false);
+  const [cityError, setCityError] = useState<string | undefined>();
+
+  useEffect(() => {
+    let active = true;
+    setCountryLoading(true);
+    loadCountries()
+      .then((options) => {
+        if (!active) return;
+        setCountryOptions(options);
+        setCountryError(undefined);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setCountryError(error instanceof Error ? error.message : "Address list could not be loaded. Please try again.");
+      })
+      .finally(() => {
+        if (active) setCountryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedCountryCode) {
+      setProvinceOptions([]);
+      setCityOptions([]);
+      return;
+    }
+    setProvinceLoading(true);
+    loadStates(selectedCountryCode)
+      .then((options) => {
+        if (!active) return;
+        setProvinceOptions(options);
+        setProvinceError(undefined);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setProvinceError(error instanceof Error ? error.message : "Address list could not be loaded. Please try again.");
+      })
+      .finally(() => {
+        if (active) setProvinceLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedCountryCode]);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedCountryCode || !selectedProvinceCode) {
+      setCityOptions([]);
+      return;
+    }
+    setCityLoading(true);
+    loadCities(selectedCountryCode, selectedProvinceCode)
+      .then((options) => {
+        if (!active) return;
+        setCityOptions(options);
+        setCityError(undefined);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setCityError(error instanceof Error ? error.message : "Address list could not be loaded. Please try again.");
+      })
+      .finally(() => {
+        if (active) setCityLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedCountryCode, selectedProvinceCode]);
+
+  useEffect(() => {
+    if (!selectedCountry || selectedCountryCode || countryOptions.length === 0) return;
+    const match = countryOptions.find((option) => option.label === selectedCountry);
+    if (match) {
+      onChange({ ...value, countryCode: match.value });
+    }
+  }, [countryOptions, onChange, selectedCountry, selectedCountryCode, value]);
+
+  useEffect(() => {
+    if (!selectedProvince || selectedProvinceCode || provinceOptions.length === 0) return;
+    const match = provinceOptions.find((option) => option.label === selectedProvince);
+    if (match) {
+      onChange({ ...value, provinceCode: match.value });
+    }
+  }, [onChange, provinceOptions, selectedProvince, selectedProvinceCode, value]);
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <FormField
         label="Business Type"
         hint="Select the registered business organization type."
         required
+        error={fieldErrors.businessType}
       >
         {fieldLocked(lockedFields, "businessType") ? (
           <div className="mb-2">
@@ -58,13 +378,20 @@ export function BusinessInformationFields({
           value={value.businessType}
           disabled={fieldLocked(lockedFields, "businessType")}
           onChange={(event) =>
-            onChange({ ...value, businessType: event.target.value as BusinessInfo["businessType"] })
+            onChange({
+              ...value,
+              businessType: event.target.value as BusinessInfo["businessType"],
+              nationality: resolveNationalityOnBusinessTypeChange(
+                value.businessType,
+                event.target.value as BusinessInfo["businessType"],
+                value.nationality
+              ),
+            })
           }
         >
           <option>Sole Proprietorship</option>
-          <option>One Person Corporation</option>
-          <option>Partnership</option>
           <option>Corporation</option>
+          <option>Partnership</option>
           <option>Cooperative</option>
         </select>
         <LockedHint visible={fieldLocked(lockedFields, "businessType")} />
@@ -72,8 +399,9 @@ export function BusinessInformationFields({
 
       <FormField
         label={registrationLabel}
-        hint="Use the current registration number from your business record."
+        hint={registrationHelperText}
         required
+        error={fieldErrors.registrationNumber}
       >
         {fieldLocked(lockedFields, "registrationNumber") ? (
           <div className="mb-2">
@@ -91,7 +419,12 @@ export function BusinessInformationFields({
         <LockedHint visible={fieldLocked(lockedFields, "registrationNumber")} />
       </FormField>
 
-      <FormField label="TIN" hint="Enter the registered taxpayer identification number." required>
+      <FormField
+        label="TIN"
+        hint="Enter the registered taxpayer identification number."
+        required
+        error={fieldErrors.tin}
+      >
         {fieldLocked(lockedFields, "tin") ? (
           <div className="mb-2">
             <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
@@ -99,16 +432,21 @@ export function BusinessInformationFields({
             </span>
           </div>
         ) : null}
-        <input
-          className={fieldClasses(fieldLocked(lockedFields, "tin"))}
-          value={value.tin}
-          disabled={fieldLocked(lockedFields, "tin")}
-          onChange={(event) => onChange({ ...value, tin: event.target.value })}
-        />
-        <LockedHint visible={fieldLocked(lockedFields, "tin")} />
+          <input
+            className={fieldClasses(fieldLocked(lockedFields, "tin"))}
+            value={value.tin}
+            disabled={fieldLocked(lockedFields, "tin")}
+            onChange={(event) => onChange({ ...value, tin: event.target.value })}
+          />
+          <LockedHint visible={fieldLocked(lockedFields, "tin")} />
       </FormField>
 
-      <FormField label="Business Name" hint="Use the exact business name on record." required>
+      <FormField
+        label="Business Name"
+        hint="Use the exact business name on record."
+        required
+        error={fieldErrors.businessName}
+      >
         {fieldLocked(lockedFields, "businessName") ? (
           <div className="mb-2">
             <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
@@ -125,7 +463,12 @@ export function BusinessInformationFields({
         <LockedHint visible={fieldLocked(lockedFields, "businessName")} />
       </FormField>
 
-      <FormField label="Trade Name" hint="Enter the public-facing trade name." required>
+      <FormField
+        label="Trade Name"
+        hint="Enter the public-facing trade name."
+        required
+        error={fieldErrors.tradeName}
+      >
         {fieldLocked(lockedFields, "tradeName") ? (
           <div className="mb-2">
             <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
@@ -142,7 +485,12 @@ export function BusinessInformationFields({
         <LockedHint visible={fieldLocked(lockedFields, "tradeName")} />
       </FormField>
 
-      <FormField label="Owner / President Name" hint="Indicate the authorized owner or president." required>
+      <FormField
+        label="Owner / President Name"
+        hint="Indicate the authorized owner or president."
+        required
+        error={fieldErrors.ownerName}
+      >
         {fieldLocked(lockedFields, "ownerName") ? (
           <div className="mb-2">
             <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
@@ -159,24 +507,87 @@ export function BusinessInformationFields({
         <LockedHint visible={fieldLocked(lockedFields, "ownerName")} />
       </FormField>
 
-      <FormField label="Nationality" hint="State the owner or president nationality." required>
-        {fieldLocked(lockedFields, "nationality") ? (
-          <div className="mb-2">
-            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-              Locked
-            </span>
-          </div>
-        ) : null}
-        <input
-          className={fieldClasses(fieldLocked(lockedFields, "nationality"))}
-          value={value.nationality}
-          disabled={fieldLocked(lockedFields, "nationality")}
-          onChange={(event) => onChange({ ...value, nationality: event.target.value })}
-        />
-        <LockedHint visible={fieldLocked(lockedFields, "nationality")} />
-      </FormField>
+        <FormField
+          label="Sex"
+          hint="Select the owner or president's sex."
+          error={fieldErrors.sex}
+        >
+          <select
+            className={fieldClasses(fieldLocked(lockedFields, "sex"))}
+            value={value.sex ?? ""}
+            disabled={fieldLocked(lockedFields, "sex")}
+            onChange={(event) =>
+              onChange({ ...value, sex: event.target.value || undefined })
+            }
+          >
+            <option value="">Not specified</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Prefer not to say">Prefer not to say</option>
+          </select>
+        </FormField>
 
-      <FormField label="Email" hint="Use an active email address for notifications." required>
+        <FormField
+          label={
+            corporation
+              ? "Corporation Nationality / Ownership Classification"
+              : "Nationality"
+          }
+          hint={
+            corporation
+              ? "Select the corporation ownership classification."
+              : "Default is Filipino but may be changed if applicable."
+          }
+          required
+          error={fieldErrors.nationality}
+        >
+          {nationalityLocked ? (
+            <div className="mb-2">
+              <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                Locked
+              </span>
+            </div>
+          ) : null}
+          {corporation ? (
+            <select
+              className={fieldClasses(nationalityLocked)}
+              value={value.nationality}
+              disabled={nationalityLocked}
+              onChange={(event) => onChange({ ...value, nationality: event.target.value })}
+            >
+              <option value="" disabled>
+                Select ownership classification
+              </option>
+              {CORPORATION_OWNERSHIP_CLASSIFICATIONS.map((classification) => (
+                <option key={classification} value={classification}>
+                  {classification}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <SearchableSelect
+              options={NATIONALITY_SELECT_OPTIONS}
+              value={value.nationality}
+              selectedLabel={value.nationality}
+              disabled={nationalityLocked}
+              onChange={(nextNationality) =>
+                onChange({ ...value, nationality: nextNationality.name })
+              }
+              placeholder="Select nationality"
+            />
+          )}
+          {corporation && !corporationClassificationSelected && !nationalityLocked ? (
+            <p className="mt-1 text-xs text-slate-600">Please choose one ownership classification.</p>
+          ) : null}
+          <LockedHint visible={fieldLocked(lockedFields, "nationality")} />
+        </FormField>
+
+      <FormField
+        label="Email"
+        hint="Use an active email address for notifications."
+        required
+        error={fieldErrors.email}
+      >
         <input
           type="email"
           className={fieldClasses(fieldLocked(lockedFields, "email"))}
@@ -186,23 +597,136 @@ export function BusinessInformationFields({
         />
       </FormField>
 
-      <div className="md:col-span-2">
-        <FormField label="Main Office Address" hint="Provide the full official main office address." required>
-          {fieldLocked(lockedFields, "mainOfficeAddress") ? (
-            <div className="mb-2">
-              <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                Locked
-              </span>
-            </div>
-          ) : null}
-        <input
-          className={fieldClasses(fieldLocked(lockedFields, "mainOfficeAddress"))}
-          value={value.mainOfficeAddress}
-          disabled={fieldLocked(lockedFields, "mainOfficeAddress")}
-          onChange={(event) => onChange({ ...value, mainOfficeAddress: event.target.value })}
-        />
-        </FormField>
-      </div>
+      {enableCascadingAddress ? (
+        <>
+          <FormField
+            label="Country"
+            hint="Search country first to filter provinces."
+            required
+            error={fieldErrors.country}
+          >
+            <SearchableSelect
+              options={countryOptions}
+              value={selectedCountryCode}
+              selectedLabel={selectedCountry}
+              loading={countryLoading}
+              error={countryError}
+              onChange={(nextCountry) =>
+                onChange({
+                  ...value,
+                  country: nextCountry.name,
+                  countryCode: nextCountry.value,
+                  province: "",
+                  provinceCode: "",
+                  cityMunicipality: "",
+                })
+              }
+              disabled={fieldLocked(lockedFields, "country")}
+              placeholder="Select country"
+            />
+          </FormField>
+
+          <FormField
+            label="Province"
+            hint="Search province after country selected."
+            required
+            error={fieldErrors.province}
+          >
+            <SearchableSelect
+              options={provinceOptions}
+              value={selectedProvinceCode}
+              selectedLabel={selectedProvince}
+              loading={provinceLoading}
+              error={provinceError}
+              onChange={(nextProvince) =>
+                onChange({
+                  ...value,
+                  province: nextProvince.name,
+                  provinceCode: nextProvince.value,
+                  cityMunicipality: "",
+                })
+              }
+              disabled={fieldLocked(lockedFields, "province") || !selectedCountry}
+              placeholder={selectedCountry ? "Select province" : "Select country first"}
+            />
+          </FormField>
+
+          <FormField
+            label="City / Municipality"
+            hint="Search city/municipality after province selected."
+            required
+            error={fieldErrors.cityMunicipality}
+          >
+            <SearchableSelect
+              options={cityOptions}
+              value={value.cityMunicipality ?? ""}
+              loading={cityLoading}
+              error={cityError}
+              onChange={(nextCityMunicipality) =>
+                onChange({ ...value, cityMunicipality: nextCityMunicipality.name })
+              }
+              disabled={fieldLocked(lockedFields, "cityMunicipality") || !selectedProvince}
+              placeholder={selectedProvince ? "Select city/municipality" : "Select province first"}
+            />
+          </FormField>
+
+          <FormField
+            label="Street Address"
+            hint="Enter street, purok, building, barangay, and detailed address manually."
+            required
+            error={fieldErrors.streetAddress}
+          >
+            <input
+              className={fieldClasses(fieldLocked(lockedFields, "streetAddress"))}
+              value={value.streetAddress ?? ""}
+              disabled={fieldLocked(lockedFields, "streetAddress")}
+              onChange={(event) => onChange({ ...value, streetAddress: event.target.value })}
+            />
+          </FormField>
+
+          <div className="md:col-span-2">
+            <FormField
+              label="Main Office Address (Auto-generated)"
+              hint="Generated automatically once Country, Province, City/Municipality, and Street Address are all filled in."
+              required
+              error={fieldErrors.mainOfficeAddress}
+            >
+              {value.mainOfficeAddress ? (
+                <div className={fieldClasses(true)}>
+                  {value.mainOfficeAddress}
+                </div>
+              ) : (
+                <div className="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm italic text-slate-400">
+                  Complete address fields to generate full address.
+                </div>
+              )}
+            </FormField>
+          </div>
+        </>
+      ) : (
+        <div className="md:col-span-2">
+          <FormField
+            label="Main Office Address"
+            hint="Enter the full official main office address, including house/building number, street, barangay, city/municipality, province, and ZIP code if available."
+            required
+            error={fieldErrors.mainOfficeAddress}
+          >
+            {fieldLocked(lockedFields, "mainOfficeAddress") ? (
+              <div className="mb-2">
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  Locked
+                </span>
+              </div>
+            ) : null}
+            <input
+              className={fieldClasses(fieldLocked(lockedFields, "mainOfficeAddress"))}
+              value={value.mainOfficeAddress}
+              disabled={fieldLocked(lockedFields, "mainOfficeAddress")}
+              onChange={(event) => onChange({ ...value, mainOfficeAddress: event.target.value })}
+            />
+          </FormField>
+        </div>
+      )}
 
       <label className="flex items-center gap-2 text-sm text-slate-800 md:col-span-2">
         <input
@@ -214,27 +738,53 @@ export function BusinessInformationFields({
         Business Address is same as Main Office Address
       </label>
 
-      {!value.sameAsMainOffice ? (
-        <div className="md:col-span-2">
-          <FormField label="Business Address" hint="Enter the actual place of business operation." required>
-            {fieldLocked(lockedFields, "businessAddress") ? (
-              <div className="mb-2">
-                <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  Locked
-                </span>
+      <div className="md:col-span-2">
+        <FormField
+          label="Business Address"
+          hint={
+            value.sameAsMainOffice
+              ? "Automatically set to match Main Office Address."
+              : "Enter the actual place of business operation."
+          }
+          required={!value.sameAsMainOffice}
+          error={fieldErrors.businessAddress}
+        >
+          {value.sameAsMainOffice ? (
+            value.businessAddress ? (
+              <div className={fieldClasses(true)}>
+                {value.businessAddress}
               </div>
-            ) : null}
-          <input
-            className={fieldClasses(fieldLocked(lockedFields, "businessAddress"))}
-            value={value.businessAddress}
-            disabled={fieldLocked(lockedFields, "businessAddress")}
-            onChange={(event) => onChange({ ...value, businessAddress: event.target.value })}
-          />
-          </FormField>
-        </div>
-      ) : null}
+            ) : (
+              <div className="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm italic text-slate-400">
+                Will match Main Office Address when all address fields are complete.
+              </div>
+            )
+          ) : (
+            <>
+              {fieldLocked(lockedFields, "businessAddress") ? (
+                <div className="mb-2">
+                  <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    Locked
+                  </span>
+                </div>
+              ) : null}
+              <input
+                className={fieldClasses(fieldLocked(lockedFields, "businessAddress"))}
+                value={value.businessAddress}
+                disabled={fieldLocked(lockedFields, "businessAddress")}
+                onChange={(event) => onChange({ ...value, businessAddress: event.target.value })}
+              />
+            </>
+          )}
+        </FormField>
+      </div>
 
-      <FormField label="Contact Number" hint="Provide a reachable contact number." required>
+      <FormField
+        label="Contact Number"
+        hint="Provide a reachable contact number."
+        required
+        error={fieldErrors.phone}
+      >
         <input
           className={fieldClasses(fieldLocked(lockedFields, "phone"))}
           value={value.phone}
@@ -242,6 +792,26 @@ export function BusinessInformationFields({
           onChange={(event) => onChange({ ...value, phone: event.target.value })}
         />
       </FormField>
+
+      <div className="md:col-span-2">
+        <FormField
+          label="Liquor/Tobacco Business"
+          hint="If selected, BPLO will automatically apply the required 25% surcharge during assessment."
+        >
+          <label className="flex items-center gap-2 text-sm text-slate-800">
+            <input
+              type="checkbox"
+              checked={Boolean(value.isLiquorOrTobacco)}
+              disabled={fieldLocked(lockedFields, "isLiquorOrTobacco")}
+              onChange={(event) =>
+                onChange({ ...value, isLiquorOrTobacco: event.target.checked })
+              }
+            />
+            Liquor/Tobacco Business
+          </label>
+          <LockedHint visible={fieldLocked(lockedFields, "isLiquorOrTobacco")} />
+        </FormField>
+      </div>
     </div>
   );
 }

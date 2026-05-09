@@ -82,7 +82,7 @@ export default async function MyApplicationsPage() {
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
                       <Link href={`/applicant/my-applications/${row.id}`} className={actionButtonStyles("secondary", "sm")}>
-                        View
+                        View Details
                       </Link>
                       {row.status === "Returned for Correction" ? (
                         <Link

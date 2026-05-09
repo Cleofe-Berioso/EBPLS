@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { assertStatusTransition } from "@/lib/application-status";
 import { toMoneyNumber } from "@/lib/money";
 
 type DbApplicationStatus =
@@ -36,6 +37,7 @@ export interface PaymentVerificationRow {
   amountPaid: number;
   paymentDate: string;
   transactionNumber: string;
+  officialReceiptNumber: string;
   submittedAt: string;
   paymentStatus: "PENDING" | "VERIFIED" | "REJECTED";
   applicationStatus: string;
@@ -74,11 +76,18 @@ export interface PaymentVerificationDetail {
     penalties: number;
     surcharge: number;
     interest: number;
+    closurePaymentDues: number;
     closureCertificateFee: number;
     arrears: number;
     otherCharges: number;
     totalAmount: number;
     remarks: string | null;
+    lineItems: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      isSystemGenerated: boolean;
+    }>;
   };
 }
 
@@ -141,6 +150,7 @@ function toRow(params: {
     amountPaid: toMoneyNumber(ref.amountPaid),
     paymentDate: ref.paymentDate.toISOString(),
     transactionNumber: ref.transactionNumber,
+    officialReceiptNumber: ref.transactionNumber,
     submittedAt: ref.submittedAt.toISOString(),
     paymentStatus: ref.status,
     applicationStatus: mapDbStatusToUi(app.status),
@@ -154,7 +164,7 @@ async function fetchCandidateApplications() {
   return (prisma as any).businessApplication.findMany({
     where: {
       status: {
-        in: ["APPROVED_FOR_PAYMENT", "PAID", "FOR_RELEASE", "RELEASED"],
+        in: ["APPROVED_FOR_PAYMENT", "PAID", "FOR_RELEASE"],
       },
       feeAssessment: {
         isNot: null,
@@ -181,11 +191,13 @@ async function fetchCandidateApplications() {
           penalties: true,
           surcharge: true,
           interest: true,
+          closurePaymentDues: true,
           closureCertificateFee: true,
           arrears: true,
           otherCharges: true,
           totalAmount: true,
           remarks: true,
+          lineItems: true,
         },
       },
       paymentReferences: {
@@ -302,11 +314,18 @@ export async function getPaymentVerificationDetail(
       penalties: toMoneyNumber(app.feeAssessment?.penalties),
       surcharge: toMoneyNumber(app.feeAssessment?.surcharge),
       interest: toMoneyNumber(app.feeAssessment?.interest),
+      closurePaymentDues: toMoneyNumber(app.feeAssessment?.closurePaymentDues),
       closureCertificateFee: toMoneyNumber(app.feeAssessment?.closureCertificateFee),
       arrears: toMoneyNumber(app.feeAssessment?.arrears),
       otherCharges: toMoneyNumber(app.feeAssessment?.otherCharges),
       totalAmount: toMoneyNumber(app.feeAssessment?.totalAmount),
       remarks: app.feeAssessment?.remarks ?? null,
+      lineItems: (app.feeAssessment?.lineItems ?? []).map((item: any) => ({
+        id: item.id,
+        description: item.description,
+        amount: toMoneyNumber(item.amount),
+        isSystemGenerated: item.isSystemGenerated,
+      })),
     },
   };
 }
@@ -334,27 +353,24 @@ export async function approvePaymentReference(
     throw new Error("Application is not eligible for payment verification");
   }
 
-  const requiredForRelease = toMoneyNumber(assessment.releasePaymentAmount);
+  const requiredForRelease = toMoneyNumber(assessment.totalAmount);
   const submittedAmount = toMoneyNumber(found.amountPaid);
   if (submittedAmount < requiredForRelease) {
     throw new Error(
-      `Amount paid is below required release payment amount (₱${requiredForRelease.toLocaleString("en-PH", {
+      `Amount paid is below required TOP total amount (₱${requiredForRelease.toLocaleString("en-PH", {
         minimumFractionDigits: 2,
       })}).`
     );
   }
 
-  const paidSoFar = Math.round((toMoneyNumber(assessment.amountPaid) + submittedAmount) * 100) / 100;
-  const remainingBalance = Math.max(
-    0,
-    Math.round((toMoneyNumber(assessment.annualAssessedAmount) - paidSoFar) * 100) / 100
-  );
-  const paymentStatus =
-    remainingBalance <= 0 ? "PAID" : paidSoFar > 0 ? "PARTIALLY_PAID" : "UNPAID";
+  const paidSoFar = submittedAmount;
+  const remainingBalance = 0;
+  const paymentStatus = "PAID";
 
   const now = new Date();
 
   await prisma.$transaction(async (tx: any) => {
+    assertStatusTransition(app.status, "PAID");
     await tx.paymentReference.update({
       where: { id: found.id },
       data: {
@@ -389,7 +405,7 @@ export async function approvePaymentReference(
         fromStatus: "APPROVED_FOR_PAYMENT",
         toStatus: "PAID",
         remarks:
-          `BPLO verified payment reference (${found.transactionNumber}) for ₱${submittedAmount.toLocaleString("en-PH", {
+          `BPLO verified OR number ${found.transactionNumber} for ₱${submittedAmount.toLocaleString("en-PH", {
             minimumFractionDigits: 2,
           })}.` + (remarks?.trim() ? ` Remarks: ${remarks.trim()}` : ""),
       },
@@ -450,7 +466,7 @@ export async function rejectPaymentReference(
         actorRole: "BPLO",
         fromStatus: "APPROVED_FOR_PAYMENT",
         toStatus: "APPROVED_FOR_PAYMENT",
-        remarks: `BPLO rejected payment reference (${found.transactionNumber}). Reason: ${reason}`,
+        remarks: `BPLO rejected OR number ${found.transactionNumber}. Reason: ${reason}`,
       },
     });
   });

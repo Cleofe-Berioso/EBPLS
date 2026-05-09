@@ -1,0 +1,8 @@
+
+> ebpls@0.1.0 build
+> next build --webpack
+
+Γû▓ Next.js 16.2.4 (webpack)
+- Environments: .env.local
+
+  Creating an optimized production build ...

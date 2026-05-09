@@ -12,9 +12,8 @@ import { BANK_CLASSIFICATIONS, type FeeCategoryKey, type RuntimeFeeSettings } fr
  *  5. Determine worker-count classification using the exact 7 brackets.
  *  6. Look up the fee for each classification independently.
  *  7. Use the classification that produces the higher fee.
- *  8. Apply Liquor/Tobacco 25% add-on if applicable.
- *  9. Apply renewal surcharge (25%) and monthly interest (2%) if indicated.
- * 10. Apply Closure Certificate Fee (₱100) for closure applications.
+ *  8. Apply renewal surcharge (25%) and monthly interest (2%) if indicated.
+ *  9. Apply Closure Certificate Fee (₱100) for closure applications.
  */
 
 // ---------------------------------------------------------------------------
@@ -89,7 +88,7 @@ export type BusinessCategory =
   | "LODGING"              // Lodging / Boarding Houses
   | "AMUSEMENT"            // Amusement Places
   | "RESTAURANTS"          // Restaurants, Cafés, Catering Services
-  | "LIQUOR_TOBACCO"       // Liquor and Tobacco (base = Wholesalers/Retailers × 1.25)
+  | "LIQUOR_TOBACCO"       // Liquor and Tobacco (base category only)
   | "POWER_COMPANY"        // Power Companies / Hydropower Plants — ₱10,000 fixed
   | "POWER_GEN_DIST"       // Power Generation and Distribution — ₱10,000 fixed
   | "OTHER_INDUSTRIAL"     // Other Industrial Companies
@@ -562,8 +561,6 @@ export function computeMayorsPermitFee(
   // Detect primary category (excluding liquor/tobacco from primary detection if another matches)
   const detectedCategory = detectBusinessCategory(lineOfBusiness);
 
-  // Detect liquor/tobacco overlay
-  const isLiquorTobacco = /liquor|wine|beer|spirits|tobacco|cigarette|distiller|alcohol/.test(lower);
   const isExplicitLiquorTobacco = detectedCategory === "LIQUOR_TOBACCO";
 
   // For Liquor/Tobacco explicit business: base fees are from WHOLESALERS_RETAILERS
@@ -607,14 +604,6 @@ export function computeMayorsPermitFee(
 
   let selectedMayorPermitFee = baseFee;
   let specialRuleApplied: string | null = null;
-
-  // Apply Liquor/Tobacco +25% add-on
-  if (isLiquorTobacco || isExplicitLiquorTobacco) {
-    const addonPercent = runtimeSettings?.penalties.liquorTobaccoAddOnPercent ?? 25;
-    const addon = Math.round(baseFee * (addonPercent / 100));
-    selectedMayorPermitFee = baseFee + addon;
-    specialRuleApplied = `Liquor/Tobacco +${addonPercent}%: ₱${baseFee.toLocaleString("en-PH")} -> ₱${selectedMayorPermitFee.toLocaleString("en-PH")}`;
-  }
 
   const explanation =
     `Category: ${catLabel}${isExplicitLiquorTobacco ? " (Liquor/Tobacco — base: Wholesalers/Retailers)" : ""}` +

@@ -1,4 +1,8 @@
 import type { ApplicationStatus, BusinessInfo } from "@/lib/applicant-types";
+import {
+  getRegistrationHelperText,
+  getRegistrationLabel,
+} from "@/lib/business-rules";
 
 export const APPLICANT_SIDEBAR_ITEMS = [
   { label: "Dashboard", href: "/applicant/dashboard" },
@@ -13,6 +17,7 @@ export const APPLICANT_SIDEBAR_ITEMS = [
 export const defaultBusinessInfo: BusinessInfo = {
   businessType: "Sole Proprietorship",
   registrationNumber: "",
+  paymentFrequency: "ANNUAL",
   tin: "",
   businessName: "",
   tradeName: "",
@@ -20,6 +25,12 @@ export const defaultBusinessInfo: BusinessInfo = {
   nationality: "Filipino",
   email: "",
   phone: "",
+  country: "",
+  countryCode: "",
+  province: "",
+  provinceCode: "",
+  cityMunicipality: "",
+  streetAddress: "",
   mainOfficeAddress: "",
   businessAddress: "",
   sameAsMainOffice: true,
@@ -37,6 +48,9 @@ export const defaultBusinessInfo: BusinessInfo = {
   businessActivity: "",
   lineOfBusiness: "",
   assetSize: "",
+  isMarket: false,
+  isAgriculture: false,
+  isLiquorOrTobacco: false,
 };
 
 export const mockBusinesses: BusinessInfo[] = [
@@ -50,6 +64,11 @@ export const mockBusinesses: BusinessInfo[] = [
     ownerName: "Juan Dela Cruz",
     email: "applicant@example.com",
     phone: "+63 912 345 6789",
+    country: "Philippines",
+    countryCode: "PH",
+    province: "Negros Occidental",
+    cityMunicipality: "Enrique B. Magalona",
+    streetAddress: "Poblacion",
     mainOfficeAddress: "Poblacion, Enrique B. Magalona, Negros Occidental",
     sameAsMainOffice: true,
     businessArea: "120",
@@ -101,8 +120,4 @@ export const mockApplications: MockApplicationRow[] = [
   },
 ];
 
-export function getRegistrationLabel(businessType: BusinessInfo["businessType"]): string {
-  if (businessType === "Sole Proprietorship") return "DTI Registration No.";
-  if (businessType === "Cooperative") return "CDA Registration No.";
-  return "SEC Registration No.";
-}
+export { getRegistrationHelperText, getRegistrationLabel };

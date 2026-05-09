@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { assertStatusTransition } from "@/lib/application-status";
 import { toMoneyNumber } from "@/lib/money";
 import { sendReleaseStatusSms } from "@/lib/sms";
 
@@ -139,6 +140,15 @@ function dateIsoOrNull(date: Date | null | undefined): string | null {
 
 function resolveDocumentType(applicationType: ApplicationType): IssuanceDocumentType {
   return applicationType === "CLOSURE" ? "CLOSURE_CERTIFICATE" : "BUSINESS_PERMIT";
+}
+
+function resolvePermitExpirationDateForRelease(applicationType: ApplicationType): Date | null {
+  if (applicationType === "CLOSURE") {
+    return null;
+  }
+
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
 }
 
 async function generateDocumentNumber(
@@ -420,6 +430,9 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any) {
     lineOfBusiness:
       typeof form.lineOfBusiness === "string" ? form.lineOfBusiness : null,
     assetSize: typeof form.assetSize === "string" ? form.assetSize : null,
+    isMarket: typeof form.isMarket === "boolean" ? form.isMarket : false,
+    isAgriculture: typeof form.isAgriculture === "boolean" ? form.isAgriculture : false,
+    permitExpirationDate: resolvePermitExpirationDateForRelease(app.applicationType as ApplicationType),
   };
 
   if (app.businessRecordId) {
@@ -511,6 +524,8 @@ export async function preparePermitIssuance(
       },
     });
 
+    assertStatusTransition(app.status, "FOR_RELEASE");
+
     await tx.businessApplication.update({
       where: { id: applicationId },
       data: { status: "FOR_RELEASE" },
@@ -595,6 +610,8 @@ export async function releasePermitIssuance(
         remarks: remarks?.trim() || app.permitIssuance.remarks || null,
       },
     });
+
+    assertStatusTransition(app.status, "RELEASED");
 
     await tx.businessApplication.update({
       where: { id: applicationId },

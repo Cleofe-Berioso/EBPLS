@@ -1,12 +1,12 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
+import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
 import { BusinessInformationFields } from "@/components/applicant/business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
-import { resolveRequiredDocuments } from "@/lib/required-documents";
+import { normalizeDocumentName, resolveRequiredDocuments } from "@/lib/required-documents";
 import type {
   ApplicationDocumentInput,
   BusinessInfo,
@@ -34,8 +34,8 @@ const steps = [
     description: "Attach all current clearances and supporting files.",
   },
   {
-    title: "Assessment Preview",
-    description: "Review the estimated renewal charges before final review.",
+    title: "Assessment Notice",
+    description: "Final fees are assessed by BPLO after application review.",
   },
   {
     title: "Review and Submit",
@@ -52,6 +52,18 @@ const lockedFields: Array<keyof BusinessInfo> = [
   "ownerName",
   "nationality",
 ];
+
+function normalizeBusinessInfo(next: BusinessInfo): BusinessInfo {
+  const normalized = normalizeBusinessInfoRules(next);
+  if (!normalized.sameAsMainOffice) {
+    return normalized;
+  }
+
+  return {
+    ...normalized,
+    businessAddress: normalized.mainOfficeAddress,
+  };
+}
 
 function ReviewStat({
   label,
@@ -123,6 +135,7 @@ export function RenewalApplicationForm() {
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
 
   const requiredRenewalDocs = useMemo(
     () =>
@@ -133,7 +146,12 @@ export function RenewalApplicationForm() {
     [info]
   );
 
-  const uploadedRequiredCount = requiredRenewalDocs.filter((doc) => uploadedDocuments[doc]).length;
+  const getUploadedDocumentForRequiredName = (requiredName: string) =>
+    Object.values(uploadedDocuments).find(
+      (doc) => normalizeDocumentName(doc.documentName) === normalizeDocumentName(requiredName)
+    );
+
+  const uploadedRequiredCount = requiredRenewalDocs.filter((doc) => getUploadedDocumentForRequiredName(doc)).length;
   const selectedRecord = records.find((item) => item.id === selectedBusinessId);
 
   useEffect(() => {
@@ -150,7 +168,13 @@ export function RenewalApplicationForm() {
       setRecords(data.records);
       if (data.records[0] && !selectedBusinessId) {
         setSelectedBusinessId(data.records[0].id);
-        setInfo(data.records[0].businessInfo);
+          setInfo(
+            normalizeBusinessInfo({
+              ...defaultBusinessInfo,
+              ...data.records[0].businessInfo,
+              paymentFrequency: data.records[0].businessInfo.paymentFrequency ?? "ANNUAL",
+            })
+          );
       }
     }
 
@@ -179,7 +203,13 @@ export function RenewalApplicationForm() {
       if (!active || !response.ok || !data.application) return;
 
       setApplicationId(data.application.id);
-      setInfo(data.application.formData);
+      setInfo(
+        normalizeBusinessInfo({
+          ...defaultBusinessInfo,
+          ...data.application.formData,
+          paymentFrequency: data.application.formData.paymentFrequency ?? "ANNUAL",
+        })
+      );
       if (data.application.businessRecordId) setSelectedBusinessId(data.application.businessRecordId);
       setUploadedDocuments(
         data.application.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
@@ -196,6 +226,30 @@ export function RenewalApplicationForm() {
   }, [editId]);
 
   function next() {
+    if (step === 0 && !selectedBusinessId) {
+      setFieldErrors({ businessName: "Select an existing business record first." });
+      setStatusMessage({ kind: "error", text: "Select an existing business record before proceeding." });
+      return;
+    }
+
+    if (step === 1) {
+      const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+      if (!info.email.trim()) nextErrors.email = "Email is required.";
+      if (!info.mainOfficeAddress.trim()) nextErrors.mainOfficeAddress = "Main Office Address is required.";
+      if (!info.phone.trim()) nextErrors.phone = "Contact Number is required.";
+      if (!info.sameAsMainOffice && !info.businessAddress.trim()) {
+        nextErrors.businessAddress = "Business Address is required.";
+      }
+
+      if (Object.keys(nextErrors).length > 0) {
+        setFieldErrors(nextErrors);
+        setStatusMessage({ kind: "error", text: "Complete required fields before moving to the next step." });
+        return;
+      }
+    }
+
+    setFieldErrors({});
+    setStatusMessage(null);
     setStep((current) => Math.min(current + 1, steps.length - 1));
   }
 
@@ -207,6 +261,7 @@ export function RenewalApplicationForm() {
     setSubmitting(true);
     setStatusMessage(null);
     setValidationDetail(null);
+    setFieldErrors({});
 
     const payload: SaveApplicationInput = {
       applicationId,
@@ -360,7 +415,16 @@ export function RenewalApplicationForm() {
                     const selectedId = event.target.value;
                     setSelectedBusinessId(selectedId);
                     const selected = records.find((item) => item.id === selectedId);
-                    if (selected) setInfo(selected.businessInfo);
+                    if (selected) {
+                      setInfo(
+                        normalizeBusinessInfo({
+                          ...defaultBusinessInfo,
+                          ...selected.businessInfo,
+                          paymentFrequency: selected.businessInfo.paymentFrequency ?? "ANNUAL",
+                        })
+                      );
+                      setFieldErrors({});
+                    }
                   }}
                 >
                   {records.map((business) => (
@@ -396,9 +460,48 @@ export function RenewalApplicationForm() {
           >
             <BusinessInformationFields
               value={info}
-              onChange={setInfo}
+              onChange={(nextInfo) => {
+                setInfo(normalizeBusinessInfo(nextInfo));
+              }}
               lockedFields={lockedFields}
+              fieldErrors={fieldErrors}
             />
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={info.isMarket}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isMarket: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-slate-900">Market business</span>
+                  Keep this checked when the registered business still operates inside a public market or market stall.
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={info.isAgriculture}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isAgriculture: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-slate-900">Agriculture-related business</span>
+                  Keep this checked when Department of Agriculture clearance is still required for this renewal.
+                </span>
+              </label>
+            </div>
           </SectionCard>
         </div>
       ) : null}
@@ -415,22 +518,25 @@ export function RenewalApplicationForm() {
             description="Conditional clearances may appear depending on the line of business and recorded activity."
           >
             <div className="grid gap-3 md:grid-cols-2">
-              {requiredRenewalDocs.map((doc) => (
-                <UploadSlot
-                  key={doc}
-                  label={doc}
-                  required
-                  helperText="Upload the latest valid copy for renewal review."
-                  disabled={submitting || records.length === 0}
-                  fileName={uploadedDocuments[doc]?.fileName}
-                  onFileChange={(file) => {
-                    void handleDocumentUpload(doc, file);
-                  }}
-                  onRemove={() => {
-                    void handleDocumentDelete(doc);
-                  }}
-                />
-              ))}
+              {requiredRenewalDocs.map((doc) => {
+                const uploadedDoc = getUploadedDocumentForRequiredName(doc);
+                return (
+                  <UploadSlot
+                    key={doc}
+                    label={doc}
+                    required
+                    helperText="Upload the latest valid copy for renewal review."
+                    disabled={submitting || records.length === 0}
+                    fileName={uploadedDoc?.fileName}
+                    onFileChange={(file) => {
+                      void handleDocumentUpload(doc, file);
+                    }}
+                    onRemove={() => {
+                      void handleDocumentDelete(uploadedDoc?.documentName ?? doc);
+                    }}
+                  />
+                );
+              })}
             </div>
           </SectionCard>
         </div>
@@ -438,34 +544,49 @@ export function RenewalApplicationForm() {
 
       {step === 3 ? (
         <div className="space-y-4">
-          <InfoBanner
-            title="Assessment preview only"
-            description="This screen shows an estimated renewal total for applicant guidance. Final assessment remains part of the BPLO review and TOP generation process."
-            variant="warning"
-          />
           <SectionCard
-            title="Assessment Preview"
-            description="Use this preview to understand possible late-renewal charges before final review."
+            title="Preferred Payment Frequency"
+            description="Choose how you prefer to pay the assessed fees. Final payment details are confirmed after BPLO assessment."
           >
-            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-gray-800">
-              <div className="flex justify-between py-1">
-                <span>Permit Fee</span>
-                <span>Php 2,400.00</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span>25% Surcharge for late renewal</span>
-                <span>Php 600.00</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span>2% Monthly Interest</span>
-                <span>Php 96.00</span>
-              </div>
-              <div className="mt-2 flex justify-between border-t border-green-200 pt-2 font-semibold text-green-800">
-                <span>Total Amount</span>
-                <span>Php 3,096.00</span>
-              </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                <input
+                  type="radio"
+                  name="renewalPaymentFrequency"
+                  value="ANNUAL"
+                  checked={info.paymentFrequency === "ANNUAL"}
+                  onChange={() => setInfo((current) => ({ ...current, paymentFrequency: "ANNUAL" }))}
+                />
+                Annual
+              </label>
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                <input
+                  type="radio"
+                  name="renewalPaymentFrequency"
+                  value="BI_ANNUAL"
+                  checked={info.paymentFrequency === "BI_ANNUAL"}
+                  onChange={() => setInfo((current) => ({ ...current, paymentFrequency: "BI_ANNUAL" }))}
+                />
+                Bi-Annual
+              </label>
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                <input
+                  type="radio"
+                  name="renewalPaymentFrequency"
+                  value="QUARTERLY"
+                  checked={info.paymentFrequency === "QUARTERLY"}
+                  onChange={() => setInfo((current) => ({ ...current, paymentFrequency: "QUARTERLY" }))}
+                />
+                Quarterly
+              </label>
             </div>
           </SectionCard>
+
+          <InfoBanner
+            title="BPLO assessment"
+            description="Fees will be assessed by BPLO after application review."
+            variant="info"
+          />
         </div>
       ) : null}
 

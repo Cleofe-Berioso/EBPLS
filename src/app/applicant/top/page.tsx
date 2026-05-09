@@ -16,31 +16,35 @@ const PAYMENT_FREQ_LABELS: Record<string, string> = {
 interface TopSummary {
   applicationId: string;
   applicationNumber: string;
+  businessName: string;
   applicationType: string;
   status: string;
   topNumber: string | null;
   assessmentStatus: "DRAFT" | "GENERATED" | null;
   paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null;
-  annualAssessedAmount: number;
-  releasePaymentAmount: number;
-  amountPaid: number;
-  remainingBalance: number;
-  paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
   mayorsPermitFee: number;
   regulatoryFees: number;
   additionalCharges: number;
   penalties: number;
   surcharge: number;
   interest: number;
+  closurePaymentDues: number;
   closureCertificateFee: number;
   arrears: number;
   otherCharges: number;
   totalAmount: number;
   remarks: string | null;
   generatedAt: string | null;
+  lineItems: Array<{
+    id: string;
+    description: string;
+    amount: number;
+    isSystemGenerated: boolean;
+  }>;
   paymentReference: {
     id?: string;
     transactionNumber?: string;
+    officialReceiptNumber?: string;
     amountPaid?: number;
     paymentDate?: string;
     submittedAt?: string;
@@ -56,16 +60,10 @@ interface TopPageData {
   records: TopSummary[];
 }
 
-function getAmountToPayToRelease(summary: TopSummary): number {
-  return summary.releasePaymentAmount;
-}
-
 export default function TaxOrderOfPaymentPage() {
   const [topData, setTopData] = useState<TopPageData>({ activeSummary: null, records: [] });
   const [loading, setLoading] = useState(true);
   const [transactionNumber, setTransactionNumber] = useState("");
-  const [amountPaid, setAmountPaid] = useState("");
-  const [paymentDate, setPaymentDate] = useState("");
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [message, setMessage] = useState("");
 
@@ -96,15 +94,16 @@ export default function TaxOrderOfPaymentPage() {
   }, []);
 
   async function submitReference() {
-    if (!summary || !transactionNumber.trim() || !paymentDate || !paymentProof) return;
+    if (!summary || !paymentProof) return;
 
-    const parsedAmount = parseFloat(amountPaid) || 0;
+    if (!transactionNumber.trim()) {
+      setMessage("Official Receipt Number is required.");
+      return;
+    }
 
     const payload = new FormData();
     payload.append("applicationId", summary.applicationId);
     payload.append("transactionNumber", transactionNumber.trim());
-    payload.append("amountPaid", String(parsedAmount));
-    payload.append("paymentDate", paymentDate);
     payload.append("paymentProof", paymentProof);
 
     const response = await fetch("/api/applicant/top", {
@@ -118,15 +117,15 @@ export default function TaxOrderOfPaymentPage() {
       return;
     }
 
-    setMessage("Payment reference submitted. BPLO will verify your payment.");
+    setMessage("OR submission received. BPLO will verify your payment.");
     setTopData((current) => {
       if (!current.activeSummary) return current;
 
       const nextPaymentReference = {
         id: current.activeSummary.paymentReference?.id,
         transactionNumber: transactionNumber.trim(),
-        amountPaid: parsedAmount,
-        paymentDate,
+        amountPaid: current.activeSummary.totalAmount,
+        paymentDate: new Date().toISOString().slice(0, 10),
         submittedAt: new Date().toISOString(),
         status: "PENDING" as const,
         reviewerRemarks: null,
@@ -147,8 +146,6 @@ export default function TaxOrderOfPaymentPage() {
       };
     });
     setTransactionNumber("");
-    setAmountPaid("");
-    setPaymentDate("");
     setPaymentProof(null);
   }
 
@@ -175,8 +172,8 @@ export default function TaxOrderOfPaymentPage() {
               variant: "warning" as const,
             }
           : {
-              title: "Ready for payment reference",
-              description: "After payment at MTO or eGov, submit the OR Number / eGov Transaction Number here.",
+              title: "Ready for OR submission",
+              description: "This Tax Order of Payment is for permit release payment. Submit the OR number and official receipt or payment proof after payment.",
               variant: "info" as const,
             };
 
@@ -186,7 +183,7 @@ export default function TaxOrderOfPaymentPage() {
         <PageHeader
           eyebrow="Applicant"
           title="Tax Order of Payment"
-          description="Review assessed fees, including Amount to Pay to Release, then submit your payment reference after payment."
+          description="Tax Order of Payment for permit release payment."
         />
         <SectionCard>
           <p className="text-sm text-slate-500">Loading assessed payment details...</p>
@@ -200,19 +197,19 @@ export default function TaxOrderOfPaymentPage() {
       <PageHeader
         eyebrow="Applicant"
         title="Tax Order of Payment"
-        description="Review assessed fees, including Amount to Pay to Release, then submit your payment reference after payment."
+        description="Tax Order of Payment for permit release payment."
       />
 
       {!summary ? (
         <EmptyState
-          title="No records available yet"
-          description="This section will populate once BPLO completes assessment and marks an application ready for payment. No action is required right now."
+          title="Tax Order of Payment is not yet available"
+          description="This page becomes available only after BPLO completes assessment and generates the Tax Order of Payment."
         />
       ) : (
         <div className="space-y-4">
           <SectionCard
             title={`TOP Records (${topData.records.length})`}
-            description="Compare annual assessed amount, payment frequency, required release payment, amount paid, and remaining balance across all available TOP records."
+            description="Review generated TOP records and the total amount to pay for permit release."
           >
             <div className="space-y-3">
               {topData.records.map((record) => (
@@ -220,6 +217,11 @@ export default function TaxOrderOfPaymentPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-mono text-xs text-slate-600">{record.applicationNumber}</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{record.businessName}</p>
+                      <p className="text-xs text-slate-500">TOP: {record.topNumber ?? "Pending TOP Number"}</p>
+                      <p className="text-xs text-slate-500">
+                        Total Amount to Pay: ₱ {record.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      </p>
                       <p className="mt-1 text-sm font-semibold text-slate-900">{record.applicationType}</p>
                       <p className="text-xs text-slate-500">Status: {record.status}</p>
                     </div>
@@ -230,28 +232,6 @@ export default function TaxOrderOfPaymentPage() {
                     </span>
                   </div>
 
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Annual Assessed Amount</p>
-                      <p className="mt-1 font-semibold text-slate-900">₱ {record.annualAssessedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Required Release Payment</p>
-                      <p className="mt-1 font-semibold text-slate-900">₱ {record.releasePaymentAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Amount Paid</p>
-                      <p className="mt-1 font-semibold text-slate-900">₱ {record.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Remaining Balance</p>
-                      <p className="mt-1 font-semibold text-slate-900">₱ {record.remainingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Payment Status</p>
-                      <p className="mt-1 font-semibold text-slate-900">{record.paymentStatus}</p>
-                    </div>
-                  </div>
                 </div>
               ))}
             </div>
@@ -267,7 +247,7 @@ export default function TaxOrderOfPaymentPage() {
 
           <SectionCard
             title="TOP Summary"
-            description={`${summary.applicationNumber} • ${summary.applicationType}`}
+            description={`${summary.applicationNumber} • ${summary.applicationType} • ${summary.businessName}`}
           >
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-xl border border-green-200 bg-green-50 p-4">
@@ -283,9 +263,9 @@ export default function TaxOrderOfPaymentPage() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Annual Assessed Amount</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Total Amount to Pay</p>
                     <p className="mt-1 text-lg font-semibold text-slate-900">
-                      ₱ {summary.annualAssessedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      ₱ {summary.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                     </p>
                   </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -297,23 +277,11 @@ export default function TaxOrderOfPaymentPage() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Amount to Pay to Release</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">TOP Purpose</p>
                   <p className="mt-1 text-lg font-semibold text-slate-900">
-                    ₱ {getAmountToPayToRelease(summary).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                    Permit release payment
                   </p>
                 </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Amount Paid</p>
-                    <p className="mt-1 font-medium text-slate-900">
-                      ₱ {summary.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Remaining Balance</p>
-                    <p className="mt-1 font-medium text-slate-900">
-                      ₱ {summary.remainingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                   <p className="text-xs uppercase tracking-wide text-slate-500">Application Status</p>
                   <p className="mt-1 font-medium text-slate-900">{summary.status}</p>
@@ -321,11 +289,59 @@ export default function TaxOrderOfPaymentPage() {
               </div>
             </div>
             <p className="mt-3 text-xs text-slate-500">
-              Amount shown is for applicant guidance. Official payment verification remains subject to BPLO review.
+              Final verification is performed by BPLO after OR submission.
             </p>
+            {summary.applicationType === "CLOSURE" ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Closure Certificate Fee</p>
+                  <p className="mt-1 font-medium text-slate-900">
+                    ₱ {summary.closureCertificateFee.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Payment Dues / Pending Fee</p>
+                  <p className="mt-1 font-medium text-slate-900">
+                    ₱ {summary.closurePaymentDues.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Total Amount</p>
+                  <p className="mt-1 font-semibold text-slate-900">
+                    ₱ {summary.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </SectionCard>
 
-          <SectionCard title="Pay Now" description="Submit transaction details after payment at MTO or eGov.">
+          <SectionCard title="Itemized Fees" description="These are the fee items approved in your current Tax Order of Payment.">
+            <div className="space-y-3">
+              {summary.lineItems.map((item) => (
+                <div key={item.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <div>
+                    <p className="font-medium text-slate-900">{item.description}</p>
+                    <p className="text-xs text-slate-500">
+                      {item.isSystemGenerated ? "Automatically computed by BPLO rules" : "Included in the approved TOP"}
+                    </p>
+                  </div>
+                  <p className="font-semibold text-slate-900">
+                    ₱ {item.amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              ))}
+              {summary.closurePaymentDues > 0 ? (
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="font-medium text-slate-900">Closure Payment Dues</p>
+                  <p className="font-semibold text-slate-900">
+                    ₱ {summary.closurePaymentDues.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Submit Payment" description="Submit OR details for TOP payment to proceed to permit release.">
               {paymentRef?.transactionNumber ? (
                 <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                   <p className="text-slate-700">
@@ -350,43 +366,20 @@ export default function TaxOrderOfPaymentPage() {
               <div className="space-y-3">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
-                    OR Number / eGov Transaction Number
+                    Official Receipt Number
+                    <span className="text-red-600">*</span>
                   </label>
                   <input
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
                     value={transactionNumber}
                     onChange={(event) => setTransactionNumber(event.target.value)}
-                    placeholder="Enter transaction or receipt number"
+                    placeholder="Enter official receipt number"
                   />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Amount Paid (₱)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
-                    value={amountPaid}
-                    onChange={(event) => setAmountPaid(event.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Payment Date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
-                    value={paymentDate}
-                    onChange={(event) => setPaymentDate(event.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Payment Proof
+                    Official Receipt Upload / Payment Proof
+                    <span className="text-red-600">*</span>
                   </label>
                   <input
                     type="file"
@@ -399,16 +392,16 @@ export default function TaxOrderOfPaymentPage() {
                   onClick={() => {
                     void submitReference();
                   }}
-                  disabled={!transactionNumber.trim() || !paymentDate || !paymentProof || !canSubmitPaymentReference}
+                  disabled={!transactionNumber.trim() || !paymentProof || !canSubmitPaymentReference}
                   className={actionButtonStyles("primary", "md", "w-full")}
                 >
-                  Submit Payment Reference
+                  Submit Payment
                 </button>
                 {!canSubmitPaymentReference ? (
                   <p className="text-xs text-slate-500">
                     {isPaidStatus || paymentRefStatus === "VERIFIED"
-                      ? "Application is already paid. Payment submission is locked."
-                      : "A payment reference is pending verification. Please wait for BPLO action."}
+                      ? "Application is already paid. OR submission is locked."
+                      : "An OR submission is pending verification. Please wait for BPLO action."}
                   </p>
                 ) : null}
               </div>

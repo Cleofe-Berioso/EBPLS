@@ -23,34 +23,25 @@ export async function POST(req: Request) {
   const body = await req.formData();
   const applicationId = body.get("applicationId");
   const transactionNumber = body.get("transactionNumber");
-  const amountPaidRaw = body.get("amountPaid");
-  const paymentDate = body.get("paymentDate");
   const proofFile = body.get("paymentProof");
 
   if (
     typeof applicationId !== "string" ||
     typeof transactionNumber !== "string" ||
-    typeof paymentDate !== "string" ||
     !applicationId.trim() ||
-    !transactionNumber.trim() ||
-    !paymentDate.trim()
+    !transactionNumber.trim()
   ) {
     return NextResponse.json(
-      { error: "applicationId, transactionNumber, paymentDate, and paymentProof are required" },
+      { error: "applicationId, Official Receipt Number, and paymentProof are required" },
       { status: 400 }
     );
   }
 
   if (!(proofFile instanceof File)) {
     return NextResponse.json(
-      { error: "applicationId, transactionNumber, paymentDate, and paymentProof are required" },
+      { error: "applicationId, Official Receipt Number, and paymentProof are required" },
       { status: 400 }
     );
-  }
-
-  const amountPaid = Number(amountPaidRaw);
-  if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
-    return NextResponse.json({ error: "amountPaid must be greater than 0" }, { status: 400 });
   }
 
   try {
@@ -60,8 +51,6 @@ export async function POST(req: Request) {
         session.user.id,
         applicationId.trim(),
         transactionNumber.trim(),
-        amountPaid,
-        paymentDate.trim(),
         {
           proofFileName: storedProof.fileName,
           proofStoragePath: storedProof.storagePath,
@@ -76,7 +65,7 @@ export async function POST(req: Request) {
       throw innerError;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to submit payment reference";
+    const message = error instanceof Error ? error.message : "Unable to submit OR details";
     const status = message === "Application not found" ? 404 : 400;
     return NextResponse.json({ error: message }, { status });
   }

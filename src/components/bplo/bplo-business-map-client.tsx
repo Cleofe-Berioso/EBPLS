@@ -20,8 +20,7 @@ const LeafletBusinessMap = dynamic(
   }
 );
 
-type ApplicationTypeFilter = "ALL" | "NEW" | "RENEWAL" | "CLOSURE";
-type LocationStatusFilter = "ALL" | "PENDING" | "VERIFIED" | "NEEDS_CORRECTION";
+type ApplicationTypeFilter = "ALL" | "NEW" | "RENEWAL";
 
 interface BploBusinessLocationRow {
   locationId: string;
@@ -32,7 +31,7 @@ interface BploBusinessLocationRow {
   businessCategoryLabel: string;
   businessCategoryColor: string;
   applicationNumber: string;
-  applicationType: "NEW" | "RENEWAL" | "CLOSURE";
+  applicationType: "NEW" | "RENEWAL";
   permitOrCertificateNumber: string | null;
   latitude: number;
   longitude: number;
@@ -56,22 +55,14 @@ const BPLO_MAP_LEGEND_GROUPS = [
   },
 ];
 
-function statusClass(status: BploBusinessLocationRow["status"]): string {
-  if (status === "VERIFIED") return "border-green-200 bg-green-50 text-green-700";
-  if (status === "NEEDS_CORRECTION") return "border-amber-200 bg-amber-50 text-amber-800";
-  return "border-blue-200 bg-blue-50 text-blue-700";
-}
-
 function typeClass(type: BploBusinessLocationRow["applicationType"]): string {
   if (type === "RENEWAL") return "border-violet-200 bg-violet-50 text-violet-700";
-  if (type === "CLOSURE") return "border-slate-200 bg-slate-100 text-slate-700";
   return "border-teal-200 bg-teal-50 text-teal-700";
 }
 
 export function BploBusinessMapClient() {
   const [rows, setRows] = useState<BploBusinessLocationRow[]>([]);
   const [typeFilter, setTypeFilter] = useState<ApplicationTypeFilter>("ALL");
-  const [statusFilter, setStatusFilter] = useState<LocationStatusFilter>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<"ALL" | MapBusinessCategory>("ALL");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [searchFilter, setSearchFilter] = useState("");
@@ -106,7 +97,6 @@ export function BploBusinessMapClient() {
     () =>
       rows.filter((row) => {
         if (typeFilter !== "ALL" && row.applicationType !== typeFilter) return false;
-        if (statusFilter !== "ALL" && row.status !== statusFilter) return false;
         if (categoryFilter !== "ALL" && row.businessCategory !== categoryFilter) return false;
 
         if (ownerFilter.trim()) {
@@ -121,7 +111,7 @@ export function BploBusinessMapClient() {
 
         return true;
       }),
-    [categoryFilter, ownerFilter, rows, searchFilter, statusFilter, typeFilter]
+    [categoryFilter, ownerFilter, rows, searchFilter, typeFilter]
   );
 
   const markers = useMemo(
@@ -156,7 +146,6 @@ export function BploBusinessMapClient() {
 
         if (row.applicationType === "NEW") accumulator.newCount += 1;
         if (row.applicationType === "RENEWAL") accumulator.renewalCount += 1;
-        if (row.applicationType === "CLOSURE") accumulator.closureCount += 1;
 
         return accumulator;
       },
@@ -167,7 +156,6 @@ export function BploBusinessMapClient() {
         needsCorrection: 0,
         newCount: 0,
         renewalCount: 0,
-        closureCount: 0,
       }
     );
   }, [visibleRows]);
@@ -276,7 +264,7 @@ export function BploBusinessMapClient() {
         <div className="space-y-4 self-start">
           <FilterBar
             title="Map Filters"
-            description="Filter New, Renewal, or Closure records, then narrow by current Business Location status."
+            description="Filter New or Renewal records, then narrow by business category and ownership details."
             contentClassName="grid gap-3"
           >
             <label className="space-y-1 text-sm">
@@ -289,21 +277,6 @@ export function BploBusinessMapClient() {
                 <option value="ALL">All</option>
                 <option value="NEW">New</option>
                 <option value="RENEWAL">Renewal</option>
-                <option value="CLOSURE">Closure</option>
-              </select>
-            </label>
-
-            <label className="space-y-1 text-sm">
-              <span className="font-medium text-slate-700">Location Status</span>
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as LocationStatusFilter)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700"
-              >
-                <option value="ALL">All</option>
-                <option value="PENDING">Pending</option>
-                <option value="VERIFIED">Verified</option>
-                <option value="NEEDS_CORRECTION">Needs Correction</option>
               </select>
             </label>
 
@@ -350,9 +323,6 @@ export function BploBusinessMapClient() {
                   Type: {typeFilter === "ALL" ? "All" : typeFilter}
                 </span>
                 <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700">
-                  Status: {statusFilter === "ALL" ? "All" : statusFilter}
-                </span>
-                <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700">
                   Category: {categoryFilter === "ALL" ? "All" : MAP_CATEGORY_META[categoryFilter].label}
                 </span>
               </div>
@@ -368,9 +338,8 @@ export function BploBusinessMapClient() {
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Queue Split</p>
               <div className="mt-2 space-y-1.5 text-sm text-slate-600">
-                <p>Pending: <span className="font-semibold text-slate-900">{summary.pending}</span></p>
-                <p>Verified: <span className="font-semibold text-slate-900">{summary.verified}</span></p>
-                <p>Needs Correction: <span className="font-semibold text-slate-900">{summary.needsCorrection}</span></p>
+                <p>New: <span className="font-semibold text-slate-900">{summary.newCount}</span></p>
+                <p>Renewal: <span className="font-semibold text-slate-900">{summary.renewalCount}</span></p>
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2 xl:col-span-1">
@@ -381,9 +350,6 @@ export function BploBusinessMapClient() {
                 </span>
                 <span className="inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
                   Renewal {summary.renewalCount}
-                </span>
-                <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                  Closure {summary.closureCount}
                 </span>
               </div>
             </div>
@@ -440,9 +406,6 @@ export function BploBusinessMapClient() {
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${typeClass(row.applicationType)}`}>
                             {row.applicationType}
                           </span>
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass(row.status)}`}>
-                            {row.status}
-                          </span>
                           <span
                             className="inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold"
                             style={{ borderColor: row.businessCategoryColor, color: row.businessCategoryColor }}
@@ -450,6 +413,21 @@ export function BploBusinessMapClient() {
                             {row.businessCategoryLabel}
                           </span>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-2xl border border-white/70 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Business Application</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">{row.applicationType}</p>
+                        <p className="mt-1 text-xs text-slate-500">Record lifecycle type for this application.</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/70 bg-white px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Business Category</p>
+                        <p className="mt-2 text-sm font-semibold" style={{ color: row.businessCategoryColor }}>
+                          {row.businessCategoryLabel}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">Derived from business classification, not application type.</p>
                       </div>
                     </div>
 
@@ -489,14 +467,6 @@ export function BploBusinessMapClient() {
                         <p className="text-sm font-semibold text-slate-900">Action Panel</p>
                         <p className="text-sm leading-6 text-slate-600">
                           Apply the next BPLO review action using the existing verify and return endpoints.
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Current State</p>
-                      <p className="mt-2 font-semibold text-slate-900">{row.status}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Verify to accept the location, or return it for correction with remarks.
                       </p>
                     </div>
 

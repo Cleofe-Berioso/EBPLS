@@ -21,23 +21,17 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  const validFrequencies = ["ANNUAL", "BI_ANNUAL", "QUARTERLY"];
-  if (!body.paymentFrequency || !validFrequencies.includes(body.paymentFrequency)) {
-    return NextResponse.json({ error: "paymentFrequency is required" }, { status: 400 });
+  if (Object.prototype.hasOwnProperty.call(body as object, "paymentFrequency")) {
+    return NextResponse.json(
+      { error: "Payment frequency is applicant-selected and cannot be changed by BPLO." },
+      { status: 400 }
+    );
   }
 
   try {
     const saved = await saveAssessmentDraft(applicationId, session.user.id, {
-      paymentFrequency: body.paymentFrequency,
-      mayorsPermitFee: body.mayorsPermitFee ?? 0,
-      regulatoryFees: body.regulatoryFees ?? 0,
-      additionalCharges: body.additionalCharges ?? 0,
-      penalties: body.penalties ?? 0,
-      surcharge: body.surcharge ?? 0,
-      interest: body.interest ?? 0,
-      closureCertificateFee: body.closureCertificateFee ?? 0,
-      arrears: body.arrears ?? 0,
-      otherCharges: body.otherCharges ?? 0,
+      lineItems: Array.isArray(body.lineItems) ? body.lineItems : [],
+      closurePaymentDues: body.closurePaymentDues ?? 0,
       remarks: body.remarks,
     });
     return NextResponse.json({ saved });

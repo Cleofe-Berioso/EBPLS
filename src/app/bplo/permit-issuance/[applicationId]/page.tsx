@@ -6,6 +6,7 @@ import {
   preparePermitIssuance,
   releasePermitIssuance,
 } from "@/lib/bplo-permit-issuance";
+import { canBploPrintDocument, getPrintableDocumentType } from "@/lib/printable-documents";
 import { DetailHeader } from "@/components/ui/detail-header";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
@@ -73,6 +74,24 @@ export default async function PermitIssuanceDetailPage({
   const detail = await getPermitIssuanceDetail(applicationId);
   if (!detail) notFound();
 
+  const printEligibility = canBploPrintDocument({
+    id: detail.application.id,
+    applicantId: "bplo-context",
+    applicationType: detail.application.applicationType,
+    status: detail.application.rawStatus,
+    permitIssuance: {
+      id: detail.issuance.id,
+      documentNumber: detail.issuance.documentNumber,
+      status: detail.issuance.status,
+    },
+    payment: {
+      hasVerifiedPaymentReference: detail.paymentSummary.paymentVerificationStatus === "VERIFIED",
+    },
+  });
+  const printableType = getPrintableDocumentType(detail.application.applicationType);
+  const isBusinessPermit = printableType === "BUSINESS_PERMIT";
+  const isClosureCertificate = printableType === "BUSINESS_CLOSURE_CERTIFICATE";
+
   return (
     <section className="space-y-6">
       <DetailHeader
@@ -131,6 +150,41 @@ export default async function PermitIssuanceDetailPage({
           <p className="mt-1 text-sm text-blue-800">
             This preview reflects the current document output view and does not alter permit issuance logic.
           </p>
+          {isBusinessPermit && printEligibility.canPrint ? (
+            <div className="mt-3">
+              <Link
+                href={`/bplo/permit-issuance/${detail.application.id}/print`}
+                className={actionButtonStyles("primary", "sm")}
+              >
+                Open Business Permit Print Preview
+              </Link>
+            </div>
+          ) : null}
+          {isClosureCertificate && printEligibility.canPrint ? (
+            <div className="mt-3">
+              <Link
+                href={`/bplo/permit-issuance/${detail.application.id}/closure-print`}
+                className={actionButtonStyles("primary", "sm")}
+              >
+                Open Closure Certificate Print Preview
+              </Link>
+            </div>
+          ) : null}
+          {!isBusinessPermit ? (
+            <p className="mt-3 text-sm font-medium text-blue-900">
+              Business Permit printing is disabled for closure applications.
+            </p>
+          ) : null}
+          {isBusinessPermit && !printEligibility.canPrint ? (
+            <p className="mt-3 text-sm font-medium text-blue-900">
+              Print preview unavailable until issuance is eligible for permit printing.
+            </p>
+          ) : null}
+          {isClosureCertificate && !printEligibility.canPrint ? (
+            <p className="mt-3 text-sm font-medium text-blue-900">
+              Print preview unavailable until issuance is eligible for closure certificate printing.
+            </p>
+          ) : null}
         </div>
       </SectionCard>
 
