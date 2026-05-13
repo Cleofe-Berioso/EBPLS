@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { getPaymentReferencesFromFormData } from "@/lib/payment-reference";
@@ -196,7 +197,7 @@ export interface SuperAdminUserRow {
   id: string;
   name: string;
   email: string;
-  role: "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+  role: "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
   status: "ACTIVE" | "DISABLED";
   createdAt: string;
   updatedAt: string;
@@ -207,6 +208,8 @@ export interface SuperAdminUserSummary {
   applicants: number;
   bploAccounts: number;
   superAdmins: number;
+  departmentHeads: number;
+  jitInspectors: number;
   activeUsers: number;
   disabledUsers: number;
 }
@@ -289,7 +292,8 @@ async function computeTotals() {
   };
 }
 
-export async function getSuperAdminDashboardSummary(): Promise<SuperAdminDashboardSummary> {
+// Cached query for dashboard summary - deduplicates per-request
+const getCachedSuperAdminDashboardSummary = cache(async () => {
   const [
     totalApplications,
     byStatus,
@@ -312,6 +316,10 @@ export async function getSuperAdminDashboardSummary(): Promise<SuperAdminDashboa
     totalAssessedAmount: totals.totalAssessedAmount,
     totalRevenueEstimate: totals.totalRevenueEstimate,
   };
+});
+
+export async function getSuperAdminDashboardSummary(): Promise<SuperAdminDashboardSummary> {
+  return getCachedSuperAdminDashboardSummary();
 }
 
 export async function listSuperAdminApplications(
@@ -628,11 +636,13 @@ export async function listSuperAdminUsers(filters?: {
 }
 
 export async function getSuperAdminUserSummary(): Promise<SuperAdminUserSummary> {
-  const [totalUsers, applicants, bploAccounts, superAdmins, activeUsers] = await Promise.all([
+  const [totalUsers, applicants, bploAccounts, superAdmins, departmentHeads, jitInspectors, activeUsers] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { role: "APPLICANT" } }),
     prisma.user.count({ where: { role: "BPLO" } }),
     prisma.user.count({ where: { role: "SUPER_ADMIN" } }),
+    prisma.user.count({ where: { role: "DEPARTMENT_HEAD" } }),
+    prisma.user.count({ where: { role: "JIT" } }),
     prisma.user.count({ where: { isActive: true } }),
   ]);
 
@@ -641,12 +651,15 @@ export async function getSuperAdminUserSummary(): Promise<SuperAdminUserSummary>
     applicants,
     bploAccounts,
     superAdmins,
+    departmentHeads,
+    jitInspectors,
     activeUsers,
     disabledUsers: totalUsers - activeUsers,
   };
 }
 
-export async function getSuperAdminReportsSummary(): Promise<SuperAdminReportsSummary> {
+// Cached query for reports summary - deduplicates per-request
+const getCachedSuperAdminReportsSummary = cache(async (): Promise<SuperAdminReportsSummary> => {
   const [statusCounts, typeCounts, totals, releasedPermits, closureCertificates, bploActivityCount] =
     await Promise.all([
       countStatuses(),
@@ -680,4 +693,8 @@ export async function getSuperAdminReportsSummary(): Promise<SuperAdminReportsSu
     closureCertificates,
     bploActivityCount,
   };
+});
+
+export async function getSuperAdminReportsSummary(): Promise<SuperAdminReportsSummary> {
+  return getCachedSuperAdminReportsSummary();
 }

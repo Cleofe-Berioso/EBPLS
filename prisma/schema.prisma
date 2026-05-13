@@ -13,6 +13,8 @@ enum Role {
   APPLICANT
   BPLO
   SUPER_ADMIN
+  DEPARTMENT_HEAD
+  JIT
 }
 
 enum ApplicationType {
@@ -25,11 +27,15 @@ enum ApplicationStatus {
   DRAFT
   SUBMITTED
   UNDER_REVIEW
+  DEPARTMENT_HEAD_REVIEW
+  DEPARTMENT_HEAD_APPROVED
   ASSESSED
   APPROVED_FOR_PAYMENT
   PAID
   FOR_RELEASE
   RELEASED
+  REVOCATION_REVIEW
+  REVOKED
   RETURNED_FOR_CORRECTION
   REJECTED
 }
@@ -50,6 +56,8 @@ model User {
   reviewedPaymentReferences PaymentReference[] @relation("PaymentReviewedBy")
   permitsPrepared PermitIssuance[] @relation("PermitPreparedBy")
   permitsReleased PermitIssuance[] @relation("PermitReleasedBy")
+  inspections      Inspection[]     @relation("InspectionInspector")
+  inspectionDecisions Inspection[]  @relation("InspectionDecider")
   feeConfigurationUpdates FeeConfigurationItem[] @relation("FeeConfigUpdatedBy")
   systemFeeSettingUpdates SystemFeeSetting[] @relation("SystemFeeSettingUpdatedBy")
   renewalExtensionUpdates RenewalExtension[] @relation("RenewalExtensionUpdatedBy")
@@ -100,12 +108,14 @@ model BusinessRecord {
   applicant    User                 @relation(fields: [applicantId], references: [id], onDelete: Cascade)
   applications BusinessApplication[]
   location     BusinessLocation?
+  inspections  Inspection[]
 
   @@index([applicantId])
 }
 
 enum BusinessRecordStatus {
   ACTIVE
+  INACTIVE
   CLOSED
 }
 
@@ -158,6 +168,7 @@ model BusinessApplication {
   feeAssessment FeeAssessment?
   permitIssuance PermitIssuance?
   smsDeliveryLogs SmsDeliveryLog[]
+  inspections   Inspection[]
 
   @@index([applicantId, createdAt])
   @@index([applicantId, status])
@@ -166,6 +177,55 @@ model BusinessApplication {
 enum PermitDocumentType {
   BUSINESS_PERMIT
   CLOSURE_CERTIFICATE
+}
+
+enum InspectionComplianceStatus {
+  COMPLIANT
+  NON_COMPLIANT
+}
+
+enum InspectionStatus {
+  COMPLIANT
+  NON_COMPLIANT
+  REVOCATION_REVIEW
+  REVOCATION_DENIED
+  REVOKED
+}
+
+enum RevocationDecision {
+  APPROVED
+  DENIED
+}
+
+model Inspection {
+  id                  String                     @id @default(cuid())
+  businessRecordId    String
+  applicationId       String?
+  inspectorId         String
+  complianceStatus    InspectionComplianceStatus
+  status              InspectionStatus
+  comment             String?
+  evidenceFileName    String?
+  evidenceStoragePath String?
+  evidenceMimeType    String?
+  evidenceSizeBytes   Int?
+  revocationDecision  RevocationDecision?
+  revocationRemarks   String?
+  decidedById         String?
+  decidedAt           DateTime?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  businessRecord BusinessRecord       @relation(fields: [businessRecordId], references: [id], onDelete: Cascade)
+  application    BusinessApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  inspector      User                 @relation("InspectionInspector", fields: [inspectorId], references: [id], onDelete: Restrict)
+  decidedBy      User?                @relation("InspectionDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([businessRecordId, createdAt])
+  @@index([applicationId, createdAt])
+  @@index([inspectorId, createdAt])
+  @@index([decidedById, createdAt])
+  @@index([status, createdAt])
 }
 
 enum PermitIssuanceStatus {

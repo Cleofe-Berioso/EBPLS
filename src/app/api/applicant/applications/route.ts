@@ -8,6 +8,11 @@ import {
 import { requireApplicantSession } from "@/lib/applicant-api";
 import type { SaveApplicationInput } from "@/lib/applicant-types";
 
+interface SubmitFileInput {
+  documentName: string;
+  file: File;
+}
+
 function logApplicantApi(event: string, data: Record<string, unknown>) {
   if (process.env.NODE_ENV !== "production") {
     console.info(`[ApplicantApplicationsAPI] ${event}`, data);
@@ -31,14 +36,40 @@ export async function POST(req: Request) {
   }
 
   let payload: SaveApplicationInput;
+  let submitFiles: SubmitFileInput[] = [];
   try {
-    payload = (await req.json()) as SaveApplicationInput;
+    const contentType = req.headers.get("content-type") ?? "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      const payloadRaw = formData.get("payload");
+
+      if (typeof payloadRaw !== "string") {
+        return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      }
+
+      payload = JSON.parse(payloadRaw) as SaveApplicationInput;
+
+      const documentNames = formData.getAll("documentNames").filter((value): value is string => typeof value === "string");
+      const documentFiles = formData.getAll("documentFiles").filter((value): value is File => value instanceof File);
+
+      submitFiles = documentFiles.map((file, index) => ({
+        file,
+        documentName: (documentNames[index] ?? "").trim(),
+      }));
+    } else {
+      payload = (await req.json()) as SaveApplicationInput;
+    }
   } catch {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
   if (!payload?.applicationType || !payload?.formData || !payload?.mode) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  if (payload.mode === "SUBMIT" && submitFiles.some((entry) => !entry.documentName || !(entry.file instanceof File))) {
+    return NextResponse.json({ error: "Invalid document upload metadata" }, { status: 400 });
   }
 
   if (!["NEW", "RENEWAL", "CLOSURE"].includes(payload.applicationType)) {
@@ -58,7 +89,7 @@ export async function POST(req: Request) {
   });
 
   try {
-    const saved = await saveApplicantApplication(session.user.id, payload);
+    const saved = await saveApplicantApplication(session.user.id, payload, submitFiles);
     logApplicantApi("success", {
       userId: session.user.id,
       userEmail: session.user.email ?? null,

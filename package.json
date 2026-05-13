@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest run --coverage",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -39,6 +42,8 @@
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "typescript": "^5"
+  ,
+    "vitest": "^1.1.4"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

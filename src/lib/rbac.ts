@@ -7,6 +7,8 @@ export const ROLE_HOME: Record<Role, string> = {
   APPLICANT: "/applicant/dashboard",
   BPLO: "/bplo/dashboard",
   SUPER_ADMIN: "/superadmin/dashboard",
+  DEPARTMENT_HEAD: "/department-head/dashboard",
+  JIT: "/jit/dashboard",
 };
 
 /**
@@ -16,11 +18,15 @@ const ROUTE_PERMISSIONS: { prefix: string; roles: Role[] }[] = [
   { prefix: "/applicant", roles: ["APPLICANT"] },
   { prefix: "/bplo", roles: ["BPLO"] },
   { prefix: "/superadmin", roles: ["SUPER_ADMIN"] },
+  { prefix: "/department-head", roles: ["DEPARTMENT_HEAD"] },
+  { prefix: "/jit", roles: ["JIT"] },
 ];
 
 /**
  * Workflow ownership policy:
- * - BPLO handles operational workflow actions.
+ * - BPLO handles initial application review.
+ * - DEPARTMENT_HEAD reviews applications for approval and revocation decisions.
+ * - JIT performs business compliance inspections.
  * - SUPER_ADMIN is view-only for operations and may manage configuration.
  */
 export type WorkflowAction =
@@ -32,7 +38,10 @@ export type WorkflowAction =
   | "APPROVE_APPLICATION"
   | "REJECT_APPLICATION"
   | "ASSESS_FEES"
-  | "VERIFY_PAYMENTS";
+  | "VERIFY_PAYMENTS"
+  | "INSPECT_BUSINESS"
+  | "VIEW_REVOCATION_QUEUE"
+  | "APPROVE_REVOCATION";
 
 const ROLE_WORKFLOW_PERMISSIONS: Record<Role, WorkflowAction[]> = {
   APPLICANT: [],
@@ -52,6 +61,20 @@ const ROLE_WORKFLOW_PERMISSIONS: Record<Role, WorkflowAction[]> = {
     "VIEW_MAP",
     "VIEW_REPORTS_DASHBOARD",
     "MANAGE_CONFIGURATION",
+  ],
+  DEPARTMENT_HEAD: [
+    "VIEW_APPLICATIONS",
+    "VIEW_BUSINESS_RECORDS",
+    "VIEW_MAP",
+    "APPROVE_APPLICATION",
+    "REJECT_APPLICATION",
+    "VIEW_REVOCATION_QUEUE",
+    "APPROVE_REVOCATION",
+  ],
+  JIT: [
+    "VIEW_BUSINESS_RECORDS",
+    "VIEW_MAP",
+    "INSPECT_BUSINESS",
   ],
 };
 

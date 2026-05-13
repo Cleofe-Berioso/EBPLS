@@ -10,11 +10,15 @@ type DbApplicationStatus =
   | "DRAFT"
   | "SUBMITTED"
   | "UNDER_REVIEW"
+  | "DEPARTMENT_HEAD_REVIEW"
+  | "DEPARTMENT_HEAD_APPROVED"
   | "ASSESSED"
   | "APPROVED_FOR_PAYMENT"
   | "PAID"
   | "FOR_RELEASE"
   | "RELEASED"
+  | "REVOCATION_REVIEW"
+  | "REVOKED"
   | "RETURNED_FOR_CORRECTION"
   | "REJECTED";
 
@@ -27,6 +31,17 @@ const RENEWAL_SURCHARGE_LABEL = "Renewal Surcharge";
 const RENEWAL_INTEREST_LABEL = "Renewal Interest";
 const LIQUOR_TOBACCO_SURCHARGE_LABEL = "Liquor/Tobacco Surcharge (25%)";
 const CLOSURE_CERTIFICATE_FEE_LABEL = "Closure Certificate Fee";
+
+const ASSESSMENT_QUEUE_STATUSES: DbApplicationStatus[] = ["DEPARTMENT_HEAD_APPROVED", "ASSESSED"];
+const ASSESSMENT_DETAIL_ALLOWED_STATUSES: DbApplicationStatus[] = [
+  "DEPARTMENT_HEAD_APPROVED",
+  "ASSESSED",
+  "APPROVED_FOR_PAYMENT",
+];
+const ASSESSMENT_MUTATION_ALLOWED_STATUSES: DbApplicationStatus[] = [
+  "DEPARTMENT_HEAD_APPROVED",
+  "ASSESSED",
+];
 
 export interface AssessmentFeeRow {
   id: string;
@@ -306,13 +321,13 @@ function buildSuggestedLineItems(
   return items;
 }
 
-function toReleasePaymentAmount(annualAssessedAmount: number, frequency: PaymentFrequency): number {
+export function toReleasePaymentAmount(annualAssessedAmount: number, frequency: PaymentFrequency): number {
   // TOP release now requires full payment amount regardless of installment preference metadata.
   void frequency;
   return annualAssessedAmount;
 }
 
-function resolveApplicantPaymentFrequency(formData: unknown): PaymentFrequency | null {
+export function resolveApplicantPaymentFrequency(formData: unknown): PaymentFrequency | null {
   const maybeForm = (formData ?? {}) as Record<string, unknown>;
   const raw = maybeForm.paymentFrequency;
   if (typeof raw !== "string") return null;
@@ -342,7 +357,7 @@ function sanitizeCustomLineItems(lineItems: FeeLineItemInput[]): Array<{ descrip
     }));
 }
 
-function buildAutomaticRenewalCharges(baseMayorPermitFee: number, overdueMonths: number, settings: any) {
+export function buildAutomaticRenewalCharges(baseMayorPermitFee: number, overdueMonths: number, settings: any) {
   if (overdueMonths <= 12 || baseMayorPermitFee <= 0) {
     return { surcharge: 0, interest: 0 };
   }
@@ -360,7 +375,7 @@ function buildAutomaticRenewalCharges(baseMayorPermitFee: number, overdueMonths:
   };
 }
 
-function buildAutomaticLiquorTobaccoSurcharge(
+export function buildAutomaticLiquorTobaccoSurcharge(
   applicationType: "NEW" | "RENEWAL" | "CLOSURE",
   baseMayorPermitFee: number,
   isLiquorOrTobacco: boolean,
@@ -514,7 +529,7 @@ async function getAssessmentApplication(applicationId: string, dbClient: any = p
 
 export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[]> {
   const rows = await prisma.businessApplication.findMany({
-    where: { status: "ASSESSED" },
+    where: { status: { in: ASSESSMENT_QUEUE_STATUSES } },
     include: {
       applicant: { select: { name: true, email: true } },
       businessRecord: { select: { businessName: true } },
@@ -540,7 +555,7 @@ export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[
 
 export async function getApplicationForAssessment(applicationId: string): Promise<AssessmentDetail | null> {
   const row = await getAssessmentApplication(applicationId);
-  if (!row || row.status !== "ASSESSED") {
+  if (!row || !ASSESSMENT_DETAIL_ALLOWED_STATUSES.includes(row.status as DbApplicationStatus)) {
     return null;
   }
 
@@ -623,48 +638,93 @@ export async function getApplicationForAssessment(applicationId: string): Promis
   };
 }
 
+function canMutateAssessment(status: DbApplicationStatus): boolean {
+  return ASSESSMENT_MUTATION_ALLOWED_STATUSES.includes(status);
+}
+
+function moveToAssessedWhenNeeded(status: DbApplicationStatus): DbApplicationStatus {
+  return status === "DEPARTMENT_HEAD_APPROVED" ? "ASSESSED" : status;
+}
+
 async function persistAssessment(
   applicationId: string,
   bploUserId: string,
   input: AssessmentInput,
   mode: "DRAFT" | "GENERATED"
 ): Promise<SavedAssessment> {
+  // Move slow operations outside the transaction to avoid timeout
   const sanitized = sanitizeAssessmentInput(input);
+  const runtimeSettings = await getRuntimeFeeSettings();
 
-  return prisma.$transaction(async (tx: any) => {
+  // Fetch application outside transaction for pre-validation
+  const preCheckApplication = await prisma.businessApplication.findUnique({
+    where: { id: applicationId },
+    select: { id: true, status: true, applicationType: true, formData: true, feeAssessment: { select: { id: true, assessmentNumber: true, status: true } } },
+  });
+
+  if (!preCheckApplication) {
+    throw new Error("Application not found");
+  }
+
+  if (!canMutateAssessment(preCheckApplication.status as DbApplicationStatus)) {
+    throw new Error(
+      mode === "GENERATED"
+        ? `Tax Order of Payment can only be generated for DEPARTMENT_HEAD_APPROVED or ASSESSED applications. Current status: ${preCheckApplication.status}`
+        : `Assessment draft can only be saved for DEPARTMENT_HEAD_APPROVED or ASSESSED applications. Current status: ${preCheckApplication.status}`
+    );
+  }
+
+  const existing = preCheckApplication.feeAssessment
+    ? {
+        id: preCheckApplication.feeAssessment.id,
+        assessmentNumber: preCheckApplication.feeAssessment.assessmentNumber,
+        status: preCheckApplication.feeAssessment.status,
+      }
+    : null;
+
+  if (existing?.status === "GENERATED" && mode === "DRAFT") {
+    throw new Error("Tax Order of Payment has already been generated. Cannot revert to draft.");
+  }
+
+  const applicantPaymentFrequency = resolveApplicantPaymentFrequency(preCheckApplication.formData);
+  if (!applicantPaymentFrequency) {
+    throw new Error("Payment frequency must be selected by the applicant before assessment finalization.");
+  }
+
+  // Validate and compute totals outside transaction
+  validateCustomLineItems(sanitized.lineItems);
+  const customLineItems = sanitizeCustomLineItems(sanitized.lineItems);
+
+  // Generate assessment number outside transaction
+  const assessmentNumber = existing?.assessmentNumber ?? (await generateAssessmentNumber(prisma));
+
+  const savedAssessmentId = await prisma.$transaction(async (tx: any) => {
+    // Fetch full application inside transaction for write consistency
     const application = await getAssessmentApplication(applicationId, tx);
     if (!application) {
       throw new Error("Application not found");
     }
 
-    if (application.status !== "ASSESSED") {
+    // Re-validate status hasn't changed
+    if (!canMutateAssessment(application.status as DbApplicationStatus)) {
       throw new Error(
         mode === "GENERATED"
-          ? `Tax Order of Payment can only be generated for ASSESSED applications. Current status: ${application.status}`
-          : "Assessment can only be saved for ASSESSED applications"
+          ? `Tax Order of Payment can only be generated for DEPARTMENT_HEAD_APPROVED or ASSESSED applications. Current status: ${application.status}`
+          : `Assessment draft can only be saved for DEPARTMENT_HEAD_APPROVED or ASSESSED applications. Current status: ${application.status}`
       );
     }
 
-    const existing = application.feeAssessment
-      ? {
-          id: application.feeAssessment.id,
-          assessmentNumber: application.feeAssessment.assessmentNumber,
-          status: application.feeAssessment.status,
-        }
-      : null;
+    const initialStatus = application.status as DbApplicationStatus;
+    const workingStatus = moveToAssessedWhenNeeded(initialStatus);
 
-    if (existing?.status === "GENERATED" && mode === "DRAFT") {
-      throw new Error("Tax Order of Payment has already been generated. Cannot revert to draft.");
+    if (workingStatus !== initialStatus) {
+      assertStatusTransition(initialStatus, "ASSESSED");
+      await tx.businessApplication.update({
+        where: { id: applicationId },
+        data: { status: "ASSESSED" },
+      });
     }
 
-    const runtimeSettings = await getRuntimeFeeSettings();
-    const applicantPaymentFrequency = resolveApplicantPaymentFrequency(application.formData);
-    if (!applicantPaymentFrequency) {
-      throw new Error("Payment frequency must be selected by the applicant before assessment finalization.");
-    }
-
-    validateCustomLineItems(sanitized.lineItems);
-    const customLineItems = sanitizeCustomLineItems(sanitized.lineItems);
     const overdueMonths = resolveOverdueMonths(application);
     const isLiquorOrTobacco = resolveLiquorOrTobacco(application.formData);
     const totals = buildAssessmentTotals(
@@ -682,7 +742,6 @@ async function persistAssessment(
 
     const annualAssessedAmount = totals.totalAmount;
     const releasePaymentAmount = toReleasePaymentAmount(annualAssessedAmount, applicantPaymentFrequency);
-    const assessmentNumber = existing?.assessmentNumber ?? (await generateAssessmentNumber(tx));
     const now = new Date();
 
     const saved = await tx.feeAssessment.upsert({
@@ -754,10 +813,23 @@ async function persistAssessment(
     }
 
     if (mode === "GENERATED") {
-      assertStatusTransition(application.status, "APPROVED_FOR_PAYMENT");
+      assertStatusTransition(workingStatus, "APPROVED_FOR_PAYMENT");
       await tx.businessApplication.update({
         where: { id: applicationId },
         data: { status: "APPROVED_FOR_PAYMENT" },
+      });
+    }
+
+    if (workingStatus !== initialStatus) {
+      await tx.applicationHistory.create({
+        data: {
+          applicationId,
+          actorId: bploUserId,
+          actorRole: "BPLO",
+          fromStatus: initialStatus,
+          toStatus: "ASSESSED",
+          remarks: "Assessment processing started after Department Head approval.",
+        },
       });
     }
 
@@ -766,8 +838,8 @@ async function persistAssessment(
         applicationId,
         actorId: bploUserId,
         actorRole: "BPLO",
-        fromStatus: application.status,
-        toStatus: mode === "GENERATED" ? "APPROVED_FOR_PAYMENT" : application.status,
+        fromStatus: workingStatus,
+        toStatus: mode === "GENERATED" ? "APPROVED_FOR_PAYMENT" : workingStatus,
         remarks:
           mode === "GENERATED"
             ? `Tax Order of Payment generated. TOP No.: ${assessmentNumber}, Total Amount Due: ₱${totals.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
@@ -775,17 +847,21 @@ async function persistAssessment(
       },
     });
 
-    const savedWithLineItems = await tx.feeAssessment.findUniqueOrThrow({
-      where: { id: saved.id },
-      include: {
-        lineItems: {
-          orderBy: { sortOrder: "asc" },
-        },
-      },
-    });
+    // Return saved ID for post-transaction fetch
+    return saved.id;
+  }, { maxWait: 10000, timeout: 10000 });
 
-    return toSavedAssessment(savedWithLineItems);
+  // Fetch complete assessment after transaction completes
+  const savedWithLineItems = await prisma.feeAssessment.findUniqueOrThrow({
+    where: { id: savedAssessmentId },
+    include: {
+      lineItems: {
+        orderBy: { sortOrder: "asc" },
+      },
+    },
   });
+
+  return toSavedAssessment(savedWithLineItems);
 }
 
 export async function saveAssessmentDraft(

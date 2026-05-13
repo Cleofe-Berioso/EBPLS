@@ -1,13 +1,16 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi, isEditableStatus } from "@/lib/application-mappers";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
 import { toMoneyNumber } from "@/lib/money";
+import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import {
   applyLockedBusinessFields,
   isCorporation,
   isCorporationOwnershipClassification,
   normalizeBusinessInfo,
 } from "@/lib/business-rules";
+import { isWithinEbMagalona } from "@/lib/business-location";
 import type {
   ApplicantApplicationRow,
   ApplicationDocumentInput,
@@ -56,6 +59,19 @@ interface SafeApplicantDocument {
   mimeType: string;
   sizeBytes: number;
   uploadedAt: Date;
+}
+
+interface SubmitFileInput {
+  documentName: string;
+  file: File;
+}
+
+interface StagedSubmitDocument {
+  documentName: string;
+  fileName: string;
+  storagePath: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 function toSafeApplicantDocument(doc: {
@@ -119,6 +135,9 @@ const ELIGIBLE_EXISTING_BUSINESS_STATUSES: DbApplicationStatus[] = [
   "RELEASED",
 ];
 
+const RENEWAL_REVOKED_MESSAGE =
+  "Renewal is not allowed because this business permit has been revoked. Re-application is required.";
+
 async function assertEligibleBusinessRecord(
   applicantId: string,
   input: SaveApplicationInput
@@ -156,12 +175,22 @@ async function assertEligibleBusinessRecord(
         },
         take: 1,
       },
+      revokedApplications: {
+        where: {
+          status: "REVOKED",
+        },
+        select: {
+          id: true,
+        },
+        take: 1,
+      },
     } as any,
   })) as unknown as {
     id: string;
-    businessStatus?: "ACTIVE" | "CLOSED" | null;
+    businessStatus?: "ACTIVE" | "INACTIVE" | "CLOSED" | null;
     location?: { status: string } | null;
     applications: Array<{ id: string }>;
+    revokedApplications: Array<{ id: string }>;
   } | null;
 
   if (!businessRecord) {
@@ -169,6 +198,13 @@ async function assertEligibleBusinessRecord(
       "Selected business record was not found for this applicant.",
       403
     );
+  }
+
+  if (
+    input.applicationType === "RENEWAL" &&
+    (businessRecord.businessStatus === "INACTIVE" || businessRecord.revokedApplications.length > 0)
+  ) {
+    throw new ApplicantEligibilityError(RENEWAL_REVOKED_MESSAGE, 409);
   }
 
   if (businessRecord.businessStatus === "CLOSED") {
@@ -246,6 +282,26 @@ function sanitizeDocuments(documents: SaveApplicationInput["documents"]) {
     }));
 }
 
+function sanitizeSubmitFiles(submitFiles: SubmitFileInput[]) {
+  const sanitized = submitFiles
+    .filter((entry) => entry.documentName.trim().length > 0)
+    .map((entry) => ({
+      documentName: entry.documentName.trim(),
+      file: entry.file,
+    }));
+
+  const seen = new Set<string>();
+  for (const entry of sanitized) {
+    const normalizedName = entry.documentName.toLowerCase();
+    if (seen.has(normalizedName)) {
+      throw new Error(`Duplicate uploaded document entry for ${entry.documentName}.`);
+    }
+    seen.add(normalizedName);
+  }
+
+  return sanitized;
+}
+
 function buildBusinessInfoFromRecord(record: any): BusinessInfo {
   return normalizeBusinessInfo({
     businessType: record.businessType as BusinessInfo["businessType"],
@@ -261,6 +317,8 @@ function buildBusinessInfoFromRecord(record: any): BusinessInfo {
     phone: record.phone,
     mainOfficeAddress: record.mainOfficeAddress,
     businessAddress: record.businessAddress,
+    businessLatitude: record.location?.latitude ?? null,
+    businessLongitude: record.location?.longitude ?? null,
     sameAsMainOffice: record.sameAsMainOffice,
     businessArea: record.businessArea ?? "",
     totalFloorArea: record.totalFloorArea ?? "",
@@ -278,6 +336,7 @@ function buildBusinessInfoFromRecord(record: any): BusinessInfo {
     assetSize: record.assetSize ?? "",
     isMarket: Boolean(record.isMarket),
     isAgriculture: Boolean(record.isAgriculture),
+    isLiquorOrTobacco: Boolean(record.isLiquorOrTobacco),
   });
 }
 
@@ -301,6 +360,18 @@ function validateSubmitPayload(
   normalizedFormData: BusinessInfo,
   mergedDocuments: ApplicationDocumentInput[]
 ) {
+  const pinRequired = input.applicationType === "NEW" || input.applicationType === "RENEWAL";
+
+  if (pinRequired) {
+    if (
+      typeof normalizedFormData.businessLatitude !== "number" ||
+      typeof normalizedFormData.businessLongitude !== "number" ||
+      !isWithinEbMagalona(normalizedFormData.businessLatitude, normalizedFormData.businessLongitude)
+    ) {
+      throw new Error("Please pin the business location inside EB Magalona.");
+    }
+  }
+
   const missingFields = REQUIRED_FIELD_KEYS.filter((key) => {
     const value = normalizedFormData[key];
     return typeof value !== "string" || value.trim().length === 0;
@@ -377,27 +448,52 @@ function validateSubmitPayload(
     mergedDocuments.map((doc) => doc.documentName)
   );
 
-  if (missingFields.length || missingDocuments.length) {
+  const invalidDocumentMetadata = requiredDocs
+    .filter((requiredDoc) => {
+      const candidates = mergedDocuments.filter(
+        (doc) => doc.documentName.trim().toLowerCase() === requiredDoc.trim().toLowerCase()
+      );
+
+      if (candidates.length === 0) return false;
+
+      return !candidates.some(
+        (doc) =>
+          doc.fileName?.trim() &&
+          doc.mimeType?.trim() &&
+          typeof doc.sizeBytes === "number" &&
+          doc.sizeBytes > 0
+      );
+    })
+    .map((doc) => `${doc} (invalid file metadata)`);
+
+  if (missingFields.length || missingDocuments.length || invalidDocumentMetadata.length) {
     throw new SubmitValidationError({
-      missingFields,
+      missingFields: [...missingFields, ...invalidDocumentMetadata],
       missingDocuments,
     });
   }
 }
 
-export async function listApplicantApplications(applicantId: string): Promise<ApplicantApplicationRow[]> {
-  const applications = await prisma.businessApplication.findMany({
-    where: { applicantId },
-    include: {
-      documents: true,
-      businessRecord: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+// Cached query for applicant applications - deduplicates per-request
+const getCachedApplicantApplications = cache(
+  async (applicantId: string): Promise<ApplicantApplicationRow[]> => {
+    const applications = await prisma.businessApplication.findMany({
+      where: { applicantId },
+      include: {
+        documents: true,
+        businessRecord: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
-  return (applications as ApplicationWithDocs[]).map(mapApplicationToRow);
+    return (applications as ApplicationWithDocs[]).map(mapApplicationToRow);
+  }
+);
+
+export async function listApplicantApplications(applicantId: string): Promise<ApplicantApplicationRow[]> {
+  return getCachedApplicantApplications(applicantId);
 }
 
 export async function getApplicantApplicationDetail(applicantId: string, applicationId: string) {
@@ -468,11 +564,18 @@ export async function getApplicantApplicationDetail(applicantId: string, applica
   };
 }
 
-export async function saveApplicantApplication(applicantId: string, input: SaveApplicationInput) {
+export async function saveApplicantApplication(
+  applicantId: string,
+  input: SaveApplicationInput,
+  submitFiles: SubmitFileInput[] = []
+) {
   const nextStatus = input.mode === "SUBMIT" ? "SUBMITTED" : "DRAFT";
   const documents = sanitizeDocuments(input.documents);
+  const normalizedSubmitFiles = sanitizeSubmitFiles(submitFiles);
 
-  if (input.mode === "SUBMIT") {
+  if (input.applicationType === "RENEWAL") {
+    await assertEligibleBusinessRecord(applicantId, input);
+  } else if (input.mode === "SUBMIT") {
     await assertEligibleBusinessRecord(applicantId, input);
   }
 
@@ -499,6 +602,13 @@ export async function saveApplicantApplication(applicantId: string, input: SaveA
       })
     : [];
 
+  const submitFileDocuments: ApplicationDocumentInput[] = normalizedSubmitFiles.map((entry) => ({
+    documentName: entry.documentName,
+    fileName: entry.file.name,
+    mimeType: entry.file.type,
+    sizeBytes: entry.file.size,
+  }));
+
   const mergedDocuments: ApplicationDocumentInput[] = [
     ...existingDocuments.map((doc: any) => ({
       id: doc.id,
@@ -507,10 +617,10 @@ export async function saveApplicantApplication(applicantId: string, input: SaveA
       storagePath: doc.storagePath,
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
+      uploadedAt: doc.uploadedAt ? doc.uploadedAt.toISOString() : undefined,
     })),
-    ...documents.filter(
-      (doc) => Boolean(doc.id) || (Boolean(doc.storagePath) && Boolean(doc.mimeType) && typeof doc.sizeBytes === "number")
-    ),
+    ...documents,
+    ...submitFileDocuments,
   ];
 
   const sourceBusinessInfo = await getApplicantBusinessRecordSource(applicantId, input.businessRecordId);
@@ -524,25 +634,170 @@ export async function saveApplicantApplication(applicantId: string, input: SaveA
     validateSubmitPayload(input, normalizedFormData, mergedDocuments);
   }
 
-  if (existing) {
-    const updated = await prisma.$transaction(async (tx: any) => {
-      const row = await tx.businessApplication.update({
-        where: { id: existing.id },
-        data: {
+  const persistedPayloadDocuments = documents.filter(
+    (doc) =>
+      typeof doc.storagePath === "string" &&
+      doc.storagePath.trim().length > 0 &&
+      typeof doc.mimeType === "string" &&
+      doc.mimeType.trim().length > 0 &&
+      typeof doc.sizeBytes === "number" &&
+      doc.sizeBytes > 0
+  );
+
+  const stagedDocuments: StagedSubmitDocument[] = [];
+  const replacedStoragePaths: string[] = [];
+
+  try {
+    if (input.mode === "SUBMIT") {
+      for (const entry of normalizedSubmitFiles) {
+        const stored = await storeApplicantDocument(entry.file);
+        stagedDocuments.push({
+          documentName: entry.documentName,
+          fileName: stored.fileName,
+          storagePath: stored.storagePath,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.sizeBytes,
+        });
+      }
+    }
+
+    const newDocumentsByName = new Map<string, StagedSubmitDocument>();
+    for (const doc of [...persistedPayloadDocuments, ...stagedDocuments]) {
+      newDocumentsByName.set(doc.documentName.toLowerCase(), {
+        documentName: doc.documentName,
+        fileName: doc.fileName,
+        storagePath: doc.storagePath ?? "",
+        mimeType: doc.mimeType ?? "",
+        sizeBytes: doc.sizeBytes ?? 0,
+      });
+    }
+
+    if (existing) {
+      const updated = await prisma.$transaction(async (tx: any) => {
+        const row = await tx.businessApplication.update({
+          where: { id: existing.id },
+          data: {
+            applicationType: input.applicationType,
+            businessRecordId: input.businessRecordId ?? null,
+            status: nextStatus,
+            formData: normalizedFormData,
+            submittedAt: input.mode === "SUBMIT" ? new Date() : null,
+          },
+        });
+
+        if (input.mode === "SUBMIT") {
+          for (const doc of newDocumentsByName.values()) {
+            const existingDoc = await tx.applicationDocument.findFirst({
+              where: {
+                applicationId: existing.id,
+                documentName: doc.documentName,
+              },
+            });
+
+            if (existingDoc) {
+              if (existingDoc.storagePath !== doc.storagePath) {
+                replacedStoragePaths.push(existingDoc.storagePath);
+              }
+
+              await tx.applicationDocument.update({
+                where: { id: existingDoc.id },
+                data: {
+                  fileName: doc.fileName,
+                  storagePath: doc.storagePath,
+                  mimeType: doc.mimeType,
+                  sizeBytes: doc.sizeBytes,
+                  uploadedAt: new Date(),
+                },
+              });
+            } else {
+              await tx.applicationDocument.create({
+                data: {
+                  applicationId: existing.id,
+                  documentName: doc.documentName,
+                  fileName: doc.fileName,
+                  storagePath: doc.storagePath,
+                  mimeType: doc.mimeType,
+                  sizeBytes: doc.sizeBytes,
+                },
+              });
+            }
+          }
+        }
+
+        await tx.applicationHistory.create({
+          data: {
+            applicationId: existing.id,
+            actorId: applicantId,
+            actorRole: "APPLICANT",
+            fromStatus: existing.status,
+            toStatus: nextStatus,
+            remarks: input.mode === "SUBMIT" ? "Applicant submitted application" : "Applicant saved draft",
+          },
+        });
+
+        return row;
+      });
+
+      for (const storagePath of replacedStoragePaths) {
+        await removeApplicantDocument(storagePath);
+      }
+
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[ApplicantSubmission] update", {
+          applicantId,
+          applicationId: updated.id,
+          applicationNumber: updated.applicationNumber,
+          mode: input.mode,
           applicationType: input.applicationType,
+          status: updated.status,
+          submittedAt: updated.submittedAt ? updated.submittedAt.toISOString() : null,
+        });
+      }
+
+      return {
+        id: updated.id,
+        applicationNumber: updated.applicationNumber,
+        status: mapDbStatusToUi(updated.status),
+        submittedAt: updated.submittedAt ? updated.submittedAt.toISOString() : null,
+      };
+    }
+
+    const applicationNumber = await generateApplicationNumber();
+
+    const created = await prisma.$transaction(async (tx: any) => {
+      const row = await tx.businessApplication.create({
+        data: {
+          applicationNumber,
+          applicantId,
           businessRecordId: input.businessRecordId ?? null,
+          applicationType: input.applicationType,
           status: nextStatus,
           formData: normalizedFormData,
           submittedAt: input.mode === "SUBMIT" ? new Date() : null,
         },
       });
 
+      if (input.mode === "SUBMIT") {
+        for (const doc of newDocumentsByName.values()) {
+          await tx.applicationDocument.create({
+            data: {
+              applicationId: row.id,
+              documentName: doc.documentName,
+              fileName: doc.fileName,
+              storagePath: doc.storagePath,
+              mimeType: doc.mimeType,
+              sizeBytes: doc.sizeBytes,
+            },
+          });
+        }
+      }
+
       await tx.applicationHistory.create({
         data: {
-          applicationId: existing.id,
+          applicationId: row.id,
           actorId: applicantId,
           actorRole: "APPLICANT",
-          fromStatus: existing.status,
+          fromStatus: null,
           toStatus: nextStatus,
           remarks: input.mode === "SUBMIT" ? "Applicant submitted application" : "Applicant saved draft",
         },
@@ -552,91 +807,29 @@ export async function saveApplicantApplication(applicantId: string, input: SaveA
     });
 
     if (process.env.NODE_ENV !== "production") {
-      console.info("[ApplicantSubmission] update", {
+      console.info("[ApplicantSubmission] create", {
         applicantId,
-        applicationId: updated.id,
-        applicationNumber: updated.applicationNumber,
+        applicationId: created.id,
+        applicationNumber: created.applicationNumber,
         mode: input.mode,
         applicationType: input.applicationType,
-        status: updated.status,
-        submittedAt: updated.submittedAt ? updated.submittedAt.toISOString() : null,
+        status: created.status,
+        submittedAt: created.submittedAt ? created.submittedAt.toISOString() : null,
       });
     }
 
     return {
-      id: updated.id,
-      applicationNumber: updated.applicationNumber,
-      status: mapDbStatusToUi(updated.status),
-      submittedAt: updated.submittedAt ? updated.submittedAt.toISOString() : null,
-    };
-  }
-
-  const applicationNumber = await generateApplicationNumber();
-
-  const created = await prisma.$transaction(async (tx: any) => {
-    const row = await tx.businessApplication.create({
-      data: {
-        applicationNumber,
-        applicantId,
-        businessRecordId: input.businessRecordId ?? null,
-        applicationType: input.applicationType,
-        status: nextStatus,
-        formData: normalizedFormData,
-        submittedAt: input.mode === "SUBMIT" ? new Date() : null,
-      },
-    });
-
-    if (documents.length) {
-      const validDocuments = documents.filter(
-        (doc) => doc.storagePath && doc.mimeType && typeof doc.sizeBytes === "number"
-      );
-
-      if (validDocuments.length) {
-        await tx.applicationDocument.createMany({
-          data: validDocuments.map((doc) => ({
-            applicationId: row.id,
-            documentName: doc.documentName,
-            fileName: doc.fileName,
-            storagePath: doc.storagePath as string,
-            mimeType: doc.mimeType as string,
-            sizeBytes: doc.sizeBytes as number,
-          })),
-        });
-      }
-    }
-
-    await tx.applicationHistory.create({
-      data: {
-        applicationId: row.id,
-        actorId: applicantId,
-        actorRole: "APPLICANT",
-        fromStatus: null,
-        toStatus: nextStatus,
-        remarks: input.mode === "SUBMIT" ? "Applicant submitted application" : "Applicant saved draft",
-      },
-    });
-
-    return row;
-  });
-
-  if (process.env.NODE_ENV !== "production") {
-    console.info("[ApplicantSubmission] create", {
-      applicantId,
-      applicationId: created.id,
+      id: created.id,
       applicationNumber: created.applicationNumber,
-      mode: input.mode,
-      applicationType: input.applicationType,
-      status: created.status,
+      status: mapDbStatusToUi(created.status),
       submittedAt: created.submittedAt ? created.submittedAt.toISOString() : null,
-    });
+    };
+  } catch (error) {
+    for (const doc of stagedDocuments) {
+      await removeApplicantDocument(doc.storagePath);
+    }
+    throw error;
   }
-
-  return {
-    id: created.id,
-    applicationNumber: created.applicationNumber,
-    status: mapDbStatusToUi(created.status),
-    submittedAt: created.submittedAt ? created.submittedAt.toISOString() : null,
-  };
 }
 
 export async function createApplicantDocument(
@@ -658,7 +851,9 @@ export async function createApplicantDocument(
   });
 
   if (!application) throw new Error("Application not found");
-  if (!isEditableStatus(application.status)) throw new Error("Only draft or returned applications can be edited");
+  if (application.status !== "SUBMITTED") {
+    throw new Error("Documents can only be uploaded after application submission.");
+  }
 
   const existing = await prisma.applicationDocument.findFirst({
     where: {
@@ -753,7 +948,8 @@ export async function deleteApplicantDocument(applicantId: string, applicationId
   return doc;
 }
 
-export async function listApplicantNotifications(applicantId: string) {
+// Cached query for applicant notifications - deduplicates per-request
+const getCachedApplicantNotifications = cache(async (applicantId: string) => {
   const apps = await prisma.businessApplication.findMany({
     where: { applicantId },
     select: {
@@ -784,6 +980,10 @@ export async function listApplicantNotifications(applicantId: string) {
   return notifications.sort((a: { createdAt: string }, b: { createdAt: string }) =>
     b.createdAt.localeCompare(a.createdAt)
   );
+});
+
+export async function listApplicantNotifications(applicantId: string) {
+  return getCachedApplicantNotifications(applicantId);
 }
 
 export async function getApplicantTopSummary(applicantId: string) {
@@ -1013,6 +1213,19 @@ export async function submitApplicantPaymentReference(
 export async function listApplicantBusinessRecords(applicantId: string) {
   const rows = await prisma.businessRecord.findMany({
     where: { applicantId },
+    include: {
+      applications: {
+        select: {
+          status: true,
+        },
+      },
+      location: {
+        select: {
+          latitude: true,
+          longitude: true,
+        },
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -1022,7 +1235,8 @@ export async function listApplicantBusinessRecords(applicantId: string) {
     id: row.id,
     registrationNumber: row.registrationNumber,
     businessName: row.businessName,
-    businessStatus: row.businessStatus as "ACTIVE" | "CLOSED",
+    businessStatus: row.businessStatus as "ACTIVE" | "INACTIVE" | "CLOSED",
+    hasRevokedPermit: row.applications.some((application: any) => application.status === "REVOKED"),
     closedAt: row.closedAt ? (row.closedAt as Date).toISOString() : null,
     businessInfo: {
       businessType: row.businessType as BusinessInfo["businessType"],
@@ -1037,6 +1251,8 @@ export async function listApplicantBusinessRecords(applicantId: string) {
       phone: row.phone,
       mainOfficeAddress: row.mainOfficeAddress,
       businessAddress: row.businessAddress,
+      businessLatitude: row.location?.latitude ?? null,
+      businessLongitude: row.location?.longitude ?? null,
       sameAsMainOffice: row.sameAsMainOffice,
       businessArea: row.businessArea ?? "",
       totalFloorArea: row.totalFloorArea ?? "",
@@ -1054,6 +1270,7 @@ export async function listApplicantBusinessRecords(applicantId: string) {
       assetSize: row.assetSize ?? "",
       isMarket: Boolean(row.isMarket),
       isAgriculture: Boolean(row.isAgriculture),
+      isLiquorOrTobacco: Boolean(row.isLiquorOrTobacco),
     } satisfies BusinessInfo,
     permitExpirationDate: row.permitExpirationDate ? (row.permitExpirationDate as Date).toISOString() : null,
   }));

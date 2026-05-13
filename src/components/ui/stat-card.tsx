@@ -47,16 +47,16 @@ export function StatCard({
 
   return (
     <div
-      className={`ui-stat-card app-surface relative overflow-hidden p-4 before:absolute before:inset-x-0 before:top-0 before:h-1 ${palette.accent} sm:p-5`}
+      className={`ui-stat-card app-surface relative overflow-hidden p-4 before:absolute before:inset-x-0 before:top-0 before:h-1 ${palette.accent} sm:p-5 lg:p-6`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="ui-muted-text text-sm font-medium text-slate-600">{title}</p>
-          <p className={`mt-2 text-2xl font-semibold tracking-tight sm:text-3xl ${palette.value}`}>{value}</p>
-          {subtitle ? <p className="ui-muted-text mt-1.5 text-xs text-slate-500">{subtitle}</p> : null}
+        <div className="min-w-0">
+          <p className="ui-muted-text text-xs sm:text-sm font-medium text-slate-600">{title}</p>
+          <p className={`mt-2 text-2xl sm:text-3xl font-semibold tracking-tight lg:text-4xl ${palette.value}`}>{value}</p>
+          {subtitle ? <p className="ui-muted-text mt-1.5 text-xs leading-5 text-slate-500">{subtitle}</p> : null}
         </div>
         {icon ? (
-          <div className={`rounded-xl p-3 ${palette.icon}`}>{icon}</div>
+          <div className={`rounded-xl p-2.5 sm:p-3 flex-shrink-0 ${palette.icon}`}>{icon}</div>
         ) : null}
       </div>
     </div>

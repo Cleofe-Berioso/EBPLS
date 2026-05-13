@@ -63,23 +63,23 @@ export default async function MyApplicationsPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-700">
               <tr>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Application Number</th>
-                <th className="px-4 py-3 font-semibold">Business Name</th>
-                <th className="px-4 py-3 font-semibold">Application Type</th>
-                <th className="px-4 py-3 font-semibold">Date Submitted</th>
-                <th className="px-4 py-3 font-semibold">Action</th>
+                <th className="px-4 py-4 font-semibold sm:px-6">Status</th>
+                <th className="px-4 py-4 font-semibold sm:px-6">Application Number</th>
+                <th className="px-4 py-4 font-semibold sm:px-6">Business Name</th>
+                <th className="px-4 py-4 font-semibold sm:px-6">Application Type</th>
+                <th className="px-4 py-4 font-semibold sm:px-6">Date Submitted</th>
+                <th className="px-4 py-4 font-semibold sm:px-6">Action</th>
               </tr>
             </thead>
             <tbody>
               {applications.map((row) => (
                 <tr key={row.id} className="border-t border-slate-100 align-top hover:bg-slate-50/60">
-                  <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                  <td className="px-4 py-3 font-medium text-slate-900">{row.applicationNumber}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.businessName}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.applicationType}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.dateSubmitted}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4 sm:px-6"><StatusBadge status={row.status} /></td>
+                  <td className="px-4 py-4 font-medium text-slate-900 sm:px-6">{row.applicationNumber}</td>
+                  <td className="px-4 py-4 text-slate-700 sm:px-6">{row.businessName}</td>
+                  <td className="px-4 py-4 text-slate-700 sm:px-6">{row.applicationType}</td>
+                  <td className="px-4 py-4 text-slate-600 sm:px-6">{row.dateSubmitted}</td>
+                  <td className="px-4 py-4 sm:px-6">
                     <div className="flex flex-wrap gap-2">
                       <Link href={`/applicant/my-applications/${row.id}`} className={actionButtonStyles("secondary", "sm")}>
                         View Details
@@ -98,7 +98,7 @@ export default async function MyApplicationsPage() {
               ))}
               {applications.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-8 text-slate-500" colSpan={6}>
+                  <td className="px-4 py-8 text-slate-500 sm:px-6" colSpan={6}>
                     No records available yet. This table will populate as applications are processed.
                   </td>
                 </tr>

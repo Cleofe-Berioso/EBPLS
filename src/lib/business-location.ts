@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { mapDbStatusToUi } from "@/lib/application-mappers";
 import {
   inferMapBusinessCategory,
   MAP_CATEGORY_META,
@@ -14,6 +15,15 @@ export const EB_MAGALONA_BOUNDS = {
   southWest: { latitude: 10.82, longitude: 122.97 },
   northEast: { latitude: 10.95, longitude: 123.11 },
 } as const;
+
+export function isWithinEbMagalona(latitude: number, longitude: number): boolean {
+  return (
+    latitude >= EB_MAGALONA_BOUNDS.southWest.latitude &&
+    latitude <= EB_MAGALONA_BOUNDS.northEast.latitude &&
+    longitude >= EB_MAGALONA_BOUNDS.southWest.longitude &&
+    longitude <= EB_MAGALONA_BOUNDS.northEast.longitude
+  );
+}
 
 type ApplicationType = "NEW" | "RENEWAL" | "CLOSURE";
 type BusinessMapApplicationType = "NEW" | "RENEWAL";
@@ -42,6 +52,7 @@ export interface ApplicantBusinessLocationRow {
 export interface BusinessLocationMapRow {
   locationId: string;
   businessRecordId: string;
+  applicationId: string;
   businessName: string;
   ownerName: string;
   businessCategory: MapBusinessCategory;
@@ -50,6 +61,9 @@ export interface BusinessLocationMapRow {
   applicationNumber: string;
   applicationType: BusinessMapApplicationType;
   permitOrCertificateNumber: string | null;
+  permitValidUntil: string | null;
+  lineOfBusiness: string | null;
+  applicationStatus: string;
   latitude: number;
   longitude: number;
   address: string | null;
@@ -66,12 +80,7 @@ export interface BusinessMapFilters {
   search?: string;
 }
 
-const VALID_BUSINESS_MAP_APP_STATUSES = [
-  "APPROVED_FOR_PAYMENT",
-  "PAID",
-  "FOR_RELEASE",
-  "RELEASED",
-] as const;
+const ACTIVE_PERMITTED_MAP_APP_STATUSES = ["RELEASED"] as const;
 
 function parseCoordinate(input: unknown, kind: "latitude" | "longitude"): number {
   const value = typeof input === "number" ? input : Number(input);
@@ -350,7 +359,52 @@ export async function submitApplicantBusinessLocation(
   return updated;
 }
 
-export async function listBploBusinessLocations(
+export async function upsertBusinessLocationForBusinessRecord(
+  dbClient: typeof prisma = prisma,
+  params: {
+    businessRecordId: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    address?: string | null;
+    barangay?: string | null;
+    submittedById: string;
+  }
+): Promise<void> {
+  const { businessRecordId, latitude, longitude, address, barangay, submittedById } = params;
+
+  if (typeof latitude !== "number" || typeof longitude !== "number") {
+    return;
+  }
+
+  if (!isWithinEbMagalona(latitude, longitude)) {
+    return;
+  }
+
+  await dbClient.businessLocation.upsert({
+    where: { businessRecordId },
+    create: {
+      businessRecordId,
+      latitude,
+      longitude,
+      address: address ?? null,
+      barangay: barangay ?? null,
+      status: "PENDING",
+      submittedById,
+    },
+    update: {
+      latitude,
+      longitude,
+      address: address ?? null,
+      barangay: barangay ?? null,
+      status: "PENDING",
+      submittedById,
+      verifiedById: null,
+      remarks: null,
+    },
+  });
+}
+
+export async function listActivePermittedBusinessLocations(
   filters: BusinessMapFilters = {}
 ): Promise<BusinessLocationMapRow[]> {
   const locations = await prisma.businessLocation.findMany({
@@ -359,7 +413,7 @@ export async function listBploBusinessLocations(
         businessStatus: "ACTIVE",
         applications: {
           some: {
-            status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
+            status: { in: [...ACTIVE_PERMITTED_MAP_APP_STATUSES] },
             applicationType: { in: ["NEW", "RENEWAL"] },
           },
         },
@@ -380,9 +434,10 @@ export async function listBploBusinessLocations(
           businessName: true,
           ownerName: true,
           lineOfBusiness: true,
+          permitExpirationDate: true,
           applications: {
             where: {
-              status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
+              status: { in: [...ACTIVE_PERMITTED_MAP_APP_STATUSES] },
               applicationType: { in: ["NEW", "RENEWAL"] },
             },
             orderBy: {
@@ -390,8 +445,10 @@ export async function listBploBusinessLocations(
             },
             take: 1,
             select: {
+              id: true,
               applicationNumber: true,
               applicationType: true,
+              status: true,
               formData: true,
               permitIssuance: {
                 select: {
@@ -432,6 +489,7 @@ export async function listBploBusinessLocations(
       return {
         locationId: location.id,
         businessRecordId: location.businessRecord.id,
+        applicationId: latestApplication.id,
         businessName: location.businessRecord.businessName,
         ownerName: location.businessRecord.ownerName,
         businessCategory: category,
@@ -440,6 +498,11 @@ export async function listBploBusinessLocations(
         applicationNumber: latestApplication.applicationNumber,
         applicationType: latestApplication.applicationType as BusinessMapApplicationType,
         permitOrCertificateNumber: latestApplication.permitIssuance?.documentNumber ?? null,
+        permitValidUntil: location.businessRecord.permitExpirationDate
+          ? location.businessRecord.permitExpirationDate.toISOString()
+          : null,
+        lineOfBusiness: (lineOfBusiness ?? location.businessRecord.lineOfBusiness ?? null)?.trim() || null,
+        applicationStatus: mapDbStatusToUi(latestApplication.status),
         latitude: location.latitude,
         longitude: location.longitude,
         address: location.address,
@@ -478,6 +541,12 @@ export async function listBploBusinessLocations(
   return filtered;
 }
 
+export async function listBploBusinessLocations(
+  filters: BusinessMapFilters = {}
+): Promise<BusinessLocationMapRow[]> {
+  return listActivePermittedBusinessLocations(filters);
+}
+
 export async function verifyBusinessLocation(
   businessLocationId: string,
   verifierId: string,
@@ -503,7 +572,7 @@ export async function verifyBusinessLocation(
       businessStatus: "ACTIVE",
       applications: {
         some: {
-          status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
+          status: { in: [...ACTIVE_PERMITTED_MAP_APP_STATUSES] },
         },
       },
     },
@@ -564,7 +633,7 @@ export async function returnBusinessLocationForCorrection(
         businessStatus: "ACTIVE",
         applications: {
           some: {
-            status: { in: [...VALID_BUSINESS_MAP_APP_STATUSES] },
+            status: { in: [...ACTIVE_PERMITTED_MAP_APP_STATUSES] },
           },
         },
       },

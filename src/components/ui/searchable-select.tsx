@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useId, type KeyboardEvent } from "react";
 
 import type { AddressOption } from "@/lib/address-types";
 
@@ -41,6 +41,7 @@ export function SearchableSelect({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const errorId = `searchable-select-error-${useId()}`;
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -119,7 +120,7 @@ export function SearchableSelect({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
         disabled={disabled || loading}
         className={`${triggerBase} ${disabled || loading ? triggerDisabled : triggerEnabled} ${triggerError}`}
         onClick={handleTriggerClick}
@@ -151,11 +152,13 @@ export function SearchableSelect({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search…"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? errorId : undefined}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-200"
             />
           </div>
 
-          {error ? <div className="px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+          {error ? <div id={errorId} className="px-3 py-2 text-sm text-rose-700">{error}</div> : null}
 
           <ul role="listbox" className="max-h-56 overflow-y-auto py-1">
             {loading ? (

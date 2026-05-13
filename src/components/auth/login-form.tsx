@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { googleSignInAction, loginAction } from "@/app/login/actions";
 
@@ -14,11 +16,12 @@ export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
         <div className="bg-[#0b8754] px-8 py-8 text-center text-white">
           <div className="mb-4 flex justify-center">
             <div className="rounded-full bg-white p-2 shadow-sm">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/images/logo.png"
                 alt="Municipality of Enrique B. Magalona Logo"
-                className="w-16 h-16 object-contain"
+                width={64}
+                height={64}
+                className="h-16 w-16 object-contain"
               />
             </div>
           </div>
@@ -106,12 +109,12 @@ export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
                 />
                 <span className="ml-2 text-sm text-slate-700">Remember me</span>
               </label>
-              <a
+              <Link
                 href="/forgot-password"
                 className="text-sm text-[#0b8754] hover:text-[#096a42] font-semibold"
               >
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             <button
@@ -134,11 +137,12 @@ export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
               type="submit"
               className="inline-flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-[15px] font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:shadow"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/google2.png"
                 alt=""
                 aria-hidden="true"
+                width={20}
+                height={20}
                 className="h-5 w-5 object-contain"
               />
               <span>Sign in with Google</span>
@@ -148,12 +152,12 @@ export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">
               Don&apos;t have an account?{" "}
-              <a
+              <Link
                 href="/register"
                 className="text-[#0b8754] hover:text-[#096a42] font-semibold"
               >
                 Register as Applicant
-              </a>
+              </Link>
             </p>
           </div>
         </div>

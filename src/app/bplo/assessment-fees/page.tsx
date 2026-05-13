@@ -23,16 +23,16 @@ export default async function BploAssessmentFeesPage() {
       <PageHeader
         eyebrow="BPLO"
         title="Assessment & Fees"
-        description="Applications in Assessed status are ready for fee computation and Tax Order of Payment generation."
+        description="Department Head approved applications are ready for fee computation and Tax Order of Payment generation."
       />
 
       <TableContainer
-        title="Assessed Applications"
-        description={`${rows.length} record${rows.length === 1 ? "" : "s"} ready for assessment and TOP handling.`}
+        title="Assessment Queue"
+        description={`${rows.length} record${rows.length === 1 ? "" : "s"} ready for assessment or currently under assessment.`}
       >
         {rows.length === 0 ? (
           <div className="px-6 py-8 text-sm text-slate-500">
-            No records available yet. This section will populate as applications reach the assessed stage.
+            No records available yet. This section will populate as applications are approved by the Department Head.
           </div>
         ) : (
           <table className="w-full text-sm">

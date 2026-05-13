@@ -36,7 +36,7 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
   const hasActiveFilters = filters.search || filters.type !== "ALL" || filters.status !== "ALL";
 
   return (
-    <section className="mx-auto w-full max-w-7xl space-y-6">
+    <section className="space-y-6">
       <PageHeader
         eyebrow="BPLO"
         title="Applications Queue"

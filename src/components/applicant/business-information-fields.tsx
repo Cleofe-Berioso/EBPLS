@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { BusinessInfo } from "@/lib/applicant-types";
 import {
@@ -15,6 +15,7 @@ import type { AddressOption } from "@/lib/address-types";
 import { loadCities, loadCountries, loadStates } from "@/lib/address-client";
 import { FormField } from "@/components/ui/form-field";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { BusinessLocationPicker } from "@/components/maps/business-location-picker";
 
 interface BusinessInformationFieldsProps {
   value: BusinessInfo;
@@ -270,6 +271,13 @@ export function BusinessInformationFields({
   const [cityOptions, setCityOptions] = useState<AddressOption[]>([]);
   const [cityLoading, setCityLoading] = useState(false);
   const [cityError, setCityError] = useState<string | undefined>();
+  const [businessAddressStatus, setBusinessAddressStatus] = useState<{
+    type: "idle" | "loading" | "success" | "error";
+    message: string | null;
+  }>({
+    type: "idle",
+    message: null,
+  });
 
   useEffect(() => {
     let active = true;
@@ -358,6 +366,42 @@ export function BusinessInformationFields({
       onChange({ ...value, provinceCode: match.value });
     }
   }, [onChange, provinceOptions, selectedProvince, selectedProvinceCode, value]);
+
+  // Memoize picker callbacks to avoid stale closures after coordinate updates
+  const handlePickerChange = useCallback(
+    (nextValue: { latitude: number; longitude: number } | null) =>
+      onChange({
+        ...value,
+        businessLatitude: nextValue?.latitude ?? null,
+        businessLongitude: nextValue?.longitude ?? null,
+      }),
+    [value, onChange]
+  );
+
+  const handleAddressResolved = useCallback(
+    (address: string, coordinates: { latitude: number; longitude: number }) => {
+      setBusinessAddressStatus({
+        type: "success",
+        message: "Business Address updated from pinned location.",
+      });
+      onChange({
+        ...value,
+        businessAddress: address,
+        businessLatitude: coordinates.latitude,
+        businessLongitude: coordinates.longitude,
+      });
+    },
+    [value, onChange]
+  );
+
+  const handleAddressResolveStart = useCallback(() => {
+    setBusinessAddressStatus({ type: "loading", message: null });
+  }, []);
+
+  const handleAddressResolveError = useCallback((message: string) => {
+    setBusinessAddressStatus({ type: "error", message });
+  }, []);
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <FormField
@@ -728,55 +772,59 @@ export function BusinessInformationFields({
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-sm text-slate-800 md:col-span-2">
-        <input
-          type="checkbox"
-          checked={value.sameAsMainOffice}
-          disabled={fieldLocked(lockedFields, "sameAsMainOffice")}
-          onChange={(event) => onChange({ ...value, sameAsMainOffice: event.target.checked })}
-        />
-        Business Address is same as Main Office Address
-      </label>
-
       <div className="md:col-span-2">
         <FormField
           label="Business Address"
-          hint={
-            value.sameAsMainOffice
-              ? "Automatically set to match Main Office Address."
-              : "Enter the actual place of business operation."
-          }
-          required={!value.sameAsMainOffice}
+          hint="Enter the actual place of business operation."
+          required
           error={fieldErrors.businessAddress}
         >
-          {value.sameAsMainOffice ? (
-            value.businessAddress ? (
-              <div className={fieldClasses(true)}>
-                {value.businessAddress}
-              </div>
-            ) : (
-              <div className="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm italic text-slate-400">
-                Will match Main Office Address when all address fields are complete.
-              </div>
-            )
-          ) : (
-            <>
-              {fieldLocked(lockedFields, "businessAddress") ? (
-                <div className="mb-2">
-                  <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                    Locked
-                  </span>
-                </div>
-              ) : null}
-              <input
-                className={fieldClasses(fieldLocked(lockedFields, "businessAddress"))}
-                value={value.businessAddress}
-                disabled={fieldLocked(lockedFields, "businessAddress")}
-                onChange={(event) => onChange({ ...value, businessAddress: event.target.value })}
-              />
-            </>
-          )}
+          {fieldLocked(lockedFields, "businessAddress") ? (
+            <div className="mb-2">
+              <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                Locked
+              </span>
+            </div>
+          ) : null}
+          <input
+            className={fieldClasses(fieldLocked(lockedFields, "businessAddress"))}
+            value={value.businessAddress}
+            disabled={fieldLocked(lockedFields, "businessAddress")}
+            onChange={(event) => {
+              setBusinessAddressStatus({ type: "idle", message: null });
+              onChange({ ...value, businessAddress: event.target.value });
+            }}
+          />
+          {businessAddressStatus.type === "loading" ? (
+            <p className="mt-2 text-xs font-medium text-blue-700">Finding address…</p>
+          ) : null}
+          {businessAddressStatus.type === "success" && businessAddressStatus.message ? (
+            <p className="mt-2 text-xs font-medium text-emerald-700">
+              {businessAddressStatus.message}
+            </p>
+          ) : null}
+          {businessAddressStatus.type === "error" && businessAddressStatus.message ? (
+            <p className="mt-2 text-xs font-medium text-amber-700">
+              {businessAddressStatus.message}
+            </p>
+          ) : null}
         </FormField>
+
+        <div className="mt-4">
+          <BusinessLocationPicker
+            value={
+              value.businessLatitude != null && value.businessLongitude != null
+                ? { latitude: value.businessLatitude, longitude: value.businessLongitude }
+                : null
+            }
+            onChange={handlePickerChange}
+            readOnly={fieldLocked(lockedFields, "businessAddress")}
+            error={fieldErrors.businessLatitude ?? fieldErrors.businessLongitude}
+            onAddressResolved={handleAddressResolved}
+            onAddressResolveStart={handleAddressResolveStart}
+            onAddressResolveError={handleAddressResolveError}
+          />
+        </div>
       </div>
 
       <FormField

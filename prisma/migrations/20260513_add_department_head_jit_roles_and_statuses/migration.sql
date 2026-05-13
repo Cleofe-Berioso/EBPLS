@@ -1,0 +1,7 @@
+-- Add DEPARTMENT_HEAD and JIT roles to Role enum
+-- Add new application statuses for department head review and permit revocation
+-- 
+-- In SQLite, enums are not enforced at the database level.
+-- This migration documents the schema change.
+-- New role values: DEPARTMENT_HEAD, JIT
+-- New status values: DEPARTMENT_HEAD_REVIEW, DEPARTMENT_HEAD_APPROVED, REVOCATION_REVIEW, REVOKED

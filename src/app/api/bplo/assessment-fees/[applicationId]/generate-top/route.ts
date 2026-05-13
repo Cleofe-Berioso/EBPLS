@@ -40,7 +40,7 @@ export async function POST(
     const status =
       message === "Application not found"
         ? 404
-        : message.includes("ASSESSED")
+        : message.includes("can only be") || message.includes("Current status")
           ? 422
           : 400;
     return NextResponse.json({ error: message }, { status });

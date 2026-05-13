@@ -3,6 +3,7 @@ import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { assertStatusTransition } from "@/lib/application-status";
 import { toMoneyNumber } from "@/lib/money";
 import { sendReleaseStatusSms } from "@/lib/sms";
+import { upsertBusinessLocationForBusinessRecord } from "@/lib/business-location";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -249,16 +250,16 @@ export async function listPermitIssuanceEntries(): Promise<PermitIssuanceLists> 
 
   return {
     blocked: rows
-      .filter((row: { status: DbApplicationStatus }) => row.status === "APPROVED_FOR_PAYMENT")
+      .filter((row) => row.status === "APPROVED_FOR_PAYMENT")
       .map(toListRow),
     paid: rows
-      .filter((row: { status: DbApplicationStatus }) => row.status === "PAID")
+      .filter((row) => row.status === "PAID")
       .map(toListRow),
     forRelease: rows
-      .filter((row: { status: DbApplicationStatus }) => row.status === "FOR_RELEASE")
+      .filter((row) => row.status === "FOR_RELEASE")
       .map(toListRow),
     released: rows
-      .filter((row: { status: DbApplicationStatus }) => row.status === "RELEASED")
+      .filter((row) => row.status === "RELEASED")
       .map(toListRow),
   };
 }
@@ -363,7 +364,7 @@ export async function getPermitIssuanceDetail(applicationId: string): Promise<Pe
   };
 }
 
-async function upsertBusinessRecordOnRelease(tx: any, app: any) {
+async function upsertBusinessRecordOnRelease(tx: any, app: any): Promise<string | null> {
   if (app.applicationType === "CLOSURE") {
     // Soft-close: mark the related business record as CLOSED without deleting it.
     // All historical applications, documents, payments, and permits are preserved.
@@ -377,7 +378,7 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any) {
         },
       });
     }
-    return;
+    return app.businessRecordId ?? null;
   }
 
   const form = (app.formData ?? {}) as Record<string, unknown>;
@@ -433,6 +434,9 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any) {
     isMarket: typeof form.isMarket === "boolean" ? form.isMarket : false,
     isAgriculture: typeof form.isAgriculture === "boolean" ? form.isAgriculture : false,
     permitExpirationDate: resolvePermitExpirationDateForRelease(app.applicationType as ApplicationType),
+    businessStatus: "ACTIVE" as const,
+    closedAt: null,
+    closureApplicationId: null,
   };
 
   if (app.businessRecordId) {
@@ -440,7 +444,7 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any) {
       where: { id: app.businessRecordId },
       data: payload,
     });
-    return;
+    return app.businessRecordId;
   }
 
   const record = await tx.businessRecord.upsert({
@@ -454,6 +458,8 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any) {
     where: { id: app.id },
     data: { businessRecordId: record.id },
   });
+
+  return record.id;
 }
 
 export async function preparePermitIssuance(
@@ -618,7 +624,22 @@ export async function releasePermitIssuance(
       data: { status: "RELEASED" },
     });
 
-    await upsertBusinessRecordOnRelease(tx, app);
+    const businessRecordId = await upsertBusinessRecordOnRelease(tx, app);
+
+    const form = (app.formData ?? {}) as Record<string, unknown>;
+    const latitude = typeof form.businessLatitude === "number" ? form.businessLatitude : null;
+    const longitude = typeof form.businessLongitude === "number" ? form.businessLongitude : null;
+
+    if (businessRecordId) {
+      await upsertBusinessLocationForBusinessRecord(tx, {
+        businessRecordId,
+        latitude,
+        longitude,
+        address: typeof form.businessAddress === "string" ? form.businessAddress : null,
+        barangay: null,
+        submittedById: app.applicantId,
+      });
+    }
 
     await tx.applicationHistory.create({
       data: {

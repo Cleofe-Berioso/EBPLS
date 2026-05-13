@@ -8,21 +8,27 @@ import {
   isCorporation,
   isCorporationOwnershipClassification,
 } from "@/lib/business-rules";
+import { isWithinEbMagalona } from "@/lib/business-location";
 import type {
   ApplicationDocumentInput,
   BusinessInfo,
   PersistMode,
   PropertyOwnership,
   SaveApplicationInput,
-  SubmitValidationErrorDetail,
 } from "@/lib/applicant-types";
-import { normalizeDocumentName, resolveRequiredDocuments } from "@/lib/required-documents";
+import {
+  getMissingRequiredDocuments,
+  normalizeDocumentName,
+  resolveRequiredDocuments,
+} from "@/lib/required-documents";
+import type { AddressOption } from "@/lib/address-types";
 import { BusinessInformationFields } from "@/components/applicant/business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SectionCard } from "@/components/ui/section-card";
 
 const steps = [
@@ -63,11 +69,34 @@ const operationFields: Array<{
     key: "employeesWithinMunicipality",
   },
   { label: "Delivery Vehicles", key: "deliveryVehicles" },
-  { label: "Tax Incentives", key: "taxIncentives", helperText: "Enter None if not applicable." },
   { label: "Business Activity", key: "businessActivity" },
-  { label: "Line of Business", key: "lineOfBusiness" },
   { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos." },
 ];
+
+// taxIncentives removed from applicant form (field preserved in DB / type for existing records and BPLO display)
+
+const LINE_OF_BUSINESS_OPTIONS = [
+  "Manufacturing / Industrial Sector",
+  "Financial Institutions",
+  "Construction and Contracting Services",
+  "Trade and Distribution Sector",
+  "Transportation Sector",
+  "Communication and Digital Services",
+  "Real Estate and Leasing",
+  "Accommodation Services",
+  "Boarding and Lodging Houses",
+  "Food Services Industry",
+  "Entertainment and Amusement Industry",
+  "Energy Sector",
+  "Ports and Maritime Facilities",
+  "Private Ports / Wharves",
+] as const;
+
+const LINE_OF_BUSINESS_SELECT_OPTIONS: AddressOption[] = LINE_OF_BUSINESS_OPTIONS.map((option) => ({
+  value: option,
+  label: option,
+  name: option,
+}));
 
 const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   businessType: "Business Type",
@@ -94,13 +123,16 @@ const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   femaleEmployees: "Female Employees",
   employeesWithinMunicipality: "Employees Residing within Municipality",
   deliveryVehicles: "Delivery Vehicles",
-  taxIncentives: "Tax Incentives",
   businessActivity: "Business Activity",
   lineOfBusiness: "Line of Business",
   assetSize: "Asset Size",
   taxDeclarationNumber: "Tax Declaration Number",
   propertyIdentificationNumber: "Property Identification Number",
+  businessLatitude: "Business Latitude",
+  businessLongitude: "Business Longitude",
 };
+
+const BUSINESS_LOCATION_ERROR = "Please pin the business location inside EB Magalona.";
 
 const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
   0: [
@@ -128,7 +160,6 @@ const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
     "femaleEmployees",
     "employeesWithinMunicipality",
     "deliveryVehicles",
-    "taxIncentives",
     "businessActivity",
     "lineOfBusiness",
     "assetSize",
@@ -136,12 +167,22 @@ const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
 };
 
 function normalizeBusinessInfo(next: BusinessInfo): BusinessInfo {
-  const normalized = normalizeBusinessInfoRules(next);
-  if (!normalized.sameAsMainOffice) return normalized;
-  return {
-    ...normalized,
-    businessAddress: normalized.mainOfficeAddress,
-  };
+  return normalizeBusinessInfoRules(next);
+}
+
+function validateBusinessLocation(info: BusinessInfo): Partial<Record<keyof BusinessInfo, string>> {
+  const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+
+  if (info.businessLatitude == null || info.businessLongitude == null) {
+    nextErrors.businessLatitude = BUSINESS_LOCATION_ERROR;
+    return nextErrors;
+  }
+
+  if (!isWithinEbMagalona(info.businessLatitude, info.businessLongitude)) {
+    nextErrors.businessLatitude = BUSINESS_LOCATION_ERROR;
+  }
+
+  return nextErrors;
 }
 
 function ReviewStat({
@@ -158,40 +199,6 @@ function ReviewStat({
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
       {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
-    </div>
-  );
-}
-
-function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
-  return (
-    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-      <p className="font-semibold">Submission requirements still missing</p>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-            Missing Fields
-          </p>
-          <ul className="mt-2 space-y-1">
-            {detail.missingFields.length > 0 ? (
-              detail.missingFields.map((item) => <li key={item}>• {item}</li>)
-            ) : (
-              <li>• None</li>
-            )}
-          </ul>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-            Missing Documents
-          </p>
-          <ul className="mt-2 space-y-1">
-            {detail.missingDocuments.length > 0 ? (
-              detail.missingDocuments.map((item) => <li key={item}>• {item}</li>)
-            ) : (
-              <li>• None</li>
-            )}
-          </ul>
-        </div>
-      </div>
     </div>
   );
 }
@@ -227,13 +234,14 @@ export function NewApplicationForm() {
   const [step, setStep] = useState(0);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
+  const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [applicationId, setApplicationId] = useState<string | undefined>(editId ?? undefined);
   const [statusMessage, setStatusMessage] = useState<{
     kind: "success" | "error";
     text: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
+  const [missingDocNames, setMissingDocNames] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
 
   const requiredDocs = useMemo(
@@ -315,9 +323,11 @@ export function NewApplicationForm() {
       }
     }
 
-    if (!normalizedInfo.sameAsMainOffice && normalizedInfo.businessAddress.trim().length === 0) {
+    if (normalizedInfo.businessAddress.trim().length === 0) {
       nextErrors.businessAddress = "Business Address is required.";
     }
+
+    Object.assign(nextErrors, validateBusinessLocation(normalizedInfo));
 
     if (
       isCorporation(normalizedInfo.businessType) &&
@@ -341,12 +351,29 @@ export function NewApplicationForm() {
   }
 
   function next() {
-    if (!validateCurrentStep(step)) {
-      setStatusMessage({
-        kind: "error",
-        text: "Complete required fields before moving to the next step.",
-      });
-      return;
+    if (step === 0 || step === 1) {
+      if (!validateCurrentStep(step)) {
+        setStatusMessage({
+          kind: "error",
+          text: "Complete required fields before moving to the next step.",
+        });
+        return;
+      }
+    } else if (step === 2) {
+      const uploadedKeys = [
+        ...Object.values(uploadedDocuments).map((d) => d.documentName),
+        ...Object.keys(pendingDocuments),
+      ];
+      const missing = getMissingRequiredDocuments(requiredDocs, uploadedKeys);
+      if (missing.length > 0) {
+        setMissingDocNames(missing);
+        setStatusMessage({
+          kind: "error",
+          text: "Upload all required documents before proceeding.",
+        });
+        return;
+      }
+      setMissingDocNames([]);
     }
 
     setStatusMessage(null);
@@ -360,8 +387,44 @@ export function NewApplicationForm() {
   async function persist(mode: PersistMode) {
     setSubmitting(true);
     setStatusMessage(null);
-    setValidationDetail(null);
     setFieldErrors({});
+
+    if (mode === "SUBMIT") {
+      if (!validateCurrentStep(0)) {
+        setStep(0);
+        setStatusMessage({
+          kind: "error",
+          text: "Complete all required business information fields before submitting.",
+        });
+        setSubmitting(false);
+        return null;
+      }
+
+      if (!validateCurrentStep(1)) {
+        setStep(1);
+        setStatusMessage({
+          kind: "error",
+          text: "Complete all required operation fields before submitting.",
+        });
+        setSubmitting(false);
+        return null;
+      }
+
+      const missingDocuments = getMissingRequiredDocuments(requiredDocs, [
+        ...Object.values(uploadedDocuments).map((doc) => doc.documentName),
+        ...Object.keys(pendingDocuments),
+      ]);
+      if (missingDocuments.length > 0) {
+        setMissingDocNames(missingDocuments);
+        setStep(2);
+        setStatusMessage({
+          kind: "error",
+          text: "Upload all required documents before submitting.",
+        });
+        setSubmitting(false);
+        return null;
+      }
+    }
 
     const payload: SaveApplicationInput = {
       applicationId,
@@ -371,16 +434,30 @@ export function NewApplicationForm() {
       mode,
     };
 
-    const response = await fetch("/api/applicant/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const response =
+      mode === "SUBMIT"
+        ? await (async () => {
+            const formData = new FormData();
+            formData.append("payload", JSON.stringify(payload));
+            for (const [documentName, file] of Object.entries(pendingDocuments)) {
+              formData.append("documentNames", documentName);
+              formData.append("documentFiles", file, file.name);
+            }
+
+            return fetch("/api/applicant/applications", {
+              method: "POST",
+              body: formData,
+            });
+          })()
+        : await fetch("/api/applicant/applications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
     const data = (await response.json()) as {
       application?: { id: string; applicationNumber: string; status: string };
       error?: string;
-      detail?: SubmitValidationErrorDetail;
     };
 
     setSubmitting(false);
@@ -390,78 +467,61 @@ export function NewApplicationForm() {
         kind: "error",
         text: data.error ?? "Unable to save application.",
       });
-      if (data.detail) setValidationDetail(data.detail);
+      setSubmitting(false);
       return null;
     }
 
     setApplicationId(data.application.id);
+
+    if (mode === "SUBMIT") {
+      setPendingDocuments({});
+      setStatusMessage({
+        kind: "success",
+        text: `Application ${data.application.applicationNumber} submitted successfully.`,
+      });
+      return data.application.id;
+    }
+
+    setSubmitting(false);
     setStatusMessage({
       kind: "success",
-      text:
-        mode === "SUBMIT"
-          ? `Application ${data.application.applicationNumber} submitted successfully.`
-          : `Draft ${data.application.applicationNumber} saved successfully.`,
+      text: `Draft ${data.application.applicationNumber} saved successfully.`,
     });
     return data.application.id;
-  }
-
-  async function ensureApplicationId(): Promise<string | null> {
-    if (applicationId) return applicationId;
-    return persist("DRAFT");
   }
 
   async function handleDocumentUpload(documentName: string, file: File | null) {
     if (!file) return;
 
-    setSubmitting(true);
-    setStatusMessage(null);
-
-    const ensuredId = await ensureApplicationId();
-    if (!ensuredId) {
-      setSubmitting(false);
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("documentName", documentName);
-    formData.append("file", file);
-
-    const response = await fetch(`/api/applicant/applications/${ensuredId}/documents`, {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = (await response.json()) as {
-      document?: ApplicationDocumentInput;
-      error?: string;
-    };
-
-    setSubmitting(false);
-
-    if (!response.ok || !data.document) {
-      setStatusMessage({
-        kind: "error",
-        text: data.error ?? "Unable to upload document.",
-      });
-      return;
-    }
-
-    const uploadedDoc = data.document;
-
     setUploadedDocuments((current) => ({
       ...current,
-      [documentName]: uploadedDoc,
+      [documentName]: {
+        documentName,
+        fileName: file.name,
+      },
     }));
-    setStatusMessage({
-      kind: "success",
-      text: `${documentName} uploaded.`,
-    });
+    setPendingDocuments((current) => ({
+      ...current,
+      [documentName]: file,
+    }));
+    setMissingDocNames((current) =>
+      current.filter(
+        (m) => normalizeDocumentName(m) !== normalizeDocumentName(documentName)
+      )
+    );
   }
 
   async function handleDocumentDelete(documentName: string) {
     const doc = uploadedDocuments[documentName];
-    if (!doc?.id || !applicationId) {
+    const hasSavedDocument = Boolean(doc?.id && applicationId);
+
+    if (!hasSavedDocument) {
       setUploadedDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      setPendingDocuments((current) => {
         const nextState = { ...current };
         delete nextState[documentName];
         return nextState;
@@ -478,6 +538,11 @@ export function NewApplicationForm() {
     if (!response.ok) return;
 
     setUploadedDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setPendingDocuments((current) => {
       const nextState = { ...current };
       delete nextState[documentName];
       return nextState;
@@ -538,6 +603,24 @@ export function NewApplicationForm() {
                   }
                 />
               ))}
+
+              <FormField
+                label="Line of Business"
+                required
+                error={fieldErrors.lineOfBusiness}
+              >
+                <SearchableSelect
+                  options={LINE_OF_BUSINESS_SELECT_OPTIONS}
+                  value={info.lineOfBusiness}
+                  selectedLabel={info.lineOfBusiness}
+                  placeholder="Select line of business"
+                  onChange={(option) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, lineOfBusiness: option.name })
+                    )
+                  }
+                />
+              </FormField>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -643,7 +726,7 @@ export function NewApplicationForm() {
         <div className="space-y-4">
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredDocs.length}`}
-            description="Upload clear, readable files for every listed requirement. Draft save and upload behavior stays unchanged."
+            description="Select files locally first, then the final submit will save the documents and timestamps."
             variant="info"
           />
           <SectionCard
@@ -661,6 +744,14 @@ export function NewApplicationForm() {
                     helperText="Prepare a clear file copy before uploading."
                     disabled={submitting}
                     fileName={uploadedDoc?.fileName}
+                    uploadedAt={uploadedDoc?.uploadedAt}
+                    error={
+                      missingDocNames.some(
+                        (m) => normalizeDocumentName(m) === normalizeDocumentName(doc)
+                      )
+                        ? "This document is required."
+                        : undefined
+                    }
                     onFileChange={(file) => {
                       void handleDocumentUpload(doc, file);
                     }}
@@ -806,7 +897,9 @@ export function NewApplicationForm() {
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
               <p className="font-semibold text-slate-900">Business Address</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                {info.sameAsMainOffice ? "Same as Main Office Address" : "Separate from Main Office Address"}
+                {info.businessLatitude != null && info.businessLongitude != null
+                  ? "Business location pinned"
+                  : "Business location not pinned"}
               </p>
               <p className="mt-1">{info.businessAddress || "-"}</p>
             </div>
@@ -821,7 +914,6 @@ export function NewApplicationForm() {
             </div>
           </SectionCard>
 
-          {validationDetail ? <ValidationPanel detail={validationDetail} /> : null}
         </div>
       ) : null}
 

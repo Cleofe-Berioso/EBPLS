@@ -19,7 +19,7 @@ const ACTIONS_BY_STATUS: Record<string, Array<{ action: string; label: string; r
     { action: "reject", label: "Reject Application", requiresRemarks: true, variant: "danger" },
   ],
   "Under Review": [
-    { action: "approve-assessment", label: "Approve for Assessment", requiresRemarks: false, variant: "primary" },
+    { action: "approve-assessment", label: "Send to Department Head Review", requiresRemarks: false, variant: "primary" },
     { action: "return", label: "Return for Correction", requiresRemarks: true, variant: "warning" },
     { action: "reject", label: "Reject Application", requiresRemarks: true, variant: "danger" },
   ],

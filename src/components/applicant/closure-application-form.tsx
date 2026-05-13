@@ -99,6 +99,7 @@ export function ClosureApplicationForm() {
   const [selectedBusinessName, setSelectedBusinessName] = useState(defaultBusinessInfo.businessName);
   const [selectedBusinessInfo, setSelectedBusinessInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
+  const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [statusMessage, setStatusMessage] = useState<{
     kind: "success" | "error";
     text: string;
@@ -117,6 +118,45 @@ export function ClosureApplicationForm() {
 
   const uploadedRequiredCount = requiredDocs.filter((doc) => uploadedDocuments[doc]).length;
   const selectedRecord = records.find((item) => item.id === selectedBusinessId);
+
+  async function uploadPendingDocuments(nextApplicationId: string) {
+    const documentsToUpload = Object.entries(pendingDocuments);
+
+    for (const [documentName, file] of documentsToUpload) {
+      const formData = new FormData();
+      formData.append("documentName", documentName);
+      formData.append("file", file);
+
+      const response = await fetch(`/api/applicant/applications/${nextApplicationId}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await response.json()) as {
+        document?: ApplicationDocumentInput;
+        error?: string;
+      };
+
+      if (!response.ok || !data.document) {
+        setStatusMessage({
+          kind: "error",
+          text: data.error ?? `Application submitted, but ${documentName} could not be uploaded.`,
+        });
+        return false;
+      }
+
+      setUploadedDocuments((current) => ({
+        ...current,
+        [documentName]: data.document,
+      }));
+    }
+
+    if (documentsToUpload.length > 0) {
+      setPendingDocuments({});
+    }
+
+    return true;
+  }
 
   useEffect(() => {
     let active = true;
@@ -243,73 +283,68 @@ export function ClosureApplicationForm() {
         text: data.error ?? "Unable to save closure application.",
       });
       if (data.detail) setValidationDetail(data.detail);
+      setSubmitting(false);
       return null;
     }
 
     setApplicationId(data.application.id);
+
+    if (mode === "SUBMIT") {
+      const uploaded = await uploadPendingDocuments(data.application.id);
+      setSubmitting(false);
+
+      if (!uploaded) {
+        return data.application.id;
+      }
+
+      setStatusMessage({
+        kind: "success",
+        text: `Closure ${data.application.applicationNumber} submitted successfully.`,
+      });
+      return data.application.id;
+    }
+
+    setSubmitting(false);
     setStatusMessage({
       kind: "success",
-      text:
-        mode === "SUBMIT"
-          ? `Closure ${data.application.applicationNumber} submitted successfully.`
-          : `Closure draft ${data.application.applicationNumber} saved successfully.`,
+      text: `Closure draft ${data.application.applicationNumber} saved successfully.`,
     });
     return data.application.id;
-  }
-
-  async function ensureApplicationId(): Promise<string | null> {
-    if (applicationId) return applicationId;
-    return persist("DRAFT");
   }
 
   async function handleDocumentUpload(documentName: string, file: File | null) {
     if (!file) return;
 
-    const ensuredId = await ensureApplicationId();
-    if (!ensuredId) return;
-
-    setSubmitting(true);
-    setStatusMessage(null);
-
-    const formData = new FormData();
-    formData.append("documentName", documentName);
-    formData.append("file", file);
-
-    const response = await fetch(`/api/applicant/applications/${ensuredId}/documents`, {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = (await response.json()) as {
-      document?: ApplicationDocumentInput;
-      error?: string;
-    };
-
-    setSubmitting(false);
-
-    if (!response.ok || !data.document) {
-      setStatusMessage({
-        kind: "error",
-        text: data.error ?? "Unable to upload document.",
-      });
-      return;
-    }
-
-    const uploadedDoc = data.document;
-
     setUploadedDocuments((current) => ({
       ...current,
-      [documentName]: uploadedDoc,
+      [documentName]: {
+        documentName,
+        fileName: file.name,
+      },
     }));
-    setStatusMessage({
-      kind: "success",
-      text: `${documentName} uploaded.`,
-    });
+    setPendingDocuments((current) => ({
+      ...current,
+      [documentName]: file,
+    }));
   }
 
   async function handleDocumentDelete(documentName: string) {
     const doc = uploadedDocuments[documentName];
-    if (!doc?.id || !applicationId) return;
+    const hasSavedDocument = Boolean(doc?.id && applicationId);
+
+    if (!hasSavedDocument) {
+      setUploadedDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      setPendingDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      return;
+    }
 
     setSubmitting(true);
     const response = await fetch(`/api/applicant/applications/${applicationId}/documents/${doc.id}`, {
@@ -320,6 +355,11 @@ export function ClosureApplicationForm() {
     if (!response.ok) return;
 
     setUploadedDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setPendingDocuments((current) => {
       const nextState = { ...current };
       delete nextState[documentName];
       return nextState;
@@ -401,7 +441,7 @@ export function ClosureApplicationForm() {
         <div className="space-y-4">
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredDocs.length}`}
-            description="Upload the closure letter, barangay certification, and proof of ceased operation with clear file copies."
+            description="Select files locally first, then the final submit will save the documents and timestamps."
             variant="info"
           />
           <SectionCard
@@ -417,6 +457,7 @@ export function ClosureApplicationForm() {
                   helperText="Upload a clear file that supports business closure review."
                   disabled={submitting || records.length === 0}
                   fileName={uploadedDocuments[doc]?.fileName}
+                  uploadedAt={uploadedDocuments[doc]?.uploadedAt}
                   onFileChange={(file) => {
                     void handleDocumentUpload(doc, file);
                   }}

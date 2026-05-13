@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import L from "leaflet";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import { EB_MAGALONA_BOUNDS } from "@/lib/business-location";
 
 export interface LeafletBusinessMarker {
   id: string;
@@ -30,12 +30,10 @@ interface LeafletBusinessMapProps {
   selectedLabel?: string;
   className?: string;
   useEbMagalonaBounds?: boolean;
+  markerVariant?: "default" | "emoji";
 }
 
-const EB_MAGALONA_MAX_BOUNDS: [[number, number], [number, number]] = [
-  [EB_MAGALONA_BOUNDS.southWest.latitude, EB_MAGALONA_BOUNDS.southWest.longitude],
-  [EB_MAGALONA_BOUNDS.northEast.latitude, EB_MAGALONA_BOUNDS.northEast.longitude],
-];
+
 
 function MapClickHandler({
   onSelectPosition,
@@ -55,13 +53,28 @@ function MapClickHandler({
   return null;
 }
 
-function MapRecenter({ selectedPosition }: { selectedPosition?: [number, number] | null }) {
+function MapRecenter({ 
+  selectedPosition, 
+  shouldAlwaysCenter 
+}: { 
+  selectedPosition?: [number, number] | null;
+  shouldAlwaysCenter?: boolean;
+}) {
   const map = useMap();
+  const hasCenteredOnSelection = useRef(false);
 
   useEffect(() => {
     if (!selectedPosition) return;
-    map.setView(selectedPosition, map.getZoom());
-  }, [map, selectedPosition]);
+    
+    // Only center automatically on first selection if shouldAlwaysCenter is true
+    // Otherwise, let the user control panning freely
+    if (shouldAlwaysCenter) {
+      map.setView(selectedPosition, map.getZoom());
+    } else if (!hasCenteredOnSelection.current) {
+      map.setView(selectedPosition, map.getZoom());
+      hasCenteredOnSelection.current = true;
+    }
+  }, [map, selectedPosition, shouldAlwaysCenter]);
 
   return null;
 }
@@ -90,7 +103,8 @@ export function LeafletBusinessMap({
   onSelectPosition,
   selectedLabel = "Selected business location",
   className = "h-[380px] w-full overflow-hidden rounded-[30px] border border-slate-200/90 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.45)] sm:h-[460px] lg:h-[580px]",
-  useEbMagalonaBounds = true,
+  useEbMagalonaBounds = false,
+  markerVariant = "default",
 }: LeafletBusinessMapProps) {
   return (
     <MapContainer
@@ -98,9 +112,8 @@ export function LeafletBusinessMap({
       zoom={zoom}
       className={className}
       scrollWheelZoom
-      maxBounds={useEbMagalonaBounds ? EB_MAGALONA_MAX_BOUNDS : undefined}
-      maxBoundsViscosity={useEbMagalonaBounds ? 0.9 : undefined}
-      minZoom={useEbMagalonaBounds ? 12 : undefined}
+      maxBounds={undefined}
+      minZoom={1}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -108,7 +121,7 @@ export function LeafletBusinessMap({
       />
 
       <MapClickHandler onSelectPosition={onSelectPosition} />
-      <MapRecenter selectedPosition={selectedPosition} />
+      <MapRecenter selectedPosition={selectedPosition} shouldAlwaysCenter={useEbMagalonaBounds} />
 
       {markers.map((marker) => (
         <CircleMarker
@@ -189,20 +202,34 @@ export function LeafletBusinessMap({
       ))}
 
       {selectedPosition ? (
-        <Marker
-          position={selectedPosition}
-          draggable={Boolean(onSelectPosition)}
-          eventHandlers={
-            onSelectPosition
-              ? {
-                  dragend(event) {
-                    const next = event.target.getLatLng();
-                    onSelectPosition({ latitude: next.lat, longitude: next.lng });
-                  },
-                }
-              : undefined
-          }
-        >
+        (() => {
+          // optionally render an emoji divIcon for applicant-selected pins
+          const icon =
+            markerVariant === "emoji"
+              ? L.divIcon({
+                  html: `<div style="display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;width:40px;height:40px;background:rgba(255,255,255,0.9);border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,0.25);">📍</div>`,
+                  className: "leaflet-emoji-icon",
+                  iconSize: [40, 40],
+                  iconAnchor: [20, 40],
+                })
+              : undefined;
+
+          return (
+            <Marker
+              position={selectedPosition}
+              icon={icon}
+              draggable={Boolean(onSelectPosition)}
+              eventHandlers={
+                onSelectPosition
+                  ? {
+                      dragend(event) {
+                        const next = event.target.getLatLng();
+                        onSelectPosition({ latitude: next.lat, longitude: next.lng });
+                      },
+                    }
+                  : undefined
+              }
+            >
           <Popup className="leaflet-business-map-popup">
             <div className="min-w-[240px] space-y-3 text-sm">
               <div className="space-y-1.5">
@@ -227,7 +254,9 @@ export function LeafletBusinessMap({
               </div>
             </div>
           </Popup>
-        </Marker>
+            </Marker>
+          );
+        })()
       ) : null}
     </MapContainer>
   );

@@ -91,7 +91,7 @@ export default async function BploDashboard() {
   };
 
   return (
-    <section className="bplo-dashboard mx-auto w-full max-w-7xl space-y-6">
+    <section className="space-y-6">
       <PageHeader
         eyebrow="BPLO"
         title="BPLO Dashboard"

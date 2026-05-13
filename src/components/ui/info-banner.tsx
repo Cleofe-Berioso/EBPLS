@@ -22,13 +22,13 @@ export function InfoBanner({
   action?: ReactNode;
 }) {
   return (
-    <div className={`rounded-2xl border px-4 py-3.5 ${BANNER_STYLES[variant]}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold tracking-tight">{title}</p>
-          {description ? <p className="mt-1 text-sm leading-6 opacity-90">{description}</p> : null}
+    <div className={`rounded-2xl border px-4 py-3.5 sm:px-5 sm:py-4 ${BANNER_STYLES[variant]}`}>
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <p className="text-sm sm:text-base font-semibold tracking-tight">{title}</p>
+          {description ? <p className="mt-1 text-sm sm:text-base leading-6 opacity-90">{description}</p> : null}
         </div>
-        {action ? <div className="flex items-center gap-2">{action}</div> : null}
+        {action ? <div className="flex items-center gap-2 flex-shrink-0">{action}</div> : null}
       </div>
     </div>
   );

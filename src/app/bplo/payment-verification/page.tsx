@@ -75,13 +75,22 @@ interface VerificationLists {
 
 type TabKey = "PENDING" | "VERIFIED" | "REJECTED";
 
+// Hoist Intl formatter to avoid recreating on every render
+const dateFormatter = new Intl.DateTimeFormat("en-PH", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function money(value: number): string {
   return `₱ ${value.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 }
 
 function formatDateTime(value: string | null): string {
   if (!value) return "-";
-  return new Date(value).toLocaleString("en-PH");
+  return dateFormatter.format(new Date(value));
 }
 
 function SummaryTile({
@@ -249,7 +258,7 @@ export default function BploPaymentVerificationPage() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6" aria-busy={loading || detailLoading}>
       <PageHeader
         eyebrow="BPLO"
         title="Payment Verification"
@@ -289,7 +298,7 @@ export default function BploPaymentVerificationPage() {
           description={loading ? "Loading submitted payment references..." : `${rows.length} record${rows.length === 1 ? "" : "s"} in the selected section.`}
           table={
             loading ? (
-              <div className="px-6 py-8 text-sm text-slate-500">Loading payment references for BPLO review...</div>
+              <div role="status" aria-live="polite" className="px-6 py-8 text-sm text-slate-500">Loading payment references for BPLO review...</div>
             ) : rows.length === 0 ? (
               <div className="px-6 py-8 text-sm text-slate-500">No records available yet in this section. Submitted payment references will appear here when available.</div>
             ) : (
@@ -341,7 +350,7 @@ export default function BploPaymentVerificationPage() {
           }
           mobile={
             loading ? (
-              <div className="p-4 text-sm text-slate-500">Loading payment references for BPLO review...</div>
+              <div role="status" aria-live="polite" className="p-4 text-sm text-slate-500">Loading payment references for BPLO review...</div>
             ) : rows.length === 0 ? (
               <div className="p-4 text-sm text-slate-500">No records available yet in this section.</div>
             ) : (
@@ -388,7 +397,7 @@ export default function BploPaymentVerificationPage() {
           {!selectedRefId ? (
             <div className="text-sm text-slate-500">Select a payment reference from the queue to review the TOP, applicant details, and BPLO action area.</div>
           ) : detailLoading ? (
-            <div className="text-sm text-slate-500">Loading payment reference details...</div>
+            <div role="status" aria-live="polite" className="text-sm text-slate-500">Loading payment reference details...</div>
           ) : !detail ? (
             <div className="text-sm text-slate-500">Unable to load the selected payment reference details.</div>
           ) : (

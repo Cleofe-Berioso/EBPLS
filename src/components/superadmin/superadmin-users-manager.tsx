@@ -235,7 +235,10 @@ export function SuperAdminUsersManager() {
   const flashVariant = flash?.type === "danger" ? "danger" : flash?.type === "success" ? "success" : "info";
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4" aria-busy={isLoading}>
+      <div role="status" aria-live="polite" className="sr-only">
+        {isLoading ? "Loading users." : "Users loaded."}
+      </div>
       <PageHeader
         eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
@@ -279,12 +282,12 @@ export function SuperAdminUsersManager() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search name or email"
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
         />
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
         >
           <option value="ALL">All Roles</option>
           <option value="APPLICANT">Applicant</option>
@@ -294,7 +297,7 @@ export function SuperAdminUsersManager() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
         >
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
@@ -507,7 +510,7 @@ export function SuperAdminUsersManager() {
                   value={createForm.name}
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
                   required
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
                 />
               </div>
 
@@ -518,7 +521,7 @@ export function SuperAdminUsersManager() {
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
                   required
                   type="email"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
                 />
               </div>
 
@@ -531,7 +534,7 @@ export function SuperAdminUsersManager() {
                     required
                     minLength={8}
                     type="password"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
                   />
                 </div>
                 <div>
@@ -542,7 +545,7 @@ export function SuperAdminUsersManager() {
                     required
                     minLength={8}
                     type="password"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
                   />
                 </div>
               </div>
@@ -614,7 +617,7 @@ export function SuperAdminUsersManager() {
                   required
                   minLength={8}
                   type="password"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
                 />
               </div>
               <div>
@@ -625,7 +628,7 @@ export function SuperAdminUsersManager() {
                   required
                   minLength={8}
                   type="password"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
                 />
               </div>
 

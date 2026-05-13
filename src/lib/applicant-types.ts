@@ -19,11 +19,15 @@ export type ApplicationStatus =
   | "Draft"
   | "Submitted"
   | "Under Review"
+  | "Department Head Review"
+  | "Department Head Approved"
   | "Assessed"
   | "Approved for Payment"
   | "Paid"
   | "For Release"
   | "Released"
+  | "Revocation Review"
+  | "Revoked"
   | "Returned for Correction"
   | "Rejected";
 
@@ -35,11 +39,15 @@ export const STATUS_FLOW: ApplicationStatus[] = [
   "Draft",
   "Submitted",
   "Under Review",
+  "Department Head Review",
+  "Department Head Approved",
   "Assessed",
   "Approved for Payment",
   "Paid",
   "For Release",
   "Released",
+  "Revocation Review",
+  "Revoked",
   "Returned for Correction",
   "Rejected",
 ];
@@ -51,6 +59,7 @@ export interface ApplicationDocumentInput {
   storagePath?: string;
   mimeType?: string;
   sizeBytes?: number;
+  uploadedAt?: Date | string;
 }
 
 export interface SubmitValidationErrorDetail {
@@ -97,6 +106,8 @@ export interface BusinessInfo {
   streetAddress?: string;
   mainOfficeAddress: string;
   businessAddress: string;
+  businessLatitude: number | null;
+  businessLongitude: number | null;
   sameAsMainOffice: boolean;
   businessArea: string;
   totalFloorArea: string;

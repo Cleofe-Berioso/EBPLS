@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { assertStatusTransition } from "@/lib/application-status";
@@ -7,11 +8,15 @@ type DbApplicationStatus =
   | "DRAFT"
   | "SUBMITTED"
   | "UNDER_REVIEW"
+  | "DEPARTMENT_HEAD_REVIEW"
+  | "DEPARTMENT_HEAD_APPROVED"
   | "ASSESSED"
   | "APPROVED_FOR_PAYMENT"
   | "PAID"
   | "FOR_RELEASE"
   | "RELEASED"
+  | "REVOCATION_REVIEW"
+  | "REVOKED"
   | "RETURNED_FOR_CORRECTION"
   | "REJECTED";
 
@@ -79,14 +84,15 @@ function getNextStatus(action: BploReviewAction): DbApplicationStatus {
   if (action === "MARK_UNDER_REVIEW") return "UNDER_REVIEW";
   if (action === "RETURN_FOR_CORRECTION") return "RETURNED_FOR_CORRECTION";
   if (action === "REJECT_APPLICATION") return "REJECTED";
-  return "ASSESSED";
+  return "DEPARTMENT_HEAD_REVIEW";
 }
 
 function remarksRequired(action: BploReviewAction): boolean {
   return action === "RETURN_FOR_CORRECTION" || action === "REJECT_APPLICATION";
 }
 
-export async function getBploDashboardSummary() {
+// Cached query for dashboard summary - deduplicates per-request
+const getCachedBploDashboardSummary = cache(async () => {
   const [submittedApplications, underReview, returnedForCorrection, assessedApplications, paidApplications, forRelease, releasedPermits, pendingPaymentVerification] = await Promise.all([
     prisma.businessApplication.count({ where: { status: "SUBMITTED" } }),
     prisma.businessApplication.count({ where: { status: "UNDER_REVIEW" } }),
@@ -108,9 +114,14 @@ export async function getBploDashboardSummary() {
     forRelease,
     releasedPermits,
   };
+});
+
+export async function getBploDashboardSummary() {
+  return getCachedBploDashboardSummary();
 }
 
-export async function getBploApplicationTypeSummary() {
+// Cached query for application type summary - deduplicates per-request
+const getCachedBploApplicationTypeSummary = cache(async () => {
   const [totalNew, totalRenewal, totalClosure] = await Promise.all([
     prisma.businessApplication.count({ where: { applicationType: "NEW" } }),
     prisma.businessApplication.count({ where: { applicationType: "RENEWAL" } }),
@@ -122,6 +133,10 @@ export async function getBploApplicationTypeSummary() {
     totalRenewal,
     totalClosure,
   };
+});
+
+export async function getBploApplicationTypeSummary() {
+  return getCachedBploApplicationTypeSummary();
 }
 
 export async function listRecentBploSubmissions(limit = 5): Promise<BploQueueRow[]> {

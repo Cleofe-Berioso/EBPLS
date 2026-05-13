@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
+import { isWithinEbMagalona } from "@/lib/business-location";
 import { BusinessInformationFields } from "@/components/applicant/business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
@@ -54,15 +55,26 @@ const lockedFields: Array<keyof BusinessInfo> = [
 ];
 
 function normalizeBusinessInfo(next: BusinessInfo): BusinessInfo {
-  const normalized = normalizeBusinessInfoRules(next);
-  if (!normalized.sameAsMainOffice) {
-    return normalized;
+  return normalizeBusinessInfoRules(next);
+}
+
+const BUSINESS_LOCATION_ERROR = "Please pin the business location inside EB Magalona.";
+const RENEWAL_REVOKED_MESSAGE =
+  "Renewal is not allowed because this business permit has been revoked. Re-application is required.";
+
+function validateBusinessLocation(info: BusinessInfo): Partial<Record<keyof BusinessInfo, string>> {
+  const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+
+  if (info.businessLatitude == null || info.businessLongitude == null) {
+    nextErrors.businessLatitude = BUSINESS_LOCATION_ERROR;
+    return nextErrors;
   }
 
-  return {
-    ...normalized,
-    businessAddress: normalized.mainOfficeAddress,
-  };
+  if (!isWithinEbMagalona(info.businessLatitude, info.businessLongitude)) {
+    nextErrors.businessLatitude = BUSINESS_LOCATION_ERROR;
+  }
+
+  return nextErrors;
 }
 
 function ReviewStat({
@@ -129,6 +141,7 @@ export function RenewalApplicationForm() {
   >([]);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
+  const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [statusMessage, setStatusMessage] = useState<{
     kind: "success" | "error";
     text: string;
@@ -136,6 +149,7 @@ export function RenewalApplicationForm() {
   const [submitting, setSubmitting] = useState(false);
   const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
+  const [revokedBlockedCount, setRevokedBlockedCount] = useState(0);
 
   const requiredRenewalDocs = useMemo(
     () =>
@@ -154,6 +168,45 @@ export function RenewalApplicationForm() {
   const uploadedRequiredCount = requiredRenewalDocs.filter((doc) => getUploadedDocumentForRequiredName(doc)).length;
   const selectedRecord = records.find((item) => item.id === selectedBusinessId);
 
+  async function uploadPendingDocuments(nextApplicationId: string) {
+    const documentsToUpload = Object.entries(pendingDocuments);
+
+    for (const [documentName, file] of documentsToUpload) {
+      const formData = new FormData();
+      formData.append("documentName", documentName);
+      formData.append("file", file);
+
+      const response = await fetch(`/api/applicant/applications/${nextApplicationId}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await response.json()) as {
+        document?: ApplicationDocumentInput;
+        error?: string;
+      };
+
+      if (!response.ok || !data.document) {
+        setStatusMessage({
+          kind: "error",
+          text: data.error ?? `Application submitted, but ${documentName} could not be uploaded.`,
+        });
+        return false;
+      }
+
+      setUploadedDocuments((current) => ({
+        ...current,
+        [documentName]: data.document,
+      }));
+    }
+
+    if (documentsToUpload.length > 0) {
+      setPendingDocuments({});
+    }
+
+    return true;
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -161,11 +214,13 @@ export function RenewalApplicationForm() {
       const response = await fetch("/api/applicant/business-records", { cache: "no-store" });
       const data = (await response.json()) as {
         records?: Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>;
+        revokedBlockedCount?: number;
       };
 
       if (!active || !response.ok || !data.records) return;
 
       setRecords(data.records);
+      setRevokedBlockedCount(data.revokedBlockedCount ?? 0);
       if (data.records[0] && !selectedBusinessId) {
         setSelectedBusinessId(data.records[0].id);
           setInfo(
@@ -237,9 +292,11 @@ export function RenewalApplicationForm() {
       if (!info.email.trim()) nextErrors.email = "Email is required.";
       if (!info.mainOfficeAddress.trim()) nextErrors.mainOfficeAddress = "Main Office Address is required.";
       if (!info.phone.trim()) nextErrors.phone = "Contact Number is required.";
-      if (!info.sameAsMainOffice && !info.businessAddress.trim()) {
+      if (!info.businessAddress.trim()) {
         nextErrors.businessAddress = "Business Address is required.";
       }
+
+      Object.assign(nextErrors, validateBusinessLocation(info));
 
       if (Object.keys(nextErrors).length > 0) {
         setFieldErrors(nextErrors);
@@ -262,6 +319,27 @@ export function RenewalApplicationForm() {
     setStatusMessage(null);
     setValidationDetail(null);
     setFieldErrors({});
+
+    if (!selectedRecord) {
+      setStatusMessage({
+        kind: "error",
+        text: revokedBlockedCount > 0
+          ? RENEWAL_REVOKED_MESSAGE
+          : "Select an eligible business record before submitting renewal.",
+      });
+      setSubmitting(false);
+      return null;
+    }
+
+    if (mode === "SUBMIT") {
+      const locationErrors = validateBusinessLocation(info);
+      if (Object.keys(locationErrors).length > 0) {
+        setFieldErrors(locationErrors);
+        setStatusMessage({ kind: "error", text: BUSINESS_LOCATION_ERROR });
+        setSubmitting(false);
+        return null;
+      }
+    }
 
     const payload: SaveApplicationInput = {
       applicationId,
@@ -291,73 +369,68 @@ export function RenewalApplicationForm() {
         text: data.error ?? "Unable to save renewal application.",
       });
       if (data.detail) setValidationDetail(data.detail);
+      setSubmitting(false);
       return null;
     }
 
     setApplicationId(data.application.id);
+
+    if (mode === "SUBMIT") {
+      const uploaded = await uploadPendingDocuments(data.application.id);
+      setSubmitting(false);
+
+      if (!uploaded) {
+        return data.application.id;
+      }
+
+      setStatusMessage({
+        kind: "success",
+        text: `Renewal ${data.application.applicationNumber} submitted successfully.`,
+      });
+      return data.application.id;
+    }
+
+    setSubmitting(false);
     setStatusMessage({
       kind: "success",
-      text:
-        mode === "SUBMIT"
-          ? `Renewal ${data.application.applicationNumber} submitted successfully.`
-          : `Renewal draft ${data.application.applicationNumber} saved successfully.`,
+      text: `Renewal draft ${data.application.applicationNumber} saved successfully.`,
     });
     return data.application.id;
-  }
-
-  async function ensureApplicationId(): Promise<string | null> {
-    if (applicationId) return applicationId;
-    return persist("DRAFT");
   }
 
   async function handleDocumentUpload(documentName: string, file: File | null) {
     if (!file) return;
 
-    const ensuredId = await ensureApplicationId();
-    if (!ensuredId) return;
-
-    setSubmitting(true);
-    setStatusMessage(null);
-
-    const formData = new FormData();
-    formData.append("documentName", documentName);
-    formData.append("file", file);
-
-    const response = await fetch(`/api/applicant/applications/${ensuredId}/documents`, {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = (await response.json()) as {
-      document?: ApplicationDocumentInput;
-      error?: string;
-    };
-
-    setSubmitting(false);
-
-    if (!response.ok || !data.document) {
-      setStatusMessage({
-        kind: "error",
-        text: data.error ?? "Unable to upload document.",
-      });
-      return;
-    }
-
-    const uploadedDoc = data.document;
-
     setUploadedDocuments((current) => ({
       ...current,
-      [documentName]: uploadedDoc,
+      [documentName]: {
+        documentName,
+        fileName: file.name,
+      },
     }));
-    setStatusMessage({
-      kind: "success",
-      text: `${documentName} uploaded.`,
-    });
+    setPendingDocuments((current) => ({
+      ...current,
+      [documentName]: file,
+    }));
   }
 
   async function handleDocumentDelete(documentName: string) {
     const doc = uploadedDocuments[documentName];
-    if (!doc?.id || !applicationId) return;
+    const hasSavedDocument = Boolean(doc?.id && applicationId);
+
+    if (!hasSavedDocument) {
+      setUploadedDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      setPendingDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      return;
+    }
 
     setSubmitting(true);
     const response = await fetch(`/api/applicant/applications/${applicationId}/documents/${doc.id}`, {
@@ -368,6 +441,11 @@ export function RenewalApplicationForm() {
     if (!response.ok) return;
 
     setUploadedDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setPendingDocuments((current) => {
       const nextState = { ...current };
       delete nextState[documentName];
       return nextState;
@@ -397,8 +475,12 @@ export function RenewalApplicationForm() {
         >
           {records.length === 0 ? (
             <EmptyState
-              title="No records available yet"
-              description="No action is required right now. This renewal form will populate once you have an existing business record."
+              title={revokedBlockedCount > 0 ? "No eligible renewal records" : "No records available yet"}
+              description={
+                revokedBlockedCount > 0
+                  ? `${RENEWAL_REVOKED_MESSAGE} You may file a New Application to re-apply.`
+                  : "No action is required right now. This renewal form will populate once you have an existing business record."
+              }
             />
           ) : (
             <div className="space-y-4">
@@ -510,7 +592,7 @@ export function RenewalApplicationForm() {
         <div className="space-y-4">
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredRenewalDocs.length}`}
-            description="Zoning clearance is not required for renewal. Upload current, readable copies of the remaining requirements."
+            description="Select files locally first, then the final submit will save the documents and timestamps."
             variant="info"
           />
           <SectionCard
@@ -528,6 +610,7 @@ export function RenewalApplicationForm() {
                     helperText="Upload the latest valid copy for renewal review."
                     disabled={submitting || records.length === 0}
                     fileName={uploadedDoc?.fileName}
+                    uploadedAt={uploadedDoc?.uploadedAt}
                     onFileChange={(file) => {
                       void handleDocumentUpload(doc, file);
                     }}

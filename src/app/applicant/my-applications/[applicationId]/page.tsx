@@ -15,6 +15,16 @@ interface PageProps {
   params: Promise<{ applicationId: string }>;
 }
 
+const formatUploadTimestamp = (date: string | Date | null | undefined) => {
+  if (!date) return "Upload time unavailable";
+
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Manila",
+  }).format(new Date(date));
+};
+
 function getStatusSummary(status: string): { meaning: string; nextStep: string } {
   if (status === "Draft") {
     return {
@@ -232,9 +242,6 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
                       Print Closure Certificate
                     </Link>
                   ) : null}
-                  <Link href="/applicant/business-location" className={actionButtonStyles("secondary", "sm")}>
-                    Open Business Location
-                  </Link>
                 </div>
               }
             />
@@ -259,7 +266,14 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
         <ul className="space-y-2 text-sm text-gray-700">
           {application.documents.map((doc: any) => (
             <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-              <span>{doc.documentName}: {doc.fileName}</span>
+              <div>
+                <p className="font-medium text-slate-900">
+                  {doc.documentName}: {doc.fileName}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Uploaded: {formatUploadTimestamp(doc.uploadedAt)}
+                </p>
+              </div>
               <a
                 href={`/api/applicant/applications/${application.id}/documents/${doc.id}/download`}
                 className={actionButtonStyles("secondary", "sm")}
@@ -367,15 +381,8 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <p className="text-sm text-slate-600">
-            {application.permitIssuance?.releasedAt
-              ? "Your application is released. Continue to Business Location for mapping submission or updates."
-              : "Business Location mapping is shown after release stage completion."}
-          </p>
-          <Link href="/applicant/business-location" className={actionButtonStyles("secondary", "sm")}>
-            Open Business Location
-          </Link>
+        <div className="text-sm text-slate-600">
+          Your business location coordinates have been submitted and processed with your application.
         </div>
       </SectionCard>
 

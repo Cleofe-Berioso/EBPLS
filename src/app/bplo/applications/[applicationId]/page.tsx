@@ -15,6 +15,13 @@ interface PageProps {
   params: Promise<{ applicationId: string }>;
 }
 
+const formatDateTime = (value: string | Date) =>
+  new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Manila",
+  }).format(new Date(value));
+
 function getStatusGuidance(status: string): { meaning: string; nextStep: string } {
   if (status === "Draft") {
     return {
@@ -33,7 +40,7 @@ function getStatusGuidance(status: string): { meaning: string; nextStep: string 
   if (status === "Under Review") {
     return {
       meaning: "The application is currently in BPLO review stage.",
-      nextStep: "Approve for Assessment, or return/reject with remarks if needed.",
+      nextStep: "Send to Department Head Review, or return/reject with remarks if needed.",
     };
   }
 
@@ -141,7 +148,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Date Submitted</p>
             <p className="mt-1 font-medium text-slate-900">
-              {application.submittedAt ? new Date(application.submittedAt).toLocaleString() : "-"}
+              {application.submittedAt ? formatDateTime(application.submittedAt) : "-"}
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -175,7 +182,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
             <li key={doc.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
               <div>
                 <p><strong>{doc.documentName}</strong>: {doc.fileName}</p>
-                <p className="text-xs text-slate-500">Uploaded: {new Date(doc.uploadedAt).toLocaleString()}</p>
+                <p className="text-xs text-slate-500">Uploaded: {formatDateTime(doc.uploadedAt)}</p>
               </div>
               <a
                 href={`/api/bplo/applications/${application.id}/documents/${doc.id}/download`}

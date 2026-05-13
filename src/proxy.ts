@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { canAccess, isProtectedRoute, ROLE_HOME } from "@/lib/rbac";
 import type { Role } from "@/lib/db";
 
-export default auth((req) => {
+export const proxy = auth((req) => {
   const { nextUrl } = req;
   const pathname = nextUrl.pathname;
   const isLoggedIn = !!req.auth;

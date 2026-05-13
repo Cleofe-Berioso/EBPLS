@@ -128,12 +128,12 @@ function getNextActionForStatus(input: {
 
   if (input.status === "Released") {
     return {
-      label: "Submit or view Business Location",
+      label: "Application Released",
       detail: input.releasedWithLocation
-        ? "Your released record already has a submitted Business Location. You can view or update it as allowed."
-        : "Your permit or certificate is released. Submit your Business Location details next.",
-      href: "/applicant/business-location",
-      cta: "Open Business Location",
+        ? "Your permit or certificate is released. Business Location coordinates have been submitted with your application."
+        : "Your permit or certificate is released. Business Location coordinates are recorded in your application.",
+      href: "/applicant/my-applications",
+      cta: "View all applications",
       variant: "info",
     };
   }

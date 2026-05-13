@@ -117,10 +117,6 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
       })
     : input.mainOfficeAddress.trim();
 
-  const normalizedBusinessAddress = input.sameAsMainOffice
-    ? normalizedMainOfficeAddress
-    : input.businessAddress.trim();
-
   return {
     ...input,
     registrationNumber: input.registrationNumber.trim(),
@@ -139,7 +135,15 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     cityMunicipality,
     streetAddress,
     mainOfficeAddress: normalizedMainOfficeAddress,
-    businessAddress: normalizedBusinessAddress,
+    businessAddress: input.businessAddress.trim(),
+    businessLatitude:
+      typeof input.businessLatitude === "number" && Number.isFinite(input.businessLatitude)
+        ? input.businessLatitude
+        : null,
+    businessLongitude:
+      typeof input.businessLongitude === "number" && Number.isFinite(input.businessLongitude)
+        ? input.businessLongitude
+        : null,
     taxDeclarationNumber: input.taxDeclarationNumber.trim(),
     propertyIdentificationNumber: input.propertyIdentificationNumber.trim(),
     taxIncentives: input.taxIncentives.trim(),

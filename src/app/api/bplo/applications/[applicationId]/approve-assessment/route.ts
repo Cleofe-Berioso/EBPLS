@@ -29,7 +29,7 @@ export async function POST(req: Request, context: RouteContext) {
     );
     return NextResponse.json({ application });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to approve application for assessment";
+    const message = error instanceof Error ? error.message : "Unable to route application to Department Head review";
     const status = message === "Application not found" ? 404 : 400;
     return NextResponse.json({ error: message }, { status });
   }

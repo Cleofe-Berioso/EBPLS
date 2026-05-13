@@ -1,9 +1,12 @@
-const { PrismaClient } = require("@prisma/client");
-const { PrismaLibSql } = require("@prisma/adapter-libsql");
-const bcrypt = require("bcryptjs");
+import { PrismaClient } from "@prisma/client";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
+import bcrypt from "bcryptjs";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
 
 const adapter = new PrismaLibSql({ url: "file:./prisma/dev.db" });
 const prisma = new PrismaClient({ adapter });
+const DEBUG_PROOF_FILE_PATH = path.join(process.cwd(), "scripts", "smoke-test-proof.txt");
 
 const DEFAULT_SYSTEM_FEE_SETTINGS = {
   renewalSurchargePercent: 25,
@@ -420,6 +423,18 @@ async function seedBaseData() {
       password: "password123",
       role: "SUPER_ADMIN" as const,
     },
+    {
+      email: "dept-head@example.com",
+      name: "Department Head",
+      password: "password123",
+      role: "DEPARTMENT_HEAD" as const,
+    },
+    {
+      email: "jit@example.com",
+      name: "JIT Inspector",
+      password: "password123",
+      role: "JIT" as const,
+    },
   ];
 
   // Keep seed idempotent and avoid deleting user-managed accounts.
@@ -657,7 +672,7 @@ async function syncDebugHistory(
   applicationId: string,
   events: Array<{
     actorId: string;
-    actorRole: "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+    actorRole: "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
     fromStatus: string | null;
     toStatus: string;
     remarks: string;
@@ -682,15 +697,420 @@ async function syncDebugHistory(
         data: {
           applicationId,
           actorId: event.actorId,
-          actorRole: event.actorRole,
-          fromStatus: event.fromStatus,
-          toStatus: event.toStatus,
+          actorRole: event.actorRole as any,
+          fromStatus: event.fromStatus as any,
+          toStatus: event.toStatus as any,
           remarks: `[DEBUG-SEED] ${event.remarks}`,
           createdAt: new Date(baseTime + i * 60_000),
         },
       })
     );
   }
+}
+
+let inspectionColumnCache: Set<string> | null = null;
+
+async function getInspectionColumnSet(): Promise<Set<string>> {
+  if (inspectionColumnCache) {
+    return inspectionColumnCache;
+  }
+
+  const rows = await prisma.$queryRawUnsafe<Array<{ name?: string }>>("PRAGMA table_info('Inspection')");
+  inspectionColumnCache = new Set(rows.map((row) => row.name).filter((name): name is string => Boolean(name)));
+  return inspectionColumnCache;
+}
+
+async function upsertDebugInspectionSeed(input: {
+  marker: string;
+  businessRecordId: string;
+  applicationId: string;
+  inspectorId: string;
+  complianceStatus: "COMPLIANT" | "NON_COMPLIANT";
+  status: "COMPLIANT" | "NON_COMPLIANT" | "REVOCATION_REVIEW" | "REVOCATION_DENIED" | "REVOKED";
+  comment: string;
+  decidedById?: string | null;
+  revocationDecision?: "APPROVED" | "DENIED" | null;
+  revocationRemarks?: string | null;
+  decidedAt?: Date | null;
+  evidence?: {
+    fileName: string;
+    storagePath: string;
+    mimeType: string;
+    sizeBytes: number;
+  };
+}) {
+  const inspectionColumns = await getInspectionColumnSet();
+  const supports = (column: string) => inspectionColumns.has(column);
+
+  const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    'SELECT "id" FROM "Inspection" WHERE "businessRecordId" = ? AND "applicationId" = ? AND "comment" LIKE ? LIMIT 1',
+    input.businessRecordId,
+    input.applicationId,
+    `${input.marker}%`
+  );
+
+  const data: Record<string, unknown> = {
+    inspectorId: input.inspectorId,
+    complianceStatus: input.complianceStatus,
+    status: input.status,
+    comment: input.comment,
+  };
+
+  if (supports("decidedById")) data.decidedById = input.decidedById ?? null;
+  if (supports("revocationDecision")) data.revocationDecision = input.revocationDecision ?? null;
+  if (supports("revocationRemarks")) data.revocationRemarks = input.revocationRemarks ?? null;
+  if (supports("decidedAt")) data.decidedAt = input.decidedAt ?? null;
+  if (supports("evidenceFileName")) data.evidenceFileName = input.evidence?.fileName ?? null;
+  if (supports("evidenceStoragePath")) data.evidenceStoragePath = input.evidence?.storagePath ?? null;
+  if (supports("evidenceMimeType")) data.evidenceMimeType = input.evidence?.mimeType ?? null;
+  if (supports("evidenceSizeBytes")) data.evidenceSizeBytes = input.evidence?.sizeBytes ?? null;
+
+  const existingId = existing[0]?.id;
+  if (existingId) {
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+
+    for (const [key, value] of Object.entries(data)) {
+      setClauses.push(`"${key}" = ?`);
+      params.push(value);
+    }
+
+    if (setClauses.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Inspection" SET ${setClauses.join(", ")} WHERE "id" = ?`,
+        ...params,
+        existingId
+      );
+    }
+
+    return;
+  }
+
+  const createData: Record<string, unknown> = {
+    businessRecordId: input.businessRecordId,
+    applicationId: input.applicationId,
+    ...data,
+  };
+
+  if (supports("id")) createData.id = randomUUID();
+  if (supports("createdAt")) createData.createdAt = new Date();
+  if (supports("updatedAt")) createData.updatedAt = new Date();
+
+  const createColumns = Object.keys(createData);
+  const placeholders = createColumns.map(() => "?");
+  const createValues = createColumns.map((column) => createData[column]);
+
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "Inspection" (${createColumns.map((column) => `"${column}"`).join(", ")}) VALUES (${placeholders.join(", ")})`,
+    ...createValues
+  );
+}
+
+async function seedPhase14WorkflowDebugData() {
+  console.log("Seeding Phase 14 debug workflow data...");
+
+  const [applicant, bplo, departmentHead, jit] = await Promise.all([
+    prisma.user.findUnique({ where: { email: "applicant@example.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "bplo@example.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "dept-head@example.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "jit@example.com" }, select: { id: true } }),
+  ]);
+
+  if (!applicant?.id || !bplo?.id || !departmentHead?.id || !jit?.id) {
+    throw new Error("Phase 14 debug seed requires applicant, BPLO, Department Head, and JIT users.");
+  }
+
+  const debugBusinesses = [
+    {
+      registrationNumber: "DBG-P14-DH-REVIEW-BIZ",
+      businessName: "[DEBUG-SEED] P14 DH Review Business",
+      ownerName: "Debug Owner DH Review",
+      lineOfBusiness: "Trading",
+      businessStatus: "ACTIVE",
+    },
+    {
+      registrationNumber: "DBG-P14-DH-APPROVED-BIZ",
+      businessName: "[DEBUG-SEED] P14 DH Approved Business",
+      ownerName: "Debug Owner DH Approved",
+      lineOfBusiness: "Services",
+      businessStatus: "ACTIVE",
+    },
+    {
+      registrationNumber: "DBG-P14-RELEASED-MAP-BIZ",
+      businessName: "[DEBUG-SEED] P14 Released Map Business",
+      ownerName: "Debug Owner Released",
+      lineOfBusiness: "Retail",
+      businessStatus: "ACTIVE",
+    },
+    {
+      registrationNumber: "DBG-P14-REVOKE-QUEUE-BIZ",
+      businessName: "[DEBUG-SEED] P14 Revocation Queue Business",
+      ownerName: "Debug Owner Revoke Queue",
+      lineOfBusiness: "Food Services",
+      businessStatus: "ACTIVE",
+    },
+    {
+      registrationNumber: "DBG-P14-REVOKED-BIZ",
+      businessName: "[DEBUG-SEED] P14 Revoked Business",
+      ownerName: "Debug Owner Revoked",
+      lineOfBusiness: "Accommodation",
+      businessStatus: "INACTIVE",
+    },
+    {
+      registrationNumber: "DBG-P14-RENEW-ELIGIBLE-BIZ",
+      businessName: "[DEBUG-SEED] P14 Renewal Eligible Business",
+      ownerName: "Debug Owner Renewal Eligible",
+      lineOfBusiness: "Communication",
+      businessStatus: "ACTIVE",
+    },
+  ] as const;
+
+  const businessByReg = new Map<string, { id: string }>();
+
+  for (const business of debugBusinesses) {
+    const upserted = await prisma.businessRecord.upsert({
+      where: { registrationNumber: business.registrationNumber },
+      update: {
+        applicantId: applicant.id,
+        businessType: "Sole Proprietorship",
+        tin: `TIN-${business.registrationNumber}`,
+        businessName: business.businessName,
+        tradeName: `${business.businessName} Trade`,
+        ownerName: business.ownerName,
+        nationality: "Filipino",
+        email: "applicant@example.com",
+        phone: "+639111111111",
+        mainOfficeAddress: "Poblacion, Enrique B. Magalona, Negros Occidental",
+        businessAddress: "Poblacion, Enrique B. Magalona, Negros Occidental",
+        sameAsMainOffice: true,
+        businessArea: "120",
+        totalFloorArea: "180",
+        totalEmployees: "10",
+        maleEmployees: "6",
+        femaleEmployees: "4",
+        employeesWithinMunicipality: "8",
+        deliveryVehicles: "1",
+        propertyOwnership: "Owned",
+        taxDeclarationNumber: `TD-${business.registrationNumber}`,
+        propertyIdentificationNumber: `PIN-${business.registrationNumber}`,
+        taxIncentives: "None",
+        businessActivity: "[DEBUG-SEED] Phase 14 workflow activity",
+        lineOfBusiness: business.lineOfBusiness,
+        assetSize: "3500000",
+        businessStatus: business.businessStatus as any,
+      },
+      create: {
+        applicantId: applicant.id,
+        businessType: "Sole Proprietorship",
+        registrationNumber: business.registrationNumber,
+        tin: `TIN-${business.registrationNumber}`,
+        businessName: business.businessName,
+        tradeName: `${business.businessName} Trade`,
+        ownerName: business.ownerName,
+        nationality: "Filipino",
+        email: "applicant@example.com",
+        phone: "+639111111111",
+        mainOfficeAddress: "Poblacion, Enrique B. Magalona, Negros Occidental",
+        businessAddress: "Poblacion, Enrique B. Magalona, Negros Occidental",
+        sameAsMainOffice: true,
+        businessArea: "120",
+        totalFloorArea: "180",
+        totalEmployees: "10",
+        maleEmployees: "6",
+        femaleEmployees: "4",
+        employeesWithinMunicipality: "8",
+        deliveryVehicles: "1",
+        propertyOwnership: "Owned",
+        taxDeclarationNumber: `TD-${business.registrationNumber}`,
+        propertyIdentificationNumber: `PIN-${business.registrationNumber}`,
+        taxIncentives: "None",
+        businessActivity: "[DEBUG-SEED] Phase 14 workflow activity",
+        lineOfBusiness: business.lineOfBusiness,
+        assetSize: "3500000",
+        businessStatus: business.businessStatus as any,
+      },
+      select: { id: true },
+    });
+
+    businessByReg.set(business.registrationNumber, upserted as { id: string });
+  }
+
+  const debugApplications = [
+    {
+      applicationNumber: "DBG-P14-DH-REVIEW-001",
+      applicationType: "NEW",
+      status: "DEPARTMENT_HEAD_REVIEW",
+      businessReg: "DBG-P14-DH-REVIEW-BIZ",
+    },
+    {
+      applicationNumber: "DBG-P14-DH-APPROVED-001",
+      applicationType: "NEW",
+      status: "DEPARTMENT_HEAD_APPROVED",
+      businessReg: "DBG-P14-DH-APPROVED-BIZ",
+    },
+    {
+      applicationNumber: "DBG-P14-RELEASED-MAP-001",
+      applicationType: "NEW",
+      status: "RELEASED",
+      businessReg: "DBG-P14-RELEASED-MAP-BIZ",
+    },
+    {
+      applicationNumber: "DBG-P14-REVOCATION-QUEUE-001",
+      applicationType: "NEW",
+      status: "REVOCATION_REVIEW",
+      businessReg: "DBG-P14-REVOKE-QUEUE-BIZ",
+    },
+    {
+      applicationNumber: "DBG-P14-REVOKED-001",
+      applicationType: "NEW",
+      status: "REVOKED",
+      businessReg: "DBG-P14-REVOKED-BIZ",
+    },
+    {
+      applicationNumber: "DBG-P14-RENEW-ELIGIBLE-001",
+      applicationType: "RENEWAL",
+      status: "RELEASED",
+      businessReg: "DBG-P14-RENEW-ELIGIBLE-BIZ",
+    },
+  ] as const;
+
+  const appByNumber = new Map<string, { id: string }>();
+
+  for (const app of debugApplications) {
+    const businessRecord = businessByReg.get(app.businessReg);
+    if (!businessRecord) continue;
+
+    const formData = buildBusinessInfo({
+      registrationNumber: app.businessReg,
+      businessName: `[DEBUG-SEED] ${app.applicationNumber} Business`,
+      ownerName: "Debug Seed Applicant",
+      lineOfBusiness: "Trading",
+    });
+
+    const upserted = await prisma.businessApplication.upsert({
+      where: { applicationNumber: app.applicationNumber },
+      update: {
+        applicantId: applicant.id,
+        businessRecordId: businessRecord.id,
+        applicationType: app.applicationType as any,
+        status: app.status as any,
+        formData,
+        submittedAt: new Date("2026-05-10T08:00:00.000Z"),
+      },
+      create: {
+        applicationNumber: app.applicationNumber,
+        applicantId: applicant.id,
+        businessRecordId: businessRecord.id,
+        applicationType: app.applicationType as any,
+        status: app.status as any,
+        formData,
+        submittedAt: new Date("2026-05-10T08:00:00.000Z"),
+      },
+      select: { id: true },
+    });
+
+    appByNumber.set(app.applicationNumber, upserted as { id: string });
+  }
+
+  const releasedMapApp = appByNumber.get("DBG-P14-RELEASED-MAP-001");
+  const releasedMapBusiness = businessByReg.get("DBG-P14-RELEASED-MAP-BIZ");
+  if (releasedMapApp && releasedMapBusiness) {
+    await prisma.permitIssuance.upsert({
+      where: { applicationId: releasedMapApp.id },
+      update: {
+        documentNumber: "DBG-P14-BP-RELEASED-MAP-001",
+        documentType: "BUSINESS_PERMIT",
+        status: "RELEASED",
+        issuedAt: new Date("2026-05-11T08:00:00.000Z"),
+        releasedAt: new Date("2026-05-11T09:00:00.000Z"),
+        preparedById: bplo.id,
+        releasedById: bplo.id,
+        remarks: "[DEBUG-SEED][P14] Released permit visible on map",
+      },
+      create: {
+        applicationId: releasedMapApp.id,
+        documentNumber: "DBG-P14-BP-RELEASED-MAP-001",
+        documentType: "BUSINESS_PERMIT",
+        status: "RELEASED",
+        issuedAt: new Date("2026-05-11T08:00:00.000Z"),
+        releasedAt: new Date("2026-05-11T09:00:00.000Z"),
+        preparedById: bplo.id,
+        releasedById: bplo.id,
+        remarks: "[DEBUG-SEED][P14] Released permit visible on map",
+      },
+    });
+
+    await prisma.businessLocation.upsert({
+      where: { businessRecordId: releasedMapBusiness.id },
+      update: {
+        latitude: 10.9052,
+        longitude: 123.0722,
+        address: "[DEBUG-SEED] P14 Released map address",
+        barangay: "Poblacion",
+        status: "VERIFIED",
+        submittedById: applicant.id,
+        verifiedById: bplo.id,
+        remarks: "[DEBUG-SEED][P14] Map visible sample",
+      },
+      create: {
+        businessRecordId: releasedMapBusiness.id,
+        latitude: 10.9052,
+        longitude: 123.0722,
+        address: "[DEBUG-SEED] P14 Released map address",
+        barangay: "Poblacion",
+        status: "VERIFIED",
+        submittedById: applicant.id,
+        verifiedById: bplo.id,
+        remarks: "[DEBUG-SEED][P14] Map visible sample",
+      },
+    });
+  }
+
+  const revokeQueueApp = appByNumber.get("DBG-P14-REVOCATION-QUEUE-001");
+  const revokeQueueBusiness = businessByReg.get("DBG-P14-REVOKE-QUEUE-BIZ");
+  if (revokeQueueApp && revokeQueueBusiness) {
+    await upsertDebugInspectionSeed({
+      marker: "[DEBUG-SEED][P14] REVOCATION_REVIEW",
+      businessRecordId: revokeQueueBusiness.id,
+      applicationId: revokeQueueApp.id,
+      inspectorId: jit.id,
+      complianceStatus: "NON_COMPLIANT",
+      status: "REVOCATION_REVIEW",
+      comment: "[DEBUG-SEED][P14] REVOCATION_REVIEW Non-compliant sample for DH Permit to Revoke queue",
+      evidence: {
+        fileName: "smoke-test-proof.txt",
+        storagePath: DEBUG_PROOF_FILE_PATH,
+        mimeType: "text/plain",
+        sizeBytes: 128,
+      },
+    });
+  }
+
+  const revokedApp = appByNumber.get("DBG-P14-REVOKED-001");
+  const revokedBusiness = businessByReg.get("DBG-P14-REVOKED-BIZ");
+  if (revokedApp && revokedBusiness) {
+    await upsertDebugInspectionSeed({
+      marker: "[DEBUG-SEED][P14] REVOKED",
+      businessRecordId: revokedBusiness.id,
+      applicationId: revokedApp.id,
+      inspectorId: jit.id,
+      complianceStatus: "NON_COMPLIANT",
+      status: "REVOKED",
+      comment: "[DEBUG-SEED][P14] REVOKED Inspection approved for revocation list",
+      decidedById: departmentHead.id,
+      revocationDecision: "APPROVED",
+      revocationRemarks: "[DEBUG-SEED][P14] Revocation approved by Department Head",
+      decidedAt: new Date("2026-05-12T09:30:00.000Z"),
+      evidence: {
+        fileName: "smoke-test-proof.txt",
+        storagePath: DEBUG_PROOF_FILE_PATH,
+        mimeType: "text/plain",
+        sizeBytes: 128,
+      },
+    });
+  }
+
+  console.log("Phase 14 debug workflow data seeded");
 }
 
 async function seedUiDebugData() {
@@ -817,7 +1237,7 @@ async function seedUiDebugData() {
           businessActivity: record.businessActivity,
           lineOfBusiness: record.lineOfBusiness,
           assetSize: record.assetSize,
-          businessStatus: record.businessStatus,
+          businessStatus: record.businessStatus as any,
           closedAt: record.closedAt,
           closureApplicationId: record.closureApplicationId,
         },
@@ -849,7 +1269,7 @@ async function seedUiDebugData() {
           businessActivity: record.businessActivity,
           lineOfBusiness: record.lineOfBusiness,
           assetSize: record.assetSize,
-          businessStatus: record.businessStatus,
+          businessStatus: record.businessStatus as any,
           closedAt: record.closedAt,
           closureApplicationId: record.closureApplicationId,
         },
@@ -1187,13 +1607,13 @@ async function seedUiDebugData() {
         where: { applicationId: app.id },
         update: {
           assessmentNumber: seed.assessmentNumber,
-          status: seed.status,
-          paymentFrequency: seed.paymentFrequency,
+          status: seed.status as any,
+          paymentFrequency: seed.paymentFrequency as any,
           annualAssessedAmount: seed.annualAssessedAmount,
           releasePaymentAmount: seed.releasePaymentAmount,
           amountPaid: seed.amountPaid,
           remainingBalance: seed.remainingBalance,
-          paymentStatus: seed.paymentStatus,
+          paymentStatus: seed.paymentStatus as any,
           mayorsPermitFee: seed.mayorsPermitFee,
           regulatoryFees: seed.regulatoryFees,
           additionalCharges: seed.additionalCharges,
@@ -1211,13 +1631,13 @@ async function seedUiDebugData() {
         create: {
           applicationId: app.id,
           assessmentNumber: seed.assessmentNumber,
-          status: seed.status,
-          paymentFrequency: seed.paymentFrequency,
+          status: seed.status as any,
+          paymentFrequency: seed.paymentFrequency as any,
           annualAssessedAmount: seed.annualAssessedAmount,
           releasePaymentAmount: seed.releasePaymentAmount,
           amountPaid: seed.amountPaid,
           remainingBalance: seed.remainingBalance,
-          paymentStatus: seed.paymentStatus,
+          paymentStatus: seed.paymentStatus as any,
           mayorsPermitFee: seed.mayorsPermitFee,
           regulatoryFees: seed.regulatoryFees,
           additionalCharges: seed.additionalCharges,
@@ -1518,6 +1938,8 @@ async function seedUiDebugData() {
   }
 
   console.log("Debug seed complete");
+
+  await seedPhase14WorkflowDebugData();
 }
 
 async function main() {
@@ -1534,6 +1956,7 @@ async function main() {
   console.log("Seeding complete.");
 }
 
+
 main()
   .catch((e) => {
     console.error(e);
@@ -1542,5 +1965,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-export {};

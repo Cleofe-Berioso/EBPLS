@@ -70,6 +70,7 @@ export function BploBusinessMapClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mapKey, setMapKey] = useState(0);
 
   async function loadRows() {
     setIsLoading(true);
@@ -232,13 +233,23 @@ export function BploBusinessMapClient() {
                       OpenStreetMap tiles and saved business coordinates remain unchanged.
                     </p>
                   </div>
-                  <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                    BPLO Review View
-                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMapKey((prev) => prev + 1)}
+                      className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Re-center to EB Magalona
+                    </button>
+                    <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+                      BPLO Review View
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mt-3">
                 <LeafletBusinessMap
+                  key={mapKey}
                   center={[EB_MAGALONA_CENTER.latitude, EB_MAGALONA_CENTER.longitude]}
                   zoom={13}
                   markers={markers}

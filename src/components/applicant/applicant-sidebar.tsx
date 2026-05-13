@@ -25,7 +25,6 @@ const APPLICANT_SIDEBAR_STRUCTURE: SidebarGroup[] = [
       { label: "Tax Order / Payment", href: "/applicant/top" },
     ],
   },
-  { label: "Business Location", href: "/applicant/business-location" },
   { label: "Notifications", href: "/applicant/notifications" },
   { label: "Profile", href: "/applicant/profile" },
 ];
@@ -35,7 +34,6 @@ const SIDEBAR_ICONS = {
   "File Application": FileText,
   "My Applications": FolderOpen,
   "Tax Order / Payment": Receipt,
-  "Business Location": MapPin,
   Notifications: Bell,
   Profile: User,
 } as const;

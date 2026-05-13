@@ -43,7 +43,7 @@ export function SuperAdminLayoutClient({
                 onClick={() => setMobileOpen((value) => !value)}
                 aria-expanded={mobileOpen}
                 aria-label={mobileOpen ? "Close sidebar" : "Open sidebar"}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
               >
                 {mobileOpen ? <X className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
               </button>
@@ -52,7 +52,7 @@ export function SuperAdminLayoutClient({
                 onClick={() => setCollapsed((value) => !value)}
                 aria-expanded={!collapsed}
                 aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
-                className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:inline-flex"
+                className="hidden h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:inline-flex"
               >
                 {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               </button>
@@ -86,7 +86,9 @@ export function SuperAdminLayoutClient({
           </div>
         </header>
 
-        <main className="app-shell-main min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">{children}</main>
+        <main className="app-shell-main min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl">{children}</div>
+        </main>
       </div>
     </div>
   );

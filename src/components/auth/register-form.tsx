@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail, Phone, User } from "lucide-react";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -63,11 +65,12 @@ export function RegisterForm() {
           <div className="border-b border-slate-200 bg-slate-50/80 px-8 py-8 text-center">
             <div className="mb-4 flex justify-center">
               <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src="/images/logo.png"
                   alt="Municipality of Enrique B. Magalona Logo"
-                  className="w-20 h-20 object-contain"
+                  width={80}
+                  height={80}
+                  className="h-20 w-20 object-contain"
                 />
               </div>
             </div>
@@ -82,12 +85,12 @@ export function RegisterForm() {
               description="Your applicant account has been created. You can now sign in."
               variant="success"
             />
-            <a
+            <Link
               href="/login"
               className="inline-block w-full rounded-xl border border-emerald-700 bg-emerald-700 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-800"
             >
               Go to Login
-            </a>
+            </Link>
           </div>
 
           <div className="border-t border-slate-200 bg-slate-50 px-8 py-4">
@@ -107,11 +110,12 @@ export function RegisterForm() {
         <div className="border-b border-slate-200 bg-slate-50/80 px-8 py-8 text-center">
           <div className="mb-4 flex justify-center">
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/images/logo.png"
                 alt="Municipality of Enrique B. Magalona Logo"
-                className="w-20 h-20 object-contain"
+                width={80}
+                height={80}
+                className="h-20 w-20 object-contain"
               />
             </div>
           </div>
@@ -280,12 +284,12 @@ export function RegisterForm() {
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-700">
               Already have an account?{" "}
-              <a
+              <Link
                 href="/login"
                 className="text-emerald-600 hover:text-emerald-700 font-medium"
               >
                 Sign in
-              </a>
+              </Link>
             </p>
           </div>
         </div>

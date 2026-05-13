@@ -179,14 +179,14 @@ export default function TaxOrderOfPaymentPage() {
 
   if (loading) {
     return (
-      <section className="space-y-4">
+      <section className="space-y-4" aria-busy={loading}>
         <PageHeader
           eyebrow="Applicant"
           title="Tax Order of Payment"
           description="Tax Order of Payment for permit release payment."
         />
         <SectionCard>
-          <p className="text-sm text-slate-500">Loading assessed payment details...</p>
+          <p role="status" aria-live="polite" className="text-sm text-slate-500">Loading assessed payment details...</p>
         </SectionCard>
       </section>
     );

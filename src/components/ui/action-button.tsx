@@ -11,7 +11,7 @@ export function actionButtonStyles(
   className?: string
 ) {
   const base =
-    "inline-flex max-w-full items-center justify-center gap-1.5 rounded-xl border text-center font-semibold whitespace-normal transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none";
+    "inline-flex max-w-full items-center justify-center gap-1.5 rounded-xl border text-center font-semibold whitespace-normal transition-colors transition-shadow transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none";
 
   const variants: Record<ActionButtonVariant, string> = {
     primary:
@@ -29,7 +29,7 @@ export function actionButtonStyles(
   };
 
   const sizes: Record<ActionButtonSize, string> = {
-    sm: "min-h-10 px-3.5 py-2 text-sm leading-5",
+    sm: "min-h-11 px-3.5 py-2 text-sm leading-5",
     md: "min-h-11 px-4.5 py-2.5 text-sm leading-5",
   };
 

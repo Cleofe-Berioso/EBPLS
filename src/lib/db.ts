@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type Role = "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+export type Role = "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
 
 export interface DbUser {
   id: string;

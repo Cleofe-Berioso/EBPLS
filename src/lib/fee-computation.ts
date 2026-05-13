@@ -602,8 +602,8 @@ export function computeMayorsPermitFee(
     selectedBy = `Configured setting (${selectedTierNameFromDefaults}) = ₱${configuredAmount.toLocaleString("en-PH")}`;
   }
 
-  let selectedMayorPermitFee = baseFee;
-  let specialRuleApplied: string | null = null;
+  const selectedMayorPermitFee = baseFee;
+  const specialRuleApplied: string | null = null;
 
   const explanation =
     `Category: ${catLabel}${isExplicitLiquorTobacco ? " (Liquor/Tobacco — base: Wholesalers/Retailers)" : ""}` +
