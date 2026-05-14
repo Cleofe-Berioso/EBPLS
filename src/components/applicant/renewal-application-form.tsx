@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
 import { isWithinEbMagalona } from "@/lib/business-location";
+import { validateBusinessIdentityFormats } from "@/lib/business-rules";
 import { BusinessInformationFields } from "@/components/applicant/business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
@@ -151,6 +152,29 @@ export function RenewalApplicationForm() {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
   const [revokedBlockedCount, setRevokedBlockedCount] = useState(0);
 
+  useEffect(() => {
+    const normalizedInfo = normalizeBusinessInfo(info);
+    const identityFormats = validateBusinessIdentityFormats(normalizedInfo);
+
+    setFieldErrors((current) => {
+      const nextErrors = { ...current };
+
+      if (normalizedInfo.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
+        nextErrors.registrationNumber = "Wrong Format";
+      } else if (nextErrors.registrationNumber === "Wrong Format" || nextErrors.registrationNumber === "This already exist") {
+        delete nextErrors.registrationNumber;
+      }
+
+      if (normalizedInfo.tin.trim().length > 0 && !identityFormats.tin) {
+        nextErrors.tin = "Wrong Format";
+      } else if (nextErrors.tin === "Wrong Format" || nextErrors.tin === "This already exist") {
+        delete nextErrors.tin;
+      }
+
+      return nextErrors;
+    });
+  }, [info]);
+
   const requiredRenewalDocs = useMemo(
     () =>
       resolveRequiredDocuments({
@@ -296,6 +320,14 @@ export function RenewalApplicationForm() {
         nextErrors.businessAddress = "Business Address is required.";
       }
 
+      const identityFormats = validateBusinessIdentityFormats(info);
+      if (info.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
+        nextErrors.registrationNumber = "Wrong Format";
+      }
+      if (info.tin.trim().length > 0 && !identityFormats.tin) {
+        nextErrors.tin = "Wrong Format";
+      }
+
       Object.assign(nextErrors, validateBusinessLocation(info));
 
       if (Object.keys(nextErrors).length > 0) {
@@ -319,6 +351,23 @@ export function RenewalApplicationForm() {
     setStatusMessage(null);
     setValidationDetail(null);
     setFieldErrors({});
+
+    const identityFormats = validateBusinessIdentityFormats(info);
+    const identityErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+
+    if (info.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
+      identityErrors.registrationNumber = "Wrong Format";
+    }
+    if (info.tin.trim().length > 0 && !identityFormats.tin) {
+      identityErrors.tin = "Wrong Format";
+    }
+
+    if (Object.keys(identityErrors).length > 0) {
+      setFieldErrors(identityErrors);
+      setStatusMessage({ kind: "error", text: "Wrong Format" });
+      setSubmitting(false);
+      return null;
+    }
 
     if (!selectedRecord) {
       setStatusMessage({
@@ -360,10 +409,14 @@ export function RenewalApplicationForm() {
       application?: { id: string; applicationNumber: string; status: string };
       error?: string;
       detail?: SubmitValidationErrorDetail;
+      duplicateField?: string;
     };
     setSubmitting(false);
 
     if (!response.ok || !data.application) {
+      if (data.duplicateField === "registrationNumber" || data.duplicateField === "tin") {
+        setFieldErrors({ [data.duplicateField]: "This already exist" });
+      }
       setStatusMessage({
         kind: "error",
         text: data.error ?? "Unable to save renewal application.",

@@ -14,7 +14,7 @@ export default async function DepartmentHeadPermitToRevokePage() {
       <PageHeader
         eyebrow="Department Head"
         title="Flagged Cases"
-        description="Review JIT non-compliant inspection reports and decide if revocation should proceed."
+        description="Review Department Head verified NON_COMPLIANT inspections and decide if revocation should proceed."
         badge={<RoleBadge role="VIEW_ONLY" label="Department Head" />}
       />
 

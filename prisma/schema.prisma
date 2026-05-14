@@ -187,6 +187,9 @@ enum InspectionComplianceStatus {
 enum InspectionStatus {
   COMPLIANT
   NON_COMPLIANT
+  DH_VERIFICATION_PENDING
+  VERIFIED_COMPLIANT
+  VERIFIED_NON_COMPLIANT
   REVOCATION_REVIEW
   REVOCATION_DENIED
   REVOKED
@@ -457,4 +460,35 @@ model RenewalExtension {
   updatedBy User? @relation("RenewalExtensionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([isActive, startDate, endDate])
+}
+
+model AuditLog {
+  id                 String    @id @default(cuid())
+  actorId            String?
+  actorName          String?
+  actorRole          String?
+  action             String
+  module             String
+  entityType         String
+  entityId           String?
+  applicationId      String?
+  businessRecordId   String?
+  inspectionId       String?
+  paymentReferenceId String?
+  documentId         String?
+  beforeStatus       String?
+  afterStatus        String?
+  description        String?
+  metadata           Json?
+  ipAddress          String?
+  userAgent          String?
+  createdAt          DateTime  @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([applicationId, createdAt])
+  @@index([businessRecordId, createdAt])
+  @@index([action, createdAt])
+  @@index([module, createdAt])
+  @@index([entityType, createdAt])
+  @@index([createdAt])
 }

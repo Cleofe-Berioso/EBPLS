@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireBploSession } from "@/lib/bplo-api";
+import { logPermitAction } from "@/lib/audit-log";
 import { releasePermitIssuance } from "@/lib/bplo-permit-issuance";
 
 export async function POST(
@@ -26,6 +27,22 @@ export async function POST(
       session.user.id,
       payload.remarks
     );
+
+    // Audit: Permit released
+    void logPermitAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "BPLO",
+      result.documentNumber,
+      result.documentNumber,
+      result.applicationId,
+      "RELEASED",
+      "FOR_RELEASE",
+      result.status,
+      `Permit released`,
+      {}
+    );
+
     return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to release permit issuance";

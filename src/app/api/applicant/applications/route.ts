@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import {
   ApplicantEligibilityError,
+  DuplicateBusinessIdentityError,
   listApplicantApplications,
   saveApplicantApplication,
   SubmitValidationError,
 } from "@/lib/applications";
 import { requireApplicantSession } from "@/lib/applicant-api";
 import type { SaveApplicationInput } from "@/lib/applicant-types";
+import { logApplicationAction } from "@/lib/audit-log";
 
 interface SubmitFileInput {
   documentName: string;
@@ -98,6 +100,23 @@ export async function POST(req: Request) {
       status: saved.status,
       submittedAt: saved.submittedAt,
     });
+
+    // Audit: Application submission
+    if (payload.mode === "SUBMIT") {
+      void logApplicationAction(
+        session.user.id,
+        session.user.name ?? session.user.email ?? null,
+        "APPLICANT",
+        saved.id,
+        saved.applicationNumber,
+        "SUBMITTED",
+        "DRAFT",
+        saved.status,
+        `${payload.applicationType} application submitted`,
+        { applicationType: payload.applicationType, documentCount: submitFiles.length }
+      );
+    }
+
     return NextResponse.json({ application: saved });
   } catch (error) {
     if (error instanceof SubmitValidationError) {
@@ -106,6 +125,13 @@ export async function POST(req: Request) {
           error: "Application is incomplete. Complete all required fields and documents before submitting.",
           detail: error.detail,
         },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof DuplicateBusinessIdentityError) {
+      return NextResponse.json(
+        { error: "This already exist", duplicateField: error.field },
         { status: 400 }
       );
     }

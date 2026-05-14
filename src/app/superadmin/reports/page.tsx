@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
@@ -121,6 +122,100 @@ export default async function SuperAdminReportsPage() {
       </div>
 
       <SuperAdminLocationReport rows={locationRows} />
+
+      {/* ── Printable System Reports ───────────────────────────────── */}
+      <SectionCard
+        title="Printable System Reports"
+        description="Generate, filter, and print official reports. Super Admin access only."
+      >
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <PrintableReportCard
+            title="Application Summary"
+            description="All application records: type, status, owner, submitted and updated dates."
+            href="/superadmin/reports/print/applications"
+            tone="blue"
+          />
+          <PrintableReportCard
+            title="Revenue Collection"
+            description="Fee assessments, Official Receipt Numbers, amounts assessed and paid."
+            href="/superadmin/reports/print/revenue"
+            tone="green"
+          />
+          <PrintableReportCard
+            title="Business Registry"
+            description="Business records with permit number, validity, type, and current status."
+            href="/superadmin/reports/print/business-registry"
+            tone="indigo"
+          />
+          <PrintableReportCard
+            title="Business Closure"
+            description="Closure applications with certificate status and released dates."
+            href="/superadmin/reports/print/closures"
+            tone="amber"
+          />
+          <PrintableReportCard
+            title="Inspection Compliance"
+            description="JIT inspection records: compliance status, inspector, and Department Head decisions."
+            href="/superadmin/reports/print/inspections"
+            tone="slate"
+          />
+          <PrintableReportCard
+            title="Audit Trail"
+            description="System-wide actor actions across modules — role, action, entity, and status changes."
+            href="/superadmin/reports/print/audit-trail"
+            tone="purple"
+          />
+          <PrintableReportCard
+            title="SMS Delivery Log"
+            description="SMS delivery records with masked phone numbers, provider, and delivery status."
+            href="/superadmin/reports/print/sms"
+            tone="red"
+          />
+        </div>
+      </SectionCard>
     </section>
+  );
+}
+
+type CardTone = "blue" | "green" | "indigo" | "amber" | "slate" | "purple" | "red";
+
+const cardToneStyles: Record<CardTone, { border: string; icon: string; title: string; btn: string }> = {
+  blue:   { border: "border-blue-200",   icon: "bg-blue-100 text-blue-600",   title: "text-blue-900",   btn: "border-blue-400 bg-blue-600 hover:bg-blue-700 text-white" },
+  green:  { border: "border-green-200",  icon: "bg-green-100 text-green-600",  title: "text-green-900",  btn: "border-green-400 bg-green-600 hover:bg-green-700 text-white" },
+  indigo: { border: "border-indigo-200", icon: "bg-indigo-100 text-indigo-600", title: "text-indigo-900", btn: "border-indigo-400 bg-indigo-600 hover:bg-indigo-700 text-white" },
+  amber:  { border: "border-amber-200",  icon: "bg-amber-100 text-amber-600",  title: "text-amber-900",  btn: "border-amber-400 bg-amber-600 hover:bg-amber-700 text-white" },
+  slate:  { border: "border-slate-200",  icon: "bg-slate-100 text-slate-600",  title: "text-slate-900",  btn: "border-slate-400 bg-slate-600 hover:bg-slate-700 text-white" },
+  purple: { border: "border-purple-200", icon: "bg-purple-100 text-purple-600", title: "text-purple-900", btn: "border-purple-400 bg-purple-600 hover:bg-purple-700 text-white" },
+  red:    { border: "border-red-200",    icon: "bg-red-100 text-red-600",    title: "text-red-900",    btn: "border-red-400 bg-red-600 hover:bg-red-700 text-white" },
+};
+
+function PrintableReportCard({
+  title,
+  description,
+  href,
+  tone,
+}: {
+  title: string;
+  description: string;
+  href: string;
+  tone: CardTone;
+}) {
+  const styles = cardToneStyles[tone];
+  return (
+    <div className={`flex flex-col gap-3 rounded-xl border p-4 ${styles.border} bg-white`}>
+      <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold ${styles.icon}`}>
+        ⬜
+      </div>
+      <div className="flex-1 space-y-1">
+        <p className={`text-sm font-semibold ${styles.title}`}>{title}</p>
+        <p className="text-xs leading-relaxed text-slate-500">{description}</p>
+      </div>
+      <Link
+        href={href}
+        className={`inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${styles.btn}`}
+      >
+        Open Report →
+      </Link>
+    </div>
   );
 }

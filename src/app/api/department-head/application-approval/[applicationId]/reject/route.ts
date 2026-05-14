@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { applyDepartmentHeadAction, requireDepartmentHeadSession } from "@/lib/department-head-api";
+import { logApplicationAction } from "@/lib/audit-log";
 
 interface RouteContext {
   params: Promise<{ applicationId: string }>;
@@ -26,6 +27,21 @@ export async function POST(req: Request, context: RouteContext) {
       "REJECT",
       payload.remarks
     );
+
+    // Audit: Application rejected by Department Head
+    void logApplicationAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "DEPARTMENT_HEAD",
+      applicationId,
+      application.applicationNumber,
+      "REJECTED",
+      "DEPARTMENT_HEAD_REVIEW",
+      application.status,
+      `Application rejected: ${payload.remarks || "No reason"}`,
+      { remarks: payload.remarks }
+    );
+
     return NextResponse.json({ application });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to reject application";

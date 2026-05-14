@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logRevocationAction } from "@/lib/audit-log";
 import { applyDepartmentHeadRevocationDecision, requireDepartmentHeadSession } from "@/lib/department-head-api";
 
 export async function POST(
@@ -27,13 +28,28 @@ export async function POST(
       payload.remarks
     );
 
+
+    // Audit: Revocation approved
+    void logRevocationAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "DEPARTMENT_HEAD",
+      result.inspectionId,
+      result.applicationId,
+      "APPROVED",
+      payload.remarks,
+      "APPROVED",
+      `Revocation approved: ${payload.remarks || "No remarks"}`,
+      { remarks: payload.remarks }
+    );
+
     return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to approve revocation";
     const status =
       message === "Inspection not found"
         ? 404
-        : message.includes("required") || message.includes("review") || message.includes("finalized")
+        : message.includes("required") || message.includes("review") || message.includes("finalized") || message.includes("verified")
           ? 422
           : 400;
 

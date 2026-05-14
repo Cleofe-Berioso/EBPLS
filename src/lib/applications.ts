@@ -9,6 +9,7 @@ import {
   isCorporation,
   isCorporationOwnershipClassification,
   normalizeBusinessInfo,
+  validateBusinessIdentityFormats,
 } from "@/lib/business-rules";
 import { isWithinEbMagalona } from "@/lib/business-location";
 import type {
@@ -105,7 +106,6 @@ const REQUIRED_FIELD_KEYS: Array<keyof BusinessInfo> = [
   "businessActivity",
 ];
 
-const TIN_REGEX = /^\d{9,12}$/;
 const PH_MOBILE_REGEX = /^(\+63|0)9\d{9}$/;
 const ALLOWED_PAYMENT_FREQUENCIES = ["ANNUAL", "BI_ANNUAL", "QUARTERLY"] as const;
 
@@ -126,6 +126,77 @@ export class ApplicantEligibilityError extends Error {
     super(message);
     this.name = "ApplicantEligibilityError";
     this.status = status;
+  }
+}
+
+export class DuplicateBusinessIdentityError extends Error {
+  field: "registrationNumber" | "tin";
+
+  constructor(field: "registrationNumber" | "tin") {
+    super("This already exist");
+    this.name = "DuplicateBusinessIdentityError";
+    this.field = field;
+  }
+}
+
+async function assertUniqueBusinessIdentity(params: {
+  registrationNumber: string;
+  tin: string;
+  excludeBusinessRecordId?: string | null;
+  excludeApplicationId?: string | null;
+}): Promise<void> {
+  const { registrationNumber, tin } = params;
+  const excludeRecordId = params.excludeBusinessRecordId ?? "";
+  const excludeAppId = params.excludeApplicationId ?? "";
+
+  // Check BusinessRecord for duplicate registrationNumber
+  const dupRecord = await prisma.businessRecord.findFirst({
+    where: {
+      registrationNumber,
+      ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (dupRecord) {
+    throw new DuplicateBusinessIdentityError("registrationNumber");
+  }
+
+  // Check BusinessRecord for duplicate TIN
+  const dupTinRecord = await prisma.businessRecord.findFirst({
+    where: {
+      tin,
+      ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (dupTinRecord) {
+    throw new DuplicateBusinessIdentityError("tin");
+  }
+
+  // Check BusinessApplication formData JSON for duplicate registrationNumber
+  // Exclude REJECTED/REVOKED statuses and the current application being edited
+  // excludeAppId = "" means no exclusion (empty string never matches a CUID)
+  const regNumDup = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "BusinessApplication"
+    WHERE json_extract(formData, '$.registrationNumber') = ${registrationNumber}
+    AND status NOT IN ('REJECTED', 'REVOKED')
+    AND id != ${excludeAppId}
+    LIMIT 1
+  `;
+  if (regNumDup.length > 0) {
+    throw new DuplicateBusinessIdentityError("registrationNumber");
+  }
+
+  // Check BusinessApplication formData JSON for duplicate TIN
+  const tinDup = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "BusinessApplication"
+    WHERE json_extract(formData, '$.tin') = ${tin}
+    AND status NOT IN ('REJECTED', 'REVOKED')
+    AND id != ${excludeAppId}
+    LIMIT 1
+  `;
+  if (tinDup.length > 0) {
+    throw new DuplicateBusinessIdentityError("tin");
   }
 }
 
@@ -377,9 +448,9 @@ function validateSubmitPayload(
     return typeof value !== "string" || value.trim().length === 0;
   }).map((key) => String(key));
 
-  const tin = normalizedFormData.tin.replace(/[^\d]/g, "");
-  if (!TIN_REGEX.test(tin)) {
-    missingFields.push("tin (must be 9 to 12 digits)");
+  const identityFormats = validateBusinessIdentityFormats(normalizedFormData);
+  if (!identityFormats.registrationNumber || !identityFormats.tin) {
+    throw new Error("Wrong Format");
   }
 
   const normalizedNationality = normalizedFormData.nationality.trim();
@@ -573,6 +644,16 @@ export async function saveApplicantApplication(
   const documents = sanitizeDocuments(input.documents);
   const normalizedSubmitFiles = sanitizeSubmitFiles(submitFiles);
 
+  const rawIdentityFormats = validateBusinessIdentityFormats({
+    businessType: input.formData.businessType,
+    registrationNumber: input.formData.registrationNumber,
+    tin: input.formData.tin,
+  });
+
+  if (!rawIdentityFormats.registrationNumber || !rawIdentityFormats.tin) {
+    throw new Error("Wrong Format");
+  }
+
   if (input.applicationType === "RENEWAL") {
     await assertEligibleBusinessRecord(applicantId, input);
   } else if (input.mode === "SUBMIT") {
@@ -629,6 +710,18 @@ export async function saveApplicantApplication(
     input.formData,
     sourceBusinessInfo
   );
+
+  const identityFormats = validateBusinessIdentityFormats(normalizedFormData);
+  if (!identityFormats.registrationNumber || !identityFormats.tin) {
+    throw new Error("Wrong Format");
+  }
+
+  await assertUniqueBusinessIdentity({
+    registrationNumber: normalizedFormData.registrationNumber,
+    tin: normalizedFormData.tin,
+    excludeBusinessRecordId: input.businessRecordId ?? null,
+    excludeApplicationId: existing?.id ?? null,
+  });
 
   if (input.mode === "SUBMIT") {
     validateSubmitPayload(input, normalizedFormData, mergedDocuments);

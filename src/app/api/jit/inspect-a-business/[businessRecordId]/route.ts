@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import { requireJitSession } from "@/lib/jit-api";
 import { createJitInspection } from "@/lib/jit-inspections";
+import { logInspectionAction } from "@/lib/audit-log";
 
 export async function POST(
   req: Request,
@@ -27,12 +28,12 @@ export async function POST(
   }
 
   if (
-    complianceStatus === "NON_COMPLIANT" &&
     evidence instanceof File &&
     evidence.size > 0 &&
-    !evidence.type.startsWith("image/")
+    !evidence.type.startsWith("image/") &&
+    evidence.type !== "application/pdf"
   ) {
-    return NextResponse.json({ error: "Photo evidence must be an image file" }, { status: 422 });
+    return NextResponse.json({ error: "Photo evidence must be an image or PDF file" }, { status: 422 });
   }
 
   let storedEvidencePath: string | null = null;
@@ -58,6 +59,22 @@ export async function POST(
         : undefined,
     });
 
+
+    // Audit: Inspection submitted by JIT
+    void logInspectionAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "JIT",
+      inspection.id,
+      businessRecordId,
+      inspection.applicationId,
+      "SUBMITTED",
+      null,
+      inspection.status,
+      complianceStatus as any,
+      `Inspection submitted with compliance status: ${complianceStatus}, Evidence: ${storedEvidence ? "Yes" : "No"}`,
+      { comment, hasEvidence: !!storedEvidence }
+    );
     return NextResponse.json({ inspection });
   } catch (error) {
     if (storedEvidencePath) {

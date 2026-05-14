@@ -25,207 +25,6 @@ interface BusinessInformationFieldsProps {
   enableCascadingAddress?: boolean;
 }
 
-const NATIONALITY_OPTIONS = [
-  "Afghan",
-  "Albanian",
-  "Algerian",
-  "American",
-  "Andorran",
-  "Angolan",
-  "Antiguan and Barbudan",
-  "Argentine",
-  "Armenian",
-  "Australian",
-  "Austrian",
-  "Azerbaijani",
-  "Bahamian",
-  "Bahraini",
-  "Bangladeshi",
-  "Barbadian",
-  "Belarusian",
-  "Belgian",
-  "Belizean",
-  "Beninese",
-  "Bhutanese",
-  "Bolivian",
-  "Bosnian and Herzegovinian",
-  "Botswanan",
-  "Brazilian",
-  "British",
-  "Bruneian",
-  "Bulgarian",
-  "Burkinabe",
-  "Burundian",
-  "Cabo Verdean",
-  "Cambodian",
-  "Cameroonian",
-  "Canadian",
-  "Central African",
-  "Chadian",
-  "Chilean",
-  "Chinese",
-  "Colombian",
-  "Comorian",
-  "Congolese",
-  "Costa Rican",
-  "Croatian",
-  "Cuban",
-  "Cypriot",
-  "Czech",
-  "Danish",
-  "Djiboutian",
-  "Dominican",
-  "Dutch",
-  "East Timorese",
-  "Ecuadorean",
-  "Egyptian",
-  "Emirati",
-  "Equatorial Guinean",
-  "Eritrean",
-  "Estonian",
-  "Eswatini",
-  "Ethiopian",
-  "Fijian",
-  "Filipino",
-  "Finnish",
-  "French",
-  "Gabonese",
-  "Gambian",
-  "Georgian",
-  "German",
-  "Ghanaian",
-  "Greek",
-  "Grenadian",
-  "Guatemalan",
-  "Guinean",
-  "Guinea-Bissauan",
-  "Guyanese",
-  "Haitian",
-  "Honduran",
-  "Hungarian",
-  "Icelandic",
-  "Indian",
-  "Indonesian",
-  "Iranian",
-  "Iraqi",
-  "Irish",
-  "Israeli",
-  "Italian",
-  "Ivorian",
-  "Jamaican",
-  "Japanese",
-  "Jordanian",
-  "Kazakh",
-  "Kenyan",
-  "Kiribati",
-  "Korean",
-  "Kuwaiti",
-  "Kyrgyz",
-  "Lao",
-  "Latvian",
-  "Lebanese",
-  "Liberian",
-  "Libyan",
-  "Liechtensteiner",
-  "Lithuanian",
-  "Luxembourger",
-  "Malagasy",
-  "Malawian",
-  "Malaysian",
-  "Maldivian",
-  "Malian",
-  "Maltese",
-  "Marshallese",
-  "Mauritanian",
-  "Mauritian",
-  "Mexican",
-  "Micronesian",
-  "Moldovan",
-  "Monacan",
-  "Mongolian",
-  "Montenegrin",
-  "Moroccan",
-  "Mozambican",
-  "Myanmar",
-  "Namibian",
-  "Nauruan",
-  "Nepalese",
-  "New Zealander",
-  "Nicaraguan",
-  "Nigerian",
-  "Nigerien",
-  "North Korean",
-  "North Macedonian",
-  "Norwegian",
-  "Omani",
-  "Pakistani",
-  "Palauan",
-  "Palestinian",
-  "Panamanian",
-  "Papua New Guinean",
-  "Paraguayan",
-  "Peruvian",
-  "Polish",
-  "Portuguese",
-  "Qatari",
-  "Romanian",
-  "Russian",
-  "Rwandan",
-  "Saint Kitts and Nevis",
-  "Saint Lucian",
-  "Saint Vincent and the Grenadines",
-  "Samoan",
-  "San Marinese",
-  "Sao Tomean",
-  "Saudi",
-  "Senegalese",
-  "Serbian",
-  "Seychellois",
-  "Sierra Leonean",
-  "Singaporean",
-  "Slovak",
-  "Slovenian",
-  "Solomon Islander",
-  "Somali",
-  "South African",
-  "South Korean",
-  "South Sudanese",
-  "Spanish",
-  "Sri Lankan",
-  "Sudanese",
-  "Surinamese",
-  "Swedish",
-  "Swiss",
-  "Syrian",
-  "Taiwanese",
-  "Tajik",
-  "Tanzanian",
-  "Thai",
-  "Togolese",
-  "Tongan",
-  "Trinidadian and Tobagonian",
-  "Tunisian",
-  "Turkish",
-  "Turkmen",
-  "Tuvaluan",
-  "Ugandan",
-  "Ukrainian",
-  "Uruguayan",
-  "Uzbek",
-  "Vanuatuan",
-  "Venezuelan",
-  "Vietnamese",
-  "Yemeni",
-  "Zambian",
-  "Zimbabwean",
-] as const;
-
-const NATIONALITY_SELECT_OPTIONS: AddressOption[] = NATIONALITY_OPTIONS.map((nationality) => ({
-  value: nationality,
-  label: nationality,
-  name: nationality,
-}));
-
 function fieldLocked(lockedFields: Array<keyof BusinessInfo>, key: keyof BusinessInfo) {
   return lockedFields.includes(key);
 }
@@ -458,6 +257,8 @@ export function BusinessInformationFields({
           className={fieldClasses(fieldLocked(lockedFields, "registrationNumber"))}
           value={value.registrationNumber}
           disabled={fieldLocked(lockedFields, "registrationNumber")}
+          autoCapitalize="characters"
+          spellCheck={false}
           onChange={(event) => onChange({ ...value, registrationNumber: event.target.value })}
         />
         <LockedHint visible={fieldLocked(lockedFields, "registrationNumber")} />
@@ -480,6 +281,9 @@ export function BusinessInformationFields({
             className={fieldClasses(fieldLocked(lockedFields, "tin"))}
             value={value.tin}
             disabled={fieldLocked(lockedFields, "tin")}
+            inputMode="numeric"
+            maxLength={9}
+            pattern="[0-9]{9}"
             onChange={(event) => onChange({ ...value, tin: event.target.value })}
           />
           <LockedHint visible={fieldLocked(lockedFields, "tin")} />
@@ -580,7 +384,7 @@ export function BusinessInformationFields({
           hint={
             corporation
               ? "Select the corporation ownership classification."
-              : "Default is Filipino but may be changed if applicable."
+              : "Nationality is fixed to Filipino for non-corporation business types."
           }
           required
           error={fieldErrors.nationality}
@@ -609,15 +413,11 @@ export function BusinessInformationFields({
               ))}
             </select>
           ) : (
-            <SearchableSelect
-              options={NATIONALITY_SELECT_OPTIONS}
-              value={value.nationality}
-              selectedLabel={value.nationality}
-              disabled={nationalityLocked}
-              onChange={(nextNationality) =>
-                onChange({ ...value, nationality: nextNationality.name })
-              }
-              placeholder="Select nationality"
+            <input
+              className={fieldClasses(true)}
+              value="Filipino"
+              disabled
+              readOnly
             />
           )}
           {corporation && !corporationClassificationSelected && !nationalityLocked ? (

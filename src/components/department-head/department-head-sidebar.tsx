@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardCheck, ShieldAlert, ShieldX } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
 import { RoleBadge } from "@/components/ui/role-badge";
 
 type SidebarItem = {
@@ -13,14 +13,18 @@ type SidebarItem = {
 const DEPARTMENT_HEAD_SIDEBAR_ITEMS: SidebarItem[] = [
   { label: "Dashboard", href: "/department-head/dashboard" },
   { label: "Application Approvals", href: "/department-head/application-approval" },
+  { label: "Inspection Verification", href: "/department-head/inspection-verification" },
   { label: "Flagged Cases", href: "/department-head/permit-to-revoke" },
+  { label: "Compliant List", href: "/department-head/compliant-list" },
   { label: "Restrictions List", href: "/department-head/revoke-permit-list" },
 ];
 
 const SIDEBAR_ICONS = {
   Dashboard: LayoutDashboard,
   "Application Approvals": ClipboardCheck,
+  "Inspection Verification": ShieldCheck,
   "Flagged Cases": ShieldAlert,
+  "Compliant List": ShieldCheck,
   "Restrictions List": ShieldX,
 } as const;
 
@@ -46,7 +50,7 @@ export function DepartmentHeadSidebar({
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Municipality eBPLS</p>
             <h2 className={`mt-2 text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Department Head</h2>
-            <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Manage application approvals, flagged cases, and restrictions.</p>
+            <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Manage application approvals, inspection verification, compliant cases, flagged cases, and restrictions.</p>
           </div>
         </div>
         <div className={`mt-3 flex items-center gap-2 ${collapsed ? "lg:justify-center" : ""}`}>

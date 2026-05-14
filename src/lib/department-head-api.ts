@@ -49,11 +49,15 @@ export interface DepartmentHeadPermitToRevokeRow {
   applicationNumber: string;
   permitOrCertificateNumber: string | null;
   businessName: string;
+  tradeName: string | null;
+  businessType: string;
   ownerName: string;
   applicantName: string;
   businessAddress: string;
   lineOfBusiness: string;
   inspectionDate: string;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
   inspectorName: string;
   inspectorComment: string | null;
   evidenceFileName: string | null;
@@ -61,6 +65,53 @@ export interface DepartmentHeadPermitToRevokeRow {
   hasEvidence: boolean;
   inspectionStatus: string;
   applicationStatus: string;
+}
+
+export interface DepartmentHeadInspectionVerificationRow {
+  inspectionId: string;
+  businessRecordId: string;
+  applicationId: string;
+  applicationNumber: string;
+  permitOrCertificateNumber: string | null;
+  businessName: string;
+  tradeName: string | null;
+  ownerName: string;
+  applicantName: string;
+  businessAddress: string;
+  businessType: string;
+  lineOfBusiness: string;
+  inspectionDate: string;
+  inspectorName: string;
+  inspectionStatus: string;
+  complianceStatus: string;
+  inspectorComment: string | null;
+  evidenceFileName: string | null;
+  evidenceMimeType: string | null;
+  hasEvidence: boolean;
+  applicationStatus: string;
+}
+
+export interface DepartmentHeadCompliantListRow {
+  inspectionId: string;
+  businessRecordId: string;
+  applicationId: string;
+  applicationNumber: string;
+  permitOrCertificateNumber: string | null;
+  businessName: string;
+  tradeName: string | null;
+  ownerName: string;
+  applicantName: string;
+  businessAddress: string;
+  businessType: string;
+  lineOfBusiness: string;
+  jitComment: string | null;
+  inspectionDate: string;
+  verifiedAt: string;
+  verifiedBy: string;
+  evidenceFileName: string | null;
+  evidenceMimeType: string | null;
+  hasEvidence: boolean;
+  inspectionStatus: string;
 }
 
 export interface DepartmentHeadRevokedPermitRow {
@@ -211,13 +262,15 @@ export async function applyDepartmentHeadAction(
 export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHeadPermitToRevokeRow[]> {
   const rows = await prisma.inspection.findMany({
     where: {
-      status: "REVOCATION_REVIEW",
+      status: "VERIFIED_NON_COMPLIANT",
+      complianceStatus: "NON_COMPLIANT",
       application: {
         status: "REVOCATION_REVIEW",
       },
     },
     include: {
       inspector: { select: { name: true } },
+      decidedBy: { select: { name: true } },
       application: {
         select: {
           id: true,
@@ -229,6 +282,8 @@ export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHea
       businessRecord: {
         select: {
           businessName: true,
+          tradeName: true,
+          businessType: true,
           ownerName: true,
           businessAddress: true,
           lineOfBusiness: true,
@@ -248,11 +303,15 @@ export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHea
       applicationNumber: row.application.applicationNumber,
       permitOrCertificateNumber: row.application.permitIssuance?.documentNumber ?? null,
       businessName: row.businessRecord.businessName,
+      tradeName: row.businessRecord.tradeName ?? null,
+      businessType: row.businessRecord.businessType ?? "-",
       ownerName: row.businessRecord.ownerName,
       applicantName: row.businessRecord.applicant?.name ?? "-",
       businessAddress: row.businessRecord.businessAddress,
       lineOfBusiness: row.businessRecord.lineOfBusiness ?? "-",
       inspectionDate: row.createdAt.toISOString(),
+      verifiedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
+      verifiedBy: row.decidedBy?.name ?? null,
       inspectorName: row.inspector.name,
       inspectorComment: row.comment?.trim() || null,
       evidenceFileName: row.evidenceFileName,
@@ -260,6 +319,253 @@ export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHea
       hasEvidence: Boolean(row.evidenceStoragePath),
       inspectionStatus: row.status,
       applicationStatus: mapDbStatusToUi(row.application.status),
+    }));
+}
+
+export async function listDepartmentHeadInspectionVerificationQueue(): Promise<DepartmentHeadInspectionVerificationRow[]> {
+  const rows = await prisma.inspection.findMany({
+    where: {
+      status: "DH_VERIFICATION_PENDING",
+      application: {
+        status: "RELEASED",
+      },
+      businessRecord: {
+        businessStatus: "ACTIVE",
+      },
+    },
+    include: {
+      inspector: { select: { name: true } },
+      application: {
+        select: {
+          id: true,
+          applicationNumber: true,
+          status: true,
+          applicationType: true,
+          permitIssuance: { select: { documentNumber: true } },
+        },
+      },
+      businessRecord: {
+        select: {
+          businessName: true,
+          tradeName: true,
+          businessType: true,
+          ownerName: true,
+          businessAddress: true,
+          lineOfBusiness: true,
+          applicant: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+
+  return rows
+    .filter((row: any) => Boolean(row.application))
+    .map((row: any) => ({
+      inspectionId: row.id,
+      businessRecordId: row.businessRecordId,
+      applicationId: row.applicationId,
+      applicationNumber: row.application.applicationNumber,
+      permitOrCertificateNumber: row.application.permitIssuance?.documentNumber ?? null,
+      businessName: row.businessRecord.businessName,
+      tradeName: row.businessRecord.tradeName ?? null,
+      ownerName: row.businessRecord.ownerName,
+      applicantName: row.businessRecord.applicant?.name ?? "-",
+      businessAddress: row.businessRecord.businessAddress,
+      businessType: row.businessRecord.businessType ?? "-",
+      lineOfBusiness: row.businessRecord.lineOfBusiness ?? "-",
+      inspectionDate: row.createdAt.toISOString(),
+      inspectorName: row.inspector.name,
+      inspectionStatus: row.status,
+      complianceStatus: row.complianceStatus,
+      inspectorComment: row.comment?.trim() || null,
+      evidenceFileName: row.evidenceFileName,
+      evidenceMimeType: row.evidenceMimeType,
+      hasEvidence: Boolean(row.evidenceStoragePath),
+      applicationStatus: mapDbStatusToUi(row.application.status),
+    }));
+}
+
+export async function applyDepartmentHeadInspectionVerification(
+  inspectionId: string,
+  departmentHeadUserId: string,
+  remarks?: string
+) {
+  const normalizedRemarks = remarks?.trim();
+
+  if (!normalizedRemarks) {
+    throw new Error("Verification remarks are required");
+  }
+
+  return prisma.$transaction(async (tx: any) => {
+    const inspection = await tx.inspection.findUnique({
+      where: { id: inspectionId },
+      include: {
+        application: {
+          select: {
+            id: true,
+            status: true,
+            applicationNumber: true,
+          },
+        },
+        businessRecord: {
+          select: {
+            id: true,
+            businessStatus: true,
+          },
+        },
+      },
+    });
+
+    if (!inspection) {
+      throw new Error("Inspection not found");
+    }
+
+    if (inspection.status !== "DH_VERIFICATION_PENDING") {
+      throw new Error("Inspection is not pending Department Head verification");
+    }
+
+    if (!inspection.application || inspection.application.status !== "RELEASED") {
+      throw new Error("Inspection application is not released");
+    }
+
+    if (!inspection.businessRecord || inspection.businessRecord.businessStatus !== "ACTIVE") {
+      throw new Error("Business is not active");
+    }
+
+    if (inspection.inspectorId === departmentHeadUserId) {
+      throw new Error("JIT cannot verify its own submitted inspection");
+    }
+
+    if (inspection.complianceStatus === "COMPLIANT") {
+      await tx.inspection.update({
+        where: { id: inspection.id },
+        data: {
+          status: "VERIFIED_COMPLIANT",
+          decidedById: departmentHeadUserId,
+          decidedAt: new Date(),
+        },
+      });
+
+      await tx.applicationHistory.create({
+        data: {
+          applicationId: inspection.application.id,
+          actorId: departmentHeadUserId,
+          actorRole: "DEPARTMENT_HEAD",
+          fromStatus: "RELEASED",
+          toStatus: "RELEASED",
+          remarks: `Department Head verified COMPLIANT inspection. Remarks: ${normalizedRemarks}`,
+        },
+      });
+
+      return {
+        inspectionId: inspection.id,
+        applicationId: inspection.application.id,
+        applicationNumber: inspection.application.applicationNumber,
+        inspectionStatus: "VERIFIED_COMPLIANT",
+        applicationStatus: mapDbStatusToUi(inspection.application.status),
+        complianceStatus: inspection.complianceStatus,
+      };
+    }
+
+    assertStatusTransition(inspection.application.status, "REVOCATION_REVIEW");
+
+    await tx.businessApplication.update({
+      where: { id: inspection.application.id },
+      data: { status: "REVOCATION_REVIEW" },
+    });
+
+    await tx.inspection.update({
+      where: { id: inspection.id },
+      data: {
+        status: "VERIFIED_NON_COMPLIANT",
+        decidedById: departmentHeadUserId,
+        decidedAt: new Date(),
+      },
+    });
+
+    await tx.applicationHistory.create({
+      data: {
+        applicationId: inspection.application.id,
+        actorId: departmentHeadUserId,
+        actorRole: "DEPARTMENT_HEAD",
+        fromStatus: "RELEASED",
+        toStatus: "REVOCATION_REVIEW",
+        remarks: `Department Head verified NON_COMPLIANT inspection. Remarks: ${normalizedRemarks}`,
+      },
+    });
+
+    return {
+      inspectionId: inspection.id,
+      applicationId: inspection.application.id,
+      applicationNumber: inspection.application.applicationNumber,
+      inspectionStatus: "VERIFIED_NON_COMPLIANT",
+      applicationStatus: mapDbStatusToUi("REVOCATION_REVIEW"),
+      complianceStatus: inspection.complianceStatus,
+    };
+  });
+}
+
+export async function listDepartmentHeadCompliantList(): Promise<DepartmentHeadCompliantListRow[]> {
+  const rows = await prisma.inspection.findMany({
+    where: {
+      status: "VERIFIED_COMPLIANT",
+      complianceStatus: "COMPLIANT",
+      application: {
+        status: "RELEASED",
+      },
+      businessRecord: {
+        businessStatus: "ACTIVE",
+      },
+    },
+    include: {
+      inspector: { select: { name: true } },
+      decidedBy: { select: { name: true } },
+      application: {
+        select: {
+          id: true,
+          applicationNumber: true,
+          permitIssuance: { select: { documentNumber: true } },
+        },
+      },
+      businessRecord: {
+        select: {
+          businessName: true,
+          tradeName: true,
+          businessType: true,
+          ownerName: true,
+          businessAddress: true,
+          lineOfBusiness: true,
+          applicant: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: [{ decidedAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  return rows
+    .filter((row: any) => Boolean(row.application) && Boolean(row.decidedAt) && Boolean(row.decidedBy))
+    .map((row: any) => ({
+      inspectionId: row.id,
+      businessRecordId: row.businessRecordId,
+      applicationId: row.applicationId,
+      applicationNumber: row.application.applicationNumber,
+      permitOrCertificateNumber: row.application.permitIssuance?.documentNumber ?? null,
+      businessName: row.businessRecord.businessName,
+      tradeName: row.businessRecord.tradeName ?? null,
+      ownerName: row.businessRecord.ownerName,
+      applicantName: row.businessRecord.applicant?.name ?? "-",
+      businessAddress: row.businessRecord.businessAddress,
+      businessType: row.businessRecord.businessType ?? "-",
+      lineOfBusiness: row.businessRecord.lineOfBusiness ?? "-",
+      jitComment: row.comment?.trim() || null,
+      inspectionDate: row.createdAt.toISOString(),
+      verifiedAt: row.decidedAt.toISOString(),
+      verifiedBy: row.decidedBy?.name ?? row.inspector.name,
+      evidenceFileName: row.evidenceFileName,
+      evidenceMimeType: row.evidenceMimeType,
+      hasEvidence: Boolean(row.evidenceStoragePath),
+      inspectionStatus: row.status,
     }));
 }
 
@@ -363,8 +669,13 @@ export async function applyDepartmentHeadRevocationDecision(
       throw new Error("Inspection not found");
     }
 
-    if (inspection.status !== "REVOCATION_REVIEW") {
+    const allowedRevocationStatuses = new Set(["VERIFIED_NON_COMPLIANT", "REVOCATION_REVIEW"]);
+    if (!allowedRevocationStatuses.has(inspection.status)) {
       throw new Error("Inspection is not in revocation review stage");
+    }
+
+    if (inspection.status === "REVOCATION_REVIEW" && !inspection.decidedById) {
+      throw new Error("Only Department Head verified non-compliant inspections can be decided");
     }
 
     if (inspection.revocationDecision || inspection.decidedAt) {
@@ -374,6 +685,17 @@ export async function applyDepartmentHeadRevocationDecision(
     if (!inspection.application || inspection.application.status !== "REVOCATION_REVIEW") {
       throw new Error("Application is not in REVOCATION_REVIEW status");
     }
+
+    await tx.applicationHistory.create({
+      data: {
+        applicationId: inspection.application.id,
+        actorId: departmentHeadUserId,
+        actorRole: "DEPARTMENT_HEAD",
+        fromStatus: "REVOCATION_REVIEW",
+        toStatus: "REVOCATION_REVIEW",
+        remarks: "Department Head reviewed flagged case.",
+      },
+    });
 
     if (action === "APPROVE") {
       assertStatusTransition(inspection.application.status, "REVOKED");

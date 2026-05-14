@@ -7,6 +7,7 @@ import {
   upsertFeeConfigurationItem,
   updateFeeConfigurationItemById,
 } from "@/lib/fee-settings";
+import { logSettingsAction } from "@/lib/audit-log";
 
 function isValidCategory(category: string): boolean {
   return FEE_CATEGORY_OPTIONS.some((item) => item.key === category);
@@ -72,6 +73,18 @@ export async function POST(req: Request) {
       isActive,
       updatedById: session.user.id,
     });
+
+    // Audit: Fee configuration created/updated
+    void logSettingsAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "SUPER_ADMIN",
+      "FEE_CONFIGURATION",
+      item.id,
+      "CREATED",
+      `Fee configuration: ${category} / ${classification} = PHP ${amount}`,
+      { category, classification, amount, isActive }
+    );
 
     return NextResponse.json({ success: true, item });
   } catch {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createApplicantDocument, listApplicantDocuments } from "@/lib/applications";
 import { requireApplicantSession } from "@/lib/applicant-api";
 import { storeApplicantDocument } from "@/lib/document-storage";
+import { logDocumentAction } from "@/lib/audit-log";
 
 interface RouteContext {
   params: Promise<{ applicationId: string }>;
@@ -52,6 +53,19 @@ export async function POST(req: Request, context: RouteContext) {
       mimeType: stored.mimeType,
       sizeBytes: stored.sizeBytes,
     });
+
+    // Audit: Document upload
+    void logDocumentAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "APPLICANT",
+      document.id,
+      documentNameValue.trim(),
+      applicationId,
+      "UPLOADED",
+      `Document uploaded: ${documentNameValue.trim()}`,
+      { mimeType: stored.mimeType, sizeBytes: stored.sizeBytes }
+    );
 
     return NextResponse.json({
       document: {

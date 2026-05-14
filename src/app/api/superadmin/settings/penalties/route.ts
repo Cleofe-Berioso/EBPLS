@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { getOrCreateSystemFeeSetting, updateSystemFeeSetting } from "@/lib/fee-settings";
+import { logSettingsAction } from "@/lib/audit-log";
 
 function isNonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
@@ -66,6 +67,23 @@ export async function PUT(req: Request) {
       ...(typeof privatePortFixedFee === "number" ? { privatePortFixedFee } : {}),
       updatedById: session.user.id,
     });
+    // Audit: Penalties/system fees updated
+    void logSettingsAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "SUPER_ADMIN",
+      "SYSTEM_FEE",
+      "default",
+      "UPDATED",
+      "System fee settings updated",
+      {
+        renewalSurchargePercent,
+        monthlyInterestPercent,
+        liquorTobaccoAddOnPercent,
+        ...(typeof powerDistributionFixedFee === "number" ? { powerDistributionFixedFee } : {}),
+        ...(typeof privatePortFixedFee === "number" ? { privatePortFixedFee } : {}),
+      }
+    );
 
     return NextResponse.json({ success: true, penalties });
   } catch {

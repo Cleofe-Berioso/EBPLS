@@ -76,6 +76,7 @@ export interface BusinessPermitPrintData {
   topNumber: string;
   orNumber: string;
   datePaid: string | null;
+  annualAmountPaid: number;
   signatories: {
     bploOfficer: string;
     municipalTreasurer: string;
@@ -204,6 +205,7 @@ function toBusinessPermitPrintData(app: {
   } | null;
   feeAssessment: {
     assessmentNumber: string;
+    annualAssessedAmount: any;
   } | null;
   paymentReferences: Array<{
     transactionNumber: string;
@@ -237,6 +239,7 @@ function toBusinessPermitPrintData(app: {
     topNumber: app.feeAssessment?.assessmentNumber ?? "-",
     orNumber: app.paymentReferences[0]?.transactionNumber ?? "-",
     datePaid: toIsoOrNull(app.paymentReferences[0]?.paymentDate),
+    annualAmountPaid: toMoneyNumber(app.feeAssessment?.annualAssessedAmount),
     signatories: {
       bploOfficer: "BPLO Officer",
       municipalTreasurer: "Municipal Treasurer",
@@ -327,6 +330,7 @@ async function findApplicationForPrint(
   formData: unknown;
   feeAssessment: {
     assessmentNumber: string;
+    annualAssessedAmount: any;
     releasePaymentAmount: any;
     remainingBalance: any;
     amountPaid: any;
@@ -360,6 +364,7 @@ async function findApplicationForPrint(
       feeAssessment: {
         select: {
           assessmentNumber: true,
+          annualAssessedAmount: true,
           releasePaymentAmount: true,
           remainingBalance: true,
           amountPaid: true,
@@ -399,6 +404,7 @@ async function findApplicationForPrint(
     formData: unknown;
     feeAssessment: {
       assessmentNumber: string;
+      annualAssessedAmount: any;
       releasePaymentAmount: unknown;
       remainingBalance: unknown;
       amountPaid: unknown;

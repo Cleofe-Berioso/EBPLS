@@ -1,20 +1,33 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BarChart3, FlagTriangleRight, ShieldCheck, TriangleAlert, Activity, ArrowRight } from "lucide-react";
+import {
+  BarChart3,
+  FlagTriangleRight,
+  ShieldCheck,
+  TriangleAlert,
+  Activity,
+  ArrowRight,
+  MapPinned,
+} from "lucide-react";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
+import { StatCard } from "@/components/ui/stat-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { DashboardPieChart } from "@/components/ui/dashboard-pie-chart";
+import { DashboardLineChart } from "@/components/ui/dashboard-line-chart";
+import { DashboardStackedBarChart } from "@/components/ui/dashboard-stacked-bar-chart";
 import { requireJitSession } from "@/lib/jit-api";
-import { getJitDashboardSummary } from "@/lib/jit-dashboard";
+import { getJitDashboardMetrics, getJitDashboardSummary } from "@/lib/jit-dashboard";
 
 export default async function JitDashboardPage() {
   const session = await requireJitSession();
   if (!session) notFound();
 
-  const summary = await getJitDashboardSummary();
+  const [summary, metrics] = await Promise.all([getJitDashboardSummary(), getJitDashboardMetrics()]);
 
   return (
     <section className="space-y-6">
@@ -87,25 +100,78 @@ export default async function JitDashboardPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Risk Note" description="UI-only risk grouping based on the latest inspection state.">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-            <p className="text-sm font-semibold text-rose-900">High Risk</p>
-            <p className="mt-1 text-sm leading-6 text-rose-800">Latest inspection is NON_COMPLIANT or REVOCATION_REVIEW.</p>
-            <p className="mt-3 text-2xl font-semibold text-rose-900">{summary.highRiskBusinessCount}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-900">Medium Risk</p>
-            <p className="mt-1 text-sm leading-6 text-amber-800">Has previous inspection history but is not currently flagged.</p>
-            <p className="mt-3 text-2xl font-semibold text-amber-900">{summary.mediumRiskBusinessCount}</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-            <p className="text-sm font-semibold text-emerald-900">Low Risk</p>
-            <p className="mt-1 text-sm leading-6 text-emerald-800">No non-compliant inspection history visible to JIT.</p>
-            <p className="mt-3 text-2xl font-semibold text-emerald-900">{summary.lowRiskBusinessCount}</p>
-          </div>
-        </div>
-      </SectionCard>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <DashboardPieChart
+          title="Inspection Results Distribution"
+          description="Current JIT inspection outcomes on released businesses only."
+          data={metrics.inspectionResultsDistribution}
+          emptyTitle="No inspection results available yet."
+        />
+        <DashboardLineChart
+          title="Inspections Conducted Per Week"
+          description="Weekly JIT inspection activity based on inspection record creation time."
+          data={metrics.inspectionsConductedPerWeek}
+          lineLabel="Inspections"
+          emptyTitle="No inspections conducted yet."
+        />
+        <DashboardStackedBarChart
+          title="Violations by Business Type"
+          description="Non-compliant and verified non-compliant inspection counts by business type."
+          data={metrics.violationsByBusinessType}
+          categoryKey="label"
+          series={[
+            { key: "nonCompliant", label: "Non-compliant", color: "#dc2626" },
+            { key: "verifiedNonCompliant", label: "Verified non-compliant", color: "#ea580c" },
+          ]}
+          emptyTitle="No violation records available yet."
+        />
+        <SectionCard
+          title="Inspection Locations Map Summary"
+          description="Released-business inspection locations grouped from active permitted business records."
+          action={
+            <Link href="/jit/business-map" className={actionButtonStyles("secondary", "sm")}>
+              Open Business Map
+            </Link>
+          }
+        >
+          {metrics.locationSummary.totalInspectionLocations === 0 ? (
+            <EmptyState
+              title="No inspection locations available yet."
+              description="Inspection locations appear here only after business permits are released and location records exist."
+            />
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <StatCard
+                  title="Total Inspection Locations"
+                  value={metrics.locationSummary.totalInspectionLocations.toLocaleString("en-PH")}
+                  subtitle="Released businesses available for inspection"
+                  icon={<MapPinned className="h-4 w-4" />}
+                  tone="blue"
+                />
+                <StatCard
+                  title="Barangays With Locations"
+                  value={metrics.locationSummary.barangayCounts.length.toLocaleString("en-PH")}
+                  subtitle="Grouped from active released-business locations"
+                  icon={<MapPinned className="h-4 w-4" />}
+                  tone="green"
+                />
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">Top Barangay Groups</p>
+                <div className="mt-3 space-y-2">
+                  {metrics.locationSummary.barangayCounts.slice(0, 6).map((row) => (
+                    <div key={row.label} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <span className="text-sm text-slate-700">{row.label}</span>
+                      <span className="text-sm font-semibold text-slate-900">{row.value.toLocaleString("en-PH")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </SectionCard>
+      </div>
     </section>
   );
 }

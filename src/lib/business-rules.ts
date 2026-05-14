@@ -1,6 +1,15 @@
 import type { ApplicationType, BusinessInfo, BusinessType } from "@/lib/applicant-types";
 import { buildMainOfficeAddress } from "@/lib/address-options";
 
+const REGISTRATION_NUMBER_REGEX_BY_BUSINESS_TYPE: Record<BusinessType, RegExp> = {
+  "Sole Proprietorship": /^DTI-\d{4}-\d{6}$/,
+  Partnership: /^CS\d{4}-\d{5}$/,
+  Corporation: /^CS\d{4}-\d{5}$/,
+  Cooperative: /^CDA-\d{4}-\d{6}$/,
+};
+
+const TIN_REGEX = /^\d{9}$/;
+
 export const REGISTRATION_METADATA: Record<
   BusinessType,
   {
@@ -12,22 +21,22 @@ export const REGISTRATION_METADATA: Record<
   "Sole Proprietorship": {
     label: "DTI Registration Number",
     agency: "Department of Trade and Industry",
-    helperText: "Use current registration number from Department of Trade and Industry.",
+    helperText: "Use DTI-YYYY-NNNNNN format (example: DTI-2026-123456).",
   },
   Partnership: {
     label: "SEC Registration Number",
     agency: "Securities and Exchange Commission",
-    helperText: "Use current registration number from Securities and Exchange Commission.",
+    helperText: "Use CSYYYY-NNNNN format (example: CS2026-12345).",
   },
   Corporation: {
     label: "SEC Registration Number",
     agency: "Securities and Exchange Commission",
-    helperText: "Use current registration number from Securities and Exchange Commission.",
+    helperText: "Use CSYYYY-NNNNN format (example: CS2026-12345).",
   },
   Cooperative: {
     label: "CDA Registration Number",
     agency: "Cooperative Development Authority",
-    helperText: "Use current registration number from Cooperative Development Authority.",
+    helperText: "Use CDA-YYYY-NNNNNN format (example: CDA-2026-123456).",
   },
 };
 
@@ -51,6 +60,27 @@ export function getRegistrationAgency(businessType: BusinessType): string {
 
 export function getRegistrationHelperText(businessType: BusinessType): string {
   return REGISTRATION_METADATA[businessType].helperText;
+}
+
+export function validateRegistrationNumberFormat(
+  businessType: BusinessType,
+  registrationNumber: string
+): boolean {
+  return REGISTRATION_NUMBER_REGEX_BY_BUSINESS_TYPE[businessType].test(registrationNumber.trim());
+}
+
+export function validateTinFormat(tin: string): boolean {
+  return TIN_REGEX.test(tin.trim());
+}
+
+export function validateBusinessIdentityFormats(input: Pick<BusinessInfo, "businessType" | "registrationNumber" | "tin">): {
+  registrationNumber: boolean;
+  tin: boolean;
+} {
+  return {
+    registrationNumber: validateRegistrationNumberFormat(input.businessType, input.registrationNumber),
+    tin: validateTinFormat(input.tin),
+  };
 }
 
 export function isCorporation(businessType: BusinessType): boolean {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireBploSession } from "@/lib/bplo-api";
 import { rejectPaymentReference } from "@/lib/bplo-payment-verification";
+import { logPaymentAction } from "@/lib/audit-log";
 
 export async function POST(
   req: Request,
@@ -33,6 +34,23 @@ export async function POST(
       session.user.id,
       payload.remarks
     );
+
+    // Audit: Payment rejected
+    void logPaymentAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "BPLO",
+      paymentReferenceId,
+      result.applicationNumber,
+      result.applicationId,
+      "REJECTED",
+      "PENDING",
+      "REJECTED",
+      0,
+      `Payment rejected: ${payload.remarks || "No remarks"}`,
+      { remarks: payload.remarks }
+    );
+
     return NextResponse.json({ result });
   } catch (error) {
     const message =

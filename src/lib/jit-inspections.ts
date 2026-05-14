@@ -1,9 +1,16 @@
-import { assertStatusTransition } from "@/lib/application-status";
 import { listActivePermittedBusinessLocations, type BusinessLocationMapRow } from "@/lib/business-location";
 import { prisma } from "@/lib/prisma";
-import type { ApplicationStatus, Role } from "@prisma/client";
 
 type ComplianceStatus = "COMPLIANT" | "NON_COMPLIANT";
+type InspectionStatus =
+  | "COMPLIANT"
+  | "NON_COMPLIANT"
+  | "DH_VERIFICATION_PENDING"
+  | "VERIFIED_COMPLIANT"
+  | "VERIFIED_NON_COMPLIANT"
+  | "REVOCATION_REVIEW"
+  | "REVOCATION_DENIED"
+  | "REVOKED";
 
 interface EvidencePayload {
   fileName: string;
@@ -21,7 +28,7 @@ interface CreateInspectionInput {
 export interface JitInspectableBusinessRow extends BusinessLocationMapRow {
   latestInspection: {
     complianceStatus: ComplianceStatus;
-    status: "COMPLIANT" | "NON_COMPLIANT" | "REVOCATION_REVIEW" | "REVOCATION_DENIED" | "REVOKED";
+    status: InspectionStatus;
     createdAt: string;
   } | null;
 }
@@ -67,7 +74,7 @@ export async function listJitInspectableBusinesses(): Promise<JitInspectableBusi
       latestInspection: latest
         ? {
             complianceStatus: latest.complianceStatus as ComplianceStatus,
-            status: latest.status as "COMPLIANT" | "NON_COMPLIANT" | "REVOCATION_REVIEW" | "REVOCATION_DENIED" | "REVOKED",
+            status: latest.status as InspectionStatus,
             createdAt: latest.createdAt.toISOString(),
           }
         : null,
@@ -80,8 +87,6 @@ export async function createJitInspection(
   inspectorId: string,
   input: CreateInspectionInput
 ) {
-  const revocationReviewStatus = "REVOCATION_REVIEW" as unknown as ApplicationStatus;
-  const jitActorRole = "JIT" as unknown as Role;
   const complianceStatus = input.complianceStatus;
   const trimmedComment = input.comment?.trim() ?? "";
 
@@ -89,63 +94,58 @@ export async function createJitInspection(
     throw new Error("complianceStatus must be COMPLIANT or NON_COMPLIANT");
   }
 
-  if (complianceStatus === "NON_COMPLIANT") {
-    if (!trimmedComment) {
-      throw new Error("Comment is required for NON_COMPLIANT inspections");
-    }
-    if (!input.evidence) {
-      throw new Error("Photo evidence is required for NON_COMPLIANT inspections");
-    }
+  if (!trimmedComment) {
+    throw new Error("Comment is required for all inspections");
+  }
+  if (!input.evidence) {
+    throw new Error("Photo evidence is required for all inspections");
   }
 
-  const activeBusiness = await prisma.businessRecord.findFirst({
-    where: {
-      id: businessRecordId,
-      businessStatus: "ACTIVE",
-    },
-    select: {
-      id: true,
-      applications: {
-        where: {
-          status: "RELEASED",
-          applicationType: {
-            in: ["NEW", "RENEWAL"],
+  const created = await prisma.$transaction(async (tx: any) => {
+    const activeBusiness = await tx.businessRecord.findFirst({
+      where: {
+        id: businessRecordId,
+        businessStatus: "ACTIVE",
+      },
+      select: {
+        id: true,
+        applications: {
+          where: {
+            status: "RELEASED",
+            applicationType: {
+              in: ["NEW", "RENEWAL"],
+            },
+          },
+          orderBy: {
+            updatedAt: "desc",
+          },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
           },
         },
-        orderBy: {
-          updatedAt: "desc",
-        },
-        take: 1,
-        select: {
-          id: true,
-          status: true,
-        },
       },
-    },
-  });
+    });
 
-  const releasedApplication = activeBusiness?.applications[0] ?? null;
+    const releasedApplication = activeBusiness?.applications[0] ?? null;
 
-  if (!activeBusiness || !releasedApplication) {
-    throw new Error("Only active released businesses can be inspected");
-  }
+    if (!activeBusiness || !releasedApplication) {
+      throw new Error("Only active released businesses can be inspected");
+    }
 
-  const result = await prisma.$transaction(async (tx: any) => {
-    const inspectionStatus =
-      complianceStatus === "NON_COMPLIANT" ? "REVOCATION_REVIEW" : "COMPLIANT";
-
-    const created = await tx.inspection.create({
+    const inspection = await tx.inspection.create({
       data: {
         businessRecordId,
         applicationId: releasedApplication.id,
         inspectorId,
         complianceStatus,
-        status: inspectionStatus,
+        status: "DH_VERIFICATION_PENDING",
         comment: trimmedComment || null,
-        evidenceFileName: input.evidence?.fileName ?? null,
-        evidenceStoragePath: input.evidence?.storagePath ?? null,
-        evidenceMimeType: input.evidence?.mimeType ?? null,
-        evidenceSizeBytes: input.evidence?.sizeBytes ?? null,
+        evidenceFileName: input.evidence.fileName,
+        evidenceStoragePath: input.evidence.storagePath,
+        evidenceMimeType: input.evidence.mimeType,
+        evidenceSizeBytes: input.evidence.sizeBytes,
       },
       select: {
         id: true,
@@ -156,38 +156,36 @@ export async function createJitInspection(
       },
     });
 
-    if (complianceStatus === "NON_COMPLIANT") {
-      assertStatusTransition(releasedApplication.status, revocationReviewStatus);
+    await tx.applicationHistory.create({
+      data: {
+        applicationId: releasedApplication.id,
+        actorId: inspectorId,
+        actorRole: "JIT",
+        fromStatus: "RELEASED",
+        toStatus: "RELEASED",
+        remarks: `JIT submitted ${complianceStatus} inspection.`,
+      },
+    });
 
-      await tx.businessApplication.update({
-        where: {
-          id: releasedApplication.id,
-        },
-        data: {
-          status: revocationReviewStatus,
-        },
-      });
+    await tx.applicationHistory.create({
+      data: {
+        applicationId: releasedApplication.id,
+        actorId: inspectorId,
+        actorRole: "JIT",
+        fromStatus: "RELEASED",
+        toStatus: "RELEASED",
+        remarks: `JIT uploaded inspection evidence (${input.evidence.fileName}).`,
+      },
+    });
 
-      await tx.applicationHistory.create({
-        data: {
-          applicationId: releasedApplication.id,
-          actorId: inspectorId,
-          actorRole: jitActorRole,
-          fromStatus: "RELEASED",
-          toStatus: revocationReviewStatus,
-          remarks: `JIT inspection marked NON_COMPLIANT.${trimmedComment ? ` Remarks: ${trimmedComment}` : ""}`,
-        },
-      });
-    }
-
-    return created;
+    return inspection;
   });
 
   return {
-    id: result.id,
-    applicationId: result.applicationId,
-    complianceStatus: result.complianceStatus as ComplianceStatus,
-    status: result.status as "COMPLIANT" | "NON_COMPLIANT" | "REVOCATION_REVIEW",
-    createdAt: result.createdAt.toISOString(),
+    id: created.id,
+    applicationId: created.applicationId,
+    complianceStatus: created.complianceStatus as ComplianceStatus,
+    status: created.status as "DH_VERIFICATION_PENDING",
+    createdAt: created.createdAt.toISOString(),
   };
 }

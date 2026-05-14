@@ -32,7 +32,7 @@ export async function GET(
     return NextResponse.json({ error: "Inspection evidence not found" }, { status: 404 });
   }
 
-  if (!new Set(["REVOCATION_REVIEW", "REVOKED", "REVOCATION_DENIED"]).has(inspection.status)) {
+  if (!new Set(["REVOCATION_REVIEW", "VERIFIED_NON_COMPLIANT", "REVOKED", "REVOCATION_DENIED"]).has(inspection.status)) {
     return NextResponse.json({ error: "Inspection evidence not available" }, { status: 403 });
   }
 

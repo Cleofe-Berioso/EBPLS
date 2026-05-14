@@ -152,15 +152,52 @@ function resolvePermitExpirationDateForRelease(applicationType: ApplicationType)
   return new Date(Date.UTC(now.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
 }
 
+const PERMIT_NUMBER_YEAR_SEQ_REGEX = /^(\d{4})-(\d{6})$/;
+
 async function generateDocumentNumber(
   dbClient: any,
   documentType: IssuanceDocumentType
 ): Promise<string> {
-  const prefix = documentType === "CLOSURE_CERTIFICATE" ? "CC" : "BP";
   const year = new Date().getFullYear();
+
+  if (documentType === "BUSINESS_PERMIT") {
+    // Format: YYYY-NNNNNN (e.g. 2026-000001)
+    // Find the highest existing sequence for this year's permits matching the pattern.
+    const existing = await dbClient.permitIssuance.findMany({
+      where: {
+        documentType: "BUSINESS_PERMIT",
+        documentNumber: { startsWith: `${year}-` },
+      },
+      select: { documentNumber: true },
+    });
+
+    let maxSeq = 0;
+    for (const row of existing) {
+      const match = PERMIT_NUMBER_YEAR_SEQ_REGEX.exec(row.documentNumber ?? "");
+      if (match && parseInt(match[1], 10) === year) {
+        const seq = parseInt(match[2], 10);
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+
+    // Retry loop: increment until a unique candidate is found.
+    let nextSeq = maxSeq + 1;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const candidate = `${year}-${String(nextSeq).padStart(6, "0")}`;
+      const dup = await dbClient.permitIssuance.findFirst({
+        where: { documentNumber: candidate },
+        select: { id: true },
+      });
+      if (!dup) return candidate;
+      nextSeq++;
+    }
+    throw new Error("Unable to generate unique permit number");
+  }
+
+  // CLOSURE_CERTIFICATE: keep existing CC-YYYY-NNNNN format
   const count = await dbClient.permitIssuance.count({
     where: {
-      documentType,
+      documentType: "CLOSURE_CERTIFICATE",
       createdAt: {
         gte: new Date(`${year}-01-01T00:00:00.000Z`),
         lt: new Date(`${year + 1}-01-01T00:00:00.000Z`),
@@ -168,7 +205,7 @@ async function generateDocumentNumber(
     },
   });
   const seq = String(count + 1).padStart(5, "0");
-  return `${prefix}-${year}-${seq}`;
+  return `CC-${year}-${seq}`;
 }
 
 function findPaidDate(history: Array<{ toStatus: DbApplicationStatus; createdAt: Date }>): string | null {

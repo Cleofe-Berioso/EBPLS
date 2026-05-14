@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireBploSession } from "@/lib/bplo-api";
 import { applyBploReviewAction } from "@/lib/bplo-applications";
+import { logApplicationAction } from "@/lib/audit-log";
 
 interface RouteContext {
   params: Promise<{ applicationId: string }>;
@@ -27,6 +28,21 @@ export async function POST(req: Request, context: RouteContext) {
       "RETURN_FOR_CORRECTION",
       payload.remarks
     );
+
+    // Audit: Application returned for correction
+    void logApplicationAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "BPLO",
+      applicationId,
+      application.applicationNumber,
+      "RETURNED",
+      "UNDER_REVIEW",
+      application.status,
+      `Application returned for correction: ${payload.remarks || "No reason provided"}`,
+      { remarks: payload.remarks }
+    );
+
     return NextResponse.json({ application });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to return application";

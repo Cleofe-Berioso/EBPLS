@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireBploSession } from "@/lib/bplo-api";
+import { logPermitAction } from "@/lib/audit-log";
 import { preparePermitIssuance } from "@/lib/bplo-permit-issuance";
 
 export async function POST(
@@ -26,6 +27,22 @@ export async function POST(
       session.user.id,
       payload.remarks
     );
+
+    // Audit: Permit prepared
+    void logPermitAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "BPLO",
+      result.documentNumber,
+      result.documentNumber,
+      result.applicationId,
+      "PREPARED",
+      "ASSESSED",
+      result.status,
+      `Permit prepared for issuance: ${result.documentType || "BUSINESS_PERMIT"}`,
+      {}
+    );
+
     return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to prepare permit issuance";

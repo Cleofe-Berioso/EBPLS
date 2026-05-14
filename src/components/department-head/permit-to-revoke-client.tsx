@@ -13,11 +13,15 @@ type PermitToRevokeRow = {
   applicationNumber: string;
   permitOrCertificateNumber: string | null;
   businessName: string;
+  tradeName: string | null;
+  businessType: string;
   ownerName: string;
   applicantName: string;
   businessAddress: string;
   lineOfBusiness: string;
   inspectionDate: string;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
   inspectorName: string;
   inspectorComment: string | null;
   evidenceFileName: string | null;
@@ -133,7 +137,7 @@ export function PermitToRevokeClient() {
     <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
       <SectionCard
         title="Flagged Cases Queue"
-        description="Only flagged (REVOCATION_REVIEW) inspection cases are listed here."
+        description="Only Department Head verified NON_COMPLIANT inspections ready for revocation decision are listed here."
       >
         {loading ? (
           <div className="text-sm text-slate-500">Loading revocation queue...</div>
@@ -157,7 +161,7 @@ export function PermitToRevokeClient() {
                   }`}
                 >
                   <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{row.tradeName ? `${row.businessName} / ${row.tradeName}` : row.businessName}</p>
                   <p className="mt-1 text-xs text-slate-600">Inspector: {row.inspectorName}</p>
                   <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-amber-700">{row.inspectionStatus}</p>
                 </button>
@@ -177,8 +181,12 @@ export function PermitToRevokeClient() {
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Name</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessName}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Business Name / Trade Name</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.tradeName ? `${selected.businessName} / ${selected.tradeName}` : selected.businessName}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Business Type</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessType}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Owner / Applicant</p>
@@ -207,8 +215,20 @@ export function PermitToRevokeClient() {
                 <p className="mt-1 text-sm text-slate-900">{formatDateTime(selected.inspectionDate)}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Date Verified</p>
+                <p className="mt-1 text-sm text-slate-900">{selected.verifiedAt ? formatDateTime(selected.verifiedAt) : "Not available"}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Verified By</p>
+                <p className="mt-1 text-sm text-slate-900">{selected.verifiedBy ?? "Not available"}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">JIT Inspector</p>
                 <p className="mt-1 text-sm text-slate-900">{selected.inspectorName}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Current Status</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.inspectionStatus}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">JIT Comment</p>

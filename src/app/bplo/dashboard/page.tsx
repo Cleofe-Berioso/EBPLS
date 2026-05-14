@@ -5,17 +5,25 @@ import {
   getBploDashboardSummary,
   listRecentBploSubmissions,
 } from "@/lib/bplo-applications";
+import { getBploDashboardMetrics } from "@/lib/bplo-dashboard";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
 import { StatusBadge } from "@/components/applicant/status-badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { RoleBadge } from "@/components/ui/role-badge";
+import { DashboardPieChart } from "@/components/ui/dashboard-pie-chart";
+import { DashboardLineChart } from "@/components/ui/dashboard-line-chart";
+import { DashboardBarChart } from "@/components/ui/dashboard-bar-chart";
+import { DashboardStackedBarChart } from "@/components/ui/dashboard-stacked-bar-chart";
 
 export default async function BploDashboard() {
-  const summary = await getBploDashboardSummary();
-  const typeSummary = await getBploApplicationTypeSummary();
-  const recentSubmissions = await listRecentBploSubmissions();
+  const [summary, typeSummary, recentSubmissions, metrics] = await Promise.all([
+    getBploDashboardSummary(),
+    getBploApplicationTypeSummary(),
+    listRecentBploSubmissions(),
+    getBploDashboardMetrics(),
+  ]);
 
   const actionRequiredQueues = [
     {
@@ -183,6 +191,38 @@ export default async function BploDashboard() {
           ))}
         </div>
       </SectionCard>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <DashboardPieChart
+          title="Application Status Distribution"
+          description="Current BPLO operational distribution by grouped application status."
+          data={metrics.applicationStatusDistribution}
+        />
+        <DashboardLineChart
+          title="Applications Processed Per Day"
+          description="Daily processed application count based on application updatedAt timestamps."
+          data={metrics.applicationsProcessedPerDay}
+          lineLabel="Processed Applications"
+        />
+        <DashboardBarChart
+          title="Processing Time per Application"
+          description="Average processing duration from submittedAt to latest updatedAt, grouped by application type."
+          data={metrics.processingTimeByApplicationType}
+          barLabel="Average Hours"
+        />
+        <DashboardStackedBarChart
+          title="Pending Queue by Status"
+          description="Pending workloads grouped by BPLO review, assessment, payment verification, and permit release stages."
+          data={metrics.pendingQueueByStatus}
+          categoryKey="queue"
+          series={[
+            { key: "bploReview", label: "BPLO Review", color: "#2563eb" },
+            { key: "assessment", label: "Assessment", color: "#0f766e" },
+            { key: "paymentVerification", label: "Payment Verification", color: "#d97706" },
+            { key: "permitRelease", label: "Permit Release", color: "#059669" },
+          ]}
+        />
+      </div>
 
       {/* Recent Submissions Section */}
       <SectionCard title="Recent Activity" description="Most recently filed applications from existing queue data.">

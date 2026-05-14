@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { logSmsAction } from "@/lib/audit-log";
 
 export type ReleaseSmsStatus = "FOR_RELEASE" | "RELEASED";
 
@@ -83,6 +84,20 @@ async function createSmsDeliveryLog(input: {
         providerResponse: input.providerResponse,
       },
     });
+      // Audit: SMS delivery logged
+      void logSmsAction(
+        null,
+        "SMS_SYSTEM",
+        input.applicantId,
+        null,
+        input.applicationId,
+        input.status as any,
+        input.phoneNumber,
+        input.provider,
+        input.status,
+        `SMS ${input.status.toLowerCase()}: ${input.provider}`,
+        { providerResponse: input.providerResponse }
+      );
   } catch (error) {
     console.error("[SMS] log failed", {
       applicationId: input.applicationId,

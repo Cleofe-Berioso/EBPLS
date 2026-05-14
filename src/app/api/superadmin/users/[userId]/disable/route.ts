@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { prisma } from "@/lib/prisma";
+import { logUserManagementAction } from "@/lib/audit-log";
 
 export async function POST(
   _req: Request,
@@ -50,6 +51,20 @@ export async function POST(
     where: { id: userId },
     data: { isActive: false },
   });
+
+  // Audit: User disabled
+  void logUserManagementAction(
+    session.user.id,
+    session.user.name ?? session.user.email ?? null,
+    "SUPER_ADMIN",
+    userId,
+    userId,
+    "DEACTIVATED",
+    "ACTIVE",
+    "INACTIVE",
+    `User disabled: ${target.role}`,
+    { role: target.role }
+  );
 
   return NextResponse.json({ success: true });
 }

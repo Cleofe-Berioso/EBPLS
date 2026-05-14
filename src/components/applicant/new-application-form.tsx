@@ -7,6 +7,7 @@ import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/busin
 import {
   isCorporation,
   isCorporationOwnershipClassification,
+  validateBusinessIdentityFormats,
 } from "@/lib/business-rules";
 import { isWithinEbMagalona } from "@/lib/business-location";
 import type {
@@ -244,6 +245,29 @@ export function NewApplicationForm() {
   const [missingDocNames, setMissingDocNames] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
 
+  useEffect(() => {
+    const normalizedInfo = normalizeBusinessInfo(info);
+    const identityFormats = validateBusinessIdentityFormats(normalizedInfo);
+
+    setFieldErrors((current) => {
+      const nextErrors = { ...current };
+
+      if (normalizedInfo.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
+        nextErrors.registrationNumber = "Wrong Format";
+      } else if (nextErrors.registrationNumber === "Wrong Format" || nextErrors.registrationNumber === "This already exist") {
+        delete nextErrors.registrationNumber;
+      }
+
+      if (normalizedInfo.tin.trim().length > 0 && !identityFormats.tin) {
+        nextErrors.tin = "Wrong Format";
+      } else if (nextErrors.tin === "Wrong Format" || nextErrors.tin === "This already exist") {
+        delete nextErrors.tin;
+      }
+
+      return nextErrors;
+    });
+  }, [info]);
+
   const requiredDocs = useMemo(
     () =>
       resolveRequiredDocuments({
@@ -327,6 +351,14 @@ export function NewApplicationForm() {
       nextErrors.businessAddress = "Business Address is required.";
     }
 
+    const identityFormats = validateBusinessIdentityFormats(normalizedInfo);
+    if (normalizedInfo.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
+      nextErrors.registrationNumber = "Wrong Format";
+    }
+    if (normalizedInfo.tin.trim().length > 0 && !identityFormats.tin) {
+      nextErrors.tin = "Wrong Format";
+    }
+
     Object.assign(nextErrors, validateBusinessLocation(normalizedInfo));
 
     if (
@@ -388,6 +420,25 @@ export function NewApplicationForm() {
     setSubmitting(true);
     setStatusMessage(null);
     setFieldErrors({});
+
+    const normalizedInfo = normalizeBusinessInfo(info);
+    const identityFormats = validateBusinessIdentityFormats(normalizedInfo);
+    const identityErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+
+    if (normalizedInfo.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
+      identityErrors.registrationNumber = "Wrong Format";
+    }
+
+    if (normalizedInfo.tin.trim().length > 0 && !identityFormats.tin) {
+      identityErrors.tin = "Wrong Format";
+    }
+
+    if (Object.keys(identityErrors).length > 0) {
+      setFieldErrors(identityErrors);
+      setStatusMessage({ kind: "error", text: "Wrong Format" });
+      setSubmitting(false);
+      return null;
+    }
 
     if (mode === "SUBMIT") {
       if (!validateCurrentStep(0)) {
@@ -458,11 +509,15 @@ export function NewApplicationForm() {
     const data = (await response.json()) as {
       application?: { id: string; applicationNumber: string; status: string };
       error?: string;
+      duplicateField?: string;
     };
 
     setSubmitting(false);
 
     if (!response.ok || !data.application) {
+      if (data.duplicateField === "registrationNumber" || data.duplicateField === "tin") {
+        setFieldErrors({ [data.duplicateField]: "This already exist" });
+      }
       setStatusMessage({
         kind: "error",
         text: data.error ?? "Unable to save application.",

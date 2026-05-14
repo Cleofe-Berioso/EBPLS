@@ -68,6 +68,12 @@ export function BusinessPermitTemplate({ permit }: BusinessPermitTemplateProps) 
           <InfoRow label="TOP Number" value={permit.topNumber} />
           <InfoRow label="OR Number" value={permit.orNumber} />
           <InfoRow label="Date Paid" value={dateLabel(permit.datePaid)} />
+          <InfoRow
+            label="Amount Paid (Annual)"
+            value={permit.annualAmountPaid > 0
+              ? `₱${permit.annualAmountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : "-"}
+          />
         </section>
 
         <section className="rounded-xl border border-dashed border-slate-300 p-4">

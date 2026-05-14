@@ -36,6 +36,7 @@ export interface ApplicantBusinessLocationRow {
   applicationNumber: string;
   applicationType: ApplicationType;
   permitOrCertificateNumber: string | null;
+  permitValidUntil: string | null;
   location: {
     id: string;
     latitude: number;
@@ -53,17 +54,28 @@ export interface BusinessLocationMapRow {
   locationId: string;
   businessRecordId: string;
   applicationId: string;
+  applicantName: string;
+  tradeName: string | null;
   businessName: string;
+  businessType: string | null;
   ownerName: string;
   businessCategory: MapBusinessCategory;
   businessCategoryLabel: string;
   businessCategoryColor: string;
   applicationNumber: string;
   applicationType: BusinessMapApplicationType;
+  submittedAt: string | null;
   permitOrCertificateNumber: string | null;
   permitValidUntil: string | null;
   lineOfBusiness: string | null;
   applicationStatus: string;
+  bploRemarks: string | null;
+  documents: Array<{
+    id: string;
+    documentName: string;
+    fileName: string;
+    uploadedAt: string;
+  }>;
   latitude: number;
   longitude: number;
   address: string | null;
@@ -113,6 +125,7 @@ function toApplicantRow(record: {
   id: string;
   businessName: string;
   registrationNumber: string;
+  permitExpirationDate: Date | null;
   location: {
     id: string;
     latitude: number;
@@ -136,6 +149,7 @@ function toApplicantRow(record: {
     applicationNumber: record.releasedApplication.applicationNumber,
     applicationType: record.releasedApplication.applicationType,
     permitOrCertificateNumber: record.releasedApplication.permitOrCertificateNumber,
+    permitValidUntil: record.permitExpirationDate ? record.permitExpirationDate.toISOString() : null,
     location: record.location
       ? {
           id: record.location.id,
@@ -231,6 +245,7 @@ export async function listApplicantReleasedBusinessLocations(
       id: true,
       businessName: true,
       registrationNumber: true,
+      permitExpirationDate: true,
       location: {
         select: {
           id: true,
@@ -432,9 +447,15 @@ export async function listActivePermittedBusinessLocations(
         select: {
           id: true,
           businessName: true,
+          tradeName: true,
           ownerName: true,
           lineOfBusiness: true,
           permitExpirationDate: true,
+          applicant: {
+            select: {
+              name: true,
+            },
+          },
           applications: {
             where: {
               status: { in: [...ACTIVE_PERMITTED_MAP_APP_STATUSES] },
@@ -449,7 +470,35 @@ export async function listActivePermittedBusinessLocations(
               applicationNumber: true,
               applicationType: true,
               status: true,
+              submittedAt: true,
               formData: true,
+              documents: {
+                select: {
+                  id: true,
+                  documentName: true,
+                  fileName: true,
+                  uploadedAt: true,
+                },
+                orderBy: {
+                  uploadedAt: "desc",
+                },
+              },
+              history: {
+                where: {
+                  actorRole: "BPLO",
+                  remarks: {
+                    not: null,
+                  },
+                },
+                select: {
+                  remarks: true,
+                  createdAt: true,
+                },
+                orderBy: {
+                  createdAt: "desc",
+                },
+                take: 1,
+              },
               permitIssuance: {
                 select: {
                   documentNumber: true,
@@ -480,6 +529,16 @@ export async function listActivePermittedBusinessLocations(
           ? ((latestApplication.formData as Record<string, unknown>).businessType as string | undefined)
           : undefined;
 
+      const tradeName =
+        typeof latestApplication.formData === "object" && latestApplication.formData
+          ? ((latestApplication.formData as Record<string, unknown>).tradeName as string | undefined)
+          : undefined;
+
+      const ownerNameFromForm =
+        typeof latestApplication.formData === "object" && latestApplication.formData
+          ? ((latestApplication.formData as Record<string, unknown>).ownerName as string | undefined)
+          : undefined;
+
       const category = inferMapBusinessCategory({
         businessType: businessType ?? null,
         lineOfBusiness: (lineOfBusiness ?? location.businessRecord.lineOfBusiness ?? "").trim(),
@@ -490,19 +549,30 @@ export async function listActivePermittedBusinessLocations(
         locationId: location.id,
         businessRecordId: location.businessRecord.id,
         applicationId: latestApplication.id,
+        applicantName: location.businessRecord.applicant?.name ?? "-",
+        tradeName: (tradeName ?? location.businessRecord.tradeName ?? null)?.trim() || null,
         businessName: location.businessRecord.businessName,
-        ownerName: location.businessRecord.ownerName,
+        businessType: businessType?.trim() || null,
+        ownerName: (ownerNameFromForm ?? location.businessRecord.ownerName).trim(),
         businessCategory: category,
         businessCategoryLabel: categoryMeta.label,
         businessCategoryColor: categoryMeta.color,
         applicationNumber: latestApplication.applicationNumber,
         applicationType: latestApplication.applicationType as BusinessMapApplicationType,
+        submittedAt: latestApplication.submittedAt ? latestApplication.submittedAt.toISOString() : null,
         permitOrCertificateNumber: latestApplication.permitIssuance?.documentNumber ?? null,
         permitValidUntil: location.businessRecord.permitExpirationDate
           ? location.businessRecord.permitExpirationDate.toISOString()
           : null,
         lineOfBusiness: (lineOfBusiness ?? location.businessRecord.lineOfBusiness ?? null)?.trim() || null,
         applicationStatus: mapDbStatusToUi(latestApplication.status),
+        bploRemarks: latestApplication.history[0]?.remarks?.trim() || null,
+        documents: latestApplication.documents.map((doc) => ({
+          id: doc.id,
+          documentName: doc.documentName,
+          fileName: doc.fileName,
+          uploadedAt: doc.uploadedAt.toISOString(),
+        })),
         latitude: location.latitude,
         longitude: location.longitude,
         address: location.address,
