@@ -58,6 +58,7 @@ model User {
   permitsReleased PermitIssuance[] @relation("PermitReleasedBy")
   inspections      Inspection[]     @relation("InspectionInspector")
   inspectionDecisions Inspection[]  @relation("InspectionDecider")
+  revocationSettlementRecords Inspection[] @relation("InspectionRevocationSettledBy")
   feeConfigurationUpdates FeeConfigurationItem[] @relation("FeeConfigUpdatedBy")
   systemFeeSettingUpdates SystemFeeSetting[] @relation("SystemFeeSettingUpdatedBy")
   renewalExtensionUpdates RenewalExtension[] @relation("RenewalExtensionUpdatedBy")
@@ -201,34 +202,39 @@ enum RevocationDecision {
 }
 
 model Inspection {
-  id                  String                     @id @default(cuid())
-  businessRecordId    String
-  applicationId       String?
-  inspectorId         String
-  complianceStatus    InspectionComplianceStatus
-  status              InspectionStatus
-  comment             String?
-  evidenceFileName    String?
-  evidenceStoragePath String?
-  evidenceMimeType    String?
-  evidenceSizeBytes   Int?
-  revocationDecision  RevocationDecision?
-  revocationRemarks   String?
-  decidedById         String?
-  decidedAt           DateTime?
-  createdAt           DateTime                   @default(now())
-  updatedAt           DateTime                   @updatedAt
+  id                         String                     @id @default(cuid())
+  businessRecordId           String
+  applicationId              String?
+  inspectorId                String
+  complianceStatus           InspectionComplianceStatus
+  status                     InspectionStatus
+  comment                    String?
+  evidenceFileName           String?
+  evidenceStoragePath        String?
+  evidenceMimeType           String?
+  evidenceSizeBytes          Int?
+  revocationDecision         RevocationDecision?
+  revocationRemarks          String?
+  decidedById                String?
+  decidedAt                  DateTime?
+  revocationSettledAt        DateTime?
+  revocationSettlementRemarks String?
+  revocationSettledById      String?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
 
   businessRecord BusinessRecord       @relation(fields: [businessRecordId], references: [id], onDelete: Cascade)
   application    BusinessApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
   inspector      User                 @relation("InspectionInspector", fields: [inspectorId], references: [id], onDelete: Restrict)
   decidedBy      User?                @relation("InspectionDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  revocationSettledBy User?           @relation("InspectionRevocationSettledBy", fields: [revocationSettledById], references: [id], onDelete: SetNull)
 
   @@index([businessRecordId, createdAt])
   @@index([applicationId, createdAt])
   @@index([inspectorId, createdAt])
   @@index([decidedById, createdAt])
   @@index([status, createdAt])
+  @@index([revocationSettledAt, createdAt])
 }
 
 enum PermitIssuanceStatus {

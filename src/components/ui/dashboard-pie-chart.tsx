@@ -44,8 +44,8 @@ export function DashboardPieChart({
       emptyTitle={emptyTitle ?? "No application data available yet."}
       emptyDescription={emptyDescription}
     >
-      <div className="h-full w-full min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="w-full min-w-0">
+        <ResponsiveContainer width="100%" height={280}>
           <PieChart>
             <Pie
               data={data}

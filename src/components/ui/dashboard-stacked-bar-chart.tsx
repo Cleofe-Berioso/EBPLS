@@ -56,8 +56,8 @@ export function DashboardStackedBarChart({
       emptyTitle={emptyTitle ?? "No pending queue records yet."}
       emptyDescription={emptyDescription}
     >
-      <div className="h-full w-full min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="w-full min-w-0">
+        <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data} margin={{ top: 12, right: 20, left: 8, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
             <XAxis dataKey={categoryKey} tick={{ fontSize: 12 }} />

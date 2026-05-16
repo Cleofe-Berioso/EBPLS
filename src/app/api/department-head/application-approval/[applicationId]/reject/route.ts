@@ -38,7 +38,7 @@ export async function POST(req: Request, context: RouteContext) {
       "REJECTED",
       "DEPARTMENT_HEAD_REVIEW",
       application.status,
-      `Application rejected: ${payload.remarks || "No reason"}`,
+      `Department Head rejected application: ${payload.remarks || "No reason"}`,
       { remarks: payload.remarks }
     );
 

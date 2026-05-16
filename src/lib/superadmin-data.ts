@@ -110,19 +110,45 @@ export interface SuperAdminApplicationDetail {
   };
   businessInfo: {
     businessName: string;
+    ownerFirstName: string;
+    ownerMiddleName: string;
+    ownerSurname: string;
     businessType: string;
     registrationNumber: string;
     tin: string;
     tradeName: string;
     ownerName: string;
+    ownerAge: string;
+    sex: string;
+    nationality: string;
     email: string;
     phone: string;
+    businessOperationType: string;
     mainOfficeAddress: string;
     businessAddress: string;
+    barangay: string;
+    streetAddress: string;
+    businessLatitude: string;
+    businessLongitude: string;
     lineOfBusiness: string;
     businessActivity: string;
+    businessArea: string;
+    totalFloorArea: string;
     assetSize: string;
+    propertyOwnership: string;
+    taxDeclarationNumber: string;
+    propertyIdentificationNumber: string;
+    taxIncentives: string;
+    isMarket: string;
+    isAgriculture: string;
+    isLiquorOrTobacco: string;
     totalEmployees: string;
+    maleEmployees: string;
+    femaleEmployees: string;
+    employeesWithinMunicipality: string;
+    deliveryVehicles: string;
+    paymentFrequency: string;
+    closureReason: string;
   };
   documents: Array<{
     id: string;
@@ -563,6 +589,20 @@ export async function getSuperAdminApplicationDetail(
     typeof form[key] === "string" && String(form[key]).trim()
       ? String(form[key]).trim()
       : "-";
+  const formBool = (key: string) => {
+    const value = form[key];
+    if (typeof value === "boolean") {
+      return value ? "Yes" : "No";
+    }
+    return "-";
+  };
+  const formNumber = (key: string) => {
+    const value = form[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+    return "-";
+  };
 
   return {
     application: {
@@ -578,19 +618,49 @@ export async function getSuperAdminApplicationDetail(
     applicant: row.applicant,
     businessInfo: {
       businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
+      ownerFirstName: formValue("ownerFirstName"),
+      ownerMiddleName: formValue("ownerMiddleName"),
+      ownerSurname: formValue("ownerSurname"),
       businessType: formValue("businessType"),
       registrationNumber: formValue("registrationNumber"),
       tin: formValue("tin"),
       tradeName: formValue("tradeName"),
       ownerName: formValue("ownerName"),
+      ownerAge: formValue("ownerAge"),
+      sex: formValue("sex"),
+      nationality: formValue("nationality"),
       email: formValue("email"),
       phone: formValue("phone"),
+      businessOperationType: formValue("businessOperationType"),
       mainOfficeAddress: formValue("mainOfficeAddress"),
       businessAddress: formValue("businessAddress"),
+      barangay: formValue("barangay"),
+      streetAddress: formValue("streetAddress"),
+      businessLatitude: formNumber("businessLatitude"),
+      businessLongitude: formNumber("businessLongitude"),
       lineOfBusiness: formValue("lineOfBusiness"),
       businessActivity: formValue("businessActivity"),
+      businessArea: formValue("businessArea"),
+      totalFloorArea: formValue("totalFloorArea"),
       assetSize: formValue("assetSize"),
+      propertyOwnership: formValue("propertyOwnership"),
+      taxDeclarationNumber: formValue("taxDeclarationNumber"),
+      propertyIdentificationNumber: formValue("propertyIdentificationNumber"),
+      taxIncentives: formValue("taxIncentives"),
+      isMarket: formBool("isMarket"),
+      isAgriculture: formBool("isAgriculture"),
+      isLiquorOrTobacco: formBool("isLiquorOrTobacco"),
       totalEmployees: formValue("totalEmployees"),
+      maleEmployees: formValue("maleEmployees"),
+      femaleEmployees: formValue("femaleEmployees"),
+      employeesWithinMunicipality: formValue("employeesWithinMunicipality"),
+      deliveryVehicles: formValue("deliveryVehicles"),
+      paymentFrequency: formValue("paymentFrequency"),
+      closureReason: formValue("closureReason") !== "-"
+        ? formValue("closureReason")
+        : formValue("reasonForClosure") !== "-"
+          ? formValue("reasonForClosure")
+          : formValue("closureRemarks"),
     },
     documents: row.documents.map((doc) => ({
       id: doc.id,
@@ -650,6 +720,30 @@ export async function getSuperAdminApplicationDetail(
       remarks: item.remarks,
     })),
   };
+}
+
+export async function getSuperAdminApplicationDocument(applicationId: string, documentId: string) {
+  const application = await prisma.businessApplication.findUnique({
+    where: { id: applicationId },
+    select: { id: true },
+  });
+
+  if (!application) {
+    throw new Error("Application not found");
+  }
+
+  const document = await prisma.applicationDocument.findFirst({
+    where: {
+      id: documentId,
+      applicationId,
+    },
+  });
+
+  if (!document) {
+    throw new Error("Document not found");
+  }
+
+  return document;
 }
 
 export async function listSuperAdminActivities(
@@ -773,7 +867,7 @@ export async function getSuperAdminActivityFilterOptions(): Promise<SuperAdminAc
 
 export async function listSuperAdminUsers(filters?: {
   search?: string;
-  role?: "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+  role?: "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
   status?: "ALL" | "ACTIVE" | "DISABLED";
 }): Promise<SuperAdminUserRow[]> {
   const normalizedSearch = filters?.search?.trim();

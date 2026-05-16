@@ -18,8 +18,18 @@ type ApprovalRow = {
   lineOfBusiness: string;
   businessAddress: string;
   submittedDate: string;
+  updatedDate: string;
   currentStatus: string;
   bploRemarks: string | null;
+  formData: Record<string, unknown>;
+  history: Array<{
+    id: string;
+    fromStatus: string | null;
+    toStatus: string;
+    actorRole: string;
+    remarks: string | null;
+    createdAt: string;
+  }>;
   documents: Array<{
     id: string;
     documentName: string;
@@ -37,6 +47,34 @@ function formatDateTime(value: string): string {
     timeStyle: "short",
     timeZone: "Asia/Manila",
   }).format(new Date(value));
+}
+
+function readText(formData: Record<string, unknown>, keys: string[], fallback = "-") {
+  for (const key of keys) {
+    const value = formData[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return fallback;
+}
+
+function readFlag(formData: Record<string, unknown>, key: string) {
+  const value = formData[key];
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  return "-";
+}
+
+function formatBirthDate(value: string): string {
+  if (!value || value === "-") return "-";
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeZone: "Asia/Manila",
+  }).format(parsed);
 }
 
 export default function DepartmentHeadApplicationApprovalPage() {
@@ -182,6 +220,18 @@ export default function DepartmentHeadApplicationApprovalPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {(() => {
+                const formData = selected.formData ?? {};
+                const ownerFirstName = readText(formData, ["ownerFirstName"], "");
+                const ownerMiddleName = readText(formData, ["ownerMiddleName"], "");
+                const ownerSurname = readText(formData, ["ownerSurname"], "");
+                const ownerName = readText(formData, ["ownerName"], selected.ownerName);
+                const latitude = typeof formData.businessLatitude === "number" ? formData.businessLatitude : null;
+                const longitude = typeof formData.businessLongitude === "number" ? formData.businessLongitude : null;
+                const closureReason = readText(formData, ["closureReason", "reasonForClosure", "closureRemarks"], "-");
+
+                return (
+                  <>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">Application Number</p>
@@ -210,6 +260,10 @@ export default function DepartmentHeadApplicationApprovalPage() {
                   <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(selected.submittedDate)}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Last Updated</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(selected.updatedDate)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">Business Type</p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessType}</p>
                 </div>
@@ -221,6 +275,96 @@ export default function DepartmentHeadApplicationApprovalPage() {
                   <p className="text-xs uppercase tracking-wide text-slate-500">Business Address</p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessAddress}</p>
                 </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <SectionCard title="Applicant / Owner Information" description="Filed owner identity and contact details.">
+                  <div className="space-y-2 text-sm text-slate-700">
+                    {ownerFirstName || ownerMiddleName || ownerSurname ? (
+                      <>
+                        <p><strong>First Name:</strong> {ownerFirstName || "-"}</p>
+                        <p><strong>Middle Name:</strong> {ownerMiddleName || "-"}</p>
+                        <p><strong>Surname:</strong> {ownerSurname || "-"}</p>
+                      </>
+                    ) : (
+                      <p><strong>Owner / President:</strong> {ownerName}</p>
+                    )}
+                    <p><strong>Age:</strong> {readText(formData, ["ownerAge"])}</p>
+                    <p><strong>Birthdate:</strong> {formatBirthDate(readText(formData, ["birthDate"]))}</p>
+                    <p><strong>Sex:</strong> {readText(formData, ["sex"])}</p>
+                    <p><strong>Nationality:</strong> {readText(formData, ["nationality"])}</p>
+                    <p><strong>Email:</strong> {readText(formData, ["email"])}</p>
+                    <p><strong>Phone:</strong> {readText(formData, ["phone"])}</p>
+                  </div>
+                </SectionCard>
+
+                <SectionCard title="Business Identity" description="Filed registration and identity details.">
+                  <div className="space-y-2 text-sm text-slate-700">
+                    <p><strong>Business Name:</strong> {readText(formData, ["businessName"], selected.businessName)}</p>
+                    <p><strong>Trade Name:</strong> {readText(formData, ["tradeName"])}</p>
+                    <p><strong>Business Type:</strong> {readText(formData, ["businessType"], selected.businessType)}</p>
+                    <p><strong>Registration Type:</strong> {readText(formData, ["businessType"], selected.businessType)}</p>
+                    <p><strong>Registration Number:</strong> {readText(formData, ["registrationNumber"])}</p>
+                    <p><strong>TIN:</strong> {readText(formData, ["tin"])}</p>
+                    <p><strong>Business Activity:</strong> {readText(formData, ["businessActivity"])}</p>
+                    <p><strong>Main / Branch:</strong> {readText(formData, ["businessOperationType"])}</p>
+                    <p><strong>Line of Business:</strong> {readText(formData, ["lineOfBusiness"], selected.lineOfBusiness)}</p>
+                  </div>
+                </SectionCard>
+
+                <SectionCard title="Address and Location" description="Filed addresses and map pin details.">
+                  <div className="space-y-2 text-sm text-slate-700">
+                    <p><strong>Main Office Address:</strong> {readText(formData, ["mainOfficeAddress"])}</p>
+                    <p><strong>Business Address:</strong> {readText(formData, ["businessAddress"], selected.businessAddress)}</p>
+                    <p><strong>Barangay:</strong> {readText(formData, ["barangay"])}</p>
+                    <p><strong>Street:</strong> {readText(formData, ["streetAddress"])}</p>
+                    <p><strong>Coordinates:</strong> {latitude != null && longitude != null ? `${latitude}, ${longitude}` : "-"}</p>
+                    <p><strong>Location Verification:</strong> {latitude != null && longitude != null ? "Location pinned" : "Location not pinned"}</p>
+                  </div>
+                </SectionCard>
+
+                <SectionCard title="Business Operation Details" description="Operational and property declarations.">
+                  <div className="space-y-2 text-sm text-slate-700">
+                    <p><strong>Business Area:</strong> {readText(formData, ["businessArea"])}</p>
+                    <p><strong>Total Floor Area:</strong> {readText(formData, ["totalFloorArea"])}</p>
+                    <p><strong>Asset Size:</strong> {readText(formData, ["assetSize"])}</p>
+                    <p><strong>Property Ownership:</strong> {readText(formData, ["propertyOwnership"])}</p>
+                    <p><strong>Tax Declaration Number:</strong> {readText(formData, ["taxDeclarationNumber"])}</p>
+                    <p><strong>Property Identification Number:</strong> {readText(formData, ["propertyIdentificationNumber"])}</p>
+                    <p><strong>Tax Incentives:</strong> {readText(formData, ["taxIncentives"])}</p>
+                    <p><strong>Market Business:</strong> {readFlag(formData, "isMarket")}</p>
+                    <p><strong>Agriculture-related:</strong> {readFlag(formData, "isAgriculture")}</p>
+                    <p><strong>Liquor/Tobacco:</strong> {readFlag(formData, "isLiquorOrTobacco")}</p>
+                  </div>
+                </SectionCard>
+
+                <SectionCard title="Employee Counts" description="Submitted staffing and vehicle declarations.">
+                  <div className="space-y-2 text-sm text-slate-700">
+                    <p><strong>Total Employees:</strong> {readText(formData, ["totalEmployees"])}</p>
+                    <p><strong>Male Employees:</strong> {readText(formData, ["maleEmployees"])}</p>
+                    <p><strong>Female Employees:</strong> {readText(formData, ["femaleEmployees"])}</p>
+                    <p><strong>Employees within Municipality:</strong> {readText(formData, ["employeesWithinMunicipality"])}</p>
+                    <p><strong>Delivery Vehicles:</strong> {readText(formData, ["deliveryVehicles"])}</p>
+                  </div>
+                </SectionCard>
+
+                <SectionCard title="Application-specific Notes" description="Renewal and closure-specific declarations.">
+                  <div className="space-y-2 text-sm text-slate-700">
+                    <p><strong>Application Type:</strong> {selected.applicationType}</p>
+                    {selected.applicationType === "CLOSURE" ? (
+                      <p><strong>Closure Reason:</strong> {closureReason}</p>
+                    ) : null}
+                    {selected.applicationType === "RENEWAL" ? (
+                      <p><strong>Renewal Payment Preference:</strong> {readText(formData, ["paymentFrequency"])}</p>
+                    ) : null}
+                    {selected.applicationType === "NEW" ? (
+                      <p><strong>Capital Investment:</strong> {readText(formData, ["capitalInvestment"])}</p>
+                    ) : null}
+                    {selected.applicationType === "RENEWAL" ? (
+                      <p><strong>Gross Profit:</strong> {readText(formData, ["grossProfit"])}</p>
+                    ) : null}
+                  </div>
+                </SectionCard>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -237,6 +381,35 @@ export default function DepartmentHeadApplicationApprovalPage() {
                       <li key={doc.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                         <p className="font-medium text-slate-900">{doc.documentName}: {doc.fileName}</p>
                         <p className="text-xs text-slate-500">Uploaded: {formatDateTime(doc.uploadedAt)}</p>
+                        <p className="text-xs text-slate-500">Status: Uploaded</p>
+                        <a
+                          href={`/api/department-head/application-approval/${selected.id}/documents/${doc.id}/download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`${actionButtonStyles("secondary", "sm")} mt-2 inline-flex`}
+                        >
+                          Preview
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
+
+              <SectionCard title="Timeline / Remarks" description="Status transitions and recorded remarks.">
+                {selected.history.length === 0 ? (
+                  <div className="text-sm text-slate-600">No timeline entries yet.</div>
+                ) : (
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    {selected.history.map((item) => (
+                      <li key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <p className="font-medium text-slate-900">
+                          {item.fromStatus ? `${item.fromStatus} to ` : ""}
+                          {item.toStatus}
+                        </p>
+                        <p className="text-xs text-slate-600">Actor: {item.actorRole}</p>
+                        <p className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</p>
+                        <p className="mt-1 text-sm text-slate-700">{item.remarks ?? "No remarks provided."}</p>
                       </li>
                     ))}
                   </ul>
@@ -291,6 +464,9 @@ export default function DepartmentHeadApplicationApprovalPage() {
                   variant={message.type === "success" ? "success" : "danger"}
                 />
               ) : null}
+                  </>
+                );
+              })()}
             </div>
           )}
         </SectionCard>

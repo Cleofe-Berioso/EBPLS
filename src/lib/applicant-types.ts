@@ -83,6 +83,7 @@ export interface ApplicantApplicationRow {
   applicationType: ApplicationType;
   status: ApplicationStatus;
   dateSubmitted: string;
+  updatedAt?: string;
   canEdit: boolean;
 }
 
@@ -104,10 +105,19 @@ export interface BusinessInfo {
   provinceCode?: string;
   cityMunicipality?: string;
   streetAddress?: string;
+  mainOfficeCountry?: string;
+  mainOfficeCountryCode?: string;
+  mainOfficeProvince?: string;
+  mainOfficeProvinceCode?: string;
+  mainOfficeCityMunicipality?: string;
+  mainOfficeStreetAddress?: string;
+  mainOfficeBarangay?: string;
   mainOfficeAddress: string;
   businessAddress: string;
   businessLatitude: number | null;
   businessLongitude: number | null;
+  businessBarangay?: string;
+  businessStreetAddress?: string;
   sameAsMainOffice: boolean;
   businessArea: string;
   totalFloorArea: string;
@@ -126,4 +136,13 @@ export interface BusinessInfo {
   isMarket: boolean;
   isAgriculture: boolean;
   isLiquorOrTobacco?: boolean;
+  ownerFirstName?: string;
+  ownerMiddleName?: string;
+  ownerSurname?: string;
+  birthDate?: string;
+  ownerAge?: string;
+  capitalInvestment?: string;
+  grossProfit?: string;
+  barangay?: string;
+  businessOperationType?: "Main" | "Branch";
 }

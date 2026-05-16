@@ -10,9 +10,9 @@ import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { actionButtonStyles } from "@/components/ui/action-button";
 
-type RoleFilter = "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+type RoleFilter = "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
 type StatusFilter = "ALL" | "ACTIVE" | "DISABLED";
-type UserRole = "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+type UserRole = "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
 type UserStatus = "ACTIVE" | "DISABLED";
 
 type UserRow = {
@@ -65,7 +65,7 @@ function statusBadge(status: UserStatus) {
   );
 }
 
-export function SuperAdminUsersManager() {
+export function SuperAdminUsersManager({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [summary, setSummary] = useState<UserSummary>(EMPTY_SUMMARY);
   const [searchInput, setSearchInput] = useState("");
@@ -79,6 +79,8 @@ export function SuperAdminUsersManager() {
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
   const [showCreateBplo, setShowCreateBplo] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [disableTarget, setDisableTarget] = useState<UserRow | null>(null);
+  const [disableReason, setDisableReason] = useState("");
 
   const [createForm, setCreateForm] = useState({
     name: "",
@@ -170,7 +172,12 @@ export function SuperAdminUsersManager() {
     setFlash(null);
 
     try {
-      const res = await fetch(`/api/superadmin/users/${user.id}/disable`, { method: "POST" });
+      const payload = disableReason.trim().length > 0 ? { reason: disableReason.trim() } : undefined;
+      const res = await fetch(`/api/superadmin/users/${user.id}/disable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload ?? {}),
+      });
       const json = (await res.json()) as { error?: string };
 
       if (!res.ok) {
@@ -179,6 +186,8 @@ export function SuperAdminUsersManager() {
       }
 
       setFlash({ type: "success", message: `Disabled account: ${user.email}` });
+      setDisableTarget(null);
+      setDisableReason("");
       await loadUsers();
     } catch {
       setFlash({ type: "danger", message: "Unable to disable account." });
@@ -293,6 +302,8 @@ export function SuperAdminUsersManager() {
           <option value="APPLICANT">Applicant</option>
           <option value="BPLO">BPLO</option>
           <option value="SUPER_ADMIN">Super Admin</option>
+          <option value="DEPARTMENT_HEAD">Department Head</option>
+          <option value="JIT">JIT Inspector</option>
         </select>
         <select
           value={statusFilter}
@@ -355,7 +366,7 @@ export function SuperAdminUsersManager() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {users.map((user) => {
-                  const canToggleStatus = user.role !== "SUPER_ADMIN";
+                  const canToggleStatus = user.role !== "SUPER_ADMIN" && user.id !== currentUserId;
                   const canResetPassword = user.role === "BPLO";
 
                   return (
@@ -383,7 +394,10 @@ export function SuperAdminUsersManager() {
                               <button
                                 type="button"
                                 className={actionButtonStyles("warning", "sm")}
-                                onClick={() => void disableUser(user)}
+                                onClick={() => {
+                                  setDisableTarget(user);
+                                  setDisableReason("");
+                                }}
                               >
                                 Disable
                               </button>
@@ -427,7 +441,7 @@ export function SuperAdminUsersManager() {
           ) : (
             <div className="space-y-3 p-4">
               {users.map((user) => {
-                const canToggleStatus = user.role !== "SUPER_ADMIN";
+                const canToggleStatus = user.role !== "SUPER_ADMIN" && user.id !== currentUserId;
                 const canResetPassword = user.role === "BPLO";
 
                 return (
@@ -461,7 +475,10 @@ export function SuperAdminUsersManager() {
                           <button
                             type="button"
                             className={actionButtonStyles("warning", "sm")}
-                            onClick={() => void disableUser(user)}
+                            onClick={() => {
+                              setDisableTarget(user);
+                              setDisableReason("");
+                            }}
                           >
                             Disable
                           </button>
@@ -570,6 +587,49 @@ export function SuperAdminUsersManager() {
                 <button type="submit" className={actionButtonStyles("primary", "sm")}>Create BPLO Account</button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {disableTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="app-surface w-full max-w-lg p-5">
+            <h3 className="text-lg font-semibold text-slate-900">Disable Account</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Confirm disabling <span className="font-semibold">{disableTarget.email}</span>.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">Role: {disableTarget.role}</p>
+
+            <div className="mt-4">
+              <label className="mb-1 block text-sm font-medium text-slate-700">Reason (optional)</label>
+              <textarea
+                value={disableReason}
+                onChange={(e) => setDisableReason(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                placeholder="Enter optional reason for disable action"
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className={actionButtonStyles("secondary", "sm")}
+                onClick={() => {
+                  setDisableTarget(null);
+                  setDisableReason("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={actionButtonStyles("warning", "sm")}
+                onClick={() => void disableUser(disableTarget)}
+              >
+                Confirm Disable
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

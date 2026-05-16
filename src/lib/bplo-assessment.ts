@@ -270,16 +270,6 @@ function buildSuggestedLineItems(
       isSystemGenerated: false,
     });
 
-    if (suggestedFees.regulatoryFees > 0) {
-      items.push({
-        id: `${REGULATORY_FEES_LABEL}-suggested`,
-        description: REGULATORY_FEES_LABEL,
-        amount: suggestedFees.regulatoryFees,
-        sortOrder: items.length,
-        isSystemGenerated: false,
-      });
-    }
-
     if (suggestedFees.liquorTobaccoSurcharge > 0) {
       items.push({
         id: `${LIQUOR_TOBACCO_SURCHARGE_LABEL}-system`,
@@ -321,6 +311,11 @@ function buildSuggestedLineItems(
   return items;
 }
 
+function isRegulatoryFeeDescription(description: string) {
+  const normalized = description.trim().toLowerCase();
+  return normalized === REGULATORY_FEES_LABEL.toLowerCase() || normalized === "regulatory fee";
+}
+
 export function toReleasePaymentAmount(annualAssessedAmount: number, frequency: PaymentFrequency): number {
   // TOP release now requires full payment amount regardless of installment preference metadata.
   void frequency;
@@ -351,6 +346,7 @@ function validateCustomLineItems(lineItems: FeeLineItemInput[]): void {
 function sanitizeCustomLineItems(lineItems: FeeLineItemInput[]): Array<{ description: string; amount: number }> {
   return lineItems
     .filter((item) => !item.isSystemGenerated)
+    .filter((item) => !isRegulatoryFeeDescription(item.description ?? ""))
     .map((item) => ({
       description: item.description.trim(),
       amount: clampMoney(item.amount),
@@ -404,13 +400,13 @@ function buildAssessmentTotals(
   overdueMonths: number,
   runtimeSettings: any
 ) {
+  const nonRegulatoryCustomLineItems = customLineItems.filter(
+    (item) => !isRegulatoryFeeDescription(item.description)
+  );
   const isClosure = applicationType === "CLOSURE";
   const mayorLine = isClosure
     ? undefined
-    : customLineItems.find((item) => item.description === MAYORS_PERMIT_FEE_LABEL);
-  const regulatoryLine = isClosure
-    ? undefined
-    : customLineItems.find((item) => item.description === REGULATORY_FEES_LABEL);
+    : nonRegulatoryCustomLineItems.find((item) => item.description === MAYORS_PERMIT_FEE_LABEL);
   const automaticRenewal = isClosure
     ? { surcharge: 0, interest: 0 }
     : buildAutomaticRenewalCharges(mayorLine?.amount ?? 0, overdueMonths, runtimeSettings);
@@ -450,21 +446,21 @@ function buildAssessmentTotals(
   }
 
   const allLineItems = [
-    ...customLineItems.map((item) => ({ ...item, isSystemGenerated: false })),
+    ...nonRegulatoryCustomLineItems.map((item) => ({ ...item, isSystemGenerated: false })),
     ...systemLineItems,
   ].filter((item) => item.amount > 0);
 
-  const totalCustom = customLineItems.reduce((sum, item) => sum + item.amount, 0);
+  const totalCustom = nonRegulatoryCustomLineItems.reduce((sum, item) => sum + item.amount, 0);
   const totalSystem = systemLineItems.reduce((sum, item) => sum + item.amount, 0);
   const totalAmount = roundMoney(totalCustom + totalSystem + closurePaymentDues);
 
-  const knownCustomAmount = [mayorLine?.amount ?? 0, regulatoryLine?.amount ?? 0].reduce((sum, item) => sum + item, 0);
+  const knownCustomAmount = [mayorLine?.amount ?? 0].reduce((sum, item) => sum + item, 0);
   const uncategorizedCustomAmount = roundMoney(totalCustom - knownCustomAmount);
 
   return {
     lineItems: allLineItems,
     mayorsPermitFee: isClosure ? 0 : mayorLine?.amount ?? 0,
-    regulatoryFees: isClosure ? 0 : regulatoryLine?.amount ?? 0,
+    regulatoryFees: 0,
     additionalCharges: 0,
     penalties: 0,
     surcharge: roundMoney(automaticRenewal.surcharge + liquorTobaccoSurcharge),

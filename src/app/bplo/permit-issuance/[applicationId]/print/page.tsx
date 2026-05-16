@@ -24,7 +24,7 @@ export default async function BploBusinessPermitPrintPage({ params }: PageProps)
     <section className="space-y-4">
       <div className="no-print flex items-center justify-between gap-3">
         <p className="text-sm text-slate-600">
-          BPLO preview mode. Use the print button below to print or reprint this Business Permit.
+          BPLO official print mode. Use the print button below to print or reprint the official Business Permit.
         </p>
         <Link href={`/bplo/permit-issuance/${applicationId}`} className={actionButtonStyles("secondary", "sm")}>
           Back to Issuance Detail

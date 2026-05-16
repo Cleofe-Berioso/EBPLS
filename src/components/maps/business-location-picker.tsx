@@ -24,12 +24,18 @@ type LocationValue = {
   longitude: number;
 };
 
+type ResolvedAddress = {
+  formattedAddress: string;
+  streetSuggestion?: string;
+  barangaySuggestion?: string;
+};
+
 export interface BusinessLocationPickerProps {
   value?: LocationValue | null;
   onChange: (value: LocationValue | null) => void;
   readOnly?: boolean;
   error?: string;
-  onAddressResolved?: (address: string, coordinates: LocationValue) => void;
+  onAddressResolved?: (resolved: ResolvedAddress, coordinates: LocationValue) => void;
   onAddressResolveStart?: () => void;
   onAddressResolveError?: (message: string) => void;
 }
@@ -43,6 +49,8 @@ export function BusinessLocationPicker({
   onAddressResolveStart,
   onAddressResolveError,
 }: BusinessLocationPickerProps) {
+  const reverseGeocodeWarning =
+    "Address could not be fully detected from the pin. Please adjust the pin or try again.";
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
@@ -77,18 +85,29 @@ export function BusinessLocationPicker({
         );
 
         if (!response.ok) {
-          const message = "Address could not be auto-filled. Please enter it manually.";
+          const message = reverseGeocodeWarning;
           setGeocodeError(message);
           onAddressResolveError?.(message);
           return;
         }
 
-        const data = (await response.json()) as { address: string };
-        onAddressResolved?.(data.address, next);
+        const data = (await response.json()) as {
+          address: string;
+          street?: string;
+          barangay?: string;
+        };
+        onAddressResolved?.(
+          {
+            formattedAddress: data.address,
+            streetSuggestion: data.street,
+            barangaySuggestion: data.barangay,
+          },
+          next
+        );
         setGeocodeError(null);
       } catch (err) {
         console.error("[BusinessLocationPicker] Reverse geocoding error:", err);
-        const message = "Address could not be auto-filled. Please enter it manually.";
+        const message = reverseGeocodeWarning;
         setGeocodeError(message);
         onAddressResolveError?.(message);
       } finally {

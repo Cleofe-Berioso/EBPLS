@@ -108,6 +108,12 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
               <StatusBadge status={app.application.status as ApplicationStatus} />
             </div>
           </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Last Updated</p>
+            <p className="mt-1 font-medium text-slate-900">
+              {new Date(app.application.updatedAt).toLocaleString("en-PH")}
+            </p>
+          </div>
         </div>
       </SectionCard>
 
@@ -174,7 +180,14 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
                     <p className="text-sm font-semibold text-slate-900">{doc.documentName}</p>
                     <p className="mt-1 text-sm text-slate-600">{doc.fileName}</p>
                   </div>
-                  {smallPill("Metadata Only")}
+                  <a
+                    href={`/api/superadmin/applications/${app.application.id}/documents/${doc.id}/preview`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={actionButtonStyles("secondary", "sm")}
+                  >
+                    Preview
+                  </a>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
                   {doc.mimeType} • {doc.sizeBytes.toLocaleString("en-PH")} bytes •{" "}
@@ -195,22 +208,83 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
             </div>
           </SectionCard>
 
-          <SectionCard title="Business Information" description="Submitted business identity and registration details.">
+          <SectionCard title="Applicant / Owner Information" description="Submitted owner identity and contact details.">
             <div className="grid gap-4 md:grid-cols-2">
-              {labelValue("Business Name", app.businessInfo.businessName)}
-              {labelValue("Business Type", app.businessInfo.businessType)}
-              {labelValue("Registration Number", app.businessInfo.registrationNumber)}
-              {labelValue("TIN", app.businessInfo.tin)}
-              {labelValue("Trade Name", app.businessInfo.tradeName)}
-              {labelValue("Owner Name", app.businessInfo.ownerName)}
+              {labelValue("Owner First Name", app.businessInfo.ownerFirstName)}
+              {labelValue("Owner Middle Name", app.businessInfo.ownerMiddleName)}
+              {labelValue("Owner Surname", app.businessInfo.ownerSurname)}
+              {labelValue("Owner / President Name", app.businessInfo.ownerName)}
+              {labelValue("Owner Age", app.businessInfo.ownerAge)}
+              {labelValue("Sex", app.businessInfo.sex)}
+              {labelValue("Nationality", app.businessInfo.nationality)}
               {labelValue("Business Email", app.businessInfo.email)}
               {labelValue("Phone", app.businessInfo.phone)}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Business Identity" description="Submitted business identity and registration details.">
+            <div className="grid gap-4 md:grid-cols-2">
+              {labelValue("Business Name", app.businessInfo.businessName)}
+              {labelValue("Trade Name", app.businessInfo.tradeName)}
+              {labelValue("Business Type", app.businessInfo.businessType)}
+              {labelValue("Registration Type", app.businessInfo.businessType)}
+              {labelValue("Registration Number", app.businessInfo.registrationNumber)}
+              {labelValue("TIN", app.businessInfo.tin)}
+              {labelValue("Business Activity", app.businessInfo.businessActivity)}
+              {labelValue("Main / Branch", app.businessInfo.businessOperationType)}
+              {labelValue("Line of Business", app.businessInfo.lineOfBusiness)}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Address and Location" description="Submitted address and location fields.">
+            <div className="grid gap-4 md:grid-cols-2">
               {labelValue("Main Office Address", app.businessInfo.mainOfficeAddress)}
               {labelValue("Business Address", app.businessInfo.businessAddress)}
-              {labelValue("Line of Business", app.businessInfo.lineOfBusiness)}
-              {labelValue("Business Activity", app.businessInfo.businessActivity)}
+              {labelValue("Barangay", app.businessInfo.barangay)}
+              {labelValue("Street", app.businessInfo.streetAddress)}
+              {labelValue("Latitude", app.businessInfo.businessLatitude)}
+              {labelValue("Longitude", app.businessInfo.businessLongitude)}
+              {labelValue(
+                "Location Verification",
+                app.businessInfo.businessLatitude !== "-" && app.businessInfo.businessLongitude !== "-"
+                  ? "Location pinned"
+                  : "Location not pinned"
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Business Operation Details" description="Operational and property declarations.">
+            <div className="grid gap-4 md:grid-cols-2">
+              {labelValue("Business Area", app.businessInfo.businessArea)}
+              {labelValue("Total Floor Area", app.businessInfo.totalFloorArea)}
               {labelValue("Asset Size", app.businessInfo.assetSize)}
+              {labelValue("Property Ownership", app.businessInfo.propertyOwnership)}
+              {labelValue("Tax Declaration Number", app.businessInfo.taxDeclarationNumber)}
+              {labelValue("Property Identification Number", app.businessInfo.propertyIdentificationNumber)}
+              {labelValue("Tax Incentives", app.businessInfo.taxIncentives)}
+              {labelValue("Market Business", app.businessInfo.isMarket)}
+              {labelValue("Agriculture-related", app.businessInfo.isAgriculture)}
+              {labelValue("Liquor/Tobacco", app.businessInfo.isLiquorOrTobacco)}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Employee Counts" description="Staffing and delivery declarations.">
+            <div className="grid gap-4 md:grid-cols-2">
               {labelValue("Total Employees", app.businessInfo.totalEmployees)}
+              {labelValue("Male Employees", app.businessInfo.maleEmployees)}
+              {labelValue("Female Employees", app.businessInfo.femaleEmployees)}
+              {labelValue("Employees within Municipality", app.businessInfo.employeesWithinMunicipality)}
+              {labelValue("Delivery Vehicles", app.businessInfo.deliveryVehicles)}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Application-specific Notes" description="Renewal and closure specific fields.">
+            <div className="grid gap-4 md:grid-cols-2">
+              {labelValue("Application Type", app.application.applicationType)}
+              {labelValue("Payment Preference", app.businessInfo.paymentFrequency)}
+              {app.application.applicationType === "CLOSURE"
+                ? labelValue("Closure Reason", app.businessInfo.closureReason)
+                : null}
             </div>
           </SectionCard>
         </div>

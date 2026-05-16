@@ -47,8 +47,8 @@ export function DashboardHorizontalBarChart({
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}
     >
-      <div className="h-full w-full min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="w-full min-w-0">
+        <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data} layout="vertical" margin={{ top: 8, right: 20, left: 30, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
             <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />

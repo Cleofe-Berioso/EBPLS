@@ -23,12 +23,12 @@ export default async function ApplicantPermitPrintPage({ params }: PageProps) {
   return (
     <section className="space-y-4">
       <div className="no-print flex items-center justify-between gap-3">
-        <p className="text-sm text-slate-600">Applicant permit view. You can print your released Business Permit from this page.</p>
+        <p className="text-sm text-slate-600">Applicant permit preview only. Official printing and release remain under BPLO.</p>
         <Link href={`/applicant/my-applications/${applicationId}`} className={actionButtonStyles("secondary", "sm")}>
           Back to Application Detail
         </Link>
       </div>
-      <BusinessPermitTemplate permit={access.permit} />
+      <BusinessPermitTemplate permit={access.permit} variant="applicant-preview" />
     </section>
   );
 }

@@ -59,6 +59,10 @@ export async function POST(
         : undefined,
     });
 
+    const submittedDescription =
+      complianceStatus === "COMPLIANT"
+        ? "JIT submitted compliant inspection"
+        : "JIT submitted non-compliant inspection";
 
     // Audit: Inspection submitted by JIT
     void logInspectionAction(
@@ -72,9 +76,27 @@ export async function POST(
       null,
       inspection.status,
       complianceStatus as any,
-      `Inspection submitted with compliance status: ${complianceStatus}, Evidence: ${storedEvidence ? "Yes" : "No"}`,
+      submittedDescription,
       { comment, hasEvidence: !!storedEvidence }
     );
+
+    if (storedEvidence) {
+      void logInspectionAction(
+        session.user.id,
+        session.user.name ?? session.user.email ?? null,
+        "JIT",
+        inspection.id,
+        businessRecordId,
+        inspection.applicationId,
+        "REVIEWED",
+        inspection.status,
+        inspection.status,
+        complianceStatus as any,
+        "JIT uploaded inspection evidence",
+        { evidenceFileName: storedEvidence.fileName }
+      );
+    }
+
     return NextResponse.json({ inspection });
   } catch (error) {
     if (storedEvidencePath) {

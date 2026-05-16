@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") ?? undefined;
   const role =
-    (searchParams.get("role") as "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | null) ??
+    (searchParams.get("role") as "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT" | null) ??
     "ALL";
   const status = (searchParams.get("status") as "ALL" | "ACTIVE" | "DISABLED" | null) ?? "ALL";
 

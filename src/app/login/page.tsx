@@ -22,6 +22,8 @@ function getSingleParam(value: string | string[] | undefined): string {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = searchParams ? await searchParams : {};
   const email = getSingleParam(params.email).trim();
+  const error = getSingleParam(params.error).trim();
+  const disabledAccountNotice = error === "account-disabled";
   const hasPasswordQuery = Object.prototype.hasOwnProperty.call(params, "password");
 
   if (hasPasswordQuery) {
@@ -42,7 +44,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="absolute inset-0 bg-black/10" />
       </div>
 
-      <LoginForm initialEmail={email} />
+      <LoginForm initialEmail={email} disabledAccountNotice={disabledAccountNotice} />
     </main>
   );
 }

@@ -141,7 +141,12 @@ export async function POST(req: Request) {
     }
 
     const message = error instanceof Error ? error.message : "Unable to save application";
-    const status = message === "Application not found" ? 404 : 400;
+    const status =
+      message === "Application not found"
+        ? 404
+        : message === "This application has already been submitted and is now locked for review."
+          ? 403
+          : 400;
     logApplicantApi("error", {
       userId: session.user.id,
       userEmail: session.user.email ?? null,

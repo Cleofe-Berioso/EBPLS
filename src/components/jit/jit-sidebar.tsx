@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ScanSearch } from "lucide-react";
+import { LayoutDashboard, MapPinned, ScanSearch } from "lucide-react";
 import { RoleBadge } from "@/components/ui/role-badge";
 
 type SidebarItem = {
@@ -12,12 +12,14 @@ type SidebarItem = {
 
 const JIT_SIDEBAR_ITEMS: SidebarItem[] = [
   { label: "Dashboard", href: "/jit/dashboard" },
-  { label: "Inspection Queue", href: "/jit/inspect-a-business" },
+  { label: "Business Map", href: "/jit/business-map" },
+  { label: "Inspect a Business", href: "/jit/inspect-a-business" },
 ];
 
 const SIDEBAR_ICONS = {
   Dashboard: LayoutDashboard,
-  "Inspection Queue": ScanSearch,
+  "Business Map": MapPinned,
+  "Inspect a Business": ScanSearch,
 } as const;
 
 export function JitSidebar({

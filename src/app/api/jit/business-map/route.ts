@@ -1,24 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireJitSession } from "@/lib/jit-api";
-import { listActivePermittedBusinessLocations } from "@/lib/business-location";
-import type { MapBusinessCategory } from "@/lib/business-map-categories";
+import { listJitBusinessMapLocations } from "@/lib/business-location";
 
 function parseType(value: string | null): "ALL" | "NEW" | "RENEWAL" {
   if (value === "NEW" || value === "RENEWAL") {
-    return value;
-  }
-
-  return "ALL";
-}
-
-function parseCategory(value: string | null): "ALL" | MapBusinessCategory {
-  if (
-    value === "SOLE_PROPRIETORSHIP" ||
-    value === "PARTNERSHIP" ||
-    value === "CORPORATION" ||
-    value === "COOPERATIVE" ||
-    value === "OTHER"
-  ) {
     return value;
   }
 
@@ -32,11 +17,10 @@ export async function GET(req: Request) {
   }
 
   const { searchParams } = new URL(req.url);
-  const rows = await listActivePermittedBusinessLocations({
+  const rows = await listJitBusinessMapLocations({
     type: parseType(searchParams.get("type")),
     owner: searchParams.get("owner") ?? undefined,
     search: searchParams.get("search") ?? undefined,
-    category: parseCategory(searchParams.get("category")),
   });
 
   return NextResponse.json({ rows });

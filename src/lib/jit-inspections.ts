@@ -25,12 +25,69 @@ interface CreateInspectionInput {
   evidence?: EvidencePayload;
 }
 
+export type JitMapMarkerStatus = "UNINSPECTED" | "PENDING_INSPECTION" | "COMPLIANT" | "REVOKED";
+
 export interface JitInspectableBusinessRow extends BusinessLocationMapRow {
   latestInspection: {
     complianceStatus: ComplianceStatus;
     status: InspectionStatus;
     createdAt: string;
   } | null;
+}
+
+/**
+ * Maps inspection status to JIT map marker status.
+ * - No inspection record = UNINSPECTED (gray)
+ * - Pending verification/review states = PENDING_INSPECTION (yellow)
+ * - VERIFIED_COMPLIANT = COMPLIANT (green)
+ * - REVOKED = REVOKED (red)
+ */
+export function getJitMapMarkerStatus(
+  inspectionStatus: string | null
+): JitMapMarkerStatus {
+  if (!inspectionStatus) {
+    return "UNINSPECTED";
+  }
+
+  if (
+    inspectionStatus === "DH_VERIFICATION_PENDING" ||
+    inspectionStatus === "COMPLIANT" ||
+    inspectionStatus === "NON_COMPLIANT" ||
+    inspectionStatus === "VERIFIED_NON_COMPLIANT" ||
+    inspectionStatus === "REVOCATION_REVIEW" ||
+    inspectionStatus === "REVOCATION_DENIED"
+  ) {
+    return "PENDING_INSPECTION";
+  }
+
+  if (inspectionStatus === "VERIFIED_COMPLIANT") {
+    return "COMPLIANT";
+  }
+
+  if (inspectionStatus === "REVOKED") {
+    return "REVOKED";
+  }
+
+  // Default to UNINSPECTED for other statuses (VERIFIED_NON_COMPLIANT, REVOCATION_REVIEW, etc)
+  return "UNINSPECTED";
+}
+
+/**
+ * Gets the hex color for a JIT map marker status.
+ */
+export function getJitMapMarkerColor(status: JitMapMarkerStatus): string {
+  switch (status) {
+    case "UNINSPECTED":
+      return "#9ca3af"; // gray
+    case "PENDING_INSPECTION":
+      return "#fbbf24"; // yellow
+    case "COMPLIANT":
+      return "#10b981"; // green
+    case "REVOKED":
+      return "#ef4444"; // red
+    default:
+      return "#9ca3af"; // gray
+  }
 }
 
 export async function listJitInspectableBusinesses(): Promise<JitInspectableBusinessRow[]> {

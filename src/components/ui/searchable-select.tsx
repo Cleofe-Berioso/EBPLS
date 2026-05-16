@@ -10,6 +10,7 @@ interface SearchableSelectProps {
   selectedLabel?: string;
   onChange: (option: AddressOption) => void;
   placeholder?: string;
+  emptyMessage?: string;
   disabled?: boolean;
   loading?: boolean;
   error?: string;
@@ -30,6 +31,7 @@ export function SearchableSelect({
   selectedLabel,
   onChange,
   placeholder = "Select…",
+  emptyMessage = "No matches.",
   disabled = false,
   loading = false,
   error,
@@ -164,7 +166,7 @@ export function SearchableSelect({
             {loading ? (
               <li className="px-3 py-2 text-sm text-slate-500">Loading…</li>
             ) : filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm italic text-slate-400">No matches.</li>
+              <li className="px-3 py-2 text-sm italic text-slate-400">{emptyMessage}</li>
             ) : (
               filtered.map((option, index) => (
                 <li

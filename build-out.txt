@@ -1,0 +1,158 @@
+Γû▓ Next.js 16.2.4 (webpack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 28.2s
+  Running TypeScript ...
+  Finished TypeScript in 34.4s ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/80) ...
+  Generating static pages using 3 workers (20/80) 
+  Generating static pages using 3 workers (40/80) 
+  Generating static pages using 3 workers (60/80) 
+Γ£ô Generating static pages using 3 workers (80/80) in 9.0s
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /api/address/barangays
+Γö£ ╞Æ /api/address/cities
+Γö£ ╞Æ /api/address/countries
+Γö£ ╞Æ /api/address/reverse-geocode
+Γö£ ╞Æ /api/address/states
+Γö£ ╞Æ /api/applicant/applications
+Γö£ ╞Æ /api/applicant/applications/[applicationId]
+Γö£ ╞Æ /api/applicant/applications/[applicationId]/documents
+Γö£ ╞Æ /api/applicant/applications/[applicationId]/documents/[documentId]
+Γö£ ╞Æ /api/applicant/applications/[applicationId]/documents/[documentId]/download
+Γö£ ╞Æ /api/applicant/business-location
+Γö£ ╞Æ /api/applicant/business-location/[businessRecordId]
+Γö£ ╞Æ /api/applicant/business-records
+Γö£ ╞Æ /api/applicant/notifications
+Γö£ ╞Æ /api/applicant/profile
+Γö£ ╞Æ /api/applicant/top
+Γö£ ╞Æ /api/auth/[...nextauth]
+Γö£ ╞Æ /api/auth/register
+Γö£ ╞Æ /api/bplo/applications
+Γö£ ╞Æ /api/bplo/applications/[applicationId]
+Γö£ ╞Æ /api/bplo/applications/[applicationId]/approve-assessment
+Γö£ ╞Æ /api/bplo/applications/[applicationId]/documents/[documentId]/download
+Γö£ ╞Æ /api/bplo/applications/[applicationId]/reject
+Γö£ ╞Æ /api/bplo/applications/[applicationId]/return
+Γö£ ╞Æ /api/bplo/applications/[applicationId]/under-review
+Γö£ ╞Æ /api/bplo/assessment-fees
+Γö£ ╞Æ /api/bplo/assessment-fees/[applicationId]
+Γö£ ╞Æ /api/bplo/assessment-fees/[applicationId]/draft
+Γö£ ╞Æ /api/bplo/assessment-fees/[applicationId]/generate-top
+Γö£ ╞Æ /api/bplo/business-map
+Γö£ ╞Æ /api/bplo/business-map/[businessLocationId]/return
+Γö£ ╞Æ /api/bplo/business-map/[businessLocationId]/verify
+Γö£ ╞Æ /api/bplo/payment-verification
+Γö£ ╞Æ /api/bplo/payment-verification/[paymentReferenceId]
+Γö£ ╞Æ /api/bplo/payment-verification/[paymentReferenceId]/approve
+Γö£ ╞Æ /api/bplo/payment-verification/[paymentReferenceId]/proof
+Γö£ ╞Æ /api/bplo/payment-verification/[paymentReferenceId]/reject
+Γö£ ╞Æ /api/bplo/permit-issuance
+Γö£ ╞Æ /api/bplo/permit-issuance/[applicationId]
+Γö£ ╞Æ /api/bplo/permit-issuance/[applicationId]/prepare
+Γö£ ╞Æ /api/bplo/permit-issuance/[applicationId]/release
+Γö£ ╞Æ /api/department-head/application-approval
+Γö£ ╞Æ /api/department-head/application-approval/[applicationId]/approve
+Γö£ ╞Æ /api/department-head/application-approval/[applicationId]/documents/[documentId]/download
+Γö£ ╞Æ /api/department-head/application-approval/[applicationId]/reject
+Γö£ ╞Æ /api/department-head/application-approval/[applicationId]/return
+Γö£ ╞Æ /api/department-head/compliant-list
+Γö£ ╞Æ /api/department-head/dashboard
+Γö£ ╞Æ /api/department-head/inspection-verification
+Γö£ ╞Æ /api/department-head/inspection-verification/[inspectionId]/evidence
+Γö£ ╞Æ /api/department-head/inspection-verification/[inspectionId]/verify
+Γö£ ╞Æ /api/department-head/permit-to-revoke
+Γö£ ╞Æ /api/department-head/permit-to-revoke/[inspectionId]/approve-revocation
+Γö£ ╞Æ /api/department-head/permit-to-revoke/[inspectionId]/deny-revocation
+Γö£ ╞Æ /api/department-head/permit-to-revoke/[inspectionId]/evidence
+Γö£ ╞Æ /api/department-head/revoke-permit-list
+Γö£ ╞Æ /api/department-head/revoke-permit-list/[inspectionId]/mark-settled
+Γö£ ╞Æ /api/jit/business-map
+Γö£ ╞Æ /api/jit/dashboard
+Γö£ ╞Æ /api/jit/inspect-a-business
+Γö£ ╞Æ /api/jit/inspect-a-business/[businessRecordId]
+Γö£ ╞Æ /api/permits/[applicationId]
+Γö£ ╞Æ /api/superadmin/activities
+Γö£ ╞Æ /api/superadmin/applications
+Γö£ ╞Æ /api/superadmin/applications/[applicationId]
+Γö£ ╞Æ /api/superadmin/applications/[applicationId]/documents/[documentId]/preview
+Γö£ ╞Æ /api/superadmin/dashboard
+Γö£ ╞Æ /api/superadmin/reports
+Γö£ ╞Æ /api/superadmin/settings/extensions
+Γö£ ╞Æ /api/superadmin/settings/extensions/[extensionId]/toggle
+Γö£ ╞Æ /api/superadmin/settings/fees
+Γö£ ╞Æ /api/superadmin/settings/penalties
+Γö£ ╞Æ /api/superadmin/users
+Γö£ ╞Æ /api/superadmin/users/[userId]/disable
+Γö£ ╞Æ /api/superadmin/users/[userId]/reactivate
+Γö£ ╞Æ /api/superadmin/users/[userId]/reset-password
+Γö£ ╞Æ /api/superadmin/users/bplo
+Γö£ ╞Æ /applicant/application
+Γö£ ╞Æ /applicant/application/closure
+Γö£ ╞Æ /applicant/application/new
+Γö£ ╞Æ /applicant/application/renewal
+Γö£ ╞Æ /applicant/business-location
+Γö£ ╞Æ /applicant/closure-certificates/[applicationId]
+Γö£ ╞Æ /applicant/dashboard
+Γö£ ╞Æ /applicant/my-applications
+Γö£ ╞Æ /applicant/my-applications/[applicationId]
+Γö£ ╞Æ /applicant/notifications
+Γö£ ╞Æ /applicant/permits/[applicationId]
+Γö£ ╞Æ /applicant/profile
+Γö£ ╞Æ /applicant/top
+Γö£ ╞Æ /auth/redirect
+Γö£ ╞Æ /bplo/applications
+Γö£ ╞Æ /bplo/applications/[applicationId]
+Γö£ ╞Æ /bplo/assessment-fees
+Γö£ ╞Æ /bplo/assessment-fees/[applicationId]
+Γö£ ╞Æ /bplo/business-map
+Γö£ ╞Æ /bplo/dashboard
+Γö£ ╞Æ /bplo/payment-verification
+Γö£ ╞Æ /bplo/permit-issuance
+Γö£ ╞Æ /bplo/permit-issuance/[applicationId]
+Γö£ ╞Æ /bplo/permit-issuance/[applicationId]/closure-print
+Γö£ ╞Æ /bplo/permit-issuance/[applicationId]/print
+Γö£ ╞Æ /bplo/profile
+Γö£ ╞Æ /bplo/reports
+Γö£ ╞Æ /department-head
+Γö£ ╞Æ /department-head/application-approval
+Γö£ ╞Æ /department-head/compliant-list
+Γö£ ╞Æ /department-head/dashboard
+Γö£ ╞Æ /department-head/inspection-verification
+Γö£ ╞Æ /department-head/permit-to-revoke
+Γö£ ╞Æ /department-head/revoke-permit-list
+Γö£ ╞Æ /jit
+Γö£ ╞Æ /jit/business-map
+Γö£ ╞Æ /jit/dashboard
+Γö£ ╞Æ /jit/inspect-a-business
+Γö£ ╞Æ /login
+Γö£ Γùï /register
+Γö£ ╞Æ /superadmin/activities
+Γö£ ╞Æ /superadmin/applications
+Γö£ ╞Æ /superadmin/applications/[applicationId]
+Γö£ ╞Æ /superadmin/dashboard
+Γö£ ╞Æ /superadmin/profile
+Γö£ ╞Æ /superadmin/reports
+Γö£ ╞Æ /superadmin/reports/print/applications
+Γö£ ╞Æ /superadmin/reports/print/audit-trail
+Γö£ ╞Æ /superadmin/reports/print/business-registry
+Γö£ ╞Æ /superadmin/reports/print/closures
+Γö£ ╞Æ /superadmin/reports/print/inspections
+Γö£ ╞Æ /superadmin/reports/print/revenue
+Γö£ ╞Æ /superadmin/reports/print/sms
+Γö£ ╞Æ /superadmin/settings
+Γöö ╞Æ /superadmin/users
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

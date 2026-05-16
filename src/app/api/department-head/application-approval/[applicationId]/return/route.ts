@@ -38,7 +38,7 @@ export async function POST(req: Request, context: RouteContext) {
       "RETURNED",
       "DEPARTMENT_HEAD_REVIEW",
       application.status,
-      `Application returned: ${payload.remarks || "No reason"}`,
+      `Department Head returned application: ${payload.remarks || "No reason"}`,
       { remarks: payload.remarks }
     );
 

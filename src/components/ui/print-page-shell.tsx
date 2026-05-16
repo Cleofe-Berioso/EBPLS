@@ -7,6 +7,7 @@ interface PrintPageShellProps {
   documentNumber?: string | null;
   issuedAtLabel?: string | null;
   onPrint?: () => void;
+  showPrintButton?: boolean;
   children: ReactNode;
 }
 
@@ -15,19 +16,22 @@ export function PrintPageShell({
   documentNumber,
   issuedAtLabel,
   onPrint,
+  showPrintButton = true,
   children,
 }: PrintPageShellProps) {
   return (
     <section className="print-page-shell mx-auto max-w-[900px] space-y-4 p-4 sm:p-6">
-      <div className="no-print flex items-center justify-end">
-        <button
-          type="button"
-          onClick={onPrint ?? (() => window.print())}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Print Document
-        </button>
-      </div>
+      {showPrintButton ? (
+        <div className="no-print flex items-center justify-end">
+          <button
+            type="button"
+            onClick={onPrint ?? (() => window.print())}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Print Document
+          </button>
+        </div>
+      ) : null}
 
       <article className="rounded-xl border border-slate-200 bg-white p-8 text-slate-900 shadow-sm print:border-0 print:shadow-none">
         <header className="border-b border-slate-200 pb-4">

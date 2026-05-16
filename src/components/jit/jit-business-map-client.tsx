@@ -10,7 +10,6 @@ import { InfoBanner } from "@/components/ui/info-banner";
 import { MapLegendCard } from "@/components/ui/map-legend-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { EB_MAGALONA_CENTER } from "@/lib/business-location";
-import { MAP_CATEGORY_META, type MapBusinessCategory } from "@/lib/business-map-categories";
 
 const LeafletBusinessMap = dynamic(
   () => import("@/components/maps/leaflet-business-map").then((mod) => mod.LeafletBusinessMap),
@@ -29,7 +28,7 @@ interface JitBusinessMapRow {
   businessRecordId: string;
   businessName: string;
   ownerName: string;
-  businessCategory: MapBusinessCategory;
+  businessCategory: string;
   businessCategoryLabel: string;
   businessCategoryColor: string;
   applicationNumber: string;
@@ -45,34 +44,36 @@ interface JitBusinessMapRow {
   status: "PENDING" | "VERIFIED" | "NEEDS_CORRECTION";
   remarks: string | null;
   updatedAt: string;
+  latestInspectionStatus: string | null;
+  mapMarkerStatus: "UNINSPECTED" | "PENDING_INSPECTION" | "COMPLIANT" | "REVOKED";
+  mapMarkerColor: string;
 }
 
 const JIT_MAP_LEGEND_GROUPS = [
   {
-    id: "business-category",
-    title: "Business Category",
-    items: Object.entries(MAP_CATEGORY_META).map(([key, meta]) => ({
-      id: key.toLowerCase(),
-      label: meta.label,
-      color: meta.color,
-      note: `Marker color for ${meta.label}`,
-    })),
-  },
-  {
-    id: "status",
-    title: "Map Pin Status",
+    id: "inspection-status",
+    title: "Inspection Status",
     items: [
-      { id: "pending", label: "Pending", color: "#f59e0b" },
-      { id: "verified", label: "Verified", color: "#0f766e" },
-      { id: "correction", label: "Needs Correction", color: "#dc2626" },
+      { id: "uninspected", label: "Uninspected", color: "#9ca3af" },
+      { id: "pending-inspection", label: "Pending Inspection / Pending Verification", color: "#fbbf24" },
+      { id: "compliant", label: "Compliant", color: "#10b981" },
+      { id: "revoked", label: "Revoked / Restricted", color: "#ef4444" },
     ],
   },
 ];
 
-function pinStatusTone(status: JitBusinessMapRow["status"]): string {
-  if (status === "VERIFIED") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  if (status === "NEEDS_CORRECTION") return "border-rose-200 bg-rose-50 text-rose-800";
-  return "border-amber-200 bg-amber-50 text-amber-800";
+function inspectionStatusTone(status: JitBusinessMapRow["mapMarkerStatus"]): string {
+  if (status === "COMPLIANT") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "REVOKED") return "border-rose-200 bg-rose-50 text-rose-800";
+  if (status === "PENDING_INSPECTION") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-gray-200 bg-gray-50 text-gray-800";
+}
+
+function inspectionStatusLabel(status: JitBusinessMapRow["mapMarkerStatus"]): string {
+  if (status === "COMPLIANT") return "Compliant";
+  if (status === "REVOKED") return "Revoked";
+  if (status === "PENDING_INSPECTION") return "Pending Inspection";
+  return "Uninspected";
 }
 
 function toShortDate(iso: string | null): string {
@@ -85,7 +86,6 @@ function toShortDate(iso: string | null): string {
 export function JitBusinessMapClient() {
   const [rows, setRows] = useState<JitBusinessMapRow[]>([]);
   const [typeFilter, setTypeFilter] = useState<ApplicationTypeFilter>("ALL");
-  const [categoryFilter, setCategoryFilter] = useState<"ALL" | MapBusinessCategory>("ALL");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [searchFilter, setSearchFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -116,7 +116,6 @@ export function JitBusinessMapClient() {
     () =>
       rows.filter((row) => {
         if (typeFilter !== "ALL" && row.applicationType !== typeFilter) return false;
-        if (categoryFilter !== "ALL" && row.businessCategory !== categoryFilter) return false;
 
         if (ownerFilter.trim()) {
           const owner = ownerFilter.trim().toLowerCase();
@@ -130,7 +129,7 @@ export function JitBusinessMapClient() {
 
         return true;
       }),
-    [categoryFilter, ownerFilter, rows, searchFilter, typeFilter]
+    [ownerFilter, rows, searchFilter, typeFilter]
   );
 
   const markers = useMemo(
@@ -147,9 +146,7 @@ export function JitBusinessMapClient() {
         barangay: row.barangay,
         status: row.status,
         ownerName: row.ownerName,
-        businessCategory: row.businessCategory,
-        businessCategoryLabel: row.businessCategoryLabel,
-        businessCategoryColor: row.businessCategoryColor,
+        mapMarkerColor: row.mapMarkerColor,
       })),
     [visibleRows]
   );
@@ -185,7 +182,7 @@ export function JitBusinessMapClient() {
         <div className="space-y-4 self-start">
           <FilterBar
             title="Map Filters"
-            description="Filter by application type, category, owner, and business name."
+            description="Filter by application type, owner, and business name."
             contentClassName="grid gap-3"
           >
             <label className="space-y-1 text-sm">
@@ -198,22 +195,6 @@ export function JitBusinessMapClient() {
                 <option value="ALL">All</option>
                 <option value="NEW">New</option>
                 <option value="RENEWAL">Renewal</option>
-              </select>
-            </label>
-
-            <label className="space-y-1 text-sm">
-              <span className="font-medium text-slate-700">Business Category</span>
-              <select
-                value={categoryFilter}
-                onChange={(event) => setCategoryFilter(event.target.value as "ALL" | MapBusinessCategory)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700"
-              >
-                <option value="ALL">All</option>
-                {Object.entries(MAP_CATEGORY_META).map(([key, meta]) => (
-                  <option key={key} value={key}>
-                    {meta.label}
-                  </option>
-                ))}
               </select>
             </label>
 
@@ -240,7 +221,7 @@ export function JitBusinessMapClient() {
 
           <MapLegendCard
             title="Map Legend"
-            subtitle="Category colors are reused from BPLO map rules."
+            subtitle="JIT marker colors are based on inspection and revocation status."
             groups={JIT_MAP_LEGEND_GROUPS}
           />
         </div>
@@ -264,14 +245,8 @@ export function JitBusinessMapClient() {
                   <p className="text-sm text-slate-600">Owner: {row.ownerName}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <span
-                    className="inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide"
-                    style={{ borderColor: row.businessCategoryColor, color: row.businessCategoryColor }}
-                  >
-                    {row.businessCategoryLabel}
-                  </span>
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${pinStatusTone(row.status)}`}>
-                    {row.status.replaceAll("_", " ")}
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${inspectionStatusTone(row.mapMarkerStatus)}`}>
+                    {inspectionStatusLabel(row.mapMarkerStatus)}
                   </span>
                 </div>
               </div>

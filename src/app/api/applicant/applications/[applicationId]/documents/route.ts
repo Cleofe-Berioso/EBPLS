@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createApplicantDocument, listApplicantDocuments } from "@/lib/applications";
 import { requireApplicantSession } from "@/lib/applicant-api";
-import { storeApplicantDocument } from "@/lib/document-storage";
+import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import { logDocumentAction } from "@/lib/audit-log";
 
 interface RouteContext {
@@ -46,13 +46,19 @@ export async function POST(req: Request, context: RouteContext) {
     }
 
     const stored = await storeApplicantDocument(fileValue);
-    const document = await createApplicantDocument(session.user.id, applicationId, {
-      documentName: documentNameValue.trim(),
-      fileName: stored.fileName,
-      storagePath: stored.storagePath,
-      mimeType: stored.mimeType,
-      sizeBytes: stored.sizeBytes,
-    });
+    let document;
+    try {
+      document = await createApplicantDocument(session.user.id, applicationId, {
+        documentName: documentNameValue.trim(),
+        fileName: stored.fileName,
+        storagePath: stored.storagePath,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes,
+      });
+    } catch (error) {
+      await removeApplicantDocument(stored.storagePath);
+      throw error;
+    }
 
     // Audit: Document upload
     void logDocumentAction(
@@ -79,7 +85,12 @@ export async function POST(req: Request, context: RouteContext) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to upload document";
-    const status = message === "Application not found" ? 404 : 400;
+    const status =
+      message === "Application not found"
+        ? 404
+        : message === "This application has already been submitted and is now locked for review."
+          ? 403
+          : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

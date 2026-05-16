@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireBploSession } from "@/lib/bplo-api";
-import { listBploBusinessLocations } from "@/lib/business-location";
+import { listBploBusinessMapLocations } from "@/lib/business-location";
 import type { MapBusinessCategory } from "@/lib/business-map-categories";
 
 function parseType(value: string | null): "ALL" | "NEW" | "RENEWAL" {
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   }
 
   const { searchParams } = new URL(req.url);
-  const rows = await listBploBusinessLocations({
+  const rows = await listBploBusinessMapLocations({
     type: parseType(searchParams.get("type")),
     owner: searchParams.get("owner") ?? undefined,
     search: searchParams.get("search") ?? undefined,

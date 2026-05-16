@@ -22,7 +22,7 @@ export async function GET(_req: Request, context: RouteContext) {
       status: 200,
       headers: {
         "Content-Type": document.mimeType,
-        "Content-Disposition": `attachment; filename="${document.fileName}"`,
+        "Content-Disposition": `inline; filename="${document.fileName}"`,
         "Cache-Control": "private, no-store",
       },
     });

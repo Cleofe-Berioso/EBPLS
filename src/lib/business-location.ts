@@ -5,6 +5,7 @@ import {
   MAP_CATEGORY_META,
   type MapBusinessCategory,
 } from "@/lib/business-map-categories";
+import { getJitMapMarkerStatus, getJitMapMarkerColor } from "@/lib/jit-inspections";
 
 export const EB_MAGALONA_CENTER = {
   latitude: 10.878586296466974,
@@ -615,6 +616,125 @@ export async function listBploBusinessLocations(
   filters: BusinessMapFilters = {}
 ): Promise<BusinessLocationMapRow[]> {
   return listActivePermittedBusinessLocations(filters);
+}
+
+export interface JitBusinessMapRow extends BusinessLocationMapRow {
+  latestInspectionStatus: string | null;
+  mapMarkerStatus: "UNINSPECTED" | "PENDING_INSPECTION" | "COMPLIANT" | "REVOKED";
+  mapMarkerColor: string;
+}
+
+/**
+ * Get latest inspection status for a list of business record IDs.
+ * Returns only the most recent inspection per business.
+ */
+async function resolveLatestInspectionsByBusinessRecord(
+  businessRecordIds: string[]
+): Promise<
+  Map<
+    string,
+    {
+      status: string;
+          revocationSettledAt: Date | null;
+    }
+  >
+> {
+  if (businessRecordIds.length === 0) {
+    return new Map();
+  }
+
+  const inspections = await prisma.inspection.findMany({
+    where: {
+      businessRecordId: {
+        in: businessRecordIds,
+      },
+    },
+    select: {
+      businessRecordId: true,
+      status: true,
+      createdAt: true,
+       revocationSettledAt: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  const latestByRecord = new Map<
+    string,
+    {
+      status: string;
+      createdAt: Date;
+       revocationSettledAt: Date | null;
+    }
+  >();
+
+  for (const inspection of inspections) {
+    if (!latestByRecord.has(inspection.businessRecordId)) {
+      latestByRecord.set(inspection.businessRecordId, {
+        status: inspection.status,
+        createdAt: inspection.createdAt,
+         revocationSettledAt: inspection.revocationSettledAt,
+      });
+    }
+  }
+
+  return latestByRecord;
+}
+
+/**
+ * List business locations with JIT inspection status and marker colors.
+ * Includes revoked businesses as red markers.
+ */
+export async function listJitBusinessMapLocations(
+  filters: BusinessMapFilters = {}
+): Promise<JitBusinessMapRow[]> {
+  const rows = await listActivePermittedBusinessLocations(filters);
+  const businessRecordIds = rows.map((row) => row.businessRecordId);
+
+  const inspectionsByRecord = await resolveLatestInspectionsByBusinessRecord(businessRecordIds);
+
+  return rows.map((row) => {
+    const inspection = inspectionsByRecord.get(row.businessRecordId);
+    const inspectionStatus = inspection?.status ?? null;
+    const markerStatus = getJitMapMarkerStatus(inspectionStatus);
+    const markerColor = getJitMapMarkerColor(markerStatus);
+
+    return {
+      ...row,
+      latestInspectionStatus: inspectionStatus,
+      mapMarkerStatus: markerStatus,
+      mapMarkerColor: markerColor,
+    } satisfies JitBusinessMapRow;
+  }).filter((row) => {
+    // Exclude settled revoked businesses from JIT map
+    if (row.mapMarkerStatus === "REVOKED") {
+      const inspection = inspectionsByRecord.get(row.businessRecordId);
+      if (inspection?.revocationSettledAt) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
+/**
+ * List business locations for BPLO map (excludes revoked).
+ */
+export async function listBploBusinessMapLocations(
+  filters: BusinessMapFilters = {}
+): Promise<BusinessLocationMapRow[]> {
+  const rows = await listActivePermittedBusinessLocations(filters);
+  const businessRecordIds = rows.map((row) => row.businessRecordId);
+
+  const inspectionsByRecord = await resolveLatestInspectionsByBusinessRecord(businessRecordIds);
+
+  // Filter out revoked businesses
+  return rows.filter((row) => {
+    const inspection = inspectionsByRecord.get(row.businessRecordId);
+    const inspectionStatus = inspection?.status ?? null;
+    return inspectionStatus !== "REVOKED";
+  });
 }
 
 export async function verifyBusinessLocation(

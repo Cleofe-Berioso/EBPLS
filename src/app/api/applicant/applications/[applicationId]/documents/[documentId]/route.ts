@@ -20,7 +20,12 @@ export async function DELETE(_req: Request, context: RouteContext) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to delete document";
-    const status = message === "Application not found" || message === "Document not found" ? 404 : 400;
+    const status =
+      message === "Application not found" || message === "Document not found"
+        ? 404
+        : message === "This application has already been submitted and is now locked for review."
+          ? 403
+          : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

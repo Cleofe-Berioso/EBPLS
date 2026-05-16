@@ -58,7 +58,7 @@ export type WorkerBracket =
   | "FROM_6_TO_10"
   | "FROM_11_TO_50"
   | "FROM_51_TO_99"
-  | "FROM_100_TO_150"
+  | "FROM_100_TO_199"
   | "FROM_200_OR_MORE";
 
 const WORKER_BRACKET_LABELS: Record<WorkerBracket, string> = {
@@ -67,7 +67,7 @@ const WORKER_BRACKET_LABELS: Record<WorkerBracket, string> = {
   FROM_6_TO_10:     "6–10 workers",
   FROM_11_TO_50:    "11–50 workers",
   FROM_51_TO_99:    "51–99 workers",
-  FROM_100_TO_150:  "100–150 workers",
+  FROM_100_TO_199:  "100–199 workers",
   FROM_200_OR_MORE: "200 or more workers",
 };
 
@@ -132,7 +132,7 @@ const CATEGORY_KEYWORDS: Array<{ category: BusinessCategory; keywords: string[] 
 //
 // Worker bracket order:
 //   [0] NONE  [1] FROM_1_TO_5  [2] FROM_6_TO_10  [3] FROM_11_TO_50
-//   [4] FROM_51_TO_99  [5] FROM_100_TO_150  [6] FROM_200_OR_MORE
+//   [4] FROM_51_TO_99  [5] FROM_100_TO_199  [6] FROM_200_OR_MORE
 // ---------------------------------------------------------------------------
 
 const ASSET_BRACKETS: AssetBracket[] = [
@@ -151,7 +151,7 @@ const WORKER_BRACKETS: WorkerBracket[] = [
   "FROM_6_TO_10",
   "FROM_11_TO_50",
   "FROM_51_TO_99",
-  "FROM_100_TO_150",
+  "FROM_100_TO_199",
   "FROM_200_OR_MORE",
 ];
 
@@ -355,19 +355,20 @@ export function classifyAssetBracket(assetSizeStr: string | null | undefined): A
   if (raw < 500_000) return "FROM_250K_TO_500K";
   if (raw < 2_000_000) return "FROM_500K_TO_2M";
   if (raw < 5_000_000) return "FROM_2M_TO_5M";
-  if (raw < 20_000_000) return "FROM_5M_TO_20M";
+  if (raw <= 20_000_000) return "FROM_5M_TO_20M";
   return "OVER_20M";
 }
 
 export function classifyWorkerBracket(totalEmployeesStr: string | null | undefined): WorkerBracket {
   if (!totalEmployeesStr) return "NONE";
-  const raw = parseInt(totalEmployeesStr.replace(/[,\s]/g, ""), 10);
-  if (isNaN(raw) || raw <= 0) return "NONE";
+  const raw = Number(totalEmployeesStr.replace(/[,\s]/g, ""));
+  if (!Number.isFinite(raw) || raw < 0 || !Number.isInteger(raw)) return "NONE";
+  if (raw === 0) return "NONE";
   if (raw <= 5) return "FROM_1_TO_5";
   if (raw <= 10) return "FROM_6_TO_10";
   if (raw <= 50) return "FROM_11_TO_50";
   if (raw <= 99) return "FROM_51_TO_99";
-  if (raw <= 150) return "FROM_100_TO_150";
+  if (raw <= 199) return "FROM_100_TO_199";
   return "FROM_200_OR_MORE";
 }
 
@@ -401,7 +402,8 @@ function getAssetTierName(category: BusinessCategory, assetBracket: AssetBracket
 function getWorkerTierName(category: BusinessCategory, workerBracket: WorkerBracket): string {
   const table = FEE_TABLES[category] ?? FEE_TABLES.GENERAL!;
   const idx = WORKER_BRACKETS.indexOf(workerBracket);
-  return table.workerTierNames[idx] ?? WORKER_BRACKET_LABELS[workerBracket];
+  const tierName = table.workerTierNames[idx] ?? WORKER_BRACKET_LABELS[workerBracket];
+  return tierName.replace(/100[–-]150/g, "100–199");
 }
 
 function detectBankType(lineOfBusiness: string): "RURAL_THRIFT_SAVINGS" | "COMMERCIAL_DEVELOPMENT" | "UNIVERSAL" {

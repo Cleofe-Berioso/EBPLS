@@ -25,6 +25,34 @@ const formatUploadTimestamp = (date: string | Date | null | undefined) => {
   }).format(new Date(date));
 };
 
+function readText(formData: Record<string, unknown>, keys: string[], fallback = "-") {
+  for (const key of keys) {
+    const value = formData[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return fallback;
+}
+
+function readFlag(formData: Record<string, unknown>, key: string) {
+  const value = formData[key];
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  return "-";
+}
+
+function formatBirthDate(value: string): string {
+  if (!value || value === "-") return "-";
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeZone: "Asia/Manila",
+  }).format(parsed);
+}
+
 function getStatusSummary(status: string): { meaning: string; nextStep: string } {
   if (status === "Draft") {
     return {
@@ -110,7 +138,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
   const application = await getApplicantApplicationDetail(session.user.id, applicationId);
   if (!application) notFound();
 
-  const formData = application.formData as Record<string, string | boolean | undefined>;
+  const formData = application.formData as Record<string, unknown>;
   const paymentReferencesRaw = Array.isArray((application.formData as Record<string, unknown>).paymentReferences)
     ? ((application.formData as Record<string, unknown>).paymentReferences as Array<Record<string, unknown>>)
     : [];
@@ -128,6 +156,14 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
     "For Release",
     "Released",
   ].includes(application.status);
+  const ownerName = readText(formData, ["ownerName"]);
+  const ownerFirstName = readText(formData, ["ownerFirstName"], "");
+  const ownerMiddleName = readText(formData, ["ownerMiddleName"], "");
+  const ownerSurname = readText(formData, ["ownerSurname"], "");
+  const closureReason = readText(formData, ["closureReason", "reasonForClosure", "closureRemarks"], "-");
+  const latitude = typeof formData.businessLatitude === "number" ? formData.businessLatitude : null;
+  const longitude = typeof formData.businessLongitude === "number" ? formData.businessLongitude : null;
+  const locationStatus = latitude != null && longitude != null ? "Location pinned" : "Location not pinned";
 
   return (
     <section className="space-y-6">
@@ -230,7 +266,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
                       href={`/applicant/permits/${application.id}`}
                       className={actionButtonStyles("primary", "sm")}
                     >
-                      Print Business Permit
+                      View Business Permit Preview
                     </Link>
                   ) : null}
                   {application.applicationType === "CLOSURE" &&
@@ -273,12 +309,15 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
                 <p className="mt-1 text-xs text-slate-500">
                   Uploaded: {formatUploadTimestamp(doc.uploadedAt)}
                 </p>
+                <p className="mt-1 text-xs text-slate-500">Status: Uploaded</p>
               </div>
               <a
                 href={`/api/applicant/applications/${application.id}/documents/${doc.id}/download`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className={actionButtonStyles("secondary", "sm")}
               >
-                Download
+                Preview
               </a>
             </li>
           ))}
@@ -383,6 +422,98 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
 
         <div className="text-sm text-slate-600">
           Your business location coordinates have been submitted and processed with your application.
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Submitted Information Snapshot" description="Read-only view of all filed information grouped for quick review.">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <SectionCard title="Applicant / Owner Information" description="Filed owner identity and contact information.">
+            <div className="space-y-2 text-sm text-slate-700">
+              {ownerFirstName || ownerMiddleName || ownerSurname ? (
+                <>
+                  <p><strong>First Name:</strong> {ownerFirstName || "-"}</p>
+                  <p><strong>Middle Name:</strong> {ownerMiddleName || "-"}</p>
+                  <p><strong>Surname:</strong> {ownerSurname || "-"}</p>
+                </>
+              ) : (
+                <p><strong>Owner / President:</strong> {ownerName}</p>
+              )}
+              <p><strong>Age:</strong> {readText(formData, ["ownerAge"])}</p>
+              <p><strong>Birthdate:</strong> {formatBirthDate(readText(formData, ["birthDate"]))}</p>
+              <p><strong>Sex:</strong> {readText(formData, ["sex"])}</p>
+              <p><strong>Nationality:</strong> {readText(formData, ["nationality"])}</p>
+              <p><strong>Email:</strong> {readText(formData, ["email"])}</p>
+              <p><strong>Phone:</strong> {readText(formData, ["phone"])}</p>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Business Identity" description="Registration and core business identification fields.">
+            <div className="space-y-2 text-sm text-slate-700">
+              <p><strong>Business Name:</strong> {readText(formData, ["businessName"])}</p>
+              <p><strong>Trade Name:</strong> {readText(formData, ["tradeName"])}</p>
+              <p><strong>Business Type:</strong> {readText(formData, ["businessType"])}</p>
+              <p><strong>Registration Type:</strong> {readText(formData, ["businessType"])}</p>
+              <p><strong>Registration Number:</strong> {readText(formData, ["registrationNumber"])}</p>
+              <p><strong>TIN:</strong> {readText(formData, ["tin"])}</p>
+              <p><strong>Business Activity:</strong> {readText(formData, ["businessActivity"])}</p>
+              <p><strong>Main / Branch:</strong> {readText(formData, ["businessOperationType"])}</p>
+              <p><strong>Line of Business:</strong> {readText(formData, ["lineOfBusiness"])}</p>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Address and Location" description="Filed addresses and pinned map coordinates.">
+            <div className="space-y-2 text-sm text-slate-700">
+              <p><strong>Main Office Address:</strong> {readText(formData, ["mainOfficeAddress"])}</p>
+              <p><strong>Business Address:</strong> {readText(formData, ["businessAddress"])}</p>
+              <p><strong>Barangay:</strong> {readText(formData, ["barangay"])}</p>
+              <p><strong>Street:</strong> {readText(formData, ["streetAddress"])}</p>
+              <p><strong>Coordinates:</strong> {latitude != null && longitude != null ? `${latitude}, ${longitude}` : "-"}</p>
+              <p><strong>Location Verification:</strong> {locationStatus}</p>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Business Operation Details" description="Operational and property-related declarations.">
+            <div className="space-y-2 text-sm text-slate-700">
+              <p><strong>Business Area:</strong> {readText(formData, ["businessArea"])}</p>
+              <p><strong>Total Floor Area:</strong> {readText(formData, ["totalFloorArea"])}</p>
+              <p><strong>Asset Size:</strong> {readText(formData, ["assetSize"])}</p>
+              <p><strong>Property Ownership:</strong> {readText(formData, ["propertyOwnership"])}</p>
+              <p><strong>Tax Declaration Number:</strong> {readText(formData, ["taxDeclarationNumber"])}</p>
+              <p><strong>Property Identification Number:</strong> {readText(formData, ["propertyIdentificationNumber"])}</p>
+              <p><strong>Tax Incentives:</strong> {readText(formData, ["taxIncentives"])}</p>
+              <p><strong>Market Business:</strong> {readFlag(formData, "isMarket")}</p>
+              <p><strong>Agriculture-related:</strong> {readFlag(formData, "isAgriculture")}</p>
+              <p><strong>Liquor/Tobacco:</strong> {readFlag(formData, "isLiquorOrTobacco")}</p>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Employee Counts" description="Declared manpower and delivery headcount.">
+            <div className="space-y-2 text-sm text-slate-700">
+              <p><strong>Total Employees:</strong> {readText(formData, ["totalEmployees"])}</p>
+              <p><strong>Male Employees:</strong> {readText(formData, ["maleEmployees"])}</p>
+              <p><strong>Female Employees:</strong> {readText(formData, ["femaleEmployees"])}</p>
+              <p><strong>Employees within Municipality:</strong> {readText(formData, ["employeesWithinMunicipality"])}</p>
+              <p><strong>Delivery Vehicles:</strong> {readText(formData, ["deliveryVehicles"])}</p>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Application-specific Notes" description="Closure/renewal specific submitted details.">
+            <div className="space-y-2 text-sm text-slate-700">
+              <p><strong>Application Type:</strong> {application.applicationType}</p>
+              {application.applicationType === "CLOSURE" ? (
+                <p><strong>Closure Reason:</strong> {closureReason}</p>
+              ) : null}
+              {application.applicationType === "RENEWAL" ? (
+                <p><strong>Renewal Payment Preference:</strong> {readText(formData, ["paymentFrequency"])}</p>
+              ) : null}
+              {application.applicationType === "NEW" ? (
+                <p><strong>Capital Investment:</strong> {readText(formData, ["capitalInvestment"])}</p>
+              ) : null}
+              {application.applicationType === "RENEWAL" ? (
+                <p><strong>Gross Profit:</strong> {readText(formData, ["grossProfit"])}</p>
+              ) : null}
+            </div>
+          </SectionCard>
         </div>
       </SectionCard>
 

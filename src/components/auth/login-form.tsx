@@ -6,7 +6,13 @@ import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { googleSignInAction, loginAction } from "@/app/login/actions";
 
-export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
+export function LoginForm({
+  initialEmail = "",
+  disabledAccountNotice = false,
+}: {
+  initialEmail?: string;
+  disabledAccountNotice?: boolean;
+}) {
   const [state, formAction, isPending] = useActionState(loginAction, null);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -32,6 +38,15 @@ export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
 
         <div className="p-8">
           <form action={formAction} className="space-y-5">
+            {disabledAccountNotice ? (
+              <div
+                role="alert"
+                className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+              >
+                Your account has been disabled. Please contact the system administrator.
+              </div>
+            ) : null}
+
             {state?.error && (
               <div
                 role="alert"

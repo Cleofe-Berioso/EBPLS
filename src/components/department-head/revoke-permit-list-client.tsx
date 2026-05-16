@@ -29,6 +29,10 @@ type RevokedPermitRow = {
   inspectionStatus: string;
   applicationStatus: string;
   businessStatus: string;
+  revocationSettledAt: string | null;
+  revocationSettledBy: string | null;
+  revocationSettlementRemarks: string | null;
+  isSettled: boolean;
 };
 
 function formatDateTime(value: string): string {
@@ -45,14 +49,17 @@ export function RevokePermitListClient() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "error"; text: string } | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [remarksInput, setRemarksInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selected = useMemo(
     () => rows.find((row) => row.inspectionId === selectedId) ?? null,
     [rows, selectedId]
   );
 
-  useEffect(() => {
-    async function loadRows() {
+  async function loadRows() {
+    try {
       setLoading(true);
       const response = await fetch("/api/department-head/revoke-permit-list", { cache: "no-store" });
       const data = (await response.json()) as { rows?: RevokedPermitRow[]; error?: string };
@@ -71,9 +78,16 @@ export function RevokePermitListClient() {
         if (current && nextRows.some((row) => row.inspectionId === current)) return current;
         return nextRows[0]?.inspectionId ?? null;
       });
+    } catch (err) {
+      setMessage({ type: "error", text: "Unable to load revoked permit list." });
+      setRows([]);
+      setSelectedId(null);
+    } finally {
       setLoading(false);
     }
+  }
 
+  useEffect(() => {
     void loadRows();
   }, []);
 
@@ -107,7 +121,18 @@ export function RevokePermitListClient() {
                   <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
                   <p className="mt-1 text-xs text-slate-600">Decision: {formatDateTime(row.revocationDecisionDate)}</p>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-rose-700">{row.inspectionStatus}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">{row.inspectionStatus}</p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                        row.isSettled
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {row.isSettled ? "Settled" : "Unsettled"}
+                    </span>
+                  </div>
                 </button>
               );
             })}
@@ -174,7 +199,24 @@ export function RevokePermitListClient() {
                 <p className="text-xs uppercase tracking-wide text-slate-500">Current Status</p>
                 <p className="mt-1 text-sm text-slate-900">Application: {selected.applicationStatus}</p>
                 <p className="text-xs text-slate-600">Business: {selected.businessStatus}</p>
+                <p className="text-xs text-slate-600">
+                  Settlement: {selected.isSettled ? "Settled" : "Unsettled"}
+                </p>
               </div>
+              {selected.isSettled ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 md:col-span-2 xl:col-span-3">
+                  <p className="text-xs uppercase tracking-wide text-emerald-700">Settlement Details</p>
+                  <p className="mt-1 text-sm text-emerald-900">
+                    Settled at: {selected.revocationSettledAt ? formatDateTime(selected.revocationSettledAt) : "-"}
+                  </p>
+                  <p className="text-xs text-emerald-800">
+                    Settled by: {selected.revocationSettledBy ?? "Unknown"}
+                  </p>
+                  <p className="mt-2 text-sm text-emerald-900">
+                    {selected.revocationSettlementRemarks ?? "No settlement remarks recorded."}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <SectionCard title="Evidence" description="Read-only evidence attached during JIT inspection.">
@@ -201,6 +243,78 @@ export function RevokePermitListClient() {
                 </div>
               )}
             </SectionCard>
+
+            {selected.inspectionStatus === "REVOKED" && !selected.isSettled ? (
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  type="button"
+                  className={actionButtonStyles("danger", "md")}
+                  onClick={() => {
+                    setRemarksInput("");
+                    setIsModalOpen(true);
+                  }}
+                >
+                  Mark as Settled
+                </button>
+                <p className="text-sm text-slate-600">Mark violation as settled without reactivating permit.</p>
+              </div>
+            ) : null}
+
+            {isModalOpen ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/40" onClick={() => setIsModalOpen(false)} />
+                <div className="relative w-[720px] rounded-lg bg-white p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold">Mark as Settled</h3>
+                  <p className="mt-2 text-sm text-slate-600">Provide settlement remarks (required).</p>
+                  <textarea
+                    value={remarksInput}
+                    onChange={(e) => setRemarksInput(e.target.value)}
+                    className="mt-3 w-full rounded-md border p-2 text-sm"
+                    rows={5}
+                    placeholder="Enter settlement remarks"
+                  />
+                  <div className="mt-4 flex justify-end gap-3">
+                    <button type="button" className={actionButtonStyles("secondary", "sm")} onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className={actionButtonStyles("danger", "sm")}
+                      onClick={async () => {
+                        const remarks = remarksInput.trim();
+                        if (!remarks) {
+                          setMessage({ type: "error", text: "Settlement remarks are required." });
+                          return;
+                        }
+                        if (!selected) return;
+                        try {
+                          setIsSubmitting(true);
+                          const res = await fetch(`/api/department-head/revoke-permit-list/${selected.inspectionId}/mark-settled`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ remarks }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) {
+                            setMessage({ type: "error", text: data.error ?? "Unable to mark as settled." });
+                            return;
+                          }
+                          setIsModalOpen(false);
+                          await loadRows();
+                          setMessage(null);
+                        } catch (err) {
+                          setMessage({ type: "error", text: "Unable to mark as settled." });
+                        } finally {
+                          setIsSubmitting(false);
+                        }
+                      }}
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
 

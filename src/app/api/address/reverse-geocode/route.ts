@@ -106,6 +106,13 @@ export async function GET(request: NextRequest) {
       }
 
       const address = addressParts.filter((part) => part && part.trim()).join(", ");
+      const streetSuggestion = data.address?.road?.trim() || data.address?.neighbourhood?.trim() || data.address?.suburb?.trim() || undefined;
+      const barangaySuggestion =
+        data.address?.village?.trim() ||
+        data.address?.hamlet?.trim() ||
+        data.address?.quarter?.trim() ||
+        data.address?.suburb?.trim() ||
+        undefined;
 
       if (!address) {
         console.warn("[ReverseGeocode] No address components extracted");
@@ -117,6 +124,8 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         address,
+        street: streetSuggestion,
+        barangay: barangaySuggestion,
         latitude,
         longitude,
       });

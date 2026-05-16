@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { applyDepartmentHeadAction, requireDepartmentHeadSession } from "@/lib/department-head-api";
 import { logApplicationAction } from "@/lib/audit-log";
 
+function applicationTypeLabel(value: "NEW" | "RENEWAL" | "CLOSURE"): "New" | "Renewal" | "Closure" {
+  if (value === "NEW") return "New";
+  if (value === "RENEWAL") return "Renewal";
+  return "Closure";
+}
+
 interface RouteContext {
   params: Promise<{ applicationId: string }>;
 }
@@ -30,7 +36,7 @@ export async function POST(_req: Request, context: RouteContext) {
       "APPROVED",
       "DEPARTMENT_HEAD_REVIEW",
       application.status,
-      "Application approved by Department Head",
+      `Department Head approved ${applicationTypeLabel(application.applicationType)} application`,
       {}
     );
 

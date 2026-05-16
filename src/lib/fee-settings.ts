@@ -28,6 +28,8 @@ export type FeeCategoryOption = {
   classifications: string[];
 };
 
+const CONFIGURABLE_FEE_CATEGORY_KEYS = new Set<FeeCategoryKey>();
+
 export const FIXED_FEE_CLASSIFICATION = "Fixed Fee";
 
 export const BANK_CLASSIFICATIONS = [
@@ -243,7 +245,7 @@ export const FEE_CATEGORY_OPTIONS: FeeCategoryOption[] = [
   },
   {
     key: "RESTAURANTS",
-    label: "Restaurants / Cafes / Catering Services",
+    label: "Restaurants / Cafés / Catering Services",
     classifications: [
       "Micro",
       "Cottage",
@@ -256,26 +258,6 @@ export const FEE_CATEGORY_OPTIONS: FeeCategoryOption[] = [
       "Small (11–50)",
       "Medium (51–99)",
       "Large (100–150)",
-      "Large (200+)",
-    ],
-  },
-  {
-    key: "LIQUOR_TOBACCO",
-    label: "Liquor and Tobacco Businesses",
-    classifications: [
-      "Micro",
-      "Cottage A",
-      "Cottage B",
-      "Small A",
-      "Small B",
-      "Medium",
-      "Large",
-      "Micro (no workers)",
-      "Micro (1–5)",
-      "Cottage A (6–10)",
-      "Small A (11–50)",
-      "Small B (51–99)",
-      "Medium (100–150)",
       "Large (200+)",
     ],
   },
@@ -310,27 +292,11 @@ export const FEE_CATEGORY_OPTIONS: FeeCategoryOption[] = [
     label: "Private Ports / Wharves",
     classifications: [FIXED_FEE_CLASSIFICATION],
   },
-  {
-    key: "GENERAL",
-    label: "General Business",
-    classifications: [
-      "Micro",
-      "Cottage A",
-      "Cottage B",
-      "Small A",
-      "Small B",
-      "Medium",
-      "Large",
-      "Micro (no workers)",
-      "Micro (1–5)",
-      "Cottage A (6–10)",
-      "Small A (11–50)",
-      "Small B (51–99)",
-      "Medium (100–150)",
-      "Large (200+)",
-    ],
-  },
 ];
+
+for (const option of FEE_CATEGORY_OPTIONS) {
+  CONFIGURABLE_FEE_CATEGORY_KEYS.add(option.key);
+}
 
 export const DEFAULT_SYSTEM_FEE_SETTINGS = {
   renewalSurchargePercent: 25,
@@ -433,12 +399,18 @@ function resolveFixedFeeAmount(input: {
     : input.legacyAmount;
 }
 
+function isConfigurableFeeCategory(category: FeeCategoryKey): boolean {
+  return CONFIGURABLE_FEE_CATEGORY_KEYS.has(category);
+}
+
 export async function listFeeConfigurationItems(): Promise<FeeConfigurationItemDto[]> {
   const items = await prisma.feeConfigurationItem.findMany({
     orderBy: [{ category: "asc" }, { classification: "asc" }],
   });
 
-  return items.map((item) => ({
+  return items
+    .filter((item) => isConfigurableFeeCategory(item.category as FeeCategoryKey))
+    .map((item) => ({
     id: item.id,
     category: item.category as FeeCategoryKey,
     classification: item.classification,
@@ -455,6 +427,10 @@ export async function upsertFeeConfigurationItem(input: {
   isActive: boolean;
   updatedById: string;
 }): Promise<FeeConfigurationItemDto> {
+  if (!isConfigurableFeeCategory(input.category)) {
+    throw new Error("Invalid fee category.");
+  }
+
   const classification = input.classification.trim();
   if (!classification) {
     throw new Error("Size classification is required.");
@@ -727,7 +703,7 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
     classification: row.classification,
     amount: toMoneyNumber(row.amount),
     updatedAt: row.updatedAt,
-  }));
+  })).filter((row) => isConfigurableFeeCategory(row.category));
   const penaltiesUpdatedAt = new Date(penalties.updatedAt);
   const powerCompanyOverride = findFixedFeeOverride(feeOverrideRows, "POWER_COMPANY");
   const powerGenDistOverride = findFixedFeeOverride(feeOverrideRows, "POWER_GEN_DIST");

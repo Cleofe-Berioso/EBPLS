@@ -3,6 +3,7 @@ import type { BusinessPermitPrintData } from "@/lib/printable-documents";
 
 interface BusinessPermitTemplateProps {
   permit: BusinessPermitPrintData;
+  variant?: "official" | "applicant-preview";
 }
 
 function dateLabel(value: string | null): string {
@@ -32,14 +33,35 @@ function SignatoryBlock({ title }: { title: string }) {
   );
 }
 
-export function BusinessPermitTemplate({ permit }: BusinessPermitTemplateProps) {
+export function BusinessPermitTemplate({ permit, variant = "official" }: BusinessPermitTemplateProps) {
+  const applicantPreview = variant === "applicant-preview";
+
   return (
     <PrintPageShell
       documentTitle="Business Permit"
       documentNumber={permit.permitNumber}
       issuedAtLabel={dateLabel(permit.dateIssued)}
+      showPrintButton={!applicantPreview}
     >
-      <div className="space-y-6 text-slate-900">
+      <div className="relative space-y-6 text-slate-900">
+        {applicantPreview ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <div className="rotate-[-28deg] rounded-2xl border-4 border-red-300/80 bg-white/65 px-8 py-6 text-center">
+              <p className="text-3xl font-extrabold tracking-[0.16em] text-red-700">APPLICANT COPY</p>
+              <p className="mt-2 text-lg font-bold tracking-[0.12em] text-red-700">FOR VIEWING ONLY</p>
+              <p className="mt-1 text-sm font-semibold tracking-[0.08em] text-red-700">
+                NOT VALID WITHOUT OFFICIAL RELEASE/SIGNATURE
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {applicantPreview ? (
+          <section className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+            Applicant preview copy only. This is not an official printable permit and is not valid without official release/signature.
+          </section>
+        ) : null}
+
         <header className="space-y-1 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.16em]">{permit.heading.republic}</p>
           <p className="text-sm font-semibold uppercase tracking-[0.12em]">{permit.heading.province}</p>

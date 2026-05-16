@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
-import { resolveRequiredDocuments } from "@/lib/required-documents";
+import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
 import type {
   ApplicationDocumentInput,
   BusinessInfo,
@@ -119,45 +119,6 @@ export function ClosureApplicationForm() {
   const uploadedRequiredCount = requiredDocs.filter((doc) => uploadedDocuments[doc]).length;
   const selectedRecord = records.find((item) => item.id === selectedBusinessId);
 
-  async function uploadPendingDocuments(nextApplicationId: string) {
-    const documentsToUpload = Object.entries(pendingDocuments);
-
-    for (const [documentName, file] of documentsToUpload) {
-      const formData = new FormData();
-      formData.append("documentName", documentName);
-      formData.append("file", file);
-
-      const response = await fetch(`/api/applicant/applications/${nextApplicationId}/documents`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = (await response.json()) as {
-        document?: ApplicationDocumentInput;
-        error?: string;
-      };
-
-      if (!response.ok || !data.document) {
-        setStatusMessage({
-          kind: "error",
-          text: data.error ?? `Application submitted, but ${documentName} could not be uploaded.`,
-        });
-        return false;
-      }
-
-      setUploadedDocuments((current) => ({
-        ...current,
-        [documentName]: data.document,
-      }));
-    }
-
-    if (documentsToUpload.length > 0) {
-      setPendingDocuments({});
-    }
-
-    return true;
-  }
-
   useEffect(() => {
     let active = true;
 
@@ -254,6 +215,24 @@ export function ClosureApplicationForm() {
     setStatusMessage(null);
     setValidationDetail(null);
 
+    if (mode === "SUBMIT") {
+      const missingDocuments = getMissingRequiredDocuments(requiredDocs, [
+        ...Object.values(uploadedDocuments).map((doc) => doc.documentName),
+        ...Object.keys(pendingDocuments),
+      ]);
+
+      if (missingDocuments.length > 0) {
+        setStep(1);
+        setValidationDetail({ missingFields: [], missingDocuments });
+        setStatusMessage({
+          kind: "error",
+          text: "Upload all required closure documents before submitting.",
+        });
+        setSubmitting(false);
+        return null;
+      }
+    }
+
     const selected = records.find((item) => item.id === selectedBusinessId);
     const payload: SaveApplicationInput = {
       applicationId,
@@ -264,11 +243,26 @@ export function ClosureApplicationForm() {
       mode,
     };
 
-    const response = await fetch("/api/applicant/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const response =
+      mode === "SUBMIT"
+        ? await (async () => {
+            const formData = new FormData();
+            formData.append("payload", JSON.stringify(payload));
+            for (const [documentName, file] of Object.entries(pendingDocuments)) {
+              formData.append("documentNames", documentName);
+              formData.append("documentFiles", file, file.name);
+            }
+
+            return fetch("/api/applicant/applications", {
+              method: "POST",
+              body: formData,
+            });
+          })()
+        : await fetch("/api/applicant/applications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
     const data = (await response.json()) as {
       application?: { id: string; applicationNumber: string; status: string };
@@ -283,19 +277,13 @@ export function ClosureApplicationForm() {
         text: data.error ?? "Unable to save closure application.",
       });
       if (data.detail) setValidationDetail(data.detail);
-      setSubmitting(false);
       return null;
     }
 
     setApplicationId(data.application.id);
 
     if (mode === "SUBMIT") {
-      const uploaded = await uploadPendingDocuments(data.application.id);
-      setSubmitting(false);
-
-      if (!uploaded) {
-        return data.application.id;
-      }
+      setPendingDocuments({});
 
       setStatusMessage({
         kind: "success",
@@ -304,7 +292,6 @@ export function ClosureApplicationForm() {
       return data.application.id;
     }
 
-    setSubmitting(false);
     setStatusMessage({
       kind: "success",
       text: `Closure draft ${data.application.applicationNumber} saved successfully.`,

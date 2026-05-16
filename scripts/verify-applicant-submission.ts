@@ -1,8 +1,21 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { access, readdir } from "node:fs/promises";
+import path from "node:path";
 
 const adapter = new PrismaLibSql({ url: process.env.DATABASE_URL ?? "file:./prisma/dev.db" });
 const prisma = new PrismaClient({ adapter });
+
+const UPLOAD_DIR = path.join(process.cwd(), ".uploads", "applicant-documents");
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function main() {
   const latest = await prisma.businessApplication.findFirst({
@@ -13,6 +26,38 @@ async function main() {
     include: {
       applicant: { select: { email: true } },
       history: { select: { id: true } },
+      documents: {
+        orderBy: { uploadedAt: "desc" },
+        select: {
+          id: true,
+          documentName: true,
+          fileName: true,
+          storagePath: true,
+          uploadedAt: true,
+        },
+      },
+    },
+  });
+
+  const latestSubmitted = await prisma.businessApplication.findFirst({
+    where: {
+      applicant: { role: "APPLICANT" },
+      status: "SUBMITTED",
+      submittedAt: { not: null },
+    },
+    orderBy: [{ submittedAt: "desc" }],
+    include: {
+      applicant: { select: { email: true } },
+      documents: {
+        orderBy: { uploadedAt: "desc" },
+        select: {
+          id: true,
+          documentName: true,
+          fileName: true,
+          storagePath: true,
+          uploadedAt: true,
+        },
+      },
     },
   });
 
@@ -30,11 +75,48 @@ async function main() {
     },
   });
 
+  const countDocuments = await prisma.applicationDocument.count({
+    where: {
+      application: {
+        applicant: { role: "APPLICANT" },
+      },
+    },
+  });
+
+  const uploadFiles = await readdir(UPLOAD_DIR).catch(() => [] as string[]);
+
+  const latestDocuments = latest
+    ? await Promise.all(
+        latest.documents.map(async (doc) => ({
+          id: doc.id,
+          documentName: doc.documentName,
+          fileName: doc.fileName,
+          uploadedAt: doc.uploadedAt.toISOString(),
+          fileExists: await pathExists(doc.storagePath),
+        }))
+      )
+    : [];
+
+  const latestSubmittedDocuments = latestSubmitted
+    ? await Promise.all(
+        latestSubmitted.documents.map(async (doc) => ({
+          id: doc.id,
+          documentName: doc.documentName,
+          fileName: doc.fileName,
+          uploadedAt: doc.uploadedAt.toISOString(),
+          fileExists: await pathExists(doc.storagePath),
+        }))
+      )
+    : [];
+
   console.log(
     JSON.stringify(
       {
         countAny,
         countSubmitted,
+        countDocuments,
+        uploadDirectory: UPLOAD_DIR,
+        uploadFileCount: uploadFiles.length,
         latest: latest
           ? {
               applicationNumber: latest.applicationNumber,
@@ -45,6 +127,21 @@ async function main() {
                 : null,
               applicantEmail: latest.applicant.email,
               historyCount: latest.history.length,
+              documentCount: latest.documents.length,
+              documents: latestDocuments,
+            }
+          : null,
+        latestSubmitted: latestSubmitted
+          ? {
+              applicationNumber: latestSubmitted.applicationNumber,
+              applicationType: latestSubmitted.applicationType,
+              status: latestSubmitted.status,
+              submittedAt: latestSubmitted.submittedAt
+                ? latestSubmitted.submittedAt.toISOString()
+                : null,
+              applicantEmail: latestSubmitted.applicant.email,
+              documentCount: latestSubmitted.documents.length,
+              documents: latestSubmittedDocuments,
             }
           : null,
       },

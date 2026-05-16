@@ -32,8 +32,18 @@ export interface DepartmentHeadApprovalRow {
   lineOfBusiness: string;
   businessAddress: string;
   submittedDate: string;
+  updatedDate: string;
   currentStatus: string;
   bploRemarks: string | null;
+  formData: Record<string, unknown>;
+  history: Array<{
+    id: string;
+    fromStatus: string | null;
+    toStatus: string;
+    actorRole: string;
+    remarks: string | null;
+    createdAt: string;
+  }>;
   documents: Array<{
     id: string;
     documentName: string;
@@ -137,6 +147,10 @@ export interface DepartmentHeadRevokedPermitRow {
   inspectionStatus: string;
   applicationStatus: string;
   businessStatus: string;
+  revocationSettledAt: string | null;
+  revocationSettledBy: string | null;
+  revocationSettlementRemarks: string | null;
+  isSettled: boolean;
 }
 
 function toDateTime(date: Date | null): string {
@@ -173,12 +187,14 @@ export async function listDepartmentHeadApprovalQueue(): Promise<DepartmentHeadA
       businessRecord: { select: { businessName: true } },
       documents: { orderBy: { uploadedAt: "asc" } },
       history: {
-        where: {
-          actorRole: "BPLO",
-          remarks: { not: null },
+        include: {
+          actor: {
+            select: {
+              role: true,
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
-        take: 1,
       },
     },
     orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }],
@@ -194,8 +210,19 @@ export async function listDepartmentHeadApprovalQueue(): Promise<DepartmentHeadA
     lineOfBusiness: getTextField(row.formData, "lineOfBusiness"),
     businessAddress: getTextField(row.formData, "businessAddress"),
     submittedDate: toDateTime(row.submittedAt),
+    updatedDate: toDateTime(row.updatedAt),
     currentStatus: mapDbStatusToUi(row.status),
-    bploRemarks: row.history[0]?.remarks?.trim() || null,
+    bploRemarks:
+      row.history.find((item: any) => item.actorRole === "BPLO" && typeof item.remarks === "string" && item.remarks.trim().length > 0)?.remarks?.trim() || null,
+    formData: (row.formData ?? {}) as Record<string, unknown>,
+    history: row.history.map((item: any) => ({
+      id: item.id,
+      fromStatus: item.fromStatus ? mapDbStatusToUi(item.fromStatus) : null,
+      toStatus: mapDbStatusToUi(item.toStatus),
+      actorRole: item.actorRole,
+      remarks: item.remarks,
+      createdAt: item.createdAt.toISOString(),
+    })),
     documents: row.documents.map((doc: any) => ({
       id: doc.id,
       documentName: doc.documentName,
@@ -220,7 +247,7 @@ export async function applyDepartmentHeadAction(
   return prisma.$transaction(async (tx: any) => {
     const current = await tx.businessApplication.findUnique({
       where: { id: applicationId },
-      select: { id: true, status: true, applicationNumber: true },
+      select: { id: true, status: true, applicationNumber: true, applicationType: true },
     });
 
     if (!current) {
@@ -254,6 +281,7 @@ export async function applyDepartmentHeadAction(
     return {
       id: updated.id,
       applicationNumber: updated.applicationNumber,
+      applicationType: current.applicationType,
       status: mapDbStatusToUi(updated.status),
     };
   });
@@ -271,6 +299,7 @@ export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHea
     include: {
       inspector: { select: { name: true } },
       decidedBy: { select: { name: true } },
+      revocationSettledBy: { select: { name: true } },
       application: {
         select: {
           id: true,
@@ -631,6 +660,10 @@ export async function listDepartmentHeadRevokedPermitList(): Promise<DepartmentH
       inspectionStatus: row.status,
       applicationStatus: mapDbStatusToUi(row.application.status),
       businessStatus: row.businessRecord.businessStatus,
+      revocationSettledAt: row.revocationSettledAt ? row.revocationSettledAt.toISOString() : null,
+      revocationSettledBy: row.revocationSettledBy?.name ?? null,
+      revocationSettlementRemarks: row.revocationSettlementRemarks?.trim() || null,
+      isSettled: Boolean(row.revocationSettledAt),
     }));
 }
 
@@ -785,4 +818,32 @@ export async function requireDepartmentHeadSession() {
   }
 
   return session;
+}
+
+export async function getDepartmentHeadApprovalDocument(applicationId: string, documentId: string) {
+  const application = await prisma.businessApplication.findUnique({
+    where: { id: applicationId },
+    select: { id: true, status: true },
+  });
+
+  if (!application) {
+    throw new Error("Application not found");
+  }
+
+  if (application.status !== "DEPARTMENT_HEAD_REVIEW") {
+    throw new Error("Application is not in Department Head review stage");
+  }
+
+  const document = await prisma.applicationDocument.findFirst({
+    where: {
+      id: documentId,
+      applicationId,
+    },
+  });
+
+  if (!document) {
+    throw new Error("Document not found");
+  }
+
+  return document;
 }

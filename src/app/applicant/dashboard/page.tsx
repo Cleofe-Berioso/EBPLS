@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
 import { StatusBadge } from "@/components/applicant/status-badge";
-import { StatusTracker } from "@/components/applicant/status-tracker";
+import { ApplicationProgressOverview } from "@/components/applicant/application-progress-overview";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
@@ -159,14 +159,7 @@ export default async function ApplicantDashboard() {
       </div>
 
       <SectionCard title="Application Progress Overview" description="Track the workflow stage of your most recent application.">
-        {latestApplication ? (
-          <StatusTracker status={latestApplication.status} applicationType={latestApplication.applicationType} />
-        ) : (
-          <EmptyState
-            title="No application progress available yet."
-            description="Submit your first application to see the progress tracker here."
-          />
-        )}
+        <ApplicationProgressOverview application={latestApplication} />
       </SectionCard>
 
       <SectionCard title="Recent Applications" description="Your most recent filings at a glance.">

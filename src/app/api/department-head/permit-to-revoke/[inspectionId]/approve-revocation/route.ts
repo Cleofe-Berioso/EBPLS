@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { logRevocationAction } from "@/lib/audit-log";
+import { logInspectionAction, logRevocationAction } from "@/lib/audit-log";
 import { applyDepartmentHeadRevocationDecision, requireDepartmentHeadSession } from "@/lib/department-head-api";
 
 export async function POST(
@@ -28,6 +28,22 @@ export async function POST(
       payload.remarks
     );
 
+    // Audit: Flagged case reviewed
+    void logInspectionAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "DEPARTMENT_HEAD",
+      result.inspectionId,
+      null,
+      result.applicationId,
+      "REVIEWED",
+      "REVOCATION_REVIEW",
+      "REVOCATION_REVIEW",
+      "NON_COMPLIANT",
+      "Department Head reviewed flagged case",
+      { remarks: payload.remarks }
+    );
+
 
     // Audit: Revocation approved
     void logRevocationAction(
@@ -39,7 +55,7 @@ export async function POST(
       "APPROVED",
       payload.remarks,
       "APPROVED",
-      `Revocation approved: ${payload.remarks || "No remarks"}`,
+      `Department Head approved revocation: ${payload.remarks || "No remarks"}`,
       { remarks: payload.remarks }
     );
 

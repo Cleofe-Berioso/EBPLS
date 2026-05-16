@@ -406,6 +406,12 @@ async function seedBaseData() {
 
   const users = [
     {
+      email: "applicant1@example.com",
+      name: "Empty Applicant",
+      password: "password123",
+      role: "APPLICANT" as const,
+    },
+    {
       email: "applicant@example.com",
       name: "Juan dela Cruz",
       password: "password123",
@@ -435,6 +441,13 @@ async function seedBaseData() {
       password: "password123",
       role: "JIT" as const,
     },
+    {
+      email: "jit-disabled@example.com",
+      name: "JIT Inspector Disabled",
+      password: "password123",
+      role: "JIT" as const,
+      isActive: false,
+    },
   ];
 
   // Keep seed idempotent and avoid deleting user-managed accounts.
@@ -444,8 +457,14 @@ async function seedBaseData() {
     const user = (await withPrismaRetry(`upsert user ${u.email}`, () =>
       prisma.user.upsert({
         where: { email: u.email },
-        update: { name: u.name, role: u.role, passwordHash, isActive: true },
-        create: { email: u.email, name: u.name, role: u.role, passwordHash, isActive: true },
+        update: { name: u.name, role: u.role, passwordHash, isActive: u.isActive ?? true },
+        create: {
+          email: u.email,
+          name: u.name,
+          role: u.role,
+          passwordHash,
+          isActive: u.isActive ?? true,
+        },
       })
     )) as { role: string; email: string };
     console.log(`  ✓ ${user.role.padEnd(10)} ${user.email}`);
@@ -726,12 +745,21 @@ async function upsertDebugInspectionSeed(input: {
   applicationId: string;
   inspectorId: string;
   complianceStatus: "COMPLIANT" | "NON_COMPLIANT";
-  status: "COMPLIANT" | "NON_COMPLIANT" | "REVOCATION_REVIEW" | "REVOCATION_DENIED" | "REVOKED";
+  status:
+    | "COMPLIANT"
+    | "NON_COMPLIANT"
+    | "DH_VERIFICATION_PENDING"
+    | "VERIFIED_COMPLIANT"
+    | "VERIFIED_NON_COMPLIANT"
+    | "REVOCATION_REVIEW"
+    | "REVOCATION_DENIED"
+    | "REVOKED";
   comment: string;
   decidedById?: string | null;
   revocationDecision?: "APPROVED" | "DENIED" | null;
   revocationRemarks?: string | null;
   decidedAt?: Date | null;
+  revocationSettledAt?: Date | null;
   evidence?: {
     fileName: string;
     storagePath: string;
@@ -760,6 +788,7 @@ async function upsertDebugInspectionSeed(input: {
   if (supports("revocationDecision")) data.revocationDecision = input.revocationDecision ?? null;
   if (supports("revocationRemarks")) data.revocationRemarks = input.revocationRemarks ?? null;
   if (supports("decidedAt")) data.decidedAt = input.decidedAt ?? null;
+  if (supports("revocationSettledAt")) data.revocationSettledAt = input.revocationSettledAt ?? null;
   if (supports("evidenceFileName")) data.evidenceFileName = input.evidence?.fileName ?? null;
   if (supports("evidenceStoragePath")) data.evidenceStoragePath = input.evidence?.storagePath ?? null;
   if (supports("evidenceMimeType")) data.evidenceMimeType = input.evidence?.mimeType ?? null;
@@ -1111,6 +1140,406 @@ async function seedPhase14WorkflowDebugData() {
   }
 
   console.log("Phase 14 debug workflow data seeded");
+}
+
+async function seedPhase6WorkflowDebugData() {
+  console.log("Seeding Phase 6 workflow verification data...");
+
+  const [applicant, bplo, departmentHead, jit] = await Promise.all([
+    prisma.user.findUnique({ where: { email: "applicant@example.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "bplo@example.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "dept-head@example.com" }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: "jit@example.com" }, select: { id: true } }),
+  ]);
+
+  if (!applicant?.id || !bplo?.id || !departmentHead?.id || !jit?.id) {
+    throw new Error("Phase 6 debug seed requires applicant, BPLO, Department Head, and JIT users.");
+  }
+
+  const phase6BusinessSeeds = [
+    {
+      registrationNumber: "DBG-P6-MAP-GRAY-BIZ",
+      businessName: "[DEBUG-SEED] P6 Map Gray Business",
+      ownerName: "Debug Owner Gray",
+      applicationNumber: "DBG-P6-MAP-GRAY-001",
+      inspectionStatus: null,
+      revocationSettledAt: null,
+    },
+    {
+      registrationNumber: "DBG-P6-MAP-YELLOW-BIZ",
+      businessName: "[DEBUG-SEED] P6 Map Yellow Business",
+      ownerName: "Debug Owner Yellow",
+      applicationNumber: "DBG-P6-MAP-YELLOW-001",
+      inspectionStatus: "DH_VERIFICATION_PENDING" as const,
+      revocationSettledAt: null,
+    },
+    {
+      registrationNumber: "DBG-P6-MAP-GREEN-BIZ",
+      businessName: "[DEBUG-SEED] P6 Map Green Business",
+      ownerName: "Debug Owner Green",
+      applicationNumber: "DBG-P6-MAP-GREEN-001",
+      inspectionStatus: "VERIFIED_COMPLIANT" as const,
+      revocationSettledAt: null,
+    },
+    {
+      registrationNumber: "DBG-P6-MAP-RED-UNSETTLED-BIZ",
+      businessName: "[DEBUG-SEED] P6 Map Red Unsettled Business",
+      ownerName: "Debug Owner Red Unsettled",
+      applicationNumber: "DBG-P6-MAP-RED-UNSETTLED-001",
+      inspectionStatus: "REVOKED" as const,
+      revocationSettledAt: null,
+    },
+    {
+      registrationNumber: "DBG-P6-MAP-RED-SETTLED-BIZ",
+      businessName: "[DEBUG-SEED] P6 Map Red Settled Business",
+      ownerName: "Debug Owner Red Settled",
+      applicationNumber: "DBG-P6-MAP-RED-SETTLED-001",
+      inspectionStatus: "REVOKED" as const,
+      revocationSettledAt: new Date("2026-05-16T09:00:00.000Z"),
+    },
+    {
+      registrationNumber: "DTI-2026-960001",
+      businessName: "[DEBUG-SEED] P6 Renewal Base Business",
+      ownerName: "Debug Owner Renewal Base",
+      applicationNumber: "DBG-P6-RENEWAL-BASE-REL-001",
+      inspectionStatus: "VERIFIED_COMPLIANT" as const,
+      revocationSettledAt: null,
+    },
+  ] as const;
+
+  const businessByReg = new Map<string, { id: string }>();
+  const appByNumber = new Map<string, { id: string }>();
+
+  for (let i = 0; i < phase6BusinessSeeds.length; i += 1) {
+    const seed = phase6BusinessSeeds[i];
+    const latitude = 10.878586 + i * 0.001;
+    const longitude = 122.978876 + i * 0.001;
+
+    const business = await withPrismaRetry(`upsert Phase 6 business ${seed.registrationNumber}`, () =>
+      prisma.businessRecord.upsert({
+        where: { registrationNumber: seed.registrationNumber },
+        update: {
+          applicantId: applicant.id,
+          businessType: "Sole Proprietorship",
+          tin: `9100000${String(i + 1).padStart(2, "0")}`,
+          businessName: seed.businessName,
+          tradeName: `${seed.businessName} Trade`,
+          ownerName: seed.ownerName,
+          nationality: "Filipino",
+          email: "applicant@example.com",
+          phone: "+639123456789",
+          mainOfficeAddress: "Purok 1, Barangay 1 (Pob.), Enrique B. Magalona, Negros Occidental",
+          businessAddress: "Purok 1, Barangay 1 (Pob.), Enrique B. Magalona, Negros Occidental",
+          sameAsMainOffice: true,
+          businessArea: "120",
+          totalFloorArea: "200",
+          totalEmployees: "10",
+          maleEmployees: "6",
+          femaleEmployees: "4",
+          employeesWithinMunicipality: "8",
+          deliveryVehicles: "1",
+          propertyOwnership: "Owned",
+          taxDeclarationNumber: `TD-${seed.registrationNumber}`,
+          propertyIdentificationNumber: `PIN-${seed.registrationNumber}`,
+          taxIncentives: "None",
+          businessActivity: "[DEBUG-SEED] Phase 6 map and regression workflow",
+          lineOfBusiness: "Trading",
+          assetSize: "2500000",
+          businessStatus: "ACTIVE" as any,
+        },
+        create: {
+          applicantId: applicant.id,
+          businessType: "Sole Proprietorship",
+          registrationNumber: seed.registrationNumber,
+          tin: `9100000${String(i + 1).padStart(2, "0")}`,
+          businessName: seed.businessName,
+          tradeName: `${seed.businessName} Trade`,
+          ownerName: seed.ownerName,
+          nationality: "Filipino",
+          email: "applicant@example.com",
+          phone: "+639123456789",
+          mainOfficeAddress: "Purok 1, Barangay 1 (Pob.), Enrique B. Magalona, Negros Occidental",
+          businessAddress: "Purok 1, Barangay 1 (Pob.), Enrique B. Magalona, Negros Occidental",
+          sameAsMainOffice: true,
+          businessArea: "120",
+          totalFloorArea: "200",
+          totalEmployees: "10",
+          maleEmployees: "6",
+          femaleEmployees: "4",
+          employeesWithinMunicipality: "8",
+          deliveryVehicles: "1",
+          propertyOwnership: "Owned",
+          taxDeclarationNumber: `TD-${seed.registrationNumber}`,
+          propertyIdentificationNumber: `PIN-${seed.registrationNumber}`,
+          taxIncentives: "None",
+          businessActivity: "[DEBUG-SEED] Phase 6 map and regression workflow",
+          lineOfBusiness: "Trading",
+          assetSize: "2500000",
+          businessStatus: "ACTIVE" as any,
+        },
+        select: { id: true },
+      })
+    );
+
+    businessByReg.set(seed.registrationNumber, business as { id: string });
+
+    const app = await withPrismaRetry(`upsert Phase 6 application ${seed.applicationNumber}`, () =>
+      prisma.businessApplication.upsert({
+        where: { applicationNumber: seed.applicationNumber },
+        update: {
+          applicantId: applicant.id,
+          businessRecordId: business.id,
+          applicationType: seed.registrationNumber === "DTI-2026-960001" ? "RENEWAL" : "NEW",
+          status: "RELEASED",
+          formData: buildBusinessInfo({
+            registrationNumber: seed.registrationNumber,
+            businessName: seed.businessName,
+            ownerName: seed.ownerName,
+            birthDate: "1991-06-15",
+            ownerAge: "34",
+            capitalInvestment: "500000",
+            grossProfit: "800000",
+            ownerFirstName: "Debug",
+            ownerSurname: "Owner",
+            country: "Philippines",
+            countryCode: "PH",
+            province: "Negros Occidental",
+            cityMunicipality: "Enrique B. Magalona",
+            streetAddress: "Purok 1",
+            barangay: "Barangay 1 (Pob.)",
+            businessLatitude: latitude,
+            businessLongitude: longitude,
+          }),
+          submittedAt: new Date("2026-05-15T08:00:00.000Z"),
+        },
+        create: {
+          applicationNumber: seed.applicationNumber,
+          applicantId: applicant.id,
+          businessRecordId: business.id,
+          applicationType: seed.registrationNumber === "DTI-2026-960001" ? "RENEWAL" : "NEW",
+          status: "RELEASED",
+          formData: buildBusinessInfo({
+            registrationNumber: seed.registrationNumber,
+            businessName: seed.businessName,
+            ownerName: seed.ownerName,
+            birthDate: "1991-06-15",
+            ownerAge: "34",
+            capitalInvestment: "500000",
+            grossProfit: "800000",
+            ownerFirstName: "Debug",
+            ownerSurname: "Owner",
+            country: "Philippines",
+            countryCode: "PH",
+            province: "Negros Occidental",
+            cityMunicipality: "Enrique B. Magalona",
+            streetAddress: "Purok 1",
+            barangay: "Barangay 1 (Pob.)",
+            businessLatitude: latitude,
+            businessLongitude: longitude,
+          }),
+          submittedAt: new Date("2026-05-15T08:00:00.000Z"),
+        },
+        select: { id: true },
+      })
+    );
+
+    appByNumber.set(seed.applicationNumber, app as { id: string });
+
+    await withPrismaRetry(`upsert Phase 6 permit ${seed.applicationNumber}`, () =>
+      prisma.permitIssuance.upsert({
+        where: { applicationId: app.id },
+        update: {
+          documentNumber: `${seed.applicationNumber}-PERMIT`,
+          documentType: "BUSINESS_PERMIT",
+          status: "RELEASED",
+          issuedAt: new Date("2026-05-16T08:00:00.000Z"),
+          releasedAt: new Date("2026-05-16T09:00:00.000Z"),
+          preparedById: bplo.id,
+          releasedById: bplo.id,
+          remarks: "[DEBUG-SEED][P6] Released permit for verification",
+        },
+        create: {
+          applicationId: app.id,
+          documentNumber: `${seed.applicationNumber}-PERMIT`,
+          documentType: "BUSINESS_PERMIT",
+          status: "RELEASED",
+          issuedAt: new Date("2026-05-16T08:00:00.000Z"),
+          releasedAt: new Date("2026-05-16T09:00:00.000Z"),
+          preparedById: bplo.id,
+          releasedById: bplo.id,
+          remarks: "[DEBUG-SEED][P6] Released permit for verification",
+        },
+      })
+    );
+
+    await withPrismaRetry(`upsert Phase 6 location ${seed.registrationNumber}`, () =>
+      prisma.businessLocation.upsert({
+        where: { businessRecordId: business.id },
+        update: {
+          latitude,
+          longitude,
+          status: "VERIFIED",
+          verifiedById: jit.id,
+          remarks: "[DEBUG-SEED][P6] Verified business location",
+        },
+        create: {
+          businessRecord: { connect: { id: business.id } },
+          latitude,
+          longitude,
+          status: "VERIFIED",
+          submittedBy: { connect: { id: applicant.id } },
+          verifiedBy: { connect: { id: jit.id } },
+          remarks: "[DEBUG-SEED][P6] Verified business location",
+        },
+      })
+    );
+
+    if (seed.inspectionStatus) {
+      await upsertDebugInspectionSeed({
+        marker: `[DEBUG-SEED][P6] ${seed.inspectionStatus}`,
+        businessRecordId: business.id,
+        applicationId: app.id,
+        inspectorId: jit.id,
+        complianceStatus:
+          seed.inspectionStatus === "VERIFIED_COMPLIANT" ? "COMPLIANT" : "NON_COMPLIANT",
+        status: seed.inspectionStatus,
+        comment: `[DEBUG-SEED][P6] ${seed.inspectionStatus} inspection`,
+        decidedById: seed.inspectionStatus === "REVOKED" ? departmentHead.id : null,
+        revocationDecision: seed.inspectionStatus === "REVOKED" ? "APPROVED" : null,
+        revocationRemarks:
+          seed.inspectionStatus === "REVOKED"
+            ? "[DEBUG-SEED][P6] Revoked for verification workflow"
+            : null,
+        decidedAt: seed.inspectionStatus === "REVOKED" ? new Date("2026-05-16T10:00:00.000Z") : null,
+        revocationSettledAt: seed.revocationSettledAt,
+        evidence: {
+          fileName: "smoke-test-proof.txt",
+          storagePath: DEBUG_PROOF_FILE_PATH,
+          mimeType: "text/plain",
+          sizeBytes: 128,
+        },
+      });
+    }
+  }
+
+  const p6DraftNewNumber = "DBG-P6-FORM-NEW-DRAFT-001";
+  await withPrismaRetry(`upsert Phase 6 draft ${p6DraftNewNumber}`, () =>
+    prisma.businessApplication.upsert({
+      where: { applicationNumber: p6DraftNewNumber },
+      update: {
+        applicantId: applicant.id,
+        applicationType: "NEW",
+        businessRecordId: null,
+        status: "DRAFT",
+        formData: buildBusinessInfo({
+          registrationNumber: "DTI-2026-900001",
+          tin: "920000001",
+          businessName: "[DEBUG-SEED] P6 Form New Draft",
+          birthDate: "1994-02-10",
+          ownerAge: "32",
+          capitalInvestment: "150000",
+          ownerFirstName: "Phase",
+          ownerSurname: "Six",
+          country: "Philippines",
+          countryCode: "PH",
+          province: "Negros Occidental",
+          cityMunicipality: "Enrique B. Magalona",
+          streetAddress: "Purok 2",
+          barangay: "Barangay 1 (Pob.)",
+          businessLatitude: 10.889,
+          businessLongitude: 122.989,
+        }),
+        submittedAt: null,
+      },
+      create: {
+        applicationNumber: p6DraftNewNumber,
+        applicantId: applicant.id,
+        applicationType: "NEW",
+        businessRecordId: null,
+        status: "DRAFT",
+        formData: buildBusinessInfo({
+          registrationNumber: "DTI-2026-900001",
+          tin: "920000001",
+          businessName: "[DEBUG-SEED] P6 Form New Draft",
+          birthDate: "1994-02-10",
+          ownerAge: "32",
+          capitalInvestment: "150000",
+          ownerFirstName: "Phase",
+          ownerSurname: "Six",
+          country: "Philippines",
+          countryCode: "PH",
+          province: "Negros Occidental",
+          cityMunicipality: "Enrique B. Magalona",
+          streetAddress: "Purok 2",
+          barangay: "Barangay 1 (Pob.)",
+          businessLatitude: 10.889,
+          businessLongitude: 122.989,
+        }),
+      },
+    })
+  );
+
+  const renewalBaseBusiness = businessByReg.get("DTI-2026-960001");
+  if (renewalBaseBusiness) {
+    const p6DraftRenewalNumber = "DBG-P6-FORM-RENEWAL-DRAFT-001";
+    await withPrismaRetry(`upsert Phase 6 draft ${p6DraftRenewalNumber}`, () =>
+      prisma.businessApplication.upsert({
+        where: { applicationNumber: p6DraftRenewalNumber },
+        update: {
+          applicantId: applicant.id,
+          applicationType: "RENEWAL",
+          businessRecordId: renewalBaseBusiness.id,
+          status: "DRAFT",
+          formData: buildBusinessInfo({
+            registrationNumber: "DTI-2026-960001",
+            tin: "920000002",
+            businessName: "[DEBUG-SEED] P6 Form Renewal Draft",
+            birthDate: "1992-07-12",
+            ownerAge: "33",
+            grossProfit: "300000",
+            ownerFirstName: "Renew",
+            ownerSurname: "Six",
+            country: "Philippines",
+            countryCode: "PH",
+            province: "Negros Occidental",
+            cityMunicipality: "Enrique B. Magalona",
+            streetAddress: "Purok 3",
+            barangay: "Barangay 1 (Pob.)",
+            businessLatitude: 10.891,
+            businessLongitude: 122.991,
+          }),
+          submittedAt: null,
+        },
+        create: {
+          applicationNumber: p6DraftRenewalNumber,
+          applicantId: applicant.id,
+          applicationType: "RENEWAL",
+          businessRecordId: renewalBaseBusiness.id,
+          status: "DRAFT",
+          formData: buildBusinessInfo({
+            registrationNumber: "DTI-2026-960001",
+            tin: "920000002",
+            businessName: "[DEBUG-SEED] P6 Form Renewal Draft",
+            birthDate: "1992-07-12",
+            ownerAge: "33",
+            grossProfit: "300000",
+            ownerFirstName: "Renew",
+            ownerSurname: "Six",
+            country: "Philippines",
+            countryCode: "PH",
+            province: "Negros Occidental",
+            cityMunicipality: "Enrique B. Magalona",
+            streetAddress: "Purok 3",
+            barangay: "Barangay 1 (Pob.)",
+            businessLatitude: 10.891,
+            businessLongitude: 122.991,
+          }),
+        },
+      })
+    );
+  }
+
+  console.log("Phase 6 workflow verification data seeded");
 }
 
 async function seedUiDebugData() {
@@ -1940,6 +2369,7 @@ async function seedUiDebugData() {
   console.log("Debug seed complete");
 
   await seedPhase14WorkflowDebugData();
+  await seedPhase6WorkflowDebugData();
 }
 
 async function main() {

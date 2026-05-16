@@ -6,11 +6,22 @@ import { toMoneyNumber } from "@/lib/money";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import {
   applyLockedBusinessFields,
+  calculateAgeFromBirthDate,
   isCorporation,
   isCorporationOwnershipClassification,
   normalizeBusinessInfo,
   validateBusinessIdentityFormats,
 } from "@/lib/business-rules";
+import {
+  EB_MAGALONA_CITY,
+  EB_MAGALONA_COUNTRY,
+  EB_MAGALONA_COUNTRY_CODE,
+  EB_MAGALONA_PROVINCE,
+  isEbMagalonaCity,
+  isEbMagalonaProvince,
+  isPhilippinesCountry,
+} from "@/lib/address-options";
+import { isValidLineOfBusiness } from "@/lib/business-options";
 import { isWithinEbMagalona } from "@/lib/business-location";
 import type {
   ApplicantApplicationRow,
@@ -109,6 +120,22 @@ const REQUIRED_FIELD_KEYS: Array<keyof BusinessInfo> = [
 const PH_MOBILE_REGEX = /^(\+63|0)9\d{9}$/;
 const ALLOWED_PAYMENT_FREQUENCIES = ["ANNUAL", "BI_ANNUAL", "QUARTERLY"] as const;
 
+function parsePositiveAmount(value: string): number | null {
+  const normalized = value.replace(/[,\s]/g, "").trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function resolveRenewalLineOfBusiness(source: BusinessInfo | null, candidate: string): string {
+  const sourceLineOfBusiness = source?.lineOfBusiness?.trim() ?? "";
+  if (isValidLineOfBusiness(sourceLineOfBusiness)) {
+    return sourceLineOfBusiness;
+  }
+  return candidate.trim();
+}
+
 export class SubmitValidationError extends Error {
   detail: SubmitValidationErrorDetail;
 
@@ -174,13 +201,17 @@ async function assertUniqueBusinessIdentity(params: {
   }
 
   // Check BusinessApplication formData JSON for duplicate registrationNumber
-  // Exclude REJECTED/REVOKED statuses and the current application being edited
-  // excludeAppId = "" means no exclusion (empty string never matches a CUID)
+  // Exclude REJECTED/REVOKED statuses and the current application being edited.
+  // Also exclude all applications belonging to the same businessRecordId (for RENEWAL/CLOSURE):
+  //   - When excludeRecordId is '' (NEW): condition ('' = '') is TRUE → no additional filtering, same as before.
+  //   - When excludeRecordId is a real ID (RENEWAL/CLOSURE): applications for that business are excluded,
+  //     but applications for a DIFFERENT business with the same reg# are still caught.
   const regNumDup = await prisma.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM "BusinessApplication"
     WHERE json_extract(formData, '$.registrationNumber') = ${registrationNumber}
     AND status NOT IN ('REJECTED', 'REVOKED')
     AND id != ${excludeAppId}
+    AND (${excludeRecordId} = '' OR businessRecordId IS NULL OR businessRecordId != ${excludeRecordId})
     LIMIT 1
   `;
   if (regNumDup.length > 0) {
@@ -188,11 +219,13 @@ async function assertUniqueBusinessIdentity(params: {
   }
 
   // Check BusinessApplication formData JSON for duplicate TIN
+  // Same businessRecordId exclusion logic as above.
   const tinDup = await prisma.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM "BusinessApplication"
     WHERE json_extract(formData, '$.tin') = ${tin}
     AND status NOT IN ('REJECTED', 'REVOKED')
     AND id != ${excludeAppId}
+    AND (${excludeRecordId} = '' OR businessRecordId IS NULL OR businessRecordId != ${excludeRecordId})
     LIMIT 1
   `;
   if (tinDup.length > 0) {
@@ -222,7 +255,7 @@ async function assertEligibleBusinessRecord(
     );
   }
 
-  const businessRecord = (await prisma.businessRecord.findFirst({
+  const businessRecord = await prisma.businessRecord.findFirst({
     where: {
       id: input.businessRecordId,
       applicantId,
@@ -246,23 +279,8 @@ async function assertEligibleBusinessRecord(
         },
         take: 1,
       },
-      revokedApplications: {
-        where: {
-          status: "REVOKED",
-        },
-        select: {
-          id: true,
-        },
-        take: 1,
-      },
-    } as any,
-  })) as unknown as {
-    id: string;
-    businessStatus?: "ACTIVE" | "INACTIVE" | "CLOSED" | null;
-    location?: { status: string } | null;
-    applications: Array<{ id: string }>;
-    revokedApplications: Array<{ id: string }>;
-  } | null;
+    },
+  });
 
   if (!businessRecord) {
     throw new ApplicantEligibilityError(
@@ -271,9 +289,10 @@ async function assertEligibleBusinessRecord(
     );
   }
 
+  // Revocation sets businessStatus to INACTIVE — checking INACTIVE is sufficient.
   if (
     input.applicationType === "RENEWAL" &&
-    (businessRecord.businessStatus === "INACTIVE" || businessRecord.revokedApplications.length > 0)
+    businessRecord.businessStatus === "INACTIVE"
   ) {
     throw new ApplicantEligibilityError(RENEWAL_REVOKED_MESSAGE, 409);
   }
@@ -319,6 +338,7 @@ function mapApplicationToRow(app: ApplicationWithDocs): ApplicantApplicationRow 
     applicationType: app.applicationType as ApplicantApplicationRow["applicationType"],
     status: mapDbStatusToUi(app.status),
     dateSubmitted: app.submittedAt ? toDateOnly(app.submittedAt) : "-",
+    updatedAt: app.updatedAt.toISOString(),
     canEdit: isEditableStatus(app.status),
   };
 }
@@ -408,6 +428,10 @@ function buildBusinessInfoFromRecord(record: any): BusinessInfo {
     isMarket: Boolean(record.isMarket),
     isAgriculture: Boolean(record.isAgriculture),
     isLiquorOrTobacco: Boolean(record.isLiquorOrTobacco),
+    birthDate: "",
+    ownerAge: "",
+    capitalInvestment: "",
+    grossProfit: "",
   });
 }
 
@@ -453,6 +477,54 @@ function validateSubmitPayload(
     throw new Error("Wrong Format");
   }
 
+  if (!normalizedFormData.ownerFirstName?.trim()) {
+    missingFields.push("ownerFirstName (First Name is required)");
+  }
+  if (!normalizedFormData.ownerSurname?.trim()) {
+    missingFields.push("ownerSurname (Surname is required)");
+  }
+
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    const birthDateRaw = normalizedFormData.birthDate?.trim() ?? "";
+    if (!birthDateRaw) {
+      missingFields.push("birthDate");
+    } else {
+      try {
+        const providedAgeRaw = normalizedFormData.ownerAge?.trim() ?? "";
+        const computedAge = calculateAgeFromBirthDate(birthDateRaw);
+        if (computedAge < 18 || computedAge > 120) {
+          missingFields.push("birthDate (must result in age between 18 and 120)");
+        } else {
+          if (providedAgeRaw && Number(providedAgeRaw) !== computedAge) {
+            missingFields.push("ownerAge (does not match birthDate)");
+          }
+          normalizedFormData.ownerAge = String(computedAge);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Birthdate is invalid.";
+        missingFields.push(`birthDate (${message})`);
+      }
+    }
+  }
+
+  if (input.applicationType === "NEW") {
+    const capitalRaw = normalizedFormData.capitalInvestment?.trim() ?? "";
+    if (!capitalRaw) {
+      missingFields.push("capitalInvestment");
+    } else if (parsePositiveAmount(capitalRaw) == null) {
+      missingFields.push("capitalInvestment (must be a positive number)");
+    }
+  }
+
+  if (input.applicationType === "RENEWAL") {
+    const grossRaw = normalizedFormData.grossProfit?.trim() ?? "";
+    if (!grossRaw) {
+      missingFields.push("grossProfit");
+    } else if (parsePositiveAmount(grossRaw) == null) {
+      missingFields.push("grossProfit (must be a positive number)");
+    }
+  }
+
   const normalizedNationality = normalizedFormData.nationality.trim();
   if (isCorporation(normalizedFormData.businessType)) {
     if (!isCorporationOwnershipClassification(normalizedNationality)) {
@@ -482,15 +554,21 @@ function validateSubmitPayload(
     missingFields.push("assetSize (must be a non-negative number)");
   }
 
-  if (input.applicationType === "NEW") {
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    const mainOfficePhilippines = isPhilippinesCountry(
+      normalizedFormData.mainOfficeCountry,
+      normalizedFormData.mainOfficeCountryCode
+    );
     const requiredAddressFields: Array<keyof BusinessInfo> = [
-      "country",
-      "countryCode",
-      "province",
-      "provinceCode",
-      "cityMunicipality",
-      "streetAddress",
+      "mainOfficeCountry",
+      "mainOfficeProvince",
+      "mainOfficeCityMunicipality",
+      "mainOfficeAddress",
     ];
+
+    requiredAddressFields.push(
+      mainOfficePhilippines ? "mainOfficeBarangay" : "mainOfficeStreetAddress"
+    );
 
     for (const key of requiredAddressFields) {
       const value = normalizedFormData[key];
@@ -498,6 +576,51 @@ function validateSubmitPayload(
         missingFields.push(String(key));
       }
     }
+  }
+
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    if (!normalizedFormData.lineOfBusiness.trim()) {
+      missingFields.push("lineOfBusiness");
+    } else if (!isValidLineOfBusiness(normalizedFormData.lineOfBusiness)) {
+      missingFields.push("lineOfBusiness (must be one of the allowed options)");
+    }
+
+    if (normalizedFormData.country.trim() !== EB_MAGALONA_COUNTRY) {
+      missingFields.push(`country (must be ${EB_MAGALONA_COUNTRY})`);
+    }
+
+    if (normalizedFormData.countryCode.trim().toUpperCase() !== EB_MAGALONA_COUNTRY_CODE) {
+      missingFields.push(`countryCode (must be ${EB_MAGALONA_COUNTRY_CODE})`);
+    }
+
+    if (!isEbMagalonaProvince(normalizedFormData.province)) {
+      missingFields.push(`province (must be ${EB_MAGALONA_PROVINCE})`);
+    }
+
+    if (!isEbMagalonaCity(normalizedFormData.cityMunicipality)) {
+      missingFields.push(`cityMunicipality (must be ${EB_MAGALONA_CITY})`);
+    }
+
+    if (!normalizedFormData.streetAddress?.trim()) {
+      missingFields.push("streetAddress");
+    }
+
+    if (!normalizedFormData.barangay?.trim()) {
+      missingFields.push("barangay");
+    }
+  }
+
+  if (
+    isPhilippinesCountry(
+      normalizedFormData.mainOfficeCountry,
+      normalizedFormData.mainOfficeCountryCode
+    )
+  ) {
+    if (!normalizedFormData.mainOfficeBarangay?.trim()) {
+      missingFields.push("mainOfficeBarangay");
+    }
+  } else if (!normalizedFormData.mainOfficeStreetAddress?.trim()) {
+    missingFields.push("mainOfficeStreetAddress");
   }
 
   const employees = Number(normalizedFormData.totalEmployees.replace(/[,\s]/g, ""));
@@ -674,7 +797,7 @@ export async function saveApplicantApplication(
   }
 
   if (existing && !isEditableStatus(existing.status)) {
-    throw new Error("Only draft or returned applications can be edited");
+    throw new Error("This application has already been submitted and is now locked for review.");
   }
 
   const existingDocuments = existing
@@ -711,6 +834,13 @@ export async function saveApplicantApplication(
     sourceBusinessInfo
   );
 
+  if (input.applicationType === "RENEWAL") {
+    normalizedFormData.lineOfBusiness = resolveRenewalLineOfBusiness(
+      sourceBusinessInfo,
+      normalizedFormData.lineOfBusiness
+    );
+  }
+
   const identityFormats = validateBusinessIdentityFormats(normalizedFormData);
   if (!identityFormats.registrationNumber || !identityFormats.tin) {
     throw new Error("Wrong Format");
@@ -737,33 +867,39 @@ export async function saveApplicantApplication(
       doc.sizeBytes > 0
   );
 
-  const stagedDocuments: StagedSubmitDocument[] = [];
+  const writtenStoragePaths: string[] = [];
   const replacedStoragePaths: string[] = [];
 
   try {
-    if (input.mode === "SUBMIT") {
-      for (const entry of normalizedSubmitFiles) {
-        const stored = await storeApplicantDocument(entry.file);
-        stagedDocuments.push({
-          documentName: entry.documentName,
-          fileName: stored.fileName,
-          storagePath: stored.storagePath,
-          mimeType: stored.mimeType,
-          sizeBytes: stored.sizeBytes,
+    const buildNewDocumentsByName = async (): Promise<Map<string, StagedSubmitDocument>> => {
+      const newDocumentsByName = new Map<string, StagedSubmitDocument>();
+
+      for (const doc of persistedPayloadDocuments) {
+        newDocumentsByName.set(doc.documentName.toLowerCase(), {
+          documentName: doc.documentName,
+          fileName: doc.fileName,
+          storagePath: doc.storagePath ?? "",
+          mimeType: doc.mimeType ?? "",
+          sizeBytes: doc.sizeBytes ?? 0,
         });
       }
-    }
 
-    const newDocumentsByName = new Map<string, StagedSubmitDocument>();
-    for (const doc of [...persistedPayloadDocuments, ...stagedDocuments]) {
-      newDocumentsByName.set(doc.documentName.toLowerCase(), {
-        documentName: doc.documentName,
-        fileName: doc.fileName,
-        storagePath: doc.storagePath ?? "",
-        mimeType: doc.mimeType ?? "",
-        sizeBytes: doc.sizeBytes ?? 0,
-      });
-    }
+      if (input.mode === "SUBMIT") {
+        for (const entry of normalizedSubmitFiles) {
+          const stored = await storeApplicantDocument(entry.file);
+          writtenStoragePaths.push(stored.storagePath);
+          newDocumentsByName.set(entry.documentName.toLowerCase(), {
+            documentName: entry.documentName,
+            fileName: stored.fileName,
+            storagePath: stored.storagePath,
+            mimeType: stored.mimeType,
+            sizeBytes: stored.sizeBytes,
+          });
+        }
+      }
+
+      return newDocumentsByName;
+    };
 
     if (existing) {
       const updated = await prisma.$transaction(async (tx: any) => {
@@ -779,6 +915,8 @@ export async function saveApplicantApplication(
         });
 
         if (input.mode === "SUBMIT") {
+          const newDocumentsByName = await buildNewDocumentsByName();
+
           for (const doc of newDocumentsByName.values()) {
             const existingDoc = await tx.applicationDocument.findFirst({
               where: {
@@ -871,6 +1009,8 @@ export async function saveApplicantApplication(
       });
 
       if (input.mode === "SUBMIT") {
+        const newDocumentsByName = await buildNewDocumentsByName();
+
         for (const doc of newDocumentsByName.values()) {
           await tx.applicationDocument.create({
             data: {
@@ -918,8 +1058,8 @@ export async function saveApplicantApplication(
       submittedAt: created.submittedAt ? created.submittedAt.toISOString() : null,
     };
   } catch (error) {
-    for (const doc of stagedDocuments) {
-      await removeApplicantDocument(doc.storagePath);
+    for (const storagePath of writtenStoragePaths) {
+      await removeApplicantDocument(storagePath);
     }
     throw error;
   }
@@ -944,8 +1084,8 @@ export async function createApplicantDocument(
   });
 
   if (!application) throw new Error("Application not found");
-  if (application.status !== "SUBMITTED") {
-    throw new Error("Documents can only be uploaded after application submission.");
+  if (!isEditableStatus(application.status)) {
+    throw new Error("This application has already been submitted and is now locked for review.");
   }
 
   const existing = await prisma.applicationDocument.findFirst({
@@ -1026,7 +1166,9 @@ export async function deleteApplicantDocument(applicantId: string, applicationId
   });
 
   if (!application) throw new Error("Application not found");
-  if (!isEditableStatus(application.status)) throw new Error("Only draft or returned applications can be edited");
+  if (!isEditableStatus(application.status)) {
+    throw new Error("This application has already been submitted and is now locked for review.");
+  }
 
   const doc = await prisma.applicationDocument.findFirst({
     where: {

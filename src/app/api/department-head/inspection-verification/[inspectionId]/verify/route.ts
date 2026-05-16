@@ -22,6 +22,12 @@ export async function POST(
 
   try {
     const result = await applyDepartmentHeadInspectionVerification(inspectionId, session.user.id, payload.remarks);
+    const isCompliant = result.complianceStatus === "COMPLIANT";
+    const nextInspectionStatus = isCompliant ? "VERIFIED_COMPLIANT" : "VERIFIED_NON_COMPLIANT";
+    const activityDescription = isCompliant
+      ? "Department Head verified compliant inspection"
+      : "Department Head verified non-compliant inspection";
+
     // Audit: Inspection verified
     void logInspectionAction(
       session.user.id,
@@ -32,10 +38,10 @@ export async function POST(
       result.applicationId ?? null,
       "VERIFIED",
       "DH_VERIFICATION_PENDING",
-      payload.remarks === "COMPLIANT" ? "VERIFIED_COMPLIANT" : "VERIFIED_NON_COMPLIANT",
-      payload.remarks as any,
-      `Inspection verified as ${payload.remarks}: ${payload.remarks || "No remarks"}`,
-      { remarks: payload.remarks }
+      nextInspectionStatus,
+      result.complianceStatus as any,
+      `${activityDescription}. Remarks: ${payload.remarks || "No remarks"}`,
+      { remarks: payload.remarks, complianceStatus: result.complianceStatus }
     );
 
     return NextResponse.json({ result });

@@ -266,6 +266,33 @@ function sanitize(value?: string): string {
   return value?.trim() ?? "";
 }
 
+export const EB_MAGALONA_CITY = "EB Magalona";
+export const EB_MAGALONA_CITY_ALIAS = "Enrique B. Magalona";
+export const EB_MAGALONA_PROVINCE = "Negros Occidental";
+export const EB_MAGALONA_COUNTRY = "Philippines";
+export const EB_MAGALONA_COUNTRY_CODE = "PH";
+
+function normalizeNameToken(value?: string): string {
+  return sanitize(value)
+    .toLowerCase()
+    .replace(/[.'’,-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isEbMagalonaCity(city?: string): boolean {
+  const normalized = normalizeNameToken(city);
+  return normalized === normalizeNameToken(EB_MAGALONA_CITY) || normalized === normalizeNameToken(EB_MAGALONA_CITY_ALIAS);
+}
+
+export function isEbMagalonaProvince(province?: string): boolean {
+  return normalizeNameToken(province) === normalizeNameToken(EB_MAGALONA_PROVINCE);
+}
+
+export function isPhilippinesCountry(country?: string, countryCode?: string): boolean {
+  return sanitize(countryCode).toUpperCase() === "PH" || sanitize(country).toLowerCase() === "philippines";
+}
+
 export function getCountryOptions(): string[] {
   return [...COUNTRY_OPTIONS].sort((a, b) => a.localeCompare(b));
 }
@@ -300,15 +327,34 @@ export function getCitiesByProvince(country?: string, province?: string): string
 
 export function buildMainOfficeAddress(parts: {
   streetAddress?: string;
+  barangay?: string;
   cityMunicipality?: string;
   province?: string;
   country?: string;
+  countryCode?: string;
 }): string {
   const street = sanitize(parts.streetAddress);
+  const barangay = sanitize(parts.barangay ?? "");
   const city = sanitize(parts.cityMunicipality);
   const province = sanitize(parts.province);
   const country = sanitize(parts.country);
+  const philippines = isPhilippinesCountry(country, parts.countryCode);
   // Only produce a value when every component is present — never show a partial address.
   if (!street || !city || !province || !country) return "";
-  return [street, city, province, country].join(", ");
+  const streetPart = philippines && barangay ? `${street}, ${barangay}` : street;
+  return [streetPart, city, province, country].join(", ");
+}
+
+export function buildEbMagalonaBusinessAddress(parts: {
+  streetAddress?: string;
+  barangay?: string;
+}): string {
+  return buildMainOfficeAddress({
+    streetAddress: parts.streetAddress,
+    barangay: parts.barangay,
+    cityMunicipality: EB_MAGALONA_CITY,
+    province: EB_MAGALONA_PROVINCE,
+    country: EB_MAGALONA_COUNTRY,
+    countryCode: EB_MAGALONA_COUNTRY_CODE,
+  });
 }

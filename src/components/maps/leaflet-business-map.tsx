@@ -19,6 +19,7 @@ export interface LeafletBusinessMarker {
   permitOrCertificateNumber?: string | null;
   address?: string | null;
   barangay?: string | null;
+  mapMarkerColor?: string;
 }
 
 interface LeafletBusinessMapProps {
@@ -80,7 +81,9 @@ function MapRecenter({
 }
 
 function markerColor(marker: LeafletBusinessMarker): string {
-  return marker.businessCategoryColor ?? "#64748b";
+  // Use mapMarkerColor if available (e.g., JIT inspection status color)
+  // Otherwise fall back to businessCategoryColor
+  return marker.mapMarkerColor ?? marker.businessCategoryColor ?? "#64748b";
 }
 
 function typeTone(applicationType?: string): string {
@@ -107,10 +110,11 @@ export function LeafletBusinessMap({
   markerVariant = "default",
 }: LeafletBusinessMapProps) {
   return (
+    <div className={`leaflet-map-shell ${className}`}>
     <MapContainer
       center={center}
       zoom={zoom}
-      className={className}
+      className="h-full w-full"
       scrollWheelZoom
       maxBounds={undefined}
       minZoom={1}
@@ -259,5 +263,6 @@ export function LeafletBusinessMap({
         })()
       ) : null}
     </MapContainer>
+    </div>
   );
 }
