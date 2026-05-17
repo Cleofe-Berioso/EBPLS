@@ -79,6 +79,17 @@ function normalizeToEbMagalonaBarangay(raw: string): string | undefined {
   return prefixMatch;
 }
 
+function normalizeAddressName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[.'’,-]/g, " ")
+    .replace(/\b(city|municipality)\s+of\b/g, "")
+    .replace(/\b(city|municipality|province)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function BusinessInformationFields({
   value,
   onChange,
@@ -127,6 +138,12 @@ export function BusinessInformationFields({
   const [geocodedBarangayUnmatched, setGeocodedBarangayUnmatched] = useState<
     string | null
   >(null);
+
+  const selectedMainOfficeCityCode = cityOptions.find(
+    (option) =>
+      option.name === selectedMainOfficeCity ||
+      normalizeAddressName(option.name) === normalizeAddressName(selectedMainOfficeCity)
+  )?.value;
 
   useEffect(() => {
     let active = true;
@@ -184,7 +201,7 @@ export function BusinessInformationFields({
       return;
     }
     setCityLoading(true);
-    loadCities(selectedMainOfficeCountryCode, selectedMainOfficeProvinceCode)
+    loadCities(selectedMainOfficeCountryCode, selectedMainOfficeProvinceCode, selectedMainOfficeProvince)
       .then((options) => {
         if (!active) return;
         setCityOptions(options);
@@ -215,6 +232,7 @@ export function BusinessInformationFields({
       provinceName: selectedMainOfficeProvince,
       cityName: selectedMainOfficeCity,
       provinceCode: selectedMainOfficeProvinceCode,
+      cityCode: selectedMainOfficeCityCode,
     })
       .then((options) => {
         if (!active) return;
@@ -237,6 +255,7 @@ export function BusinessInformationFields({
     selectedMainOfficeCountryCode,
     selectedMainOfficeProvince,
     selectedMainOfficeProvinceCode,
+    selectedMainOfficeCityCode,
   ]);
 
   useEffect(() => {
@@ -616,7 +635,8 @@ export function BusinessInformationFields({
           >
             <SearchableSelect
               options={cityOptions}
-              value={value.mainOfficeCityMunicipality ?? ""}
+              value={selectedMainOfficeCityCode ?? value.mainOfficeCityMunicipality ?? ""}
+              selectedLabel={value.mainOfficeCityMunicipality ?? ""}
               loading={cityLoading}
               error={cityError}
               onChange={(nextCityMunicipality) =>

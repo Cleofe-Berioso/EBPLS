@@ -23,9 +23,18 @@ export async function loadStates(countryCode: string): Promise<AddressOption[]> 
   return readAddressResponse(response);
 }
 
-export async function loadCities(countryCode: string, stateCode: string): Promise<AddressOption[]> {
+export async function loadCities(countryCode: string, stateCode: string, stateName?: string): Promise<AddressOption[]> {
+  const searchParams = new URLSearchParams({
+    countryCode,
+    stateCode,
+  });
+
+  if (stateName?.trim()) {
+    searchParams.set("stateName", stateName.trim());
+  }
+
   const response = await fetch(
-    `/api/address/cities?countryCode=${encodeURIComponent(countryCode)}&stateCode=${encodeURIComponent(stateCode)}`,
+    `/api/address/cities?${searchParams.toString()}`,
     { cache: "no-store" }
   );
   return readAddressResponse(response);
