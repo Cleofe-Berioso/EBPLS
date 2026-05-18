@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
-import { isWithinEbMagalona } from "@/lib/business-location";
+import { isWithinEbMagalona } from "@/lib/eb-magalona";
 import { calculateAgeFromBirthDate, isPhilippinesCountry, validateBusinessIdentityFormats } from "@/lib/business-rules";
 import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
 import {
@@ -99,8 +99,6 @@ function resolveRenewalLineOfBusiness(value: string | null | undefined): string 
 }
 
 const BUSINESS_LOCATION_ERROR = "Please pin the business location inside EB Magalona.";
-const RENEWAL_REVOKED_MESSAGE =
-  "Renewal is not allowed because this business permit has been revoked. Re-application is required.";
 
 function validateBusinessLocation(info: BusinessInfo): Partial<Record<keyof BusinessInfo, string>> {
   const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
@@ -215,6 +213,36 @@ function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
   );
 }
 
+type RenewalBlockedRecord = {
+  id: string;
+  registrationNumber: string;
+  businessName: string;
+  closedAt: string | null;
+  renewalEligibility: {
+    eligible: boolean;
+    reasonCode: string | null;
+    userFriendlyReason: string | null;
+    blockingInspectionId: string | null;
+    complianceCaseStatus: string | null;
+    nonComplianceType: string | null;
+  };
+};
+
+function humanizeCaseStatus(value: string | null): string {
+  if (value === "FLAGGED_UNSETTLED") return "Flagged / Unsettled";
+  if (value === "SETTLED") return "Settled";
+  if (value === "EXPIRED_UNSETTLED") return "Expired / Unsettled";
+  if (value === "FORCED_CLOSURE_PENDING") return "Forced Closure Pending";
+  if (value === "CLOSED_NON_COMPLIANT") return "Closed Non-Compliant";
+  return value ?? "-";
+}
+
+function humanizeNonComplianceType(value: string | null): string {
+  if (value === "GOVERNMENT_AGENCY_RELATED") return "Government Agency Related";
+  if (value === "RENEWAL_RELATED") return "Renewal Related";
+  return value ?? "-";
+}
+
 export function RenewalApplicationForm() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("applicationId");
@@ -225,6 +253,7 @@ export function RenewalApplicationForm() {
   const [records, setRecords] = useState<
     Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>
   >([]);
+  const [blockedRecords, setBlockedRecords] = useState<RenewalBlockedRecord[]>([]);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
@@ -235,7 +264,7 @@ export function RenewalApplicationForm() {
   const [submitting, setSubmitting] = useState(false);
   const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
-  const [revokedBlockedCount, setRevokedBlockedCount] = useState(0);
+  const [unavailableCount, setUnavailableCount] = useState(0);
   const [existingApplicationAccess, setExistingApplicationAccess] = useState<{
     canEdit: boolean;
     status: string;
@@ -381,16 +410,17 @@ export function RenewalApplicationForm() {
     let active = true;
 
     async function loadRecords() {
-      const response = await fetch("/api/applicant/business-records", { cache: "no-store" });
+      const response = await fetch("/api/applicant/business-records?applicationType=RENEWAL", { cache: "no-store" });
       const data = (await response.json()) as {
         records?: Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>;
-        revokedBlockedCount?: number;
+        blockedRecords?: RenewalBlockedRecord[];
       };
 
       if (!active || !response.ok || !data.records) return;
 
       setRecords(data.records);
-      setRevokedBlockedCount(data.revokedBlockedCount ?? 0);
+      setBlockedRecords(data.blockedRecords ?? []);
+      setUnavailableCount(data.blockedRecords?.length ?? 0);
       if (data.records[0] && !selectedBusinessId) {
         setSelectedBusinessId(data.records[0].id);
           setInfo(
@@ -564,8 +594,8 @@ export function RenewalApplicationForm() {
     if (!selectedRecord) {
       setStatusMessage({
         kind: "error",
-        text: revokedBlockedCount > 0
-          ? RENEWAL_REVOKED_MESSAGE
+        text: unavailableCount > 0
+          ? "Select an eligible business record before submitting renewal. Some businesses are currently unavailable for renewal."
           : "Select an eligible business record before submitting renewal.",
       });
       setSubmitting(false);
@@ -813,17 +843,17 @@ export function RenewalApplicationForm() {
           title="Select Existing Business"
           description="Renewal starts from a registered business record. Core registration fields stay locked to preserve the existing record."
         >
-          {records.length === 0 ? (
-            <EmptyState
-              title={revokedBlockedCount > 0 ? "No eligible renewal records" : "No records available yet"}
-              description={
-                revokedBlockedCount > 0
-                  ? `${RENEWAL_REVOKED_MESSAGE} You may file a New Application to re-apply.`
-                  : "No action is required right now. This renewal form will populate once you have an existing business record."
-              }
-            />
-          ) : (
-            <div className="space-y-4">
+          <div className="space-y-4">
+            {records.length === 0 ? (
+              <EmptyState
+                title={unavailableCount > 0 ? "No eligible renewal records" : "No records available yet"}
+                description={
+                  unavailableCount > 0
+                    ? "Some businesses are currently unavailable for renewal. Review the section below for reasons."
+                    : "No action is required right now. This renewal form will populate once you have an existing business record."
+                }
+              />
+            ) : (
               <FormField
                 label="Existing Business Record"
                 hint="Choose which registered business record you want to renew."
@@ -857,16 +887,41 @@ export function RenewalApplicationForm() {
                   ))}
                 </select>
               </FormField>
+            )}
 
-              {selectedRecord ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">{selectedRecord.businessName}</p>
-                  <p className="mt-1">Registration: {selectedRecord.registrationNumber}</p>
-                  <p className="mt-1">Email: {selectedRecord.businessInfo.email}</p>
+            {selectedRecord ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">{selectedRecord.businessName}</p>
+                <p className="mt-1">Registration: {selectedRecord.registrationNumber}</p>
+                <p className="mt-1">Email: {selectedRecord.businessInfo.email}</p>
+              </div>
+            ) : null}
+
+            {blockedRecords.length > 0 ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-900">Unavailable for renewal</p>
+                <div className="mt-3 space-y-3">
+                  {blockedRecords.map((record) => (
+                    <div key={record.id} className="rounded-xl border border-amber-200 bg-white p-3 text-sm text-slate-700">
+                      <p className="font-semibold text-slate-900">{record.businessName}</p>
+                      <p className="text-xs text-slate-500">{record.registrationNumber}</p>
+                      <p className="mt-1 text-sm text-slate-700">
+                        {record.renewalEligibility.userFriendlyReason ?? "Unavailable for renewal."}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                          {humanizeNonComplianceType(record.renewalEligibility.nonComplianceType)}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                          {humanizeCaseStatus(record.renewalEligibility.complianceCaseStatus)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ) : null}
-            </div>
-          )}
+              </div>
+            ) : null}
+          </div>
         </SectionCard>
       ) : null}
 

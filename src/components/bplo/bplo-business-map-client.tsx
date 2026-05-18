@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import { EB_MAGALONA_CENTER } from "@/lib/business-location";
+import { EB_MAGALONA_CENTER } from "@/lib/eb-magalona";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { InfoBanner } from "@/components/ui/info-banner";

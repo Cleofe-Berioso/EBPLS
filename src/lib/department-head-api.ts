@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { assertStatusTransition } from "@/lib/application-status";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { createAuditLog } from "@/lib/audit-log";
 
 type DepartmentHeadAction = "APPROVE" | "RETURN" | "REJECT";
 type RevocationDecisionAction = "APPROVE" | "DENY";
@@ -415,10 +416,201 @@ export async function listDepartmentHeadInspectionVerificationQueue(): Promise<D
     }));
 }
 
+export interface DepartmentHeadSettlementRow {
+  inspectionId: string;
+  businessRecordId: string;
+  applicationId: string | null;
+  applicationNumber: string | null;
+  permitOrCertificateNumber: string | null;
+  businessName: string;
+  tradeName: string | null;
+  ownerName: string;
+  applicantName: string;
+  businessAddress: string;
+  lineOfBusiness: string;
+  nonComplianceType: string | null;
+  violationSeverity: string | null;
+  complianceCaseStatus: string;
+  inspectionRemarks: string | null;
+  verificationRemarks: string | null;
+  verifiedAt: string | null;
+  deadlineAt: string | null;
+}
+
+/**
+ * List eligible settlement cases for Department Head
+ */
+export async function listDepartmentHeadSettlementCases(): Promise<DepartmentHeadSettlementRow[]> {
+  const rows = await prisma.inspection.findMany({
+    where: {
+      nonComplianceType: "GOVERNMENT_AGENCY_RELATED",
+      violationSeverity: { in: ["MINOR", "MAJOR"] },
+      complianceCaseStatus: "FLAGGED_UNSETTLED",
+      isSettled: false,
+      forcedClosure: false,
+    },
+    include: {
+      decidedBy: { select: { name: true } },
+      application: { select: { id: true, applicationNumber: true, permitIssuance: { select: { documentNumber: true } } } },
+      businessRecord: { select: { businessName: true, tradeName: true, ownerName: true, businessAddress: true, lineOfBusiness: true, applicant: { select: { name: true, id: true } }, phone: true } },
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+
+  return rows.map((row: any) => ({
+    inspectionId: row.id,
+    businessRecordId: row.businessRecordId,
+    applicationId: row.applicationId ?? null,
+    applicationNumber: row.application?.applicationNumber ?? null,
+    permitOrCertificateNumber: row.application?.permitIssuance?.documentNumber ?? null,
+    businessName: row.businessRecord.businessName,
+    tradeName: row.businessRecord.tradeName ?? null,
+    ownerName: row.businessRecord.ownerName,
+    applicantName: row.businessRecord.applicant?.name ?? "-",
+    businessAddress: row.businessRecord.businessAddress,
+    lineOfBusiness: row.businessRecord.lineOfBusiness ?? "-",
+    nonComplianceType: row.nonComplianceType ?? null,
+    violationSeverity: row.violationSeverity ?? null,
+    complianceCaseStatus: row.complianceCaseStatus,
+    inspectionRemarks: row.comment?.trim() || null,
+    verificationRemarks: row.decidedAt ? `Verified by Department Head` : null,
+    verifiedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
+    deadlineAt: row.deadlineAt ? row.deadlineAt.toISOString() : null,
+  }));
+}
+
+/**
+ * Mark an eligible inspection compliance case as settled
+ */
+export async function applyDepartmentHeadSettlement(
+  inspectionId: string,
+  departmentHeadUserId: string,
+  settlementRemarks?: string
+) {
+  const normalizedRemarks = settlementRemarks?.trim();
+  if (!normalizedRemarks) throw new Error("Settlement remarks are required");
+
+  return prisma.$transaction(async (tx: any) => {
+    const inspection = await tx.inspection.findUnique({
+      where: { id: inspectionId },
+      include: {
+        application: { select: { id: true, applicationNumber: true, status: true } },
+        businessRecord: { select: { id: true, businessName: true, ownerName: true, applicant: { select: { id: true, name: true } }, phone: true } },
+      },
+    });
+
+    if (!inspection) throw new Error("Inspection not found");
+
+    if (inspection.nonComplianceType !== "GOVERNMENT_AGENCY_RELATED") {
+      throw new Error("Only government-agency-related cases can be settled here");
+    }
+
+    if (!inspection.violationSeverity || !["MINOR", "MAJOR"].includes(inspection.violationSeverity)) {
+      throw new Error("Only MINOR or MAJOR cases can be settled through this action");
+    }
+
+    if (inspection.complianceCaseStatus !== "FLAGGED_UNSETTLED") {
+      throw new Error("Case is not in FLAGGED_UNSETTLED status");
+    }
+
+    if (inspection.isSettled) {
+      throw new Error("Case is already settled");
+    }
+
+    if (inspection.forcedClosure) {
+      throw new Error("Forced closure cases cannot be settled here");
+    }
+
+    // RENEWAL_RELATED cannot be settled here
+    if (inspection.nonComplianceType === "RENEWAL_RELATED") {
+      throw new Error("RENEWAL_RELATED cases cannot be settled through this action");
+    }
+
+    const previousStatus = inspection.complianceCaseStatus;
+
+    const updated = await tx.inspection.update({
+      where: { id: inspection.id },
+      data: {
+        isSettled: true,
+        settledAt: new Date(),
+        settledById: departmentHeadUserId,
+        complianceCaseStatus: "SETTLED",
+        settlementRemarks: normalizedRemarks,
+      },
+    });
+
+    if (inspection.application && inspection.application.id) {
+      await tx.applicationHistory.create({
+        data: {
+          applicationId: inspection.application.id,
+          actorId: departmentHeadUserId,
+          actorRole: "DEPARTMENT_HEAD",
+          fromStatus: inspection.application.status,
+          toStatus: inspection.application.status,
+          remarks: `Department Head marked flagged case as SETTLED. Remarks: ${normalizedRemarks}`,
+        },
+      });
+    }
+
+    // Audit log (non-blocking)
+    try {
+      await createAuditLog({
+        actorId: departmentHeadUserId,
+        actorRole: "DEPARTMENT_HEAD",
+        action: "SETTLED",
+        module: "INSPECTION",
+        entityType: "INSPECTION",
+        entityId: inspection.id,
+        inspectionId: inspection.id,
+        applicationId: inspection.application?.id ?? null,
+        businessRecordId: inspection.businessRecordId,
+        beforeStatus: previousStatus,
+        afterStatus: "SETTLED",
+        description: "Department Head marked government-agency-related compliance case as SETTLED.",
+        metadata: {
+          settlementRemarks: normalizedRemarks,
+        },
+      });
+    } catch (err) {
+      // non-blocking: ignore
+      console.error("[Settlement] audit failed", err instanceof Error ? err.message : String(err));
+    }
+
+    // Best-effort notification record (non-blocking). Only create if linked application exists.
+    try {
+      if (inspection.application && inspection.application.id) {
+        const phone = inspection.businessRecord?.phone ?? null;
+        await tx.smsDeliveryLog.create({
+          data: {
+            applicationId: inspection.application.id,
+            applicantId: inspection.businessRecord?.applicant?.id ?? null,
+            phoneNumber: phone,
+            provider: "none",
+            status: "SKIPPED",
+            messageBody: "Your business compliance case has been marked as settled. You may continue with eligible transactions subject to normal system rules.",
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[Settlement] notification log failed", err instanceof Error ? err.message : String(err));
+    }
+
+    return {
+      inspectionId: updated.id,
+      applicationId: inspection.application?.id ?? null,
+      businessRecordId: inspection.businessRecordId,
+      complianceCaseStatus: updated.complianceCaseStatus,
+      settledAt: updated.settledAt,
+    };
+  });
+}
+
 export async function applyDepartmentHeadInspectionVerification(
   inspectionId: string,
   departmentHeadUserId: string,
-  remarks?: string
+  remarks?: string,
+  nonComplianceType?: string,
+  violationSeverity?: string
 ) {
   const normalizedRemarks = remarks?.trim();
 
@@ -497,6 +689,32 @@ export async function applyDepartmentHeadInspectionVerification(
       };
     }
 
+    // NON_COMPLIANT path: require nonComplianceType and violationSeverity
+    const validNonComplianceTypes = ["GOVERNMENT_AGENCY_RELATED", "RENEWAL_RELATED"];
+    const validViolationSeverities = ["MINOR", "MAJOR", "SEVERE"];
+
+    if (!nonComplianceType || !validNonComplianceTypes.includes(nonComplianceType)) {
+      throw new Error("non-compliance type is required and must be GOVERNMENT_AGENCY_RELATED or RENEWAL_RELATED");
+    }
+
+    if (!violationSeverity || !validViolationSeverities.includes(violationSeverity)) {
+      throw new Error("violation severity is required and must be MINOR, MAJOR, or SEVERE");
+    }
+
+    // Determine complianceCaseStatus and forced closure flags based on severity and type
+    let complianceCaseStatus = "FLAGGED_UNSETTLED";
+    let forcedClosureFlag = false;
+    let forcedClosureAtTime: Date | null = null;
+
+    // GOVERNMENT_AGENCY_RELATED + SEVERE => FORCED_CLOSURE_PENDING + forcedClosure
+    if (nonComplianceType === "GOVERNMENT_AGENCY_RELATED" && violationSeverity === "SEVERE") {
+      complianceCaseStatus = "FORCED_CLOSURE_PENDING";
+      forcedClosureFlag = true;
+      forcedClosureAtTime = new Date();
+    }
+
+    // All other combinations are FLAGGED_UNSETTLED for settlement workflow
+
     assertStatusTransition(inspection.application.status, "REVOCATION_REVIEW");
 
     await tx.businessApplication.update({
@@ -510,6 +728,13 @@ export async function applyDepartmentHeadInspectionVerification(
         status: "VERIFIED_NON_COMPLIANT",
         decidedById: departmentHeadUserId,
         decidedAt: new Date(),
+        nonComplianceType: nonComplianceType,
+        violationSeverity: violationSeverity,
+        complianceCaseStatus: complianceCaseStatus,
+        isSettled: false,
+        forcedClosure: forcedClosureFlag,
+        forcedClosureAt: forcedClosureAtTime,
+        forcedClosureById: forcedClosureFlag ? departmentHeadUserId : null,
       },
     });
 
@@ -520,7 +745,7 @@ export async function applyDepartmentHeadInspectionVerification(
         actorRole: "DEPARTMENT_HEAD",
         fromStatus: "RELEASED",
         toStatus: "REVOCATION_REVIEW",
-        remarks: `Department Head verified NON_COMPLIANT inspection. Remarks: ${normalizedRemarks}`,
+        remarks: `Department Head verified NON_COMPLIANT inspection. Type: ${nonComplianceType}, Severity: ${violationSeverity}. Remarks: ${normalizedRemarks}`,
       },
     });
 
@@ -531,6 +756,9 @@ export async function applyDepartmentHeadInspectionVerification(
       inspectionStatus: "VERIFIED_NON_COMPLIANT",
       applicationStatus: mapDbStatusToUi("REVOCATION_REVIEW"),
       complianceStatus: inspection.complianceStatus,
+      nonComplianceType,
+      violationSeverity,
+      complianceCaseStatus,
     };
   });
 }

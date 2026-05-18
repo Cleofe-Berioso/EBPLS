@@ -304,6 +304,9 @@ export const DEFAULT_SYSTEM_FEE_SETTINGS = {
   liquorTobaccoAddOnPercent: 25,
   powerDistributionFixedFee: 10000,
   privatePortFixedFee: 50000,
+  renewalComplianceMinorPenalty: 0,
+  renewalComplianceMajorPenalty: 0,
+  renewalComplianceSeverePenalty: 0,
 } as const;
 
 export type FeeConfigurationItemDto = {
@@ -322,6 +325,10 @@ export type SystemFeeSettingDto = {
   liquorTobaccoAddOnPercent: number;
   powerDistributionFixedFee: number;
   privatePortFixedFee: number;
+  jitPortalEnabled: boolean;
+  renewalComplianceMinorPenalty: number;
+  renewalComplianceMajorPenalty: number;
+  renewalComplianceSeverePenalty: number;
   updatedAt: string;
 };
 
@@ -342,6 +349,9 @@ export type RuntimeFeeSettings = {
     renewalSurchargePercent: number;
     monthlyInterestPercent: number;
     liquorTobaccoAddOnPercent: number;
+    renewalComplianceMinorPenalty: number;
+    renewalComplianceMajorPenalty: number;
+    renewalComplianceSeverePenalty: number;
   };
   fixed: {
     powerCompanyFixedFee: number;
@@ -513,6 +523,10 @@ export async function getOrCreateSystemFeeSetting(): Promise<SystemFeeSettingDto
     liquorTobaccoAddOnPercent: row.liquorTobaccoAddOnPercent,
     powerDistributionFixedFee: toMoneyNumber(row.powerDistributionFixedFee),
     privatePortFixedFee: toMoneyNumber(row.privatePortFixedFee),
+    jitPortalEnabled: row.jitPortalEnabled,
+    renewalComplianceMinorPenalty: toMoneyNumber(row.renewalComplianceMinorPenalty),
+    renewalComplianceMajorPenalty: toMoneyNumber(row.renewalComplianceMajorPenalty),
+    renewalComplianceSeverePenalty: toMoneyNumber(row.renewalComplianceSeverePenalty),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -523,6 +537,9 @@ export async function updateSystemFeeSetting(input: {
   liquorTobaccoAddOnPercent: number;
   powerDistributionFixedFee?: number;
   privatePortFixedFee?: number;
+  renewalComplianceMinorPenalty?: number;
+  renewalComplianceMajorPenalty?: number;
+  renewalComplianceSeverePenalty?: number;
   updatedById: string;
 }): Promise<SystemFeeSettingDto> {
   const current = await getOrCreateSystemFeeSetting();
@@ -540,6 +557,18 @@ export async function updateSystemFeeSetting(input: {
         typeof input.privatePortFixedFee === "number"
           ? clampNonNegative(input.privatePortFixedFee)
           : undefined,
+      renewalComplianceMinorPenalty:
+        typeof input.renewalComplianceMinorPenalty === "number"
+          ? clampNonNegative(input.renewalComplianceMinorPenalty)
+          : undefined,
+      renewalComplianceMajorPenalty:
+        typeof input.renewalComplianceMajorPenalty === "number"
+          ? clampNonNegative(input.renewalComplianceMajorPenalty)
+          : undefined,
+      renewalComplianceSeverePenalty:
+        typeof input.renewalComplianceSeverePenalty === "number"
+          ? clampNonNegative(input.renewalComplianceSeverePenalty)
+          : undefined,
       updatedById: input.updatedById,
     },
   });
@@ -551,6 +580,10 @@ export async function updateSystemFeeSetting(input: {
     liquorTobaccoAddOnPercent: row.liquorTobaccoAddOnPercent,
     powerDistributionFixedFee: toMoneyNumber(row.powerDistributionFixedFee),
     privatePortFixedFee: toMoneyNumber(row.privatePortFixedFee),
+    jitPortalEnabled: row.jitPortalEnabled,
+    renewalComplianceMinorPenalty: toMoneyNumber(row.renewalComplianceMinorPenalty),
+    renewalComplianceMajorPenalty: toMoneyNumber(row.renewalComplianceMajorPenalty),
+    renewalComplianceSeverePenalty: toMoneyNumber(row.renewalComplianceSeverePenalty),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -714,6 +747,9 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
       renewalSurchargePercent: penalties.renewalSurchargePercent,
       monthlyInterestPercent: penalties.monthlyInterestPercent,
       liquorTobaccoAddOnPercent: penalties.liquorTobaccoAddOnPercent,
+      renewalComplianceMinorPenalty: penalties.renewalComplianceMinorPenalty,
+      renewalComplianceMajorPenalty: penalties.renewalComplianceMajorPenalty,
+      renewalComplianceSeverePenalty: penalties.renewalComplianceSeverePenalty,
     },
     fixed: {
       powerCompanyFixedFee: resolveFixedFeeAmount({

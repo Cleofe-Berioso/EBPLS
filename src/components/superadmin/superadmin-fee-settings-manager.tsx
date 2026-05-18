@@ -35,6 +35,9 @@ type Penalties = {
   liquorTobaccoAddOnPercent: number;
   powerDistributionFixedFee: number;
   privatePortFixedFee: number;
+  renewalComplianceMinorPenalty: number;
+  renewalComplianceMajorPenalty: number;
+  renewalComplianceSeverePenalty: number;
   updatedAt: string;
 };
 
@@ -48,6 +51,31 @@ type RenewalExtension = {
   waiveInterest: boolean;
   remarks: string | null;
   updatedAt: string;
+};
+
+type JitPortalEnforcementResult = {
+  casesEnforced: number;
+  affectedInspectionIds: string[];
+  details: Array<{
+    inspectionId: string;
+    businessRegistrationNumber: string;
+    nonComplianceType: string;
+    previousStatus: string;
+    newStatus: string;
+  }>;
+};
+
+type JitPortalResponse = {
+  jitPortalEnabled: boolean;
+  updatedAt: string;
+  error?: string;
+};
+
+type JitPortalUpdateResponse = {
+  success: boolean;
+  jitPortalEnabled: boolean;
+  enforcementResult?: JitPortalEnforcementResult;
+  error?: string;
 };
 
 type FeeResponse = { items?: FeeItem[]; categories?: FeeCategoryOption[]; error?: string };
@@ -81,6 +109,9 @@ const EMPTY_PENALTIES: Penalties = {
   liquorTobaccoAddOnPercent: 25,
   powerDistributionFixedFee: 10000,
   privatePortFixedFee: 50000,
+  renewalComplianceMinorPenalty: 0,
+  renewalComplianceMajorPenalty: 0,
+  renewalComplianceSeverePenalty: 0,
   updatedAt: "",
 };
 
@@ -92,6 +123,11 @@ export function SuperAdminFeeSettingsManager() {
   const [feeItems, setFeeItems] = useState<FeeItem[]>([]);
   const [penalties, setPenalties] = useState<Penalties>(EMPTY_PENALTIES);
   const [extensions, setExtensions] = useState<RenewalExtension[]>([]);
+  const [jitPortalEnabled, setJitPortalEnabled] = useState(true);
+  const [jitPortalUpdatedAt, setJitPortalUpdatedAt] = useState<string>("");
+  const [showJitConfirm, setShowJitConfirm] = useState(false);
+  const [jitConfirmValue, setJitConfirmValue] = useState(true);
+  const [isJitUpdating, setIsJitUpdating] = useState(false);
 
   const [feeForm, setFeeForm] = useState({
     category: "",
@@ -104,6 +140,9 @@ export function SuperAdminFeeSettingsManager() {
     renewalSurchargePercent: "25",
     monthlyInterestPercent: "2",
     liquorTobaccoAddOnPercent: "25",
+    renewalComplianceMinorPenalty: "0",
+    renewalComplianceMajorPenalty: "0",
+    renewalComplianceSeverePenalty: "0",
   });
 
   const [extensionForm, setExtensionForm] = useState({
@@ -121,21 +160,23 @@ export function SuperAdminFeeSettingsManager() {
     setFlash(null);
 
     try {
-      const [feeRes, penaltiesRes, extRes] = await Promise.all([
+      const [feeRes, penaltiesRes, extRes, jitRes] = await Promise.all([
         fetch("/api/superadmin/settings/fees", { cache: "no-store" }),
         fetch("/api/superadmin/settings/penalties", { cache: "no-store" }),
         fetch("/api/superadmin/settings/extensions", { cache: "no-store" }),
+        fetch("/api/superadmin/settings/jit-portal", { cache: "no-store" }),
       ]);
 
       const feeJson = (await feeRes.json()) as FeeResponse;
       const penaltiesJson = (await penaltiesRes.json()) as PenaltyResponse;
       const extJson = (await extRes.json()) as ExtensionResponse;
+      const jitJson = (await jitRes.json()) as JitPortalResponse;
 
-      if (!feeRes.ok || !penaltiesRes.ok || !extRes.ok) {
+      if (!feeRes.ok || !penaltiesRes.ok || !extRes.ok || !jitRes.ok) {
         setFlash({
           type: "danger",
           message:
-            feeJson.error ?? penaltiesJson.error ?? extJson.error ?? "Failed to load system settings.",
+            feeJson.error ?? penaltiesJson.error ?? extJson.error ?? jitJson.error ?? "Failed to load system settings.",
         });
         return;
       }
@@ -147,6 +188,8 @@ export function SuperAdminFeeSettingsManager() {
       setFeeItems(feeJson.items ?? []);
       setPenalties(nextPenalties);
       setExtensions(extJson.extensions ?? []);
+      setJitPortalEnabled(jitJson.jitPortalEnabled ?? true);
+      setJitPortalUpdatedAt(jitJson.updatedAt ?? "");
       setFeeForm((prev) => {
         const nextCategory =
           prev.category && nextCategories.some((item) => item.key === prev.category)
@@ -168,6 +211,9 @@ export function SuperAdminFeeSettingsManager() {
         renewalSurchargePercent: String(nextPenalties.renewalSurchargePercent),
         monthlyInterestPercent: String(nextPenalties.monthlyInterestPercent),
         liquorTobaccoAddOnPercent: String(nextPenalties.liquorTobaccoAddOnPercent),
+        renewalComplianceMinorPenalty: String(nextPenalties.renewalComplianceMinorPenalty ?? 0),
+        renewalComplianceMajorPenalty: String(nextPenalties.renewalComplianceMajorPenalty ?? 0),
+        renewalComplianceSeverePenalty: String(nextPenalties.renewalComplianceSeverePenalty ?? 0),
       });
     } catch {
       setFlash({ type: "danger", message: "Failed to load system settings." });
@@ -301,11 +347,17 @@ export function SuperAdminFeeSettingsManager() {
     const renewalSurchargePercent = Number(penaltyForm.renewalSurchargePercent);
     const monthlyInterestPercent = Number(penaltyForm.monthlyInterestPercent);
     const liquorTobaccoAddOnPercent = Number(penaltyForm.liquorTobaccoAddOnPercent);
+    const renewalComplianceMinorPenalty = Number(penaltyForm.renewalComplianceMinorPenalty);
+    const renewalComplianceMajorPenalty = Number(penaltyForm.renewalComplianceMajorPenalty);
+    const renewalComplianceSeverePenalty = Number(penaltyForm.renewalComplianceSeverePenalty);
 
     const all = [
       renewalSurchargePercent,
       monthlyInterestPercent,
       liquorTobaccoAddOnPercent,
+      renewalComplianceMinorPenalty,
+      renewalComplianceMajorPenalty,
+      renewalComplianceSeverePenalty,
     ];
 
     if (all.some((value) => Number.isNaN(value) || value < 0)) {
@@ -321,6 +373,9 @@ export function SuperAdminFeeSettingsManager() {
           renewalSurchargePercent,
           monthlyInterestPercent,
           liquorTobaccoAddOnPercent,
+          renewalComplianceMinorPenalty,
+          renewalComplianceMajorPenalty,
+          renewalComplianceSeverePenalty,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -329,7 +384,7 @@ export function SuperAdminFeeSettingsManager() {
         return;
       }
 
-      setFlash({ type: "success", message: "Surcharge and interest settings updated." });
+      setFlash({ type: "success", message: "Surcharge, interest, and compliance penalty settings updated." });
       await loadSettings();
     } catch {
       setFlash({ type: "danger", message: "Failed to save surcharge/interest settings." });
@@ -405,6 +460,73 @@ export function SuperAdminFeeSettingsManager() {
   }
 
   const flashVariant = flash?.type === "danger" ? "danger" : flash?.type === "success" ? "success" : "info";
+
+  async function saveJitPortalSetting() {
+    setShowJitConfirm(false);
+    setFlash(null);
+    setIsJitUpdating(true);
+
+    try {
+      const res = await fetch("/api/superadmin/settings/jit-portal", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jitPortalEnabled: jitConfirmValue }),
+      });
+      const json = (await res.json()) as JitPortalUpdateResponse;
+
+      if (!res.ok) {
+        setFlash({ type: "danger", message: json.error ?? "Failed to update JIT portal setting." });
+        setIsJitUpdating(false);
+        return;
+      }
+
+      setJitPortalEnabled(json.jitPortalEnabled);
+      const message =
+        json.enforcementResult && json.enforcementResult.casesEnforced > 0
+          ? `JIT Portal ${json.jitPortalEnabled ? "enabled" : "disabled"}. Enforced ${json.enforcementResult.casesEnforced} unresolved compliance case(s).`
+          : `JIT Portal ${json.jitPortalEnabled ? "enabled" : "disabled"}.`;
+
+      setFlash({ type: "success", message });
+      await loadSettings();
+    } catch {
+      setFlash({ type: "danger", message: "Failed to update JIT portal setting." });
+    } finally {
+      setIsJitUpdating(false);
+    }
+  }
+
+  function handleJitToggle() {
+    setJitConfirmValue(!jitPortalEnabled);
+    if (jitPortalEnabled) {
+      // Disabling - require confirmation
+      setShowJitConfirm(true);
+    } else {
+      // Enabling - update directly
+      void (async () => {
+        setFlash(null);
+        setIsJitUpdating(true);
+        try {
+          const res = await fetch("/api/superadmin/settings/jit-portal", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jitPortalEnabled: true }),
+          });
+          const json = (await res.json()) as JitPortalUpdateResponse;
+          if (!res.ok) {
+            setFlash({ type: "danger", message: json.error ?? "Failed to enable JIT portal." });
+            return;
+          }
+          setJitPortalEnabled(true);
+          setFlash({ type: "success", message: "JIT Portal enabled." });
+          await loadSettings();
+        } catch {
+          setFlash({ type: "danger", message: "Failed to enable JIT portal." });
+        } finally {
+          setIsJitUpdating(false);
+        }
+      })();
+    }
+  }
 
   function handleCategoryChange(nextCategory: string) {
     const nextCategoryOption = categories.find((item) => item.key === nextCategory);
@@ -626,6 +748,47 @@ export function SuperAdminFeeSettingsManager() {
             />
           </FormField>
 
+          <div className="md:col-span-2 xl:col-span-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Renewal Compliance Penalties (JIT — RENEWAL_RELATED)
+            </p>
+            <p className="mb-3 text-xs text-slate-500">
+              Fixed penalty amounts (₱) applied per violation severity when a renewal application has unsettled RENEWAL_RELATED non-compliance cases. Set to 0 to disable.
+            </p>
+            <div className="grid gap-3 md:grid-cols-3">
+              <FormField label="Minor Violation Penalty (₱)">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={penaltyForm.renewalComplianceMinorPenalty}
+                  onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceMinorPenalty: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                />
+              </FormField>
+              <FormField label="Major Violation Penalty (₱)">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={penaltyForm.renewalComplianceMajorPenalty}
+                  onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceMajorPenalty: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                />
+              </FormField>
+              <FormField label="Severe Violation Penalty (₱)">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={penaltyForm.renewalComplianceSeverePenalty}
+                  onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceSeverePenalty: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                />
+              </FormField>
+            </div>
+          </div>
+
           <div className="md:col-span-2 xl:col-span-3 flex justify-end">
             <button type="submit" className={actionButtonStyles("primary", "sm")} disabled={isLoading}>
               Save Penalty Settings
@@ -810,6 +973,63 @@ export function SuperAdminFeeSettingsManager() {
             ))}
           </div>
         )}
+      </SectionCard>
+
+      <SectionCard title="JIT Portal Access Control" description="Enable or disable the JIT Portal system-wide. Disabling will enforce unresolved government-agency compliance cases.">
+        <div className="rounded-xl border border-slate-200 bg-slate-50/85 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-slate-900">JIT Portal Status</p>
+              <p className="mt-1 text-sm text-slate-700">
+                {jitPortalEnabled ? (
+                  <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800">
+                    Enabled
+                  </span>
+                ) : (
+                  <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-800">
+                    Disabled
+                  </span>
+                )}
+              </p>
+              {jitPortalUpdatedAt && <p className="mt-2 text-xs text-slate-500">Last updated: {formatDate(jitPortalUpdatedAt)}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={handleJitToggle}
+              disabled={isJitUpdating}
+              className={actionButtonStyles(jitPortalEnabled ? "warning" : "primary", "sm")}
+            >
+              {jitPortalEnabled ? "Disable Portal" : "Enable Portal"}
+            </button>
+          </div>
+
+          {showJitConfirm && (
+            <div className="mt-4 rounded-xl border-2 border-red-200 bg-red-50 p-4">
+              <p className="font-semibold text-red-900">Disable JIT Portal?</p>
+              <p className="mt-2 text-sm text-red-800">
+                Disabling the JIT Portal will prevent JIT users from accessing inspection features and will mark unresolved government-agency-related flagged cases as expired/unsettled. Affected businesses will be blocked from renewal and must complete closure processing if required.
+              </p>
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={saveJitPortalSetting}
+                  disabled={isJitUpdating}
+                  className={actionButtonStyles("danger", "sm")}
+                >
+                  {isJitUpdating ? "Processing..." : "Confirm Disable"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowJitConfirm(false)}
+                  disabled={isJitUpdating}
+                  className={actionButtonStyles("secondary", "sm")}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </SectionCard>
     </section>
   );

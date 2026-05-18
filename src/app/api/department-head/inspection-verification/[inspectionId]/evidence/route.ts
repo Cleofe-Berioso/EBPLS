@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { requireDepartmentHeadSession } from "@/lib/department-head-api";
 import { prisma } from "@/lib/prisma";
+import { createStorageSignedUrl } from "@/lib/document-storage";
 
 export async function GET(
   _req: Request,
@@ -37,15 +37,13 @@ export async function GET(
   }
 
   try {
-    const buffer = await readFile(inspection.evidenceStoragePath);
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": inspection.evidenceMimeType,
-        "Content-Disposition": `inline; filename="${inspection.evidenceFileName}"`,
-        "Cache-Control": "private, no-store",
-      },
+    const signed = await createStorageSignedUrl({
+      storagePath: inspection.evidenceStoragePath,
+      mimeType: inspection.evidenceMimeType,
+      expiresIn: 60,
     });
+
+    return NextResponse.redirect(signed.signedUrl, { status: 302 });
   } catch {
     return NextResponse.json({ error: "Inspection evidence file not found" }, { status: 404 });
   }

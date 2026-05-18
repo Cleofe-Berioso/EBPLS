@@ -86,6 +86,38 @@ function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
   );
 }
 
+type ClosureRecord = {
+  id: string;
+  registrationNumber: string;
+  businessName: string;
+  businessInfo: BusinessInfo;
+  closureEligibility: {
+    eligible: boolean;
+    isComplianceForcedClosure: boolean;
+    reasonCode: string | null;
+    userFriendlyReason: string | null;
+    blockingInspectionId: string | null;
+    complianceCaseStatus: string | null;
+    nonComplianceType: string | null;
+  };
+};
+
+type ClosureTypeValue = "RETIREMENT" | "NON_COMPLIANT_RELATED" | "OTHERS" | "";
+
+const CLOSURE_TYPE_OPTIONS: Array<{ value: ClosureTypeValue; label: string }> = [
+  { value: "RETIREMENT", label: "Retirement" },
+  { value: "NON_COMPLIANT_RELATED", label: "Non-compliant Related" },
+  { value: "OTHERS", label: "Others" },
+];
+
+function isComplianceForcedClosureRecord(record: ClosureRecord | undefined) {
+  return Boolean(record?.closureEligibility.isComplianceForcedClosure);
+}
+
+function humanizeClosureEligibilityReason(record: ClosureRecord | undefined): string | null {
+  return record?.closureEligibility.userFriendlyReason ?? null;
+}
+
 export function ClosureApplicationForm() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("applicationId");
@@ -94,10 +126,12 @@ export function ClosureApplicationForm() {
   const [applicationId, setApplicationId] = useState<string | undefined>(editId ?? undefined);
   const [selectedBusinessId, setSelectedBusinessId] = useState("");
   const [records, setRecords] = useState<
-    Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>
+    ClosureRecord[]
   >([]);
   const [selectedBusinessName, setSelectedBusinessName] = useState(defaultBusinessInfo.businessName);
   const [selectedBusinessInfo, setSelectedBusinessInfo] = useState<BusinessInfo>(defaultBusinessInfo);
+  const [closureType, setClosureType] = useState<ClosureTypeValue>("");
+  const [closureTypeOtherReason, setClosureTypeOtherReason] = useState("");
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [statusMessage, setStatusMessage] = useState<{
@@ -118,14 +152,24 @@ export function ClosureApplicationForm() {
 
   const uploadedRequiredCount = requiredDocs.filter((doc) => uploadedDocuments[doc]).length;
   const selectedRecord = records.find((item) => item.id === selectedBusinessId);
+  const isComplianceForcedClosure = isComplianceForcedClosureRecord(selectedRecord);
+
+  useEffect(() => {
+    if (!isComplianceForcedClosure) return;
+    if (closureType === "NON_COMPLIANT_RELATED") return;
+
+    setClosureType("NON_COMPLIANT_RELATED");
+    setClosureTypeOtherReason("");
+  }, [closureType, isComplianceForcedClosure]);
 
   useEffect(() => {
     let active = true;
 
     async function loadRecords() {
-      const response = await fetch("/api/applicant/business-records", { cache: "no-store" });
+      const response = await fetch("/api/applicant/business-records?applicationType=CLOSURE", { cache: "no-store" });
       const data = (await response.json()) as {
-        records?: Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>;
+        records?: ClosureRecord[];
+        complianceForcedRecords?: ClosureRecord[];
       };
 
       if (!active || !response.ok || !data.records) return;
@@ -139,6 +183,10 @@ export function ClosureApplicationForm() {
           ...data.records[0].businessInfo,
           paymentFrequency: data.records[0].businessInfo.paymentFrequency ?? "ANNUAL",
         });
+        if (data.records[0].closureEligibility.isComplianceForcedClosure) {
+          setClosureType("NON_COMPLIANT_RELATED");
+          setClosureTypeOtherReason("");
+        }
       }
     }
 
@@ -160,6 +208,8 @@ export function ClosureApplicationForm() {
           id: string;
           businessRecordId?: string;
           formData: BusinessInfo;
+          closureType?: ClosureTypeValue;
+          closureTypeOtherReason?: string | null;
           documents: ApplicationDocumentInput[];
         };
       };
@@ -173,6 +223,8 @@ export function ClosureApplicationForm() {
         paymentFrequency: data.application.formData.paymentFrequency ?? "ANNUAL",
       });
       setSelectedBusinessName(data.application.formData.businessName);
+      setClosureType(data.application.closureType ?? "");
+      setClosureTypeOtherReason(data.application.closureTypeOtherReason ?? "");
       if (data.application.businessRecordId) setSelectedBusinessId(data.application.businessRecordId);
       setUploadedDocuments(
         data.application.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
@@ -192,6 +244,23 @@ export function ClosureApplicationForm() {
     if (step === 0 && !selectedBusinessId) {
       setStatusMessage({ kind: "error", text: "Select an existing business record before proceeding." });
       return;
+    }
+
+    if (step === 0) {
+      if (!closureType) {
+        setStatusMessage({ kind: "error", text: "Closure type is required." });
+        return;
+      }
+
+      if (closureType === "OTHERS" && !closureTypeOtherReason.trim()) {
+        setStatusMessage({ kind: "error", text: "Please specify the closure reason for Others." });
+        return;
+      }
+
+      if (isComplianceForcedClosure && closureType !== "NON_COMPLIANT_RELATED") {
+        setStatusMessage({ kind: "error", text: "This business requires non-compliant related closure processing." });
+        return;
+      }
     }
 
     if (step === 1 && requiredDocs.length > 0 && uploadedRequiredCount < requiredDocs.length) {
@@ -216,6 +285,24 @@ export function ClosureApplicationForm() {
     setValidationDetail(null);
 
     if (mode === "SUBMIT") {
+      if (!closureType) {
+        setStatusMessage({ kind: "error", text: "Closure type is required." });
+        setSubmitting(false);
+        return null;
+      }
+
+      if (closureType === "OTHERS" && !closureTypeOtherReason.trim()) {
+        setStatusMessage({ kind: "error", text: "Please specify the closure reason for Others." });
+        setSubmitting(false);
+        return null;
+      }
+
+      if (isComplianceForcedClosure && closureType !== "NON_COMPLIANT_RELATED") {
+        setStatusMessage({ kind: "error", text: "This business requires non-compliant related closure processing." });
+        setSubmitting(false);
+        return null;
+      }
+
       const missingDocuments = getMissingRequiredDocuments(requiredDocs, [
         ...Object.values(uploadedDocuments).map((doc) => doc.documentName),
         ...Object.keys(pendingDocuments),
@@ -238,6 +325,8 @@ export function ClosureApplicationForm() {
       applicationId,
       applicationType: "CLOSURE",
       businessRecordId: selectedBusinessId || undefined,
+      closureType: closureType || undefined,
+      closureTypeOtherReason: closureTypeOtherReason.trim() || undefined,
       formData: selected?.businessInfo ?? selectedBusinessInfo,
       documents: Object.values(uploadedDocuments),
       mode,
@@ -401,6 +490,13 @@ export function ClosureApplicationForm() {
                         ...selected.businessInfo,
                         paymentFrequency: selected.businessInfo.paymentFrequency ?? "ANNUAL",
                       });
+                      if (selected.closureEligibility.isComplianceForcedClosure) {
+                        setClosureType("NON_COMPLIANT_RELATED");
+                        setClosureTypeOtherReason("");
+                      } else {
+                        setClosureType("");
+                        setClosureTypeOtherReason("");
+                      }
                     }
                   }}
                 >
@@ -412,11 +508,59 @@ export function ClosureApplicationForm() {
                 </select>
               </FormField>
 
+              <FormField
+                label="Closure Type"
+                hint={
+                  isComplianceForcedClosure
+                    ? "This business has a compliance-related restriction and must complete closure processing."
+                    : "Select the closure type that best matches this filing."
+                }
+                required
+              >
+                <select
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  value={closureType}
+                  disabled={isComplianceForcedClosure}
+                  onChange={(event) => setClosureType(event.target.value as ClosureTypeValue)}
+                >
+                  <option value="">Select closure type</option>
+                  {CLOSURE_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {isComplianceForcedClosure ? (
+                  <p className="mt-2 text-xs font-medium text-amber-700">
+                    This business requires closure processing because of a compliance-related restriction.
+                  </p>
+                ) : null}
+              </FormField>
+
+              {closureType === "OTHERS" ? (
+                <FormField
+                  label="Please specify"
+                  hint="Provide a short reason for selecting Others."
+                  required
+                >
+                  <textarea
+                    className="min-h-[96px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    value={closureTypeOtherReason}
+                    onChange={(event) => setClosureTypeOtherReason(event.target.value)}
+                    placeholder="Describe the closure reason"
+                    disabled={isComplianceForcedClosure}
+                  />
+                </FormField>
+              ) : null}
+
               {selectedRecord ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                   <p className="font-semibold text-slate-900">{selectedRecord.businessName}</p>
                   <p className="mt-1">Registration: {selectedRecord.registrationNumber}</p>
                   <p className="mt-1">Business Type: {selectedRecord.businessInfo.businessType}</p>
+                  {humanizeClosureEligibilityReason(selectedRecord) ? (
+                    <p className="mt-1 text-xs text-amber-700">{humanizeClosureEligibilityReason(selectedRecord)}</p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -500,6 +644,25 @@ export function ClosureApplicationForm() {
                 helper="Closure workflow behavior remains unchanged"
               />
               <ReviewStat
+                label="Closure Type"
+                value={
+                  closureType === "RETIREMENT"
+                    ? "Retirement"
+                    : closureType === "NON_COMPLIANT_RELATED"
+                      ? "Non-compliant Related"
+                      : closureType === "OTHERS"
+                        ? "Others"
+                        : "-"
+                }
+                helper={
+                  closureType === "OTHERS"
+                    ? closureTypeOtherReason.trim() || "Please specify required"
+                    : isComplianceForcedClosure
+                      ? "Locked because of compliance-related restriction"
+                      : "Required before submission"
+                }
+              />
+              <ReviewStat
                 label="Required Documents"
                 value={`${uploadedRequiredCount} / ${requiredDocs.length}`}
                 helper="Uploaded required document count"
@@ -510,6 +673,7 @@ export function ClosureApplicationForm() {
               <p className="font-semibold text-slate-900">Before you submit</p>
               <ul className="mt-2 space-y-1">
                 <li>• Make sure the selected business record is the one being closed.</li>
+                <li>• Confirm the closure type matches the reason for closure.</li>
                 <li>• Confirm each closure requirement has a clear uploaded file.</li>
                 <li>• Fees will be assessed by BPLO after application review.</li>
               </ul>

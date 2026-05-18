@@ -45,18 +45,25 @@ export async function POST(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
     }
 
-    const stored = await storeApplicantDocument(fileValue);
+    const uploaded = await storeApplicantDocument(fileValue, {
+      applicationId,
+      documentType: documentNameValue.trim(),
+    });
     let document;
     try {
       document = await createApplicantDocument(session.user.id, applicationId, {
         documentName: documentNameValue.trim(),
-        fileName: stored.fileName,
-        storagePath: stored.storagePath,
-        mimeType: stored.mimeType,
-        sizeBytes: stored.sizeBytes,
+        fileName: uploaded.fileName,
+        storagePath: uploaded.storagePath,
+        bucket: uploaded.bucket,
+        filePath: uploaded.storagePath,
+        originalName: fileValue.name || uploaded.fileName,
+        mimeType: uploaded.mimeType,
+        sizeBytes: uploaded.sizeBytes,
+        fileSize: uploaded.sizeBytes,
       });
     } catch (error) {
-      await removeApplicantDocument(stored.storagePath);
+      await removeApplicantDocument(uploaded.storagePath, uploaded.mimeType);
       throw error;
     }
 
@@ -70,7 +77,7 @@ export async function POST(req: Request, context: RouteContext) {
       applicationId,
       "UPLOADED",
       `Document uploaded: ${documentNameValue.trim()}`,
-      { mimeType: stored.mimeType, sizeBytes: stored.sizeBytes }
+      { mimeType: uploaded.mimeType, sizeBytes: uploaded.sizeBytes }
     );
 
     return NextResponse.json({

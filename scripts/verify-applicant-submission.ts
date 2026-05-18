@@ -1,10 +1,6 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { access, readdir } from "node:fs/promises";
 import path from "node:path";
-
-const adapter = new PrismaLibSql({ url: process.env.DATABASE_URL ?? "file:./prisma/dev.db" });
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "../src/lib/prisma";
 
 const UPLOAD_DIR = path.join(process.cwd(), ".uploads", "applicant-documents");
 

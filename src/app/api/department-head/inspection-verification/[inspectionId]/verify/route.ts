@@ -13,15 +13,21 @@ export async function POST(
 
   const { inspectionId } = await params;
 
-  let payload: { remarks?: string } = {};
+  let payload: { remarks?: string; nonComplianceType?: string; violationSeverity?: string } = {};
   try {
-    payload = (await req.json()) as { remarks?: string };
+    payload = (await req.json()) as { remarks?: string; nonComplianceType?: string; violationSeverity?: string };
   } catch {
     payload = {};
   }
 
   try {
-    const result = await applyDepartmentHeadInspectionVerification(inspectionId, session.user.id, payload.remarks);
+    const result = await applyDepartmentHeadInspectionVerification(
+      inspectionId,
+      session.user.id,
+      payload.remarks,
+      payload.nonComplianceType,
+      payload.violationSeverity
+    );
     const isCompliant = result.complianceStatus === "COMPLIANT";
     const nextInspectionStatus = isCompliant ? "VERIFIED_COMPLIANT" : "VERIFIED_NON_COMPLIANT";
     const activityDescription = isCompliant
@@ -41,7 +47,13 @@ export async function POST(
       nextInspectionStatus,
       result.complianceStatus as any,
       `${activityDescription}. Remarks: ${payload.remarks || "No remarks"}`,
-      { remarks: payload.remarks, complianceStatus: result.complianceStatus }
+      {
+        remarks: payload.remarks,
+        complianceStatus: result.complianceStatus,
+        nonComplianceType: result.nonComplianceType,
+        violationSeverity: result.violationSeverity,
+        complianceCaseStatus: result.complianceCaseStatus,
+      }
     );
 
     return NextResponse.json({ result });

@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 // Prevent multiple Prisma Client instances in development (hot-reload)
 const globalForPrisma = globalThis as unknown as {
@@ -7,9 +7,12 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient(): PrismaClient {
-  // Use relative path — libsql on Windows doesn't handle absolute file:/// URIs correctly
-  const dbUrl = process.env.DATABASE_URL ?? "file:./prisma/dev.db";
-  const adapter = new PrismaLibSql({ url: dbUrl });
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    throw new Error("DATABASE_URL is required");
+  }
+
+  const adapter = new PrismaPg({ connectionString: dbUrl });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],

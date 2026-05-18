@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import { EB_MAGALONA_CENTER, isWithinEbMagalona } from "@/lib/business-location";
+import { EB_MAGALONA_CENTER, isWithinEbMagalona } from "@/lib/eb-magalona";
 
 const LeafletBusinessMap = dynamic(
   () =>

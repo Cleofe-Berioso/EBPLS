@@ -38,18 +38,38 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+const NON_COMPLIANCE_TYPE_OPTIONS = [
+  { value: "GOVERNMENT_AGENCY_RELATED", label: "Government Agency Related" },
+  { value: "RENEWAL_RELATED", label: "Renewal Related" },
+];
+
+const VIOLATION_SEVERITY_OPTIONS = [
+  { value: "MINOR", label: "Minor" },
+  { value: "MAJOR", label: "Major" },
+  { value: "SEVERE", label: "Severe" },
+];
+
+const HELPER_TEXT = {
+  GOVERNMENT_AGENCY_RELATED: "Minor or major cases may be flagged for settlement. Severe cases may require forced closure processing.",
+  RENEWAL_RELATED: "Renewal may continue later, but renewal-related penalties or fees may apply during assessment.",
+};
+
 export function DepartmentHeadInspectionVerificationClient() {
   const [rows, setRows] = useState<InspectionVerificationRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [remarks, setRemarks] = useState("");
+  const [nonComplianceType, setNonComplianceType] = useState("");
+  const [violationSeverity, setViolationSeverity] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const selected = useMemo(
     () => rows.find((row) => row.inspectionId === selectedId) ?? null,
     [rows, selectedId]
   );
+
+  const isNonCompliant = selected?.complianceStatus === "NON_COMPLIANT";
 
   async function loadQueue() {
     setLoading(true);
@@ -77,12 +97,32 @@ export function DepartmentHeadInspectionVerificationClient() {
     void loadQueue();
   }, []);
 
+  // Reset classification fields when selection changes
+  useEffect(() => {
+    setNonComplianceType("");
+    setViolationSeverity("");
+    setRemarks("");
+    setMessage(null);
+  }, [selectedId]);
+
   async function handleVerify() {
     if (!selected) return;
 
     if (!remarks.trim()) {
       setMessage({ type: "error", text: "Verification remarks are required." });
       return;
+    }
+
+    // Validate classification fields for NON_COMPLIANT
+    if (isNonCompliant) {
+      if (!nonComplianceType) {
+        setMessage({ type: "error", text: "Non-compliance type is required for non-compliant inspections." });
+        return;
+      }
+      if (!violationSeverity) {
+        setMessage({ type: "error", text: "Violation severity is required for non-compliant inspections." });
+        return;
+      }
     }
 
     if (!window.confirm(`Verify ${selected.complianceStatus} inspection for ${selected.businessName}?`)) {
@@ -95,7 +135,11 @@ export function DepartmentHeadInspectionVerificationClient() {
     const response = await fetch(`/api/department-head/inspection-verification/${selected.inspectionId}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remarks }),
+      body: JSON.stringify({
+        remarks,
+        nonComplianceType: isNonCompliant ? nonComplianceType : undefined,
+        violationSeverity: isNonCompliant ? violationSeverity : undefined,
+      }),
     });
 
     const data = (await response.json()) as {
@@ -117,6 +161,8 @@ export function DepartmentHeadInspectionVerificationClient() {
           : "NON_COMPLIANT inspection verified. It is now routed to Flagged Cases.",
     });
     setRemarks("");
+    setNonComplianceType("");
+    setViolationSeverity("");
     setSubmitting(false);
     await loadQueue();
   }
@@ -241,6 +287,57 @@ export function DepartmentHeadInspectionVerificationClient() {
                 placeholder="Enter verification remarks"
               />
             </div>
+
+            {isNonCompliant && (
+              <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-medium text-slate-700">Non-Compliance Classification</p>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-700" htmlFor="non-compliance-type">
+                    Non-Compliance Type <span className="text-red-600">*</span>
+                  </label>
+                  <select
+                    id="non-compliance-type"
+                    value={nonComplianceType}
+                    onChange={(event) => {
+                      setNonComplianceType(event.target.value);
+                      setViolationSeverity("");
+                    }}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="">-- Select a type --</option>
+                    {NON_COMPLIANCE_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {nonComplianceType && (
+                    <p className="text-xs text-slate-600 italic">{HELPER_TEXT[nonComplianceType as keyof typeof HELPER_TEXT]}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-700" htmlFor="violation-severity">
+                    Violation Severity <span className="text-red-600">*</span>
+                  </label>
+                  <select
+                    id="violation-severity"
+                    value={violationSeverity}
+                    onChange={(event) => setViolationSeverity(event.target.value)}
+                    disabled={!nonComplianceType}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="">-- Select severity --</option>
+                    {VIOLATION_SEVERITY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <button

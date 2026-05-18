@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { requireBploSession } from "@/lib/bplo-api";
 import { prisma } from "@/lib/prisma";
+import { createStorageSignedUrl } from "@/lib/document-storage";
 
 export async function GET(
   _req: Request,
@@ -42,15 +42,15 @@ export async function GET(
   }
 
   try {
-    const buffer = await readFile(reference.proofStoragePath);
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": reference.proofMimeType,
-        "Content-Disposition": `attachment; filename="${reference.proofFileName}"`,
-        "Cache-Control": "private, no-store",
-      },
+    const signed = await createStorageSignedUrl({
+      storagePath: reference.proofStoragePath,
+      mimeType: reference.proofMimeType,
+      expiresIn: 60,
+      download: true,
+      downloadFileName: reference.proofFileName,
     });
+
+    return NextResponse.redirect(signed.signedUrl, { status: 302 });
   } catch {
     return NextResponse.json({ error: "Payment proof file not found" }, { status: 404 });
   }

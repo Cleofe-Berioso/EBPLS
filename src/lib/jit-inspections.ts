@@ -15,6 +15,7 @@ type InspectionStatus =
 interface EvidencePayload {
   fileName: string;
   storagePath: string;
+  bucket?: string;
   mimeType: string;
   sizeBytes: number;
 }
@@ -201,6 +202,7 @@ export async function createJitInspection(
         comment: trimmedComment || null,
         evidenceFileName: input.evidence.fileName,
         evidenceStoragePath: input.evidence.storagePath,
+        evidenceBucket: input.evidence.bucket ?? null,
         evidenceMimeType: input.evidence.mimeType,
         evidenceSizeBytes: input.evidence.sizeBytes,
       },

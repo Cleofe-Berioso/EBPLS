@@ -4,6 +4,7 @@ import { assertStatusTransition } from "@/lib/application-status";
 import { toMoneyNumber } from "@/lib/money";
 import { sendReleaseStatusSms } from "@/lib/sms";
 import { upsertBusinessLocationForBusinessRecord } from "@/lib/business-location";
+import { finalizeComplianceRelatedClosure } from "@/lib/compliance-closure";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -403,18 +404,9 @@ export async function getPermitIssuanceDetail(applicationId: string): Promise<Pe
 
 async function upsertBusinessRecordOnRelease(tx: any, app: any): Promise<string | null> {
   if (app.applicationType === "CLOSURE") {
-    // Soft-close: mark the related business record as CLOSED without deleting it.
-    // All historical applications, documents, payments, and permits are preserved.
-    if (app.businessRecordId) {
-      await tx.businessRecord.update({
-        where: { id: app.businessRecordId },
-        data: {
-          businessStatus: "CLOSED",
-          closedAt: new Date(),
-          closureApplicationId: app.id,
-        },
-      });
-    }
+    // Closure business status finalization happens at RELEASED stage.
+    // Compliance-related closures are finalized in finalizeComplianceRelatedClosure.
+    // Non-compliance closure types still use the standard CLOSED status update.
     return app.businessRecordId ?? null;
   }
 
@@ -663,6 +655,26 @@ export async function releasePermitIssuance(
 
     const businessRecordId = await upsertBusinessRecordOnRelease(tx, app);
 
+    let complianceClosureResult: Awaited<ReturnType<typeof finalizeComplianceRelatedClosure>> | null = null;
+    if (app.applicationType === "CLOSURE") {
+      complianceClosureResult = await finalizeComplianceRelatedClosure(tx, {
+        closureApplicationId: applicationId,
+        actingUserId: bploUserId,
+        completionStatus: "RELEASED",
+      });
+
+      if (!complianceClosureResult.applied && businessRecordId) {
+        await tx.businessRecord.update({
+          where: { id: businessRecordId },
+          data: {
+            businessStatus: "CLOSED",
+            closedAt: new Date(),
+            closureApplicationId: app.id,
+          },
+        });
+      }
+    }
+
     const form = (app.formData ?? {}) as Record<string, unknown>;
     const latitude = typeof form.businessLatitude === "number" ? form.businessLatitude : null;
     const longitude = typeof form.businessLongitude === "number" ? form.businessLongitude : null;
@@ -699,6 +711,7 @@ export async function releasePermitIssuance(
       documentNumber: app.permitIssuance.documentNumber,
       status: "RELEASED" as const,
       newApplicationStatus: "RELEASED" as const,
+      complianceClosureResult,
       smsContext: {
         applicationId,
         applicantId: app.applicantId,

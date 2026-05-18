@@ -36,6 +36,9 @@ export async function PUT(req: Request) {
     liquorTobaccoAddOnPercent,
     powerDistributionFixedFee,
     privatePortFixedFee,
+    renewalComplianceMinorPenalty,
+    renewalComplianceMajorPenalty,
+    renewalComplianceSeverePenalty,
   } = body as Record<string, unknown>;
 
   if (!isNonNegativeNumber(renewalSurchargePercent)) {
@@ -58,6 +61,18 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Private Port fixed fee must be non-negative." }, { status: 400 });
   }
 
+  if (typeof renewalComplianceMinorPenalty !== "undefined" && !isNonNegativeNumber(renewalComplianceMinorPenalty)) {
+    return NextResponse.json({ error: "Renewal compliance minor penalty must be non-negative." }, { status: 400 });
+  }
+
+  if (typeof renewalComplianceMajorPenalty !== "undefined" && !isNonNegativeNumber(renewalComplianceMajorPenalty)) {
+    return NextResponse.json({ error: "Renewal compliance major penalty must be non-negative." }, { status: 400 });
+  }
+
+  if (typeof renewalComplianceSeverePenalty !== "undefined" && !isNonNegativeNumber(renewalComplianceSeverePenalty)) {
+    return NextResponse.json({ error: "Renewal compliance severe penalty must be non-negative." }, { status: 400 });
+  }
+
   try {
     const penalties = await updateSystemFeeSetting({
       renewalSurchargePercent,
@@ -65,6 +80,9 @@ export async function PUT(req: Request) {
       liquorTobaccoAddOnPercent,
       ...(typeof powerDistributionFixedFee === "number" ? { powerDistributionFixedFee } : {}),
       ...(typeof privatePortFixedFee === "number" ? { privatePortFixedFee } : {}),
+      ...(typeof renewalComplianceMinorPenalty === "number" ? { renewalComplianceMinorPenalty } : {}),
+      ...(typeof renewalComplianceMajorPenalty === "number" ? { renewalComplianceMajorPenalty } : {}),
+      ...(typeof renewalComplianceSeverePenalty === "number" ? { renewalComplianceSeverePenalty } : {}),
       updatedById: session.user.id,
     });
     // Audit: Penalties/system fees updated
@@ -82,6 +100,9 @@ export async function PUT(req: Request) {
         liquorTobaccoAddOnPercent,
         ...(typeof powerDistributionFixedFee === "number" ? { powerDistributionFixedFee } : {}),
         ...(typeof privatePortFixedFee === "number" ? { privatePortFixedFee } : {}),
+        ...(typeof renewalComplianceMinorPenalty === "number" ? { renewalComplianceMinorPenalty } : {}),
+        ...(typeof renewalComplianceMajorPenalty === "number" ? { renewalComplianceMajorPenalty } : {}),
+        ...(typeof renewalComplianceSeverePenalty === "number" ? { renewalComplianceSeverePenalty } : {}),
       }
     );
 

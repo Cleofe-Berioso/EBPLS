@@ -45,7 +45,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const storedProof = await storeApplicantDocument(proofFile);
+    const storedProof = await storeApplicantDocument(proofFile, {
+      applicationId: applicationId.trim(),
+      documentType: "payment-proof",
+    });
     try {
       const result = await submitApplicantPaymentReference(
         session.user.id,
@@ -54,6 +57,7 @@ export async function POST(req: Request) {
         {
           proofFileName: storedProof.fileName,
           proofStoragePath: storedProof.storagePath,
+          proofBucket: storedProof.bucket,
           proofMimeType: storedProof.mimeType,
           proofSizeBytes: storedProof.sizeBytes,
         }
@@ -61,7 +65,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({ result });
     } catch (innerError) {
-      await removeApplicantDocument(storedProof.storagePath);
+      await removeApplicantDocument(storedProof.storagePath, storedProof.mimeType);
       throw innerError;
     }
   } catch (error) {

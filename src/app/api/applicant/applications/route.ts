@@ -113,7 +113,12 @@ export async function POST(req: Request) {
         "DRAFT",
         saved.status,
         `${payload.applicationType} application submitted`,
-        { applicationType: payload.applicationType, documentCount: submitFiles.length }
+        {
+          applicationType: payload.applicationType,
+          documentCount: submitFiles.length,
+          closureType: payload.closureType ?? null,
+          closureTypeOtherReason: payload.closureTypeOtherReason ?? null,
+        }
       );
     }
 

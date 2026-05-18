@@ -57,8 +57,12 @@ export interface ApplicationDocumentInput {
   documentName: string;
   fileName: string;
   storagePath?: string;
+  bucket?: string;
+  filePath?: string;
+  originalName?: string;
   mimeType?: string;
   sizeBytes?: number;
+  fileSize?: number;
   uploadedAt?: Date | string;
 }
 
@@ -71,6 +75,8 @@ export interface SaveApplicationInput {
   applicationId?: string;
   applicationType: ApplicationType;
   businessRecordId?: string;
+  closureType?: "RETIREMENT" | "NON_COMPLIANT_RELATED" | "OTHERS";
+  closureTypeOtherReason?: string;
   formData: BusinessInfo;
   documents: ApplicationDocumentInput[];
   mode: PersistMode;

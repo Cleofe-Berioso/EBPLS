@@ -19,3 +19,15 @@ export async function requireJitSession() {
 
   return session;
 }
+
+/**
+ * Check if JIT portal is currently enabled globally
+ * Returns true if enabled, false if disabled
+ */
+export async function isJitPortalEnabled(): Promise<boolean> {
+  const setting = await prisma.systemFeeSetting.findFirst({
+    select: { jitPortalEnabled: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  return setting?.jitPortalEnabled ?? true;
+}

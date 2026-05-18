@@ -16,7 +16,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
   try {
     const { applicationId, documentId } = await context.params;
     const removed = await deleteApplicantDocument(session.user.id, applicationId, documentId);
-    await removeApplicantDocument(removed.storagePath);
+    await removeApplicantDocument(removed.storagePath, removed.mimeType);
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to delete document";

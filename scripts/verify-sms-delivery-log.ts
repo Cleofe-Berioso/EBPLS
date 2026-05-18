@@ -1,12 +1,5 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { readFile } from "node:fs/promises";
-
-const adapter = new PrismaLibSql({
-  url: process.env.DATABASE_URL ?? "file:./prisma/dev.db",
-});
-
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "../src/lib/prisma";
 
 function resolveApplicantPhone(formData: unknown): string | null {
   const maybe = (formData ?? {}) as Record<string, unknown>;

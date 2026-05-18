@@ -37,14 +37,18 @@ export async function POST(
   }
 
   let storedEvidencePath: string | null = null;
+  let storedEvidenceMimeType: string | null = null;
 
   try {
     const storedEvidence =
       evidence instanceof File && evidence.size > 0
-        ? await storeApplicantDocument(evidence)
+        ? await storeApplicantDocument(evidence, {
+            objectPrefix: `jit-inspections/${businessRecordId}/evidence`,
+          })
         : null;
 
     storedEvidencePath = storedEvidence?.storagePath ?? null;
+    storedEvidenceMimeType = storedEvidence?.mimeType ?? null;
 
     const inspection = await createJitInspection(businessRecordId, session.user.id, {
       complianceStatus,
@@ -53,6 +57,7 @@ export async function POST(
         ? {
             fileName: storedEvidence.fileName,
             storagePath: storedEvidence.storagePath,
+            bucket: storedEvidence.bucket,
             mimeType: storedEvidence.mimeType,
             sizeBytes: storedEvidence.sizeBytes,
           }
@@ -100,7 +105,7 @@ export async function POST(
     return NextResponse.json({ inspection });
   } catch (error) {
     if (storedEvidencePath) {
-      await removeApplicantDocument(storedEvidencePath);
+      await removeApplicantDocument(storedEvidencePath, storedEvidenceMimeType ?? undefined);
     }
 
     const message = error instanceof Error ? error.message : "Unable to create inspection";

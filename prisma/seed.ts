@@ -1,11 +1,7 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
 import bcrypt from "bcryptjs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-
-const adapter = new PrismaLibSql({ url: "file:./prisma/dev.db" });
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "../src/lib/prisma";
 const DEBUG_PROOF_FILE_PATH = path.join(process.cwd(), "scripts", "smoke-test-proof.txt");
 
 const DEFAULT_SYSTEM_FEE_SETTINGS = {
@@ -14,6 +10,7 @@ const DEFAULT_SYSTEM_FEE_SETTINGS = {
   liquorTobaccoAddOnPercent: 25,
   powerDistributionFixedFee: 10000,
   privatePortFixedFee: 50000,
+  jitPortalEnabled: true,
 };
 
 const FEE_TABLE_SEEDS = [
@@ -538,6 +535,7 @@ async function seedBaseData() {
       liquorTobaccoAddOnPercent: true,
       powerDistributionFixedFee: true,
       privatePortFixedFee: true,
+      jitPortalEnabled: true,
       updatedById: true,
     },
   });
@@ -553,6 +551,7 @@ async function seedBaseData() {
         liquorTobaccoAddOnPercent: existingSystemSetting?.liquorTobaccoAddOnPercent,
         powerDistributionFixedFee: existingSystemSetting?.powerDistributionFixedFee,
         privatePortFixedFee: existingSystemSetting?.privatePortFixedFee,
+        jitPortalEnabled: existingSystemSetting?.jitPortalEnabled,
         updatedById: existingSystemSetting?.updatedById,
       },
       create: {
@@ -564,7 +563,7 @@ async function seedBaseData() {
   );
 
   console.log(
-    `  ✓ SystemFeeSetting defaults ${existingSystemSetting ? "preserved" : "created"} (surcharge 25%, interest 2%, liquor/tobacco 25%, power 10000, private port 50000)`
+    `  ✓ SystemFeeSetting defaults ${existingSystemSetting ? "preserved" : "created"} (surcharge 25%, interest 2%, liquor/tobacco 25%, power 10000, private port 50000, JIT portal enabled)`
   );
 
   const existingRenewalExtension = await prisma.renewalExtension.findUnique({

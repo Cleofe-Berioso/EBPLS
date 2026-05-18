@@ -2,11 +2,12 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "binary"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 enum Role {
@@ -40,6 +41,32 @@ enum ApplicationStatus {
   REJECTED
 }
 
+enum NonComplianceType {
+  GOVERNMENT_AGENCY_RELATED
+  RENEWAL_RELATED
+}
+
+enum ViolationSeverity {
+  MINOR
+  MAJOR
+  SEVERE
+}
+
+enum ComplianceCaseStatus {
+  NONE
+  FLAGGED_UNSETTLED
+  SETTLED
+  EXPIRED_UNSETTLED
+  FORCED_CLOSURE_PENDING
+  CLOSED_NON_COMPLIANT
+}
+
+enum ClosureType {
+  RETIREMENT
+  NON_COMPLIANT_RELATED
+  OTHERS
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -59,6 +86,8 @@ model User {
   inspections      Inspection[]     @relation("InspectionInspector")
   inspectionDecisions Inspection[]  @relation("InspectionDecider")
   revocationSettlementRecords Inspection[] @relation("InspectionRevocationSettledBy")
+  complianceSettlementRecords Inspection[] @relation("InspectionSettledBy")
+  forcedClosureRecords Inspection[] @relation("InspectionForcedClosureBy")
   feeConfigurationUpdates FeeConfigurationItem[] @relation("FeeConfigUpdatedBy")
   systemFeeSettingUpdates SystemFeeSetting[] @relation("SystemFeeSettingUpdatedBy")
   renewalExtensionUpdates RenewalExtension[] @relation("RenewalExtensionUpdatedBy")
@@ -157,6 +186,8 @@ model BusinessApplication {
   applicationType   ApplicationType
   status            ApplicationStatus @default(DRAFT)
   formData          Json
+  closureType       ClosureType?
+  closureTypeOtherReason String?
   submittedAt       DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -211,6 +242,7 @@ model Inspection {
   comment                    String?
   evidenceFileName           String?
   evidenceStoragePath        String?
+  evidenceBucket             String?
   evidenceMimeType           String?
   evidenceSizeBytes          Int?
   revocationDecision         RevocationDecision?
@@ -220,6 +252,18 @@ model Inspection {
   revocationSettledAt        DateTime?
   revocationSettlementRemarks String?
   revocationSettledById      String?
+  nonComplianceType          NonComplianceType?
+  violationSeverity          ViolationSeverity?
+  isSettled                  Boolean            @default(false)
+  settledAt                  DateTime?
+  settlementRemarks          String?
+  settledById                String?
+  deadlineAt                 DateTime?
+  autoClosed                 Boolean            @default(false)
+  forcedClosure              Boolean            @default(false)
+  forcedClosureAt            DateTime?
+  forcedClosureById          String?
+  complianceCaseStatus       ComplianceCaseStatus @default(NONE)
   createdAt                  DateTime                   @default(now())
   updatedAt                  DateTime                   @updatedAt
 
@@ -228,6 +272,8 @@ model Inspection {
   inspector      User                 @relation("InspectionInspector", fields: [inspectorId], references: [id], onDelete: Restrict)
   decidedBy      User?                @relation("InspectionDecider", fields: [decidedById], references: [id], onDelete: SetNull)
   revocationSettledBy User?           @relation("InspectionRevocationSettledBy", fields: [revocationSettledById], references: [id], onDelete: SetNull)
+  settledBy      User?                @relation("InspectionSettledBy", fields: [settledById], references: [id], onDelete: SetNull)
+  forcedClosureBy User?               @relation("InspectionForcedClosureBy", fields: [forcedClosureById], references: [id], onDelete: SetNull)
 
   @@index([businessRecordId, createdAt])
   @@index([applicationId, createdAt])
@@ -235,6 +281,9 @@ model Inspection {
   @@index([decidedById, createdAt])
   @@index([status, createdAt])
   @@index([revocationSettledAt, createdAt])
+  @@index([complianceCaseStatus, createdAt])
+  @@index([settledAt, createdAt])
+  @@index([forcedClosureAt, createdAt])
 }
 
 enum PermitIssuanceStatus {
@@ -272,8 +321,12 @@ model ApplicationDocument {
   documentName  String
   fileName      String
   storagePath   String
+  bucket        String?
+  filePath      String?
+  originalName  String?
   mimeType      String
   sizeBytes     Int
+  fileSize      Int?
   uploadedAt    DateTime @default(now())
 
   application BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
@@ -403,6 +456,7 @@ model PaymentReference {
   paymentDate       DateTime
   proofFileName     String
   proofStoragePath  String
+  proofBucket       String?
   proofMimeType     String
   proofSizeBytes    Int
   status            PaymentReferenceStatus @default(PENDING)
@@ -437,15 +491,19 @@ model FeeConfigurationItem {
 }
 
 model SystemFeeSetting {
-  id                          String   @id @default(cuid())
-  renewalSurchargePercent     Float    @default(25)
-  monthlyInterestPercent      Float    @default(2)
-  liquorTobaccoAddOnPercent   Float    @default(25)
-  powerDistributionFixedFee   Decimal  @default(10000)
-  privatePortFixedFee         Decimal  @default(50000)
-  updatedById                 String?
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  id                              String   @id @default(cuid())
+  renewalSurchargePercent         Float    @default(25)
+  monthlyInterestPercent          Float    @default(2)
+  liquorTobaccoAddOnPercent       Float    @default(25)
+  powerDistributionFixedFee       Decimal  @default(10000)
+  privatePortFixedFee             Decimal  @default(50000)
+  jitPortalEnabled                Boolean  @default(true)
+  renewalComplianceMinorPenalty   Decimal  @default(0)
+  renewalComplianceMajorPenalty   Decimal  @default(0)
+  renewalComplianceSeverePenalty  Decimal  @default(0)
+  updatedById                     String?
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
 
   updatedBy User? @relation("SystemFeeSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 }

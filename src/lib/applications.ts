@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi, isEditableStatus } from "@/lib/application-mappers";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
 import { toMoneyNumber } from "@/lib/money";
+import { resolveBucketByMimeType } from "@/lib/document-storage";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import {
   applyLockedBusinessFields,
@@ -22,7 +23,9 @@ import {
   isPhilippinesCountry,
 } from "@/lib/address-options";
 import { isValidLineOfBusiness } from "@/lib/business-options";
-import { isWithinEbMagalona } from "@/lib/business-location";
+import { isWithinEbMagalona } from "@/lib/eb-magalona";
+import { resolveRenewalEligibilityForBusiness } from "@/lib/renewal-eligibility";
+import { resolveClosureEligibilityForBusiness } from "@/lib/closure-eligibility";
 import type {
   ApplicantApplicationRow,
   ApplicationDocumentInput,
@@ -82,8 +85,12 @@ interface StagedSubmitDocument {
   documentName: string;
   fileName: string;
   storagePath: string;
+  bucket?: string;
+  filePath?: string;
+  originalName?: string;
   mimeType: string;
   sizeBytes: number;
+  fileSize?: number;
 }
 
 function toSafeApplicantDocument(doc: {
@@ -207,11 +214,11 @@ async function assertUniqueBusinessIdentity(params: {
   //   - When excludeRecordId is a real ID (RENEWAL/CLOSURE): applications for that business are excluded,
   //     but applications for a DIFFERENT business with the same reg# are still caught.
   const regNumDup = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM "BusinessApplication"
-    WHERE json_extract(formData, '$.registrationNumber') = ${registrationNumber}
-    AND status NOT IN ('REJECTED', 'REVOKED')
-    AND id != ${excludeAppId}
-    AND (${excludeRecordId} = '' OR businessRecordId IS NULL OR businessRecordId != ${excludeRecordId})
+    SELECT "id" FROM "BusinessApplication"
+    WHERE "formData"->>'registrationNumber' = ${registrationNumber}
+    AND "status" NOT IN ('REJECTED', 'REVOKED')
+    AND "id" != ${excludeAppId}
+    AND (${excludeRecordId} = '' OR "businessRecordId" IS NULL OR "businessRecordId" != ${excludeRecordId})
     LIMIT 1
   `;
   if (regNumDup.length > 0) {
@@ -221,11 +228,11 @@ async function assertUniqueBusinessIdentity(params: {
   // Check BusinessApplication formData JSON for duplicate TIN
   // Same businessRecordId exclusion logic as above.
   const tinDup = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM "BusinessApplication"
-    WHERE json_extract(formData, '$.tin') = ${tin}
-    AND status NOT IN ('REJECTED', 'REVOKED')
-    AND id != ${excludeAppId}
-    AND (${excludeRecordId} = '' OR businessRecordId IS NULL OR businessRecordId != ${excludeRecordId})
+    SELECT "id" FROM "BusinessApplication"
+    WHERE "formData"->>'tin' = ${tin}
+    AND "status" NOT IN ('REJECTED', 'REVOKED')
+    AND "id" != ${excludeAppId}
+    AND (${excludeRecordId} = '' OR "businessRecordId" IS NULL OR "businessRecordId" != ${excludeRecordId})
     LIMIT 1
   `;
   if (tinDup.length > 0) {
@@ -239,8 +246,31 @@ const ELIGIBLE_EXISTING_BUSINESS_STATUSES: DbApplicationStatus[] = [
   "RELEASED",
 ];
 
-const RENEWAL_REVOKED_MESSAGE =
-  "Renewal is not allowed because this business permit has been revoked. Re-application is required.";
+type ClosureTypeValue = "RETIREMENT" | "NON_COMPLIANT_RELATED" | "OTHERS";
+
+function normalizeClosureType(value?: string | null): ClosureTypeValue | null {
+  if (value === "RETIREMENT" || value === "NON_COMPLIANT_RELATED" || value === "OTHERS") {
+    return value;
+  }
+  return null;
+}
+
+function validateClosureSubmissionRules(input: SaveApplicationInput, closureEligibility: { isComplianceForcedClosure: boolean } | null) {
+  const closureType = normalizeClosureType(input.closureType);
+  const otherReason = input.closureTypeOtherReason?.trim() ?? "";
+
+  if (!closureType) {
+    throw new Error("Closure type is required");
+  }
+
+  if (closureEligibility?.isComplianceForcedClosure && closureType !== "NON_COMPLIANT_RELATED") {
+    throw new Error("This business requires non-compliant related closure processing.");
+  }
+
+  if (closureType === "OTHERS" && !otherReason) {
+    throw new Error("Please specify the closure reason when selecting Others.");
+  }
+}
 
 async function assertEligibleBusinessRecord(
   applicantId: string,
@@ -253,6 +283,32 @@ async function assertEligibleBusinessRecord(
       "Renewal and closure submissions require an existing business record.",
       400
     );
+  }
+
+  if (input.applicationType === "RENEWAL") {
+    const eligibility = await resolveRenewalEligibilityForBusiness(applicantId, input.businessRecordId);
+    if (!eligibility.eligible) {
+      throw new ApplicantEligibilityError(
+        eligibility.userFriendlyReason ??
+          "Selected business record is not yet eligible for renewal or closure. Complete business verification first.",
+        eligibility.reasonCode === "BUSINESS_CLOSED" || eligibility.reasonCode === "EXISTING_RENEWAL_RULE_FAILED"
+          ? 403
+          : 409
+      );
+    }
+    return;
+  }
+
+  if (input.applicationType === "CLOSURE") {
+    const eligibility = await resolveClosureEligibilityForBusiness(applicantId, input.businessRecordId);
+    if (!eligibility.eligible) {
+      throw new ApplicantEligibilityError(
+        eligibility.userFriendlyReason ??
+          "Selected business record is not yet eligible for closure. Complete business verification first.",
+        403
+      );
+    }
+    return;
   }
 
   const businessRecord = await prisma.businessRecord.findFirst({
@@ -287,14 +343,6 @@ async function assertEligibleBusinessRecord(
       "Selected business record was not found for this applicant.",
       403
     );
-  }
-
-  // Revocation sets businessStatus to INACTIVE — checking INACTIVE is sufficient.
-  if (
-    input.applicationType === "RENEWAL" &&
-    businessRecord.businessStatus === "INACTIVE"
-  ) {
-    throw new ApplicantEligibilityError(RENEWAL_REVOKED_MESSAGE, 409);
   }
 
   if (businessRecord.businessStatus === "CLOSED") {
@@ -368,8 +416,12 @@ function sanitizeDocuments(documents: SaveApplicationInput["documents"]) {
       documentName: doc.documentName.trim(),
       fileName: doc.fileName.trim(),
       storagePath: doc.storagePath,
+      bucket: doc.bucket,
+      filePath: doc.filePath,
+      originalName: doc.originalName,
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
+      fileSize: doc.fileSize,
     }));
 }
 
@@ -723,6 +775,8 @@ export async function getApplicantApplicationDetail(applicantId: string, applica
     applicationNumber: app.applicationNumber,
     applicationType: app.applicationType as ApplicantApplicationRow["applicationType"],
     businessRecordId: app.businessRecordId,
+    closureType: app.closureType ?? null,
+    closureTypeOtherReason: app.closureTypeOtherReason ?? null,
     status: mapDbStatusToUi(app.status),
     canEdit: isEditableStatus(app.status),
     submittedAt: app.submittedAt ? app.submittedAt.toISOString() : null,
@@ -779,6 +833,8 @@ export async function saveApplicantApplication(
 
   if (input.applicationType === "RENEWAL") {
     await assertEligibleBusinessRecord(applicantId, input);
+  } else if (input.applicationType === "CLOSURE") {
+    await assertEligibleBusinessRecord(applicantId, input);
   } else if (input.mode === "SUBMIT") {
     await assertEligibleBusinessRecord(applicantId, input);
   }
@@ -834,6 +890,11 @@ export async function saveApplicantApplication(
     sourceBusinessInfo
   );
 
+  const closureEligibility =
+    input.applicationType === "CLOSURE" && input.businessRecordId
+      ? await resolveClosureEligibilityForBusiness(applicantId, input.businessRecordId)
+      : null;
+
   if (input.applicationType === "RENEWAL") {
     normalizedFormData.lineOfBusiness = resolveRenewalLineOfBusiness(
       sourceBusinessInfo,
@@ -854,6 +915,9 @@ export async function saveApplicantApplication(
   });
 
   if (input.mode === "SUBMIT") {
+    if (input.applicationType === "CLOSURE") {
+      validateClosureSubmissionRules(input, closureEligibility);
+    }
     validateSubmitPayload(input, normalizedFormData, mergedDocuments);
   }
 
@@ -871,7 +935,7 @@ export async function saveApplicantApplication(
   const replacedStoragePaths: string[] = [];
 
   try {
-    const buildNewDocumentsByName = async (): Promise<Map<string, StagedSubmitDocument>> => {
+    const buildNewDocumentsByName = async (applicationId: string): Promise<Map<string, StagedSubmitDocument>> => {
       const newDocumentsByName = new Map<string, StagedSubmitDocument>();
 
       for (const doc of persistedPayloadDocuments) {
@@ -879,21 +943,32 @@ export async function saveApplicantApplication(
           documentName: doc.documentName,
           fileName: doc.fileName,
           storagePath: doc.storagePath ?? "",
+          bucket: doc.bucket ?? resolveBucketByMimeType(doc.mimeType ?? ""),
+          filePath: doc.filePath ?? doc.storagePath ?? "",
+          originalName: doc.originalName ?? doc.fileName,
           mimeType: doc.mimeType ?? "",
           sizeBytes: doc.sizeBytes ?? 0,
+          fileSize: doc.fileSize ?? doc.sizeBytes ?? 0,
         });
       }
 
       if (input.mode === "SUBMIT") {
         for (const entry of normalizedSubmitFiles) {
-          const stored = await storeApplicantDocument(entry.file);
+          const stored = await storeApplicantDocument(entry.file, {
+            applicationId,
+            documentType: entry.documentName,
+          });
           writtenStoragePaths.push(stored.storagePath);
           newDocumentsByName.set(entry.documentName.toLowerCase(), {
             documentName: entry.documentName,
             fileName: stored.fileName,
             storagePath: stored.storagePath,
+            bucket: stored.bucket,
+            filePath: stored.storagePath,
+            originalName: entry.file.name || stored.fileName,
             mimeType: stored.mimeType,
             sizeBytes: stored.sizeBytes,
+            fileSize: stored.sizeBytes,
           });
         }
       }
@@ -908,6 +983,14 @@ export async function saveApplicantApplication(
           data: {
             applicationType: input.applicationType,
             businessRecordId: input.businessRecordId ?? null,
+            closureType:
+              input.applicationType === "CLOSURE" ? normalizeClosureType(input.closureType) : null,
+            closureTypeOtherReason:
+              input.applicationType === "CLOSURE"
+                ? normalizeClosureType(input.closureType) === "OTHERS"
+                  ? input.closureTypeOtherReason?.trim() || null
+                  : null
+                : null,
             status: nextStatus,
             formData: normalizedFormData,
             submittedAt: input.mode === "SUBMIT" ? new Date() : null,
@@ -915,7 +998,7 @@ export async function saveApplicantApplication(
         });
 
         if (input.mode === "SUBMIT") {
-          const newDocumentsByName = await buildNewDocumentsByName();
+          const newDocumentsByName = await buildNewDocumentsByName(existing.id);
 
           for (const doc of newDocumentsByName.values()) {
             const existingDoc = await tx.applicationDocument.findFirst({
@@ -935,8 +1018,12 @@ export async function saveApplicantApplication(
                 data: {
                   fileName: doc.fileName,
                   storagePath: doc.storagePath,
+                  bucket: doc.bucket,
+                  filePath: doc.filePath,
+                  originalName: doc.originalName,
                   mimeType: doc.mimeType,
                   sizeBytes: doc.sizeBytes,
+                  fileSize: doc.fileSize,
                   uploadedAt: new Date(),
                 },
               });
@@ -947,8 +1034,12 @@ export async function saveApplicantApplication(
                   documentName: doc.documentName,
                   fileName: doc.fileName,
                   storagePath: doc.storagePath,
+                  bucket: doc.bucket,
+                  filePath: doc.filePath,
+                  originalName: doc.originalName,
                   mimeType: doc.mimeType,
                   sizeBytes: doc.sizeBytes,
+                  fileSize: doc.fileSize,
                 },
               });
             }
@@ -1002,6 +1093,14 @@ export async function saveApplicantApplication(
           applicantId,
           businessRecordId: input.businessRecordId ?? null,
           applicationType: input.applicationType,
+          closureType:
+            input.applicationType === "CLOSURE" ? normalizeClosureType(input.closureType) : null,
+          closureTypeOtherReason:
+            input.applicationType === "CLOSURE"
+              ? normalizeClosureType(input.closureType) === "OTHERS"
+                ? input.closureTypeOtherReason?.trim() || null
+                : null
+              : null,
           status: nextStatus,
           formData: normalizedFormData,
           submittedAt: input.mode === "SUBMIT" ? new Date() : null,
@@ -1009,7 +1108,7 @@ export async function saveApplicantApplication(
       });
 
       if (input.mode === "SUBMIT") {
-        const newDocumentsByName = await buildNewDocumentsByName();
+          const newDocumentsByName = await buildNewDocumentsByName(row.id);
 
         for (const doc of newDocumentsByName.values()) {
           await tx.applicationDocument.create({
@@ -1018,8 +1117,12 @@ export async function saveApplicantApplication(
               documentName: doc.documentName,
               fileName: doc.fileName,
               storagePath: doc.storagePath,
+              bucket: doc.bucket,
+              filePath: doc.filePath,
+              originalName: doc.originalName,
               mimeType: doc.mimeType,
               sizeBytes: doc.sizeBytes,
+              fileSize: doc.fileSize,
             },
           });
         }
@@ -1072,8 +1175,12 @@ export async function createApplicantDocument(
     documentName: string;
     fileName: string;
     storagePath: string;
+    bucket?: string;
+    filePath?: string;
+    originalName?: string;
     mimeType: string;
     sizeBytes: number;
+    fileSize?: number;
   }
 ) {
   const application = await prisma.businessApplication.findFirst({
@@ -1101,11 +1208,15 @@ export async function createApplicantDocument(
       data: {
         fileName: input.fileName,
         storagePath: input.storagePath,
+        bucket: input.bucket ?? resolveBucketByMimeType(input.mimeType),
+        filePath: input.filePath ?? input.storagePath,
+        originalName: input.originalName ?? input.fileName,
         mimeType: input.mimeType,
         sizeBytes: input.sizeBytes,
+        fileSize: input.fileSize ?? input.sizeBytes,
         uploadedAt: new Date(),
       },
-    });
+    } as any);
     return updated;
   }
 
@@ -1115,10 +1226,14 @@ export async function createApplicantDocument(
       documentName: input.documentName,
       fileName: input.fileName,
       storagePath: input.storagePath,
+      bucket: input.bucket ?? resolveBucketByMimeType(input.mimeType),
+      filePath: input.filePath ?? input.storagePath,
+      originalName: input.originalName ?? input.fileName,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
+      fileSize: input.fileSize ?? input.sizeBytes,
     },
-  });
+  } as any);
 
   return created;
 }
@@ -1352,6 +1467,7 @@ export async function submitApplicantPaymentReference(
   proof: {
     proofFileName: string;
     proofStoragePath: string;
+    proofBucket?: string;
     proofMimeType: string;
     proofSizeBytes: number;
   }
@@ -1415,6 +1531,7 @@ export async function submitApplicantPaymentReference(
         paymentDate: parsedPaymentDate,
         proofFileName: proof.proofFileName,
         proofStoragePath: proof.proofStoragePath,
+        proofBucket: proof.proofBucket ?? resolveBucketByMimeType(proof.proofMimeType),
         proofMimeType: proof.proofMimeType,
         proofSizeBytes: proof.proofSizeBytes,
         status: "PENDING",

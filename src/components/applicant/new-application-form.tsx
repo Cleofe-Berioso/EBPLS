@@ -20,7 +20,7 @@ import {
   isEbMagalonaCity,
   isEbMagalonaProvince,
 } from "@/lib/address-options";
-import { isWithinEbMagalona } from "@/lib/business-location";
+import { isWithinEbMagalona } from "@/lib/eb-magalona";
 import type {
   ApplicationDocumentInput,
   BusinessInfo,

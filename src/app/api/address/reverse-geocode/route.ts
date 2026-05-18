@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isWithinEbMagalona } from "@/lib/business-location";
+import { isWithinEbMagalona } from "@/lib/eb-magalona";
 
 interface NominatimReverseResponse {
   address: {

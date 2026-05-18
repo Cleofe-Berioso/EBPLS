@@ -253,6 +253,21 @@ export function AssessmentFeeForm({ detail }: Props) {
             helper="Automatic surcharge and interest apply only beyond 1 year overdue."
           />
         </div>
+
+        {detail.applicationType === "RENEWAL" && detail.suggestedFees.renewalComplianceSeverity ? (
+          <div className="mt-4">
+            <InfoBanner
+              title={`Renewal Compliance Penalty — ${detail.suggestedFees.renewalComplianceSeverity} violation`}
+              description={
+                detail.suggestedFees.renewalCompliancePenalty > 0
+                  ? `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). A system-generated penalty of ₱\u00a0${detail.suggestedFees.renewalCompliancePenalty.toLocaleString("en-PH", { minimumFractionDigits: 2 })} will be added to the fee line items.`
+                  : `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). No penalty amount is configured — contact the Super Admin to set the compliance penalty amounts.`
+              }
+              variant="warning"
+            />
+          </div>
+        ) : null}
+
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/85 p-4 text-sm text-slate-700">
           {detail.suggestedFees.computation}
         </div>

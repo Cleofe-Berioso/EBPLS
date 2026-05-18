@@ -32,6 +32,42 @@ const RENEWAL_INTEREST_LABEL = "Renewal Interest";
 const LIQUOR_TOBACCO_SURCHARGE_LABEL = "Liquor/Tobacco Surcharge (25%)";
 const CLOSURE_CERTIFICATE_FEE_LABEL = "Closure Certificate Fee";
 
+const RENEWAL_COMPLIANCE_PENALTY_LABEL_PREFIX = "Renewal Compliance Penalty";
+
+const SEVERITY_ORDER: Record<string, number> = { MINOR: 1, MAJOR: 2, SEVERE: 3 };
+
+function getHighestRenewalComplianceSeverity(
+  inspections: Array<{ nonComplianceType: string | null; violationSeverity: string | null; isSettled: boolean }>
+): "MINOR" | "MAJOR" | "SEVERE" | null {
+  let best: "MINOR" | "MAJOR" | "SEVERE" | null = null;
+  for (const insp of inspections) {
+    if (insp.nonComplianceType !== "RENEWAL_RELATED") continue;
+    if (insp.isSettled) continue;
+    const severity = insp.violationSeverity as "MINOR" | "MAJOR" | "SEVERE" | null;
+    if (!severity) continue;
+    if (!best || SEVERITY_ORDER[severity] > SEVERITY_ORDER[best]) {
+      best = severity;
+    }
+  }
+  return best;
+}
+
+function resolveRenewalCompliancePenalty(
+  severity: "MINOR" | "MAJOR" | "SEVERE" | null,
+  runtimeSettings: any
+): number {
+  if (!severity) return 0;
+  const p = runtimeSettings?.penalties;
+  if (!p) return 0;
+  const raw =
+    severity === "SEVERE"
+      ? p.renewalComplianceSeverePenalty
+      : severity === "MAJOR"
+        ? p.renewalComplianceMajorPenalty
+        : p.renewalComplianceMinorPenalty;
+  return typeof raw === "number" && raw > 0 ? roundMoney(raw) : 0;
+}
+
 const ASSESSMENT_QUEUE_STATUSES: DbApplicationStatus[] = ["DEPARTMENT_HEAD_APPROVED", "ASSESSED"];
 const ASSESSMENT_DETAIL_ALLOWED_STATUSES: DbApplicationStatus[] = [
   "DEPARTMENT_HEAD_APPROVED",
@@ -99,6 +135,8 @@ export interface AssessmentDetail {
     selectedMayorPermitFee: number;
     specialRuleApplied: string | null;
     overdueMonths: number;
+    renewalCompliancePenalty: number;
+    renewalComplianceSeverity: "MINOR" | "MAJOR" | "SEVERE" | null;
   };
   suggestedLineItems: AssessmentLineItem[];
   assessment: SavedAssessment | null;
@@ -298,6 +336,17 @@ function buildSuggestedLineItems(
     });
   }
 
+  if (applicationType === "RENEWAL" && suggestedFees.renewalCompliancePenalty > 0 && suggestedFees.renewalComplianceSeverity) {
+    const label = `${RENEWAL_COMPLIANCE_PENALTY_LABEL_PREFIX} (${suggestedFees.renewalComplianceSeverity})`;
+    items.push({
+      id: `${RENEWAL_COMPLIANCE_PENALTY_LABEL_PREFIX}-system`,
+      description: label,
+      amount: suggestedFees.renewalCompliancePenalty,
+      sortOrder: items.length,
+      isSystemGenerated: true,
+    });
+  }
+
   if (applicationType === "CLOSURE") {
     items.push({
       id: `${CLOSURE_CERTIFICATE_FEE_LABEL}-system`,
@@ -398,7 +447,9 @@ function buildAssessmentTotals(
   isLiquorOrTobacco: boolean,
   closurePaymentDues: number,
   overdueMonths: number,
-  runtimeSettings: any
+  runtimeSettings: any,
+  renewalCompliancePenalty = 0,
+  renewalComplianceSeverity: "MINOR" | "MAJOR" | "SEVERE" | null = null
 ) {
   const nonRegulatoryCustomLineItems = customLineItems.filter(
     (item) => !isRegulatoryFeeDescription(item.description)
@@ -437,6 +488,13 @@ function buildAssessmentTotals(
       isSystemGenerated: true,
     });
   }
+  if (applicationType === "RENEWAL" && renewalCompliancePenalty > 0 && renewalComplianceSeverity) {
+    systemLineItems.push({
+      description: `${RENEWAL_COMPLIANCE_PENALTY_LABEL_PREFIX} (${renewalComplianceSeverity})`,
+      amount: renewalCompliancePenalty,
+      isSystemGenerated: true,
+    });
+  }
   if (isClosure) {
     systemLineItems.push({
       description: CLOSURE_CERTIFICATE_FEE_LABEL,
@@ -462,7 +520,7 @@ function buildAssessmentTotals(
     mayorsPermitFee: isClosure ? 0 : mayorLine?.amount ?? 0,
     regulatoryFees: 0,
     additionalCharges: 0,
-    penalties: 0,
+    penalties: renewalCompliancePenalty,
     surcharge: roundMoney(automaticRenewal.surcharge + liquorTobaccoSurcharge),
     interest: automaticRenewal.interest,
     closurePaymentDues,
@@ -508,6 +566,14 @@ async function getAssessmentApplication(applicationId: string, dbClient: any = p
               permitIssuance: {
                 select: { releasedAt: true },
               },
+            },
+          },
+          inspections: {
+            select: {
+              id: true,
+              nonComplianceType: true,
+              violationSeverity: true,
+              isSettled: true,
             },
           },
         },
@@ -587,6 +653,13 @@ export async function getApplicationForAssessment(applicationId: string): Promis
     runtimeSettings
   );
 
+  const inspections: Array<{ nonComplianceType: string | null; violationSeverity: string | null; isSettled: boolean }> =
+    row.businessRecord?.inspections ?? [];
+  const renewalComplianceSeverity = row.applicationType === "RENEWAL"
+    ? getHighestRenewalComplianceSeverity(inspections)
+    : null;
+  const renewalCompliancePenalty = resolveRenewalCompliancePenalty(renewalComplianceSeverity, runtimeSettings);
+
   const suggestedFees = {
     mayorsPermitFee: computed.mayorsPermitFee,
     regulatoryFees: computed.regulatoryFees,
@@ -611,6 +684,8 @@ export async function getApplicationForAssessment(applicationId: string): Promis
           ? `Late renewal beyond 1 year (${overdueMonths} months overdue)`
           : computed.specialRuleApplied,
     overdueMonths,
+    renewalCompliancePenalty,
+    renewalComplianceSeverity,
   };
 
   return {
@@ -723,13 +798,21 @@ async function persistAssessment(
 
     const overdueMonths = resolveOverdueMonths(application);
     const isLiquorOrTobacco = resolveLiquorOrTobacco(application.formData);
+    const applicationInspections: Array<{ nonComplianceType: string | null; violationSeverity: string | null; isSettled: boolean }> =
+      application.businessRecord?.inspections ?? [];
+    const complianceSeverity = application.applicationType === "RENEWAL"
+      ? getHighestRenewalComplianceSeverity(applicationInspections)
+      : null;
+    const compliancePenalty = resolveRenewalCompliancePenalty(complianceSeverity, runtimeSettings);
     const totals = buildAssessmentTotals(
       application.applicationType,
       customLineItems,
       isLiquorOrTobacco,
       clampMoney(sanitized.closurePaymentDues),
       overdueMonths,
-      runtimeSettings
+      runtimeSettings,
+      compliancePenalty,
+      complianceSeverity
     );
 
     if (mode === "GENERATED") {
@@ -838,7 +921,12 @@ async function persistAssessment(
         toStatus: mode === "GENERATED" ? "APPROVED_FOR_PAYMENT" : workingStatus,
         remarks:
           mode === "GENERATED"
-            ? `Tax Order of Payment generated. TOP No.: ${assessmentNumber}, Total Amount Due: ₱${totals.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+            ? [
+                `Tax Order of Payment generated. TOP No.: ${assessmentNumber}, Total Amount Due: ₱${totals.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+                ...(compliancePenalty > 0 && complianceSeverity
+                  ? [`Renewal compliance penalty (${complianceSeverity}): ₱${compliancePenalty.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`]
+                  : []),
+              ].join(" | ")
             : `Assessment draft saved. Assessment No.: ${assessmentNumber}, Total: ₱${totals.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
       },
     });

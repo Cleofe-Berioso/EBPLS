@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { EB_MAGALONA_CENTER } from "@/lib/business-location";
+import { EB_MAGALONA_CENTER } from "@/lib/eb-magalona";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { MapLegendCard } from "@/components/ui/map-legend-card";

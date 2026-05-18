@@ -9,7 +9,7 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { MapLegendCard } from "@/components/ui/map-legend-card";
 import { SectionCard } from "@/components/ui/section-card";
-import { EB_MAGALONA_CENTER } from "@/lib/business-location";
+import { EB_MAGALONA_CENTER } from "@/lib/eb-magalona";
 
 const LeafletBusinessMap = dynamic(
   () => import("@/components/maps/leaflet-business-map").then((mod) => mod.LeafletBusinessMap),

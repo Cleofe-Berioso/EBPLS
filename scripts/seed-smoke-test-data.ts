@@ -1,11 +1,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
-import { Prisma, PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-
-const adapter = new PrismaLibSql({ url: "file:./prisma/dev.db" });
-const prisma = new PrismaClient({ adapter });
+import { Prisma } from "@prisma/client";
+import { prisma } from "../src/lib/prisma";
 
 const scriptFilePath = fileURLToPath(import.meta.url);
 const scriptDirPath = path.dirname(scriptFilePath);

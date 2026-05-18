@@ -1,5 +1,3 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { getJitMapMarkerStatus } from "../src/lib/jit-inspections";
 import { listBploBusinessMapLocations, listJitBusinessMapLocations } from "../src/lib/business-location";
 import { normalizeBusinessInfo, calculateAgeFromBirthDate } from "../src/lib/business-rules";
@@ -11,9 +9,7 @@ import {
   EB_MAGALONA_PROVINCE,
 } from "../src/lib/address-options";
 import type { BusinessInfo, SaveApplicationInput } from "../src/lib/applicant-types";
-
-const adapter = new PrismaLibSql({ url: "file:./prisma/dev.db" });
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "../src/lib/prisma";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {

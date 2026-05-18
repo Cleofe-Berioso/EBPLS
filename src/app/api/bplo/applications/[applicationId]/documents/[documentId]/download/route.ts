@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { requireBploSession } from "@/lib/bplo-api";
 import { getBploApplicationDocument } from "@/lib/bplo-applications";
+import { createStorageSignedUrl } from "@/lib/document-storage";
 
 interface RouteContext {
   params: Promise<{ applicationId: string; documentId: string }>;
@@ -16,16 +16,15 @@ export async function GET(_req: Request, context: RouteContext) {
   try {
     const { applicationId, documentId } = await context.params;
     const document = await getBploApplicationDocument(applicationId, documentId);
-    const buffer = await readFile(document.storagePath);
-
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": document.mimeType,
-        "Content-Disposition": `attachment; filename="${document.fileName}"`,
-        "Cache-Control": "private, no-store",
-      },
+    const signed = await createStorageSignedUrl({
+      storagePath: document.storagePath,
+      mimeType: document.mimeType,
+      expiresIn: 60,
+      download: true,
+      downloadFileName: document.fileName,
     });
+
+    return NextResponse.redirect(signed.signedUrl, { status: 302 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to download document";
     const status =
