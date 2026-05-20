@@ -3,26 +3,28 @@
 > next build --webpack
 
 Γû▓ Next.js 16.2.4 (webpack)
-- Environments: .env.local
+- Environments: .env
 
   Creating an optimized production build ...
-Γ£ô Compiled successfully in 17.7s
+Γ£ô Compiled successfully in 37.1s
   Running TypeScript ...
-  Finished TypeScript in 22.8s ...
+  Finished TypeScript in 37.3s ...
   Collecting page data using 3 workers ...
-  Generating static pages using 3 workers (0/52) ...
-  Generating static pages using 3 workers (13/52) 
-  Generating static pages using 3 workers (26/52) 
-  Generating static pages using 3 workers (39/52) 
-Γ£ô Generating static pages using 3 workers (52/52) in 5.3s
+  Generating static pages using 3 workers (0/38) ...
+  Generating static pages using 3 workers (9/38) 
+  Generating static pages using 3 workers (18/38) 
+  Generating static pages using 3 workers (28/38) 
+Γ£ô Generating static pages using 3 workers (38/38) in 8.7s
   Finalizing page optimization ...
   Collecting build traces ...
 
 Route (app)
-Γöî Γùï /
-Γö£ Γùï /_not-found
+Γöî ╞Æ /
+Γö£ ╞Æ /_not-found
+Γö£ ╞Æ /api/address/barangays
 Γö£ ╞Æ /api/address/cities
 Γö£ ╞Æ /api/address/countries
+Γö£ ╞Æ /api/address/reverse-geocode
 Γö£ ╞Æ /api/address/states
 Γö£ ╞Æ /api/applicant/applications
 Γö£ ╞Æ /api/applicant/applications/[applicationId]
@@ -34,8 +36,12 @@ Route (app)
 Γö£ ╞Æ /api/applicant/business-records
 Γö£ ╞Æ /api/applicant/notifications
 Γö£ ╞Æ /api/applicant/profile
+Γö£ ╞Æ /api/applicant/profile-picture
 Γö£ ╞Æ /api/applicant/top
 Γö£ ╞Æ /api/auth/[...nextauth]
+Γö£ ╞Æ /api/auth/forgot-password/request-otp
+Γö£ ╞Æ /api/auth/forgot-password/reset-password
+Γö£ ╞Æ /api/auth/forgot-password/verify-otp
 Γö£ ╞Æ /api/auth/register
 Γö£ ╞Æ /api/bplo/applications
 Γö£ ╞Æ /api/bplo/applications/[applicationId]
@@ -60,15 +66,39 @@ Route (app)
 Γö£ ╞Æ /api/bplo/permit-issuance/[applicationId]
 Γö£ ╞Æ /api/bplo/permit-issuance/[applicationId]/prepare
 Γö£ ╞Æ /api/bplo/permit-issuance/[applicationId]/release
+Γö£ ╞Æ /api/department-head/application-approval
+Γö£ ╞Æ /api/department-head/application-approval/[applicationId]/approve
+Γö£ ╞Æ /api/department-head/application-approval/[applicationId]/documents/[documentId]/download
+Γö£ ╞Æ /api/department-head/application-approval/[applicationId]/reject
+Γö£ ╞Æ /api/department-head/application-approval/[applicationId]/return
+Γö£ ╞Æ /api/department-head/compliant-list
+Γö£ ╞Æ /api/department-head/dashboard
+Γö£ ╞Æ /api/department-head/inspection-verification
+Γö£ ╞Æ /api/department-head/inspection-verification/[inspectionId]/evidence
+Γö£ ╞Æ /api/department-head/inspection-verification/[inspectionId]/verify
+Γö£ ╞Æ /api/department-head/permit-to-revoke
+Γö£ ╞Æ /api/department-head/permit-to-revoke/[inspectionId]/approve-revocation
+Γö£ ╞Æ /api/department-head/permit-to-revoke/[inspectionId]/deny-revocation
+Γö£ ╞Æ /api/department-head/permit-to-revoke/[inspectionId]/evidence
+Γö£ ╞Æ /api/department-head/revoke-permit-list
+Γö£ ╞Æ /api/department-head/revoke-permit-list/[inspectionId]/mark-settled
+Γö£ ╞Æ /api/department-head/settlement-management
+Γö£ ╞Æ /api/department-head/settlement-management/[inspectionId]/settle
+Γö£ ╞Æ /api/jit/business-map
+Γö£ ╞Æ /api/jit/dashboard
+Γö£ ╞Æ /api/jit/inspect-a-business
+Γö£ ╞Æ /api/jit/inspect-a-business/[businessRecordId]
 Γö£ ╞Æ /api/permits/[applicationId]
 Γö£ ╞Æ /api/superadmin/activities
 Γö£ ╞Æ /api/superadmin/applications
 Γö£ ╞Æ /api/superadmin/applications/[applicationId]
+Γö£ ╞Æ /api/superadmin/applications/[applicationId]/documents/[documentId]/preview
 Γö£ ╞Æ /api/superadmin/dashboard
 Γö£ ╞Æ /api/superadmin/reports
 Γö£ ╞Æ /api/superadmin/settings/extensions
 Γö£ ╞Æ /api/superadmin/settings/extensions/[extensionId]/toggle
 Γö£ ╞Æ /api/superadmin/settings/fees
+Γö£ ╞Æ /api/superadmin/settings/jit-portal
 Γö£ ╞Æ /api/superadmin/settings/penalties
 Γö£ ╞Æ /api/superadmin/users
 Γö£ ╞Æ /api/superadmin/users/[userId]/disable
@@ -87,6 +117,7 @@ Route (app)
 Γö£ ╞Æ /applicant/notifications
 Γö£ ╞Æ /applicant/permits/[applicationId]
 Γö£ ╞Æ /applicant/profile
+Γö£ ╞Æ /applicant/profile-picture/setup
 Γö£ ╞Æ /applicant/top
 Γö£ ╞Æ /auth/redirect
 Γö£ ╞Æ /bplo/applications
@@ -102,18 +133,40 @@ Route (app)
 Γö£ ╞Æ /bplo/permit-issuance/[applicationId]/print
 Γö£ ╞Æ /bplo/profile
 Γö£ ╞Æ /bplo/reports
+Γö£ ╞Æ /department-head
+Γö£ ╞Æ /department-head/application-approval
+Γö£ ╞Æ /department-head/compliant-list
+Γö£ ╞Æ /department-head/dashboard
+Γö£ ╞Æ /department-head/inspection-verification
+Γö£ ╞Æ /department-head/permit-to-revoke
+Γö£ ╞Æ /department-head/revoke-permit-list
+Γö£ ╞Æ /department-head/settlement-management
+Γö£ ╞Æ /forgot-password
+Γö£ ╞Æ /jit
+Γö£ ╞Æ /jit/business-map
+Γö£ ╞Æ /jit/dashboard
+Γö£ ╞Æ /jit/inspect-a-business
+Γö£ ╞Æ /jit/portal-disabled
 Γö£ ╞Æ /login
-Γö£ Γùï /register
+Γö£ ╞Æ /register
 Γö£ ╞Æ /superadmin/activities
 Γö£ ╞Æ /superadmin/applications
 Γö£ ╞Æ /superadmin/applications/[applicationId]
 Γö£ ╞Æ /superadmin/dashboard
 Γö£ ╞Æ /superadmin/profile
 Γö£ ╞Æ /superadmin/reports
+Γö£ ╞Æ /superadmin/reports/print/applications
+Γö£ ╞Æ /superadmin/reports/print/audit-trail
+Γö£ ╞Æ /superadmin/reports/print/business-registry
+Γö£ ╞Æ /superadmin/reports/print/closures
+Γö£ ╞Æ /superadmin/reports/print/inspections
+Γö£ ╞Æ /superadmin/reports/print/revenue
+Γö£ ╞Æ /superadmin/reports/print/sms
 Γö£ ╞Æ /superadmin/settings
 Γöö ╞Æ /superadmin/users
 
 
-Γùï  (Static)   prerendered as static content
+╞Æ Proxy (Middleware)
+
 ╞Æ  (Dynamic)  server-rendered on demand
 

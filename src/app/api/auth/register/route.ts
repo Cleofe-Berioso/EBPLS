@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { formatPersonName } from "@/lib/person-name";
 
 export async function POST(req: NextRequest) {
   let body: unknown;
@@ -10,11 +11,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { name, email, contactNumber, password, confirmPassword } = body as Record<string, unknown>;
+  const { firstName, middleName, lastName, suffix, email, contactNumber, password, confirmPassword } = body as Record<string, unknown>;
 
   // ── Field presence validation ──────────────────────────────────────────────
-  if (!name || typeof name !== "string" || name.trim().length === 0) {
-    return NextResponse.json({ error: "Full name is required." }, { status: 400 });
+  if (!firstName || typeof firstName !== "string" || firstName.trim().length === 0) {
+    return NextResponse.json({ error: "First name is required." }, { status: 400 });
+  }
+
+  if (!lastName || typeof lastName !== "string" || lastName.trim().length === 0) {
+    return NextResponse.json({ error: "Last name is required." }, { status: 400 });
   }
 
   if (!email || typeof email !== "string" || email.trim().length === 0) {
@@ -64,10 +69,25 @@ export async function POST(req: NextRequest) {
 
   // ── Create user ────────────────────────────────────────────────────────────
   const passwordHash = await bcrypt.hash(password, 12);
+  const normalizedFirstName = firstName.trim();
+  const normalizedMiddleName = typeof middleName === "string" ? middleName.trim() : "";
+  const normalizedLastName = lastName.trim();
+  const normalizedSuffix = typeof suffix === "string" ? suffix.trim() : "";
+  const computedName = formatPersonName({
+    firstName: normalizedFirstName,
+    middleName: normalizedMiddleName,
+    lastName: normalizedLastName,
+    suffix: normalizedSuffix,
+    fallbackName: `${normalizedFirstName} ${normalizedLastName}`,
+  });
 
   const user = await prisma.user.create({
     data: {
-      name: name.trim(),
+      name: computedName,
+      firstName: normalizedFirstName,
+      middleName: normalizedMiddleName || null,
+      lastName: normalizedLastName,
+      suffix: normalizedSuffix || null,
       email: normalizedEmail,
       passwordHash,
       role: "APPLICANT", // always APPLICANT — never configurable via public registration

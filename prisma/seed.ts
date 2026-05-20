@@ -1,7 +1,21 @@
+import "dotenv/config";
 import bcrypt from "bcryptjs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { prisma } from "../src/lib/prisma";
+import * as PrismaClientPackage from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+
+const PrismaClient = (PrismaClientPackage as any).PrismaClient as new (options?: any) => any;
+
+const dbUrl = process.env.DATABASE_URL;
+
+if (!dbUrl) {
+  throw new Error("DATABASE_URL is required for seeding");
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: dbUrl }, { schema: "ebpls" }),
+});
 const DEBUG_PROOF_FILE_PATH = path.join(process.cwd(), "scripts", "smoke-test-proof.txt");
 
 const DEFAULT_SYSTEM_FEE_SETTINGS = {
@@ -401,6 +415,56 @@ function buildBusinessInfo(overrides: Record<string, unknown> = {}) {
 async function seedBaseData() {
   console.log("Seeding base data...");
 
+  // Backward compatibility: older databases can have a legacy public.Role enum.
+  await prisma.$executeRawUnsafe(`
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public' AND t.typname = 'Role'
+  ) THEN
+    IF EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      JOIN pg_namespace n ON n.oid = t.typnamespace
+      WHERE n.nspname = 'public' AND t.typname = 'Role' AND e.enumlabel = 'SUPERADMIN'
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      JOIN pg_namespace n ON n.oid = t.typnamespace
+      WHERE n.nspname = 'public' AND t.typname = 'Role' AND e.enumlabel = 'SUPER_ADMIN'
+    ) THEN
+      ALTER TYPE public."Role" RENAME VALUE 'SUPERADMIN' TO 'SUPER_ADMIN';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      JOIN pg_namespace n ON n.oid = t.typnamespace
+      WHERE n.nspname = 'public' AND t.typname = 'Role' AND e.enumlabel = 'DEPARTMENT_HEAD'
+    ) THEN
+      ALTER TYPE public."Role" ADD VALUE 'DEPARTMENT_HEAD';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      JOIN pg_namespace n ON n.oid = t.typnamespace
+      WHERE n.nspname = 'public' AND t.typname = 'Role' AND e.enumlabel = 'JIT'
+    ) THEN
+      ALTER TYPE public."Role" ADD VALUE 'JIT';
+    END IF;
+  END IF;
+END $$;
+  `);
+
   const users = [
     {
       email: "applicant1@example.com",
@@ -449,19 +513,76 @@ async function seedBaseData() {
 
   // Keep seed idempotent and avoid deleting user-managed accounts.
 
-  for (const u of users) {
-    const passwordHash = await bcrypt.hash(u.password, 12);
-    const user = (await withPrismaRetry(`upsert user ${u.email}`, () =>
-      prisma.user.upsert({
+  async function upsertSeedUser(u: {
+    email: string;
+    name: string;
+    role: "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
+    passwordHash: string;
+    isActive?: boolean;
+  }): Promise<{ role: string; email: string }> {
+    const active = u.isActive ?? true;
+
+    try {
+      const user = await prisma.user.upsert({
         where: { email: u.email },
-        update: { name: u.name, role: u.role, passwordHash, isActive: u.isActive ?? true },
+        update: { name: u.name, role: u.role, passwordHash: u.passwordHash, isActive: active },
         create: {
           email: u.email,
           name: u.name,
           role: u.role,
-          passwordHash,
-          isActive: u.isActive ?? true,
+          passwordHash: u.passwordHash,
+          isActive: active,
         },
+      });
+
+      return { role: user.role, email: user.email };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const isLegacySuperAdminEnum =
+        u.role === "SUPER_ADMIN" &&
+        message.includes("enum") &&
+        message.includes("SUPER_ADMIN");
+
+      if (!isLegacySuperAdminEnum) {
+        throw error;
+      }
+
+      const legacyRole = "SUPERADMIN";
+      const existing = await prisma.user.findUnique({
+        where: { email: u.email },
+        select: { id: true },
+      });
+
+      if (existing?.id) {
+        await prisma.$executeRaw`
+          UPDATE "User"
+          SET "name" = ${u.name},
+              "role" = CAST(${legacyRole} AS "Role"),
+              "passwordHash" = ${u.passwordHash},
+              "isActive" = ${active},
+              "updatedAt" = NOW()
+          WHERE "id" = ${existing.id}
+        `;
+      } else {
+        await prisma.$executeRaw`
+          INSERT INTO "User" ("id", "email", "name", "role", "passwordHash", "isActive", "createdAt", "updatedAt")
+          VALUES (${randomUUID()}, ${u.email}, ${u.name}, CAST(${legacyRole} AS "Role"), ${u.passwordHash}, ${active}, NOW(), NOW())
+        `;
+      }
+
+      return { role: legacyRole, email: u.email };
+    }
+  }
+
+  for (const u of users) {
+    const passwordHash = await bcrypt.hash(u.password, 12);
+    const user = (await withPrismaRetry(`upsert user ${u.email}`, () =>
+      upsertSeedUser({
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        passwordHash,
+        isActive: u.isActive,
       })
     )) as { role: string; email: string };
     console.log(`  ✓ ${user.role.padEnd(10)} ${user.email}`);
@@ -733,7 +854,9 @@ async function getInspectionColumnSet(): Promise<Set<string>> {
     return inspectionColumnCache;
   }
 
-  const rows = await prisma.$queryRawUnsafe<Array<{ name?: string }>>("PRAGMA table_info('Inspection')");
+  const rows = (await prisma.$queryRawUnsafe("PRAGMA table_info('Inspection')")) as Array<{
+    name?: string;
+  }>;
   inspectionColumnCache = new Set(rows.map((row) => row.name).filter((name): name is string => Boolean(name)));
   return inspectionColumnCache;
 }
@@ -769,12 +892,12 @@ async function upsertDebugInspectionSeed(input: {
   const inspectionColumns = await getInspectionColumnSet();
   const supports = (column: string) => inspectionColumns.has(column);
 
-  const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+  const existing = (await prisma.$queryRawUnsafe(
     'SELECT "id" FROM "Inspection" WHERE "businessRecordId" = ? AND "applicationId" = ? AND "comment" LIKE ? LIMIT 1',
     input.businessRecordId,
     input.applicationId,
     `${input.marker}%`
-  );
+  )) as Array<{ id: string }>;
 
   const data: Record<string, unknown> = {
     inspectorId: input.inspectorId,
@@ -1214,7 +1337,9 @@ async function seedPhase6WorkflowDebugData() {
     const latitude = 10.878586 + i * 0.001;
     const longitude = 122.978876 + i * 0.001;
 
-    const business = await withPrismaRetry(`upsert Phase 6 business ${seed.registrationNumber}`, () =>
+    const business = await withPrismaRetry<{ id: string }>(
+      `upsert Phase 6 business ${seed.registrationNumber}`,
+      () =>
       prisma.businessRecord.upsert({
         where: { registrationNumber: seed.registrationNumber },
         update: {
@@ -1280,9 +1405,11 @@ async function seedPhase6WorkflowDebugData() {
       })
     );
 
-    businessByReg.set(seed.registrationNumber, business as { id: string });
+    businessByReg.set(seed.registrationNumber, business);
 
-    const app = await withPrismaRetry(`upsert Phase 6 application ${seed.applicationNumber}`, () =>
+    const app = await withPrismaRetry<{ id: string }>(
+      `upsert Phase 6 application ${seed.applicationNumber}`,
+      () =>
       prisma.businessApplication.upsert({
         where: { applicationNumber: seed.applicationNumber },
         update: {
@@ -1342,7 +1469,7 @@ async function seedPhase6WorkflowDebugData() {
       })
     );
 
-    appByNumber.set(seed.applicationNumber, app as { id: string });
+    appByNumber.set(seed.applicationNumber, app);
 
     await withPrismaRetry(`upsert Phase 6 permit ${seed.applicationNumber}`, () =>
       prisma.permitIssuance.upsert({

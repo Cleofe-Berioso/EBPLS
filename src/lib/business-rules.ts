@@ -8,6 +8,7 @@ import {
   EB_MAGALONA_PROVINCE,
   isPhilippinesCountry,
 } from "@/lib/address-options";
+import { formatOwnerName } from "@/lib/person-name";
 
 export { isPhilippinesCountry } from "@/lib/address-options";
 
@@ -119,20 +120,40 @@ export function splitOwnerName(ownerName: string): {
   ownerFirstName: string;
   ownerMiddleName: string;
   ownerSurname: string;
+  ownerSuffix: string;
 } {
   const trimmed = ownerName.trim();
-  if (!trimmed) return { ownerFirstName: "", ownerMiddleName: "", ownerSurname: "" };
+  if (!trimmed) {
+    return { ownerFirstName: "", ownerMiddleName: "", ownerSurname: "", ownerSuffix: "" };
+  }
+
+  const suffixCandidates = new Set(["JR", "JR.", "SR", "SR.", "II", "III", "IV", "V"]);
   const parts = trimmed.split(/\s+/);
+  const maybeSuffix = (parts[parts.length - 1] ?? "").toUpperCase();
+  const hasSuffix = suffixCandidates.has(maybeSuffix);
+  const suffix = hasSuffix ? parts.pop() ?? "" : "";
+
   if (parts.length === 1) {
-    return { ownerFirstName: parts[0] ?? "", ownerMiddleName: "", ownerSurname: "" };
+    return {
+      ownerFirstName: parts[0] ?? "",
+      ownerMiddleName: "",
+      ownerSurname: "",
+      ownerSuffix: suffix,
+    };
   }
   if (parts.length === 2) {
-    return { ownerFirstName: parts[0] ?? "", ownerMiddleName: "", ownerSurname: parts[1] ?? "" };
+    return {
+      ownerFirstName: parts[0] ?? "",
+      ownerMiddleName: "",
+      ownerSurname: parts[1] ?? "",
+      ownerSuffix: suffix,
+    };
   }
   return {
     ownerFirstName: parts[0] ?? "",
     ownerMiddleName: parts.slice(1, -1).join(" "),
     ownerSurname: parts[parts.length - 1] ?? "",
+    ownerSuffix: suffix,
   };
 }
 
@@ -277,8 +298,10 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     const mainOfficeStreetAddress = mainOfficePhilippines ? "" : (input.mainOfficeStreetAddress?.trim() || "");
     const mainOfficeBarangay = mainOfficePhilippines ? (input.mainOfficeBarangay?.trim() || "") : "";
 
-  const rawStreetAddress = input.streetAddress?.trim() ?? "";
-  const rawBarangay = input.barangay?.trim() ?? "";
+  const rawBusinessStreetAddress = input.businessStreetAddress?.trim() ?? "";
+  const rawBusinessBarangay = input.businessBarangay?.trim() ?? "";
+  const rawStreetAddress = (rawBusinessStreetAddress || input.streetAddress?.trim() || "").trim();
+  const rawBarangay = (rawBusinessBarangay || input.barangay?.trim() || "").trim();
   const legacyBusinessAddress = input.businessAddress?.trim() ?? "";
 
   const legacyParts = legacyBusinessAddress.split(",").map((part) => part.trim()).filter(Boolean);
@@ -318,15 +341,21 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
   let ownerFirstName = input.ownerFirstName?.trim() ?? "";
   let ownerMiddleName = input.ownerMiddleName?.trim() ?? "";
   let ownerSurname = input.ownerSurname?.trim() ?? "";
+  let ownerSuffix = input.ownerSuffix?.trim() ?? "";
   if (!ownerFirstName && !ownerSurname && input.ownerName.trim()) {
     const split = splitOwnerName(input.ownerName);
     ownerFirstName = split.ownerFirstName;
     ownerMiddleName = split.ownerMiddleName;
     ownerSurname = split.ownerSurname;
+    ownerSuffix = split.ownerSuffix;
   }
-  const combinedOwnerName =
-    [ownerFirstName, ownerMiddleName, ownerSurname].filter(Boolean).join(" ") ||
-    input.ownerName.trim();
+  const combinedOwnerName = formatOwnerName({
+    ownerFirstName,
+    ownerMiddleName,
+    ownerLastName: ownerSurname,
+    ownerSuffix,
+    ownerName: input.ownerName,
+  });
 
   let ownerAge = input.ownerAge?.trim() ?? "";
   if (birthDate.length > 0) {
@@ -347,6 +376,7 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     ownerFirstName,
     ownerMiddleName,
     ownerSurname,
+    ownerSuffix,
     birthDate,
     ownerAge,
     sex: input.sex?.trim(),
@@ -360,6 +390,8 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     cityMunicipality,
     streetAddress,
     barangay: philippines ? barangay : "",
+    businessStreetAddress: streetAddress,
+    businessBarangay: philippines ? barangay : "",
     mainOfficeCountry,
     mainOfficeCountryCode,
     mainOfficeProvince,

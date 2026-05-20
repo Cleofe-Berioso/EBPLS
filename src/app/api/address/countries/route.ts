@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
 
-import type { AddressApiErrorResponse, AddressOption, CountryStateCityCountry } from "@/lib/address-types";
+import {
+  ADDRESS_API_NOT_CONFIGURED_MESSAGE,
+  ADDRESS_API_REQUEST_FAILED_MESSAGE,
+  getCountryStateCityApiKey,
+  jsonAddressError,
+  normalizeCountryStateCityCountry,
+} from "@/lib/address-server";
+import type { CountryStateCityCountry } from "@/lib/address-types";
 
 export const dynamic = "force-dynamic";
 
-function jsonError(status: number, error: string) {
-  return NextResponse.json({ error } satisfies AddressApiErrorResponse, { status });
-}
-
 export async function GET() {
-  const apiKey = process.env.COUNTRYSTATECITY_API_KEY;
+  const apiKey = getCountryStateCityApiKey();
   if (!apiKey) {
-    return jsonError(500, "Address API is not configured.");
+    console.error("[address/countries] Missing COUNTRY_STATE_CITY_API_KEY");
+    return jsonAddressError(500, ADDRESS_API_NOT_CONFIGURED_MESSAGE);
   }
 
   try {
@@ -23,19 +27,21 @@ export async function GET() {
     });
 
     if (!response.ok) {
-      return jsonError(502, "Address list could not be loaded. Please try again.");
+      console.error("[address/countries] CSC API failed", {
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return jsonAddressError(502, ADDRESS_API_REQUEST_FAILED_MESSAGE);
     }
 
     const countries = (await response.json()) as CountryStateCityCountry[];
-    const options: AddressOption[] = countries.map((country) => ({
-      label: country.name,
-      value: country.iso2,
-      iso2: country.iso2,
-      name: country.name,
-    }));
+    const options = countries
+      .map((country) => normalizeCountryStateCityCountry(country))
+      .filter((option): option is NonNullable<typeof option> => Boolean(option));
 
     return NextResponse.json(options);
-  } catch {
-    return jsonError(502, "Address list could not be loaded. Please try again.");
+  } catch (error) {
+    console.error("[address/countries] Unexpected failure", error);
+    return jsonAddressError(502, ADDRESS_API_REQUEST_FAILED_MESSAGE);
   }
 }

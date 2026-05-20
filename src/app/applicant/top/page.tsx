@@ -269,7 +269,7 @@ export default function TaxOrderOfPaymentPage() {
                     </p>
                   </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Payment Frequency</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Mode of Payment</p>
                   <p className="mt-1 font-medium text-slate-900">
                     {summary.paymentFrequency
                       ? PAYMENT_FREQ_LABELS[summary.paymentFrequency] ?? summary.paymentFrequency

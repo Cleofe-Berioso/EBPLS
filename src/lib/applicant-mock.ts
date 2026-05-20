@@ -3,6 +3,12 @@ import {
   getRegistrationHelperText,
   getRegistrationLabel,
 } from "@/lib/business-rules";
+import {
+  EB_MAGALONA_CITY,
+  EB_MAGALONA_COUNTRY,
+  EB_MAGALONA_COUNTRY_CODE,
+  EB_MAGALONA_PROVINCE,
+} from "@/lib/address-options";
 
 export const APPLICANT_SIDEBAR_ITEMS = [
   { label: "Dashboard", href: "/applicant/dashboard" },
@@ -24,11 +30,11 @@ export const defaultBusinessInfo: BusinessInfo = {
   nationality: "Filipino",
   email: "",
   phone: "",
-  country: "",
-  countryCode: "",
-  province: "",
+  country: EB_MAGALONA_COUNTRY,
+  countryCode: EB_MAGALONA_COUNTRY_CODE,
+  province: EB_MAGALONA_PROVINCE,
   provinceCode: "",
-  cityMunicipality: "",
+  cityMunicipality: EB_MAGALONA_CITY,
   streetAddress: "",
   mainOfficeCountry: "",
   mainOfficeCountryCode: "",
@@ -62,6 +68,7 @@ export const defaultBusinessInfo: BusinessInfo = {
   ownerFirstName: "",
   ownerMiddleName: "",
   ownerSurname: "",
+  ownerSuffix: "",
   birthDate: "",
   ownerAge: "",
   capitalInvestment: "",

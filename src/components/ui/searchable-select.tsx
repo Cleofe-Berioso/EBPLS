@@ -165,6 +165,8 @@ export function SearchableSelect({
           <ul role="listbox" className="max-h-56 overflow-y-auto py-1">
             {loading ? (
               <li className="px-3 py-2 text-sm text-slate-500">Loading…</li>
+            ) : error ? (
+              <li className="px-3 py-2 text-sm text-rose-700">{error}</li>
             ) : filtered.length === 0 ? (
               <li className="px-3 py-2 text-sm italic text-slate-400">{emptyMessage}</li>
             ) : (

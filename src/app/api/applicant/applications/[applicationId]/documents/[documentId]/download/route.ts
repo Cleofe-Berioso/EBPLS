@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireApplicantSession } from "@/lib/applicant-api";
+import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import { getApplicantOwnedDocument } from "@/lib/applications";
 import { createStorageSignedUrl } from "@/lib/document-storage";
 
@@ -8,14 +8,14 @@ interface RouteContext {
 }
 
 export async function GET(_req: Request, context: RouteContext) {
-  const session = await requireApplicantSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authContext = await resolveApplicantSessionContext();
+  if (authContext.ok === false) {
+    return NextResponse.json({ error: authContext.error }, { status: authContext.status });
   }
 
   try {
     const { applicationId, documentId } = await context.params;
-    const document = await getApplicantOwnedDocument(session.user.id, applicationId, documentId);
+    const document = await getApplicantOwnedDocument(authContext.applicantId, applicationId, documentId);
 
     const signed = await createStorageSignedUrl({
       storagePath: document.storagePath,

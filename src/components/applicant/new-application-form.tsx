@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
@@ -33,6 +33,10 @@ import {
   normalizeDocumentName,
   resolveRequiredDocuments,
 } from "@/lib/required-documents";
+import {
+  DOCUMENT_FILE_INPUT_ACCEPT,
+  validateDocumentFileUpload,
+} from "@/lib/document-upload-rules";
 import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
 import { BusinessInformationFields } from "./business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
@@ -100,7 +104,8 @@ const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   tradeName: "Trade Name",
   ownerName: "Owner / President Name",
   ownerFirstName: "First Name",
-  ownerSurname: "Surname",
+  ownerSurname: "Last Name",
+  ownerSuffix: "Suffix",
   birthDate: "Birthdate",
   ownerAge: "Owner Age",
   capitalInvestment: "Capital Investment",
@@ -152,8 +157,6 @@ const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
     "businessName",
     "ownerFirstName",
     "ownerSurname",
-    "birthDate",
-    "capitalInvestment",
     "nationality",
     "email",
     "phone",
@@ -163,7 +166,6 @@ const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
     "mainOfficeAddress",
     "businessLatitude",
     "businessLongitude",
-    "businessAddress",
     "businessBarangay",
     "businessStreetAddress",
   ],
@@ -188,12 +190,15 @@ function normalizeBusinessInfo(next: BusinessInfo): BusinessInfo {
 function validateBusinessLocation(info: BusinessInfo): Partial<Record<keyof BusinessInfo, string>> {
   const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
 
-  if (info.businessLatitude == null || info.businessLongitude == null) {
+  const latitude = Number(info.businessLatitude);
+  const longitude = Number(info.businessLongitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     nextErrors.businessLatitude = BUSINESS_LOCATION_ERROR;
     return nextErrors;
   }
 
-  if (!isWithinEbMagalona(info.businessLatitude, info.businessLongitude)) {
+  if (!isWithinEbMagalona(latitude, longitude)) {
     nextErrors.businessLatitude = BUSINESS_LOCATION_ERROR;
   }
 
@@ -223,18 +228,6 @@ function validateFixedEbMagalonaAddress(info: BusinessInfo): Partial<Record<keyo
     nextErrors.cityMunicipality = `Business city/municipality must be ${EB_MAGALONA_CITY}.`;
   }
 
-  if (!info.streetAddress?.trim()) {
-    nextErrors.streetAddress = "Street Address is required.";
-  }
-
-  if (!info.barangay?.trim()) {
-    nextErrors.barangay = "Select a barangay for EB Magalona.";
-  }
-
-  if (!info.businessAddress?.trim()) {
-    nextErrors.businessAddress = "Business Address is required.";
-  }
-
   return nextErrors;
 }
 
@@ -244,6 +237,44 @@ function parsePositiveAmount(value: string): number | null {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
+}
+
+function isMissingRequiredValue(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") return value.trim().length === 0;
+  if (typeof value === "number") return !Number.isFinite(value);
+  return false;
+}
+
+function sanitizeDocumentMetadata(documents: ApplicationDocumentInput[]): ApplicationDocumentInput[] {
+  return documents.map((doc) => ({
+    id: doc.id,
+    documentType: doc.documentType ?? doc.documentName,
+    documentName: doc.documentName,
+    fileName: doc.fileName,
+    originalName: doc.originalName,
+    mimeType: doc.mimeType,
+    sizeBytes: doc.sizeBytes,
+    fileSize: doc.fileSize,
+    bucket: doc.bucket,
+    storagePath: doc.storagePath,
+    filePath: doc.filePath,
+  }));
+}
+
+function buildCleanPayload(params: {
+  applicationId?: string;
+  mode: PersistMode;
+  info: BusinessInfo;
+  documents: ApplicationDocumentInput[];
+}): SaveApplicationInput {
+  return {
+    applicationId: params.applicationId,
+    applicationType: "NEW",
+    mode: params.mode,
+    formData: normalizeBusinessInfo(params.info),
+    documents: sanitizeDocumentMetadata(params.documents),
+  };
 }
 
 function ReviewStat({
@@ -304,6 +335,7 @@ const READ_ONLY_LOCKED_FIELDS: Array<keyof BusinessInfo> = [
   "ownerFirstName",
   "ownerMiddleName",
   "ownerSurname",
+  "ownerSuffix",
   "birthDate",
   "ownerAge",
   "sex",
@@ -350,7 +382,6 @@ export function NewApplicationForm() {
   const [step, setStep] = useState(0);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
-  const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [applicationId, setApplicationId] = useState<string | undefined>(editId ?? undefined);
   const [statusMessage, setStatusMessage] = useState<{
     kind: "success" | "error";
@@ -363,6 +394,9 @@ export function NewApplicationForm() {
     canEdit: boolean;
     status: string;
   } | null>(null);
+
+  // Guard: ensures loadDraft cannot run concurrently for the same applicationId.
+  const draftLoadingRef = useRef(false);
 
   const isReadOnly = Boolean(editId && existingApplicationAccess && !existingApplicationAccess.canEdit);
   const lockInteractivityClass = isReadOnly ? "pointer-events-none" : "";
@@ -411,6 +445,9 @@ export function NewApplicationForm() {
 
     async function loadExistingApplication() {
       if (!editId) return;
+      // Prevent concurrent loads for the same editId.
+      if (draftLoadingRef.current) return;
+      draftLoadingRef.current = true;
 
       const response = await fetch(`/api/applicant/applications/${editId}`, { cache: "no-store" });
       const data = (await response.json()) as {
@@ -423,7 +460,10 @@ export function NewApplicationForm() {
         };
       };
 
-      if (!active || !response.ok || !data.application) return;
+      if (!active || !response.ok || !data.application) {
+        draftLoadingRef.current = false;
+        return;
+      }
 
       setApplicationId(data.application.id);
       setExistingApplicationAccess({
@@ -443,6 +483,7 @@ export function NewApplicationForm() {
           return acc;
         }, {})
       );
+      draftLoadingRef.current = false;
     }
 
     void loadExistingApplication();
@@ -451,10 +492,34 @@ export function NewApplicationForm() {
     };
   }, [editId]);
 
-  function applyInfoChange(next: BusinessInfo) {
+  const applyInfoChange = useCallback((next: BusinessInfo) => {
     if (isReadOnly) return;
-    setInfo(normalizeBusinessInfo(next));
-  }
+    const normalizedNext = normalizeBusinessInfo(next);
+    const nextInfo = {
+      ...normalizedNext,
+      // Keep the raw typed values while editing; validation/submission normalize separately.
+      ownerName: next.ownerName,
+      businessStreetAddress: next.businessStreetAddress,
+      streetAddress: next.streetAddress,
+    };
+
+    setInfo(nextInfo);
+    if (
+      typeof nextInfo.businessLatitude === "number" &&
+      typeof nextInfo.businessLongitude === "number" &&
+      isWithinEbMagalona(nextInfo.businessLatitude, nextInfo.businessLongitude)
+    ) {
+      setFieldErrors((current) => {
+        if (!current.businessLatitude && !current.businessLongitude) {
+          return current;
+        }
+        const nextErrors = { ...current };
+        delete nextErrors.businessLatitude;
+        delete nextErrors.businessLongitude;
+        return nextErrors;
+      });
+    }
+  }, [isReadOnly]);
 
   function validateFieldOnBlur(field: keyof BusinessInfo) {
     if (isReadOnly) return;
@@ -472,7 +537,7 @@ export function NewApplicationForm() {
       isRequired = !philippinesMainOffice;
     }
 
-    if (isRequired && (typeof value !== "string" || value.trim().length === 0)) {
+    if (isRequired && isMissingRequiredValue(value)) {
       if (field === "mainOfficeAddress") {
         nextErrors[field] = philippinesMainOffice
           ? "Fill in Country, Province, City/Municipality, and Barangay to auto-generate."
@@ -564,7 +629,7 @@ export function NewApplicationForm() {
 
     for (const key of requiredFields) {
       const value = normalizedInfo[key];
-      if (typeof value !== "string" || value.trim().length === 0) {
+      if (isMissingRequiredValue(value)) {
         if (key === "mainOfficeAddress") {
           nextErrors[key] = requiresBarangay(normalizedInfo)
             ? "Fill in Country, Province, City/Municipality, and Barangay to auto-generate."
@@ -573,31 +638,6 @@ export function NewApplicationForm() {
           nextErrors[key] = `${FIELD_LABELS[key] ?? key} is required.`;
         }
       }
-    }
-
-    if (normalizedInfo.businessAddress.trim().length === 0) {
-      nextErrors.businessAddress = "Business Address is required.";
-    }
-
-    const birthDateRaw = normalizedInfo.birthDate?.trim() ?? "";
-    if (!birthDateRaw) {
-      nextErrors.birthDate = "Birthdate is required.";
-    } else {
-      try {
-        const computedAge = calculateAgeFromBirthDate(birthDateRaw);
-        if (computedAge < 18 || computedAge > 120) {
-          nextErrors.birthDate = "Birthdate results in an age outside 18 to 120.";
-        }
-      } catch (error) {
-        nextErrors.birthDate = error instanceof Error ? error.message : "Birthdate is invalid.";
-      }
-    }
-
-    const capitalRaw = normalizedInfo.capitalInvestment?.trim() ?? "";
-    if (!capitalRaw) {
-      nextErrors.capitalInvestment = "Capital Investment is required.";
-    } else if (parsePositiveAmount(capitalRaw) == null) {
-      nextErrors.capitalInvestment = "Capital Investment must be a positive amount.";
     }
 
     if (requiresBarangay(normalizedInfo) && normalizedInfo.mainOfficeBarangay?.trim().length === 0) {
@@ -648,7 +688,6 @@ export function NewApplicationForm() {
     } else if (step === 2) {
       const uploadedKeys = [
         ...Object.values(uploadedDocuments).map((d) => d.documentName),
-        ...Object.keys(pendingDocuments),
       ];
       const missing = getMissingRequiredDocuments(requiredDocs, uploadedKeys);
       if (missing.length > 0) {
@@ -726,7 +765,6 @@ export function NewApplicationForm() {
 
       const missingDocuments = getMissingRequiredDocuments(requiredDocs, [
         ...Object.values(uploadedDocuments).map((doc) => doc.documentName),
-        ...Object.keys(pendingDocuments),
       ]);
       if (missingDocuments.length > 0) {
         setMissingDocNames(missingDocuments);
@@ -740,34 +778,18 @@ export function NewApplicationForm() {
       }
     }
 
-    const payload: SaveApplicationInput = {
+    const payload = buildCleanPayload({
       applicationId,
-      applicationType: "NEW",
-      formData: info,
-      documents: Object.values(uploadedDocuments),
       mode,
-    };
+      info,
+      documents: Object.values(uploadedDocuments),
+    });
 
-    const response =
-      mode === "SUBMIT"
-        ? await (async () => {
-            const formData = new FormData();
-            formData.append("payload", JSON.stringify(payload));
-            for (const [documentName, file] of Object.entries(pendingDocuments)) {
-              formData.append("documentNames", documentName);
-              formData.append("documentFiles", file, file.name);
-            }
-
-            return fetch("/api/applicant/applications", {
-              method: "POST",
-              body: formData,
-            });
-          })()
-        : await fetch("/api/applicant/applications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+    const response = await fetch("/api/applicant/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
     const data = (await response.json()) as {
       application?: { id: string; applicationNumber: string; status: string };
@@ -792,7 +814,6 @@ export function NewApplicationForm() {
     setApplicationId(data.application.id);
 
     if (mode === "SUBMIT") {
-      setPendingDocuments({});
       setStatusMessage({
         kind: "success",
         text: `Application ${data.application.applicationNumber} submitted successfully.`,
@@ -812,22 +833,61 @@ export function NewApplicationForm() {
     if (isReadOnly) return;
     if (!file) return;
 
+    const fileValidationError = validateDocumentFileUpload(file);
+    if (fileValidationError) {
+      setStatusMessage({ kind: "error", text: fileValidationError });
+      return;
+    }
+
+    let targetApplicationId = applicationId;
+    if (!targetApplicationId) {
+      const draftId = await persist("DRAFT");
+      if (!draftId) {
+        setStatusMessage({
+          kind: "error",
+          text: "Save a draft first before uploading documents.",
+        });
+        return;
+      }
+      targetApplicationId = draftId;
+    }
+
+    setSubmitting(true);
+    const uploadFormData = new FormData();
+    uploadFormData.append("documentName", documentName);
+    uploadFormData.append("file", file, file.name);
+
+    const response = await fetch(`/api/applicant/applications/${targetApplicationId}/documents`, {
+      method: "POST",
+      body: uploadFormData,
+    });
+
+    const data = (await response.json()) as { document?: ApplicationDocumentInput; error?: string };
+    setSubmitting(false);
+
+    if (!response.ok || !data.document) {
+      setStatusMessage({
+        kind: "error",
+        text: data.error ?? "Unable to upload document.",
+      });
+      return;
+    }
+
+    setApplicationId(targetApplicationId);
     setUploadedDocuments((current) => ({
       ...current,
       [documentName]: {
+        ...data.document,
+        documentType: data.document.documentType ?? documentName,
         documentName,
-        fileName: file.name,
       },
-    }));
-    setPendingDocuments((current) => ({
-      ...current,
-      [documentName]: file,
     }));
     setMissingDocNames((current) =>
       current.filter(
         (m) => normalizeDocumentName(m) !== normalizeDocumentName(documentName)
       )
     );
+    setStatusMessage({ kind: "success", text: `${documentName} uploaded successfully.` });
   }
 
   async function handleDocumentDelete(documentName: string) {
@@ -837,11 +897,6 @@ export function NewApplicationForm() {
 
     if (!hasSavedDocument) {
       setUploadedDocuments((current) => {
-        const nextState = { ...current };
-        delete nextState[documentName];
-        return nextState;
-      });
-      setPendingDocuments((current) => {
         const nextState = { ...current };
         delete nextState[documentName];
         return nextState;
@@ -858,11 +913,6 @@ export function NewApplicationForm() {
     if (!response.ok) return;
 
     setUploadedDocuments((current) => {
-      const nextState = { ...current };
-      delete nextState[documentName];
-      return nextState;
-    });
-    setPendingDocuments((current) => {
       const nextState = { ...current };
       delete nextState[documentName];
       return nextState;
@@ -946,6 +996,20 @@ export function NewApplicationForm() {
                   }
                 />
               ))}
+
+              <FieldCard
+                label="Capital Investment"
+                value={info.capitalInvestment ?? ""}
+                helperText="Enter the declared capital investment amount in pesos."
+                error={fieldErrors.capitalInvestment}
+                disabled={isReadOnly}
+                onBlur={() => validateFieldOnBlur("capitalInvestment")}
+                onChange={(value) =>
+                  setInfo((current) =>
+                    normalizeBusinessInfo({ ...current, capitalInvestment: value })
+                  )
+                }
+              />
 
               <FormField
                 label="Business Activity"
@@ -1107,7 +1171,7 @@ export function NewApplicationForm() {
         <div className={`space-y-4 ${lockInteractivityClass}`}>
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredDocs.length}`}
-            description="Select files locally first, then the final submit will save the documents and timestamps."
+            description="Upload each required document now. Final submit sends only document metadata references."
             variant="info"
           />
           <SectionCard
@@ -1136,6 +1200,7 @@ export function NewApplicationForm() {
                     onFileChange={(file) => {
                       void handleDocumentUpload(doc, file);
                     }}
+                    accept={DOCUMENT_FILE_INPUT_ACCEPT}
                     onRemove={() => {
                       void handleDocumentDelete(uploadedDoc?.documentName ?? doc);
                     }}
@@ -1150,7 +1215,7 @@ export function NewApplicationForm() {
       {step === 3 ? (
         <div className={`space-y-4 ${lockInteractivityClass}`}>
           <SectionCard
-            title="Preferred Payment Frequency"
+            title="Preferred Mode of Payment"
             description="Choose how you prefer to pay the assessed fees. Final payment details are confirmed after BPLO assessment."
           >
             <div className="grid gap-3 md:grid-cols-3">
@@ -1251,7 +1316,7 @@ export function NewApplicationForm() {
                 helper="Uploaded required document count"
               />
               <ReviewStat
-                label="Payment Frequency"
+                label="Mode of Payment"
                 value={
                   info.paymentFrequency === "ANNUAL"
                     ? "Annual"

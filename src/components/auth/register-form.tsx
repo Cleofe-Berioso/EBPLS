@@ -24,7 +24,10 @@ export function RegisterForm() {
 
     const form = e.currentTarget;
     const data = {
-      name: (form.elements.namedItem("name") as HTMLInputElement).value,
+      firstName: (form.elements.namedItem("firstName") as HTMLInputElement).value,
+      middleName: (form.elements.namedItem("middleName") as HTMLInputElement).value,
+      lastName: (form.elements.namedItem("lastName") as HTMLInputElement).value,
+      suffix: (form.elements.namedItem("suffix") as HTMLInputElement).value,
       email: (form.elements.namedItem("email") as HTMLInputElement).value,
       contactNumber: (form.elements.namedItem("contactNumber") as HTMLInputElement).value,
       password: (form.elements.namedItem("password") as HTMLInputElement).value,
@@ -130,10 +133,10 @@ export function RegisterForm() {
               <InfoBanner title="Registration issue" description={state.message} variant="danger" />
             )}
 
-            {/* Full Name */}
+            {/* Split Legal Name */}
             <FormField
-              label="Full Name"
-              htmlFor="name"
+              label="First Name"
+              htmlFor="firstName"
               hint="Use your legal name as it appears on government records."
               required
             >
@@ -142,13 +145,74 @@ export function RegisterForm() {
                   <User className="h-5 w-5 text-slate-500" />
                 </div>
                 <input
-                  id="name"
-                  name="name"
+                  id="firstName"
+                  name="firstName"
                   type="text"
-                  autoComplete="name"
+                  autoComplete="given-name"
                   required
                   className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                  placeholder="Juan dela Cruz"
+                  placeholder="Juan"
+                />
+              </div>
+            </FormField>
+
+            <FormField
+              label="Middle Name"
+              htmlFor="middleName"
+              hint="Optional. Leave blank if not applicable."
+            >
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-slate-500" />
+                </div>
+                <input
+                  id="middleName"
+                  name="middleName"
+                  type="text"
+                  autoComplete="additional-name"
+                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Santos"
+                />
+              </div>
+            </FormField>
+
+            <FormField
+              label="Last Name"
+              htmlFor="lastName"
+              required
+            >
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-slate-500" />
+                </div>
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  autoComplete="family-name"
+                  required
+                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Dela Cruz"
+                />
+              </div>
+            </FormField>
+
+            <FormField
+              label="Suffix"
+              htmlFor="suffix"
+              hint="Optional (e.g., Jr., Sr., III)."
+            >
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-slate-500" />
+                </div>
+                <input
+                  id="suffix"
+                  name="suffix"
+                  type="text"
+                  autoComplete="honorific-suffix"
+                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Jr."
                 />
               </div>
             </FormField>

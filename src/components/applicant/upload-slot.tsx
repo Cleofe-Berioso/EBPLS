@@ -10,6 +10,7 @@ interface UploadSlotProps {
   disabled?: boolean;
   helperText?: string;
   error?: string;
+  accept?: string;
 }
 
 function formatUploadTimestamp(date: Date | string): string {
@@ -34,6 +35,7 @@ export function UploadSlot({
   disabled = false,
   helperText,
   error,
+  accept,
 }: UploadSlotProps) {
   const inputId = `upload-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
@@ -87,9 +89,13 @@ export function UploadSlot({
       <input
         id={inputId}
         type="file"
+        accept={accept}
         disabled={disabled}
         className="sr-only"
-        onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+        onChange={(event) => {
+          onFileChange(event.target.files?.[0] ?? null);
+          event.target.value = "";
+        }}
       />
       <p className="mt-2 text-xs text-slate-700">
         {fileName ? `Selected: ${fileName}` : "No file selected"}

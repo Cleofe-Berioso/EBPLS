@@ -12,7 +12,7 @@ function createPrismaClient(): PrismaClient {
     throw new Error("DATABASE_URL is required");
   }
 
-  const adapter = new PrismaPg({ connectionString: dbUrl });
+  const adapter = new PrismaPg({ connectionString: dbUrl }, { schema: "ebpls" });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],

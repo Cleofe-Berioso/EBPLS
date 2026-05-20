@@ -1,6 +1,7 @@
 export interface AddressOption {
   label: string;
   value: string;
+  code?: string;
   iso2?: string;
   name: string;
 }

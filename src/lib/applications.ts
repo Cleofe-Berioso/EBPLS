@@ -6,6 +6,11 @@ import { toMoneyNumber } from "@/lib/money";
 import { resolveBucketByMimeType } from "@/lib/document-storage";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import {
+  DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
+} from "@/lib/document-upload-rules";
+import { APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE } from "@/lib/applicant-api";
+import {
   applyLockedBusinessFields,
   calculateAgeFromBirthDate,
   isCorporation,
@@ -207,35 +212,47 @@ async function assertUniqueBusinessIdentity(params: {
     throw new DuplicateBusinessIdentityError("tin");
   }
 
-  // Check BusinessApplication formData JSON for duplicate registrationNumber
+  // Check BusinessApplication formData JSON for duplicate registrationNumber.
   // Exclude REJECTED/REVOKED statuses and the current application being edited.
-  // Also exclude all applications belonging to the same businessRecordId (for RENEWAL/CLOSURE):
-  //   - When excludeRecordId is '' (NEW): condition ('' = '') is TRUE → no additional filtering, same as before.
-  //   - When excludeRecordId is a real ID (RENEWAL/CLOSURE): applications for that business are excluded,
-  //     but applications for a DIFFERENT business with the same reg# are still caught.
-  const regNumDup = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT "id" FROM "BusinessApplication"
-    WHERE "formData"->>'registrationNumber' = ${registrationNumber}
-    AND "status" NOT IN ('REJECTED', 'REVOKED')
-    AND "id" != ${excludeAppId}
-    AND (${excludeRecordId} = '' OR "businessRecordId" IS NULL OR "businessRecordId" != ${excludeRecordId})
-    LIMIT 1
-  `;
-  if (regNumDup.length > 0) {
+  // For renewals/closures, also exclude applications linked to same business record.
+  const regNumDup = await prisma.businessApplication.findFirst({
+    where: {
+      formData: {
+        path: ["registrationNumber"],
+        equals: registrationNumber,
+      },
+      status: { notIn: ["REJECTED", "REVOKED"] },
+      ...(excludeAppId ? { id: { not: excludeAppId } } : {}),
+      ...(excludeRecordId
+        ? {
+            OR: [{ businessRecordId: null }, { businessRecordId: { not: excludeRecordId } }],
+          }
+        : {}),
+    },
+    select: { id: true },
+  });
+  if (regNumDup) {
     throw new DuplicateBusinessIdentityError("registrationNumber");
   }
 
-  // Check BusinessApplication formData JSON for duplicate TIN
-  // Same businessRecordId exclusion logic as above.
-  const tinDup = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT "id" FROM "BusinessApplication"
-    WHERE "formData"->>'tin' = ${tin}
-    AND "status" NOT IN ('REJECTED', 'REVOKED')
-    AND "id" != ${excludeAppId}
-    AND (${excludeRecordId} = '' OR "businessRecordId" IS NULL OR "businessRecordId" != ${excludeRecordId})
-    LIMIT 1
-  `;
-  if (tinDup.length > 0) {
+  // Check BusinessApplication formData JSON for duplicate TIN.
+  const tinDup = await prisma.businessApplication.findFirst({
+    where: {
+      formData: {
+        path: ["tin"],
+        equals: tin,
+      },
+      status: { notIn: ["REJECTED", "REVOKED"] },
+      ...(excludeAppId ? { id: { not: excludeAppId } } : {}),
+      ...(excludeRecordId
+        ? {
+            OR: [{ businessRecordId: null }, { businessRecordId: { not: excludeRecordId } }],
+          }
+        : {}),
+    },
+    select: { id: true },
+  });
+  if (tinDup) {
     throw new DuplicateBusinessIdentityError("tin");
   }
 }
@@ -413,6 +430,7 @@ function sanitizeDocuments(documents: SaveApplicationInput["documents"]) {
     .filter((doc) => doc.documentName.trim() && doc.fileName.trim())
     .map((doc) => ({
       id: doc.id,
+      documentType: doc.documentType,
       documentName: doc.documentName.trim(),
       fileName: doc.fileName.trim(),
       storagePath: doc.storagePath,
@@ -432,6 +450,11 @@ function sanitizeSubmitFiles(submitFiles: SubmitFileInput[]) {
       documentName: entry.documentName.trim(),
       file: entry.file,
     }));
+
+  const oversized = sanitized.find((entry) => entry.file.size > MAX_DOCUMENT_FILE_SIZE_BYTES);
+  if (oversized) {
+    throw new Error(DOCUMENT_UPLOAD_ERROR_MAX_SIZE);
+  }
 
   const seen = new Set<string>();
   for (const entry of sanitized) {
@@ -527,13 +550,6 @@ function validateSubmitPayload(
   const identityFormats = validateBusinessIdentityFormats(normalizedFormData);
   if (!identityFormats.registrationNumber || !identityFormats.tin) {
     throw new Error("Wrong Format");
-  }
-
-  if (!normalizedFormData.ownerFirstName?.trim()) {
-    missingFields.push("ownerFirstName (First Name is required)");
-  }
-  if (!normalizedFormData.ownerSurname?.trim()) {
-    missingFields.push("ownerSurname (Surname is required)");
   }
 
   if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
@@ -712,9 +728,21 @@ function validateSubmitPayload(
     })
     .map((doc) => `${doc} (invalid file metadata)`);
 
-  if (missingFields.length || missingDocuments.length || invalidDocumentMetadata.length) {
+  const oversizedDocuments = mergedDocuments
+    .filter((doc) => {
+      const size =
+        typeof doc.sizeBytes === "number"
+          ? doc.sizeBytes
+          : typeof doc.fileSize === "number"
+            ? doc.fileSize
+            : 0;
+      return size > MAX_DOCUMENT_FILE_SIZE_BYTES;
+    })
+    .map((doc) => `${doc.documentName} (exceeds 10MB max file size)`);
+
+  if (missingFields.length || missingDocuments.length || invalidDocumentMetadata.length || oversizedDocuments.length) {
     throw new SubmitValidationError({
-      missingFields: [...missingFields, ...invalidDocumentMetadata],
+      missingFields: [...missingFields, ...invalidDocumentMetadata, ...oversizedDocuments],
       missingDocuments,
     });
   }
@@ -817,6 +845,29 @@ export async function saveApplicantApplication(
   input: SaveApplicationInput,
   submitFiles: SubmitFileInput[] = []
 ) {
+  const applicantUser = await prisma.user.findUnique({
+    where: { id: applicantId },
+    select: { id: true, email: true, role: true, isActive: true },
+  });
+
+  if (
+    !applicantUser ||
+    applicantUser.role !== "APPLICANT" ||
+    !applicantUser.isActive
+  ) {
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[ApplicantSubmission] invalid-applicant", {
+        requestedApplicantId: applicantId,
+        resolvedApplicantId: applicantUser?.id ?? null,
+        resolvedApplicantEmail: applicantUser?.email ?? null,
+        resolvedApplicantRole: applicantUser?.role ?? null,
+        resolvedApplicantActive: applicantUser?.isActive ?? null,
+      });
+    }
+
+    throw new ApplicantEligibilityError(APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE, 401);
+  }
+
   const nextStatus = input.mode === "SUBMIT" ? "SUBMITTED" : "DRAFT";
   const documents = sanitizeDocuments(input.documents);
   const normalizedSubmitFiles = sanitizeSubmitFiles(submitFiles);

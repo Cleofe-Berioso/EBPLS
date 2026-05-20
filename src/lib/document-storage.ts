@@ -2,14 +2,14 @@ import "server-only";
 
 import path from "node:path";
 import { getSupabaseStorageAdminClient } from "@/lib/supabase-storage-server";
+import {
+  ALLOWED_DOCUMENT_MIME_TYPES,
+  DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
+  DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE,
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
+} from "@/lib/document-upload-rules";
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const ALLOWED_MIME_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+const ALLOWED_MIME_TYPES = new Set<string>(ALLOWED_DOCUMENT_MIME_TYPES);
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const PDF_BUCKET = process.env.S3_PDF_BUCKET ?? "ebpls-pdfs";
 const IMAGE_BUCKET = process.env.S3_IMAGE_BUCKET ?? "ebpls-images";
@@ -35,6 +35,13 @@ function joinObjectPath(parts: string[]): string {
     .join("/");
 }
 
+function extensionFromMimeType(mimeType: string): string {
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  return "webp";
+}
+
 function inferBucketFromStoragePath(storagePath: string): DocumentBucket {
   const extension = path.extname(storagePath).toLowerCase();
   if (extension === ".pdf") {
@@ -57,7 +64,7 @@ export function resolveBucketByMimeType(mimeType: string): DocumentBucket {
     return IMAGE_BUCKET;
   }
 
-  throw new Error("Unsupported file type. Please upload PDF, JPG, PNG, or WEBP files.");
+  throw new Error(DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE);
 }
 
 export function resolveBucketByStoragePath(storagePath: string): DocumentBucket {
@@ -77,19 +84,31 @@ function buildApplicationObjectPath(params: {
   return joinObjectPath(["applications", applicationId, documentType, fileName]);
 }
 
+function buildProfileImageObjectPath(params: {
+  applicantId: string;
+  mimeType: string;
+}): string {
+  const applicantId = sanitizePathSegment(params.applicantId);
+  const extension = extensionFromMimeType(params.mimeType);
+  const fileName = `profile-picture.${extension}`;
+
+  return joinObjectPath(["profile-pictures", applicantId, fileName]);
+}
+
 export async function uploadDocumentFile(params: {
   file: File;
   objectPath?: string;
   objectPrefix?: string;
+  upsert?: boolean;
 }) {
-  const { file, objectPrefix, objectPath } = params;
+  const { file, objectPrefix, objectPath, upsert = false } = params;
 
   if (!ALLOWED_MIME_TYPES.has(file.type)) {
-    throw new Error("Unsupported file type. Please upload PDF, JPG, PNG, or WEBP files.");
+    throw new Error(DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE);
   }
 
-  if (file.size > MAX_UPLOAD_BYTES) {
-    throw new Error("File exceeds 10 MB limit.");
+  if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+    throw new Error(DOCUMENT_UPLOAD_ERROR_MAX_SIZE);
   }
 
   const bucket = resolveBucketByMimeType(file.type);
@@ -104,7 +123,7 @@ export async function uploadDocumentFile(params: {
   const supabase = getSupabaseStorageAdminClient();
   const uploadResult = await supabase.storage.from(bucket).upload(storagePath, file, {
     contentType: file.type,
-    upsert: false,
+    upsert,
   });
 
   if (uploadResult.error) {
@@ -137,6 +156,22 @@ export async function uploadApplicationFile(params: {
   });
 }
 
+export async function uploadApplicantProfileImage(params: {
+  applicantId: string;
+  file: File;
+}) {
+  const objectPath = buildProfileImageObjectPath({
+    applicantId: params.applicantId,
+    mimeType: params.file.type,
+  });
+
+  return uploadDocumentFile({
+    file: params.file,
+    objectPath,
+    upsert: true,
+  });
+}
+
 export async function createStorageSignedUrl(params: {
   storagePath: string;
   mimeType: string;
@@ -145,6 +180,28 @@ export async function createStorageSignedUrl(params: {
   download?: boolean;
 }) {
   const bucket = resolveBucketByMimeType(params.mimeType);
+  const supabase = getSupabaseStorageAdminClient();
+  const result = await supabase.storage.from(bucket).createSignedUrl(params.storagePath, params.expiresIn ?? 60, {
+    download: params.download ? params.downloadFileName || true : false,
+  });
+
+  if (result.error || !result.data?.signedUrl) {
+    throw new Error(result.error?.message ?? "Unable to create signed URL");
+  }
+
+  return {
+    bucket,
+    signedUrl: result.data.signedUrl,
+  };
+}
+
+export async function createStorageSignedUrlByPath(params: {
+  storagePath: string;
+  expiresIn?: number;
+  downloadFileName?: string;
+  download?: boolean;
+}) {
+  const bucket = resolveBucketByStoragePath(params.storagePath);
   const supabase = getSupabaseStorageAdminClient();
   const result = await supabase.storage.from(bucket).createSignedUrl(params.storagePath, params.expiresIn ?? 60, {
     download: params.download ? params.downloadFileName || true : false,

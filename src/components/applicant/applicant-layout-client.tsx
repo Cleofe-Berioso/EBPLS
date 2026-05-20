@@ -2,9 +2,20 @@
 
 import Link from "next/link";
 import { Bell, PanelLeftClose, PanelLeftOpen, UserCircle2, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { ApplicantSidebar } from "@/components/applicant/applicant-sidebar";
 import { actionButtonStyles } from "@/components/ui/action-button";
+
+const PROFILE_PICTURE_SETUP_PATH = "/applicant/profile-picture/setup";
+
+function isAllowedNextPath(value: string | null): value is string {
+  return Boolean(
+    value &&
+      value.startsWith("/applicant/") &&
+      !value.startsWith(PROFILE_PICTURE_SETUP_PATH)
+  );
+}
 
 export function ApplicantLayoutClient({
   userName,
@@ -15,8 +26,116 @@ export function ApplicantLayoutClient({
   signOutAction: () => Promise<void>;
   children: ReactNode;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [guardReady, setGuardReady] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+
+  // Refs to prevent repeated fetching. Reset when pathname changes so
+  // post-upload navigation re-checks once, then stabilises.
+  const hasProfileRef = useRef(false);
+  const isCheckingRef = useRef(false);
+
+  useEffect(() => {
+    // Guard: don't start a second concurrent check.
+    if (isCheckingRef.current) return;
+
+    const onSetupPage = pathname.startsWith(PROFILE_PICTURE_SETUP_PATH);
+
+    // Fast path: profile already confirmed and we're not on the setup page.
+    // Skip the fetch entirely — no loading flash, no network call.
+    if (hasProfileRef.current && !onSetupPage) {
+      setGuardReady(true);
+      return;
+    }
+
+    let active = true;
+    isCheckingRef.current = true;
+    setGuardReady(false);
+
+    async function runProfilePictureGuard() {
+      try {
+        const response = await fetch("/api/applicant/profile-picture", { cache: "no-store" });
+        if (!response.ok) {
+          if (active) setGuardReady(true);
+          return;
+        }
+
+        const data = (await response.json()) as {
+          profileImage?: {
+            hasProfileImage?: boolean;
+            signedUrl?: string | null;
+          };
+        };
+
+        const hasProfileImage = Boolean(data.profileImage?.hasProfileImage);
+
+        if (active) {
+          setProfileImageUrl(data.profileImage?.signedUrl ?? null);
+        }
+
+        if (!hasProfileImage && !onSetupPage) {
+          // Read search string at execution time — not as a reactive dep.
+          const rawSearch = typeof window !== "undefined" ? window.location.search : "";
+          const rawQuery = rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch;
+          const nextPath = rawQuery ? `${pathname}?${rawQuery}` : pathname;
+          if (active) {
+            router.replace(`${PROFILE_PICTURE_SETUP_PATH}?next=${encodeURIComponent(nextPath)}`);
+          }
+          return;
+        }
+
+        if (hasProfileImage && onSetupPage) {
+          const params =
+            typeof window !== "undefined"
+              ? new URLSearchParams(window.location.search)
+              : new URLSearchParams();
+          const candidateNext = params.get("next");
+          const target = isAllowedNextPath(candidateNext)
+            ? candidateNext
+            : "/applicant/dashboard";
+          if (active) {
+            hasProfileRef.current = true;
+            router.replace(target);
+          }
+          return;
+        }
+
+        if (active) {
+          hasProfileRef.current = hasProfileImage;
+          setGuardReady(true);
+        }
+      } finally {
+        if (active) {
+          isCheckingRef.current = false;
+        }
+      }
+    }
+
+    void runProfilePictureGuard();
+
+    return () => {
+      active = false;
+      // Reset the in-flight flag so the next pathname-triggered effect can run.
+      isCheckingRef.current = false;
+    };
+  }, [pathname, router]); // searchParams intentionally excluded — read via window.location inside effect
+
+  if (!guardReady) {
+    return (
+      <div className="app-shell bg-transparent text-slate-900">
+        <main className="app-shell-main min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl rounded-2xl border border-slate-200 bg-white p-6">
+            <p role="status" aria-live="polite" className="text-sm text-slate-600">
+              Checking profile picture requirement...
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell bg-transparent text-slate-900">
@@ -71,9 +190,18 @@ export function ApplicantLayoutClient({
                 <p className="truncate text-sm font-semibold text-slate-900">{userName}</p>
                 <p className="truncate text-xs text-slate-500">Applicant Portal</p>
               </div>
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-                <UserCircle2 className="h-5 w-5" />
-              </span>
+              {profileImageUrl ? (
+                <img
+                  src={profileImageUrl}
+                  alt={`${userName} profile picture`}
+                  className="h-10 w-10 rounded-xl object-cover ring-1 ring-emerald-100"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                  <UserCircle2 className="h-5 w-5" />
+                </span>
+              )}
               <Link href="/applicant/profile" className={actionButtonStyles("secondary", "sm")}>
                 Profile
               </Link>

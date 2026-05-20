@@ -54,6 +54,7 @@ export const STATUS_FLOW: ApplicationStatus[] = [
 
 export interface ApplicationDocumentInput {
   id?: string;
+  documentType?: string;
   documentName: string;
   fileName: string;
   storagePath?: string;
@@ -145,6 +146,7 @@ export interface BusinessInfo {
   ownerFirstName?: string;
   ownerMiddleName?: string;
   ownerSurname?: string;
+  ownerSuffix?: string;
   birthDate?: string;
   ownerAge?: string;
   capitalInvestment?: string;

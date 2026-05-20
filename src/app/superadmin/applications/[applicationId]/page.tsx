@@ -306,7 +306,7 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
           >
             <div className="grid gap-4 md:grid-cols-2">
               {labelValue("TOP Number", app.feeAssessment.assessmentNumber ?? "-")}
-              {labelValue("Payment Frequency", app.feeAssessment.paymentFrequency ?? "-")}
+              {labelValue("Mode of Payment", app.feeAssessment.paymentFrequency ?? "-")}
               {labelValue("Total Amount", currency(app.feeAssessment.totalAmount))}
               {labelValue("Generated At", app.feeAssessment.generatedAt ? new Date(app.feeAssessment.generatedAt).toLocaleString("en-PH") : "-")}
               {labelValue("Mayor's Permit Fee", currency(app.feeAssessment.mayorsPermitFee))}

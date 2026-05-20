@@ -497,7 +497,7 @@ export default function BploPaymentVerificationPage() {
                   helper="Balance after verified payments"
                 />
                 <SummaryTile
-                  label="Payment Frequency"
+                  label="Mode of Payment"
                   value={detail.top.paymentFrequency ? detail.top.paymentFrequency.replace("_", "-") : "-"}
                   helper="Current TOP release schedule"
                 />

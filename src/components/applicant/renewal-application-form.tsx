@@ -24,6 +24,10 @@ import {
   normalizeDocumentName,
   resolveRequiredDocuments,
 } from "@/lib/required-documents";
+import {
+  DOCUMENT_FILE_INPUT_ACCEPT,
+  validateDocumentFileUpload,
+} from "@/lib/document-upload-rules";
 import { isValidLineOfBusiness, LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
 import type {
   ApplicationDocumentInput,
@@ -70,6 +74,10 @@ const lockedFields: Array<keyof BusinessInfo> = [
   "businessName",
   "tradeName",
   "ownerName",
+  "ownerFirstName",
+  "ownerMiddleName",
+  "ownerSurname",
+  "ownerSuffix",
   "nationality",
 ];
 
@@ -103,12 +111,15 @@ const BUSINESS_LOCATION_ERROR = "Please pin the business location inside EB Maga
 function validateBusinessLocation(info: BusinessInfo): Partial<Record<keyof BusinessInfo, string>> {
   const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
 
-  if (info.businessLatitude == null || info.businessLongitude == null) {
+  const latitude = Number(info.businessLatitude);
+  const longitude = Number(info.businessLongitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     nextErrors.businessLatitude = BUSINESS_LOCATION_ERROR;
     return nextErrors;
   }
 
-  if (!isWithinEbMagalona(info.businessLatitude, info.businessLongitude)) {
+  if (!isWithinEbMagalona(latitude, longitude)) {
     nextErrors.businessLatitude = BUSINESS_LOCATION_ERROR;
   }
 
@@ -138,19 +149,42 @@ function validateFixedEbMagalonaAddress(info: BusinessInfo): Partial<Record<keyo
     nextErrors.cityMunicipality = `Business city/municipality must be ${EB_MAGALONA_CITY}.`;
   }
 
-  if (!info.streetAddress?.trim()) {
-    nextErrors.streetAddress = "Street Address is required.";
-  }
-
-  if (!info.barangay?.trim()) {
-    nextErrors.barangay = "Select a barangay for EB Magalona.";
-  }
-
-  if (!info.businessAddress?.trim()) {
-    nextErrors.businessAddress = "Business Address is required.";
-  }
-
   return nextErrors;
+}
+
+function logStepValidationDebug(params: {
+  step: number;
+  missingKeys: string[];
+  info: BusinessInfo;
+}) {
+  if (process.env.NODE_ENV === "production") return;
+  if (params.missingKeys.length === 0) return;
+
+  const businessAddressRelatedEntries = Object.entries(params.info).filter(([key]) =>
+    key.startsWith("business") ||
+    ["country", "countryCode", "province", "provinceCode", "cityMunicipality", "streetAddress", "barangay"].includes(key)
+  );
+
+  console.info("[RenewalApplicationForm] Step validation missing fields", {
+    stepIndex: params.step,
+    stepName: steps[params.step]?.title ?? "Unknown",
+    missingKeys: params.missingKeys,
+    businessAddressSnapshot: {
+      country: params.info.country,
+      province: params.info.province,
+      cityMunicipality: params.info.cityMunicipality,
+      barangay: params.info.barangay,
+      streetAddress: params.info.streetAddress,
+      businessBarangay: params.info.businessBarangay,
+      businessStreet: params.info.businessStreetAddress,
+      businessStreetAddress: params.info.businessStreetAddress,
+      businessLatitude: params.info.businessLatitude,
+      businessLatitudeType: typeof params.info.businessLatitude,
+      businessLongitude: params.info.businessLongitude,
+      businessLongitudeType: typeof params.info.businessLongitude,
+    },
+    businessAddressRelatedFormData: Object.fromEntries(businessAddressRelatedEntries),
+  });
 }
 
 function parsePositiveAmount(value: string): number | null {
@@ -159,6 +193,39 @@ function parsePositiveAmount(value: string): number | null {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
+}
+
+function sanitizeDocumentMetadata(documents: ApplicationDocumentInput[]): ApplicationDocumentInput[] {
+  return documents.map((doc) => ({
+    id: doc.id,
+    documentType: doc.documentType ?? doc.documentName,
+    documentName: doc.documentName,
+    fileName: doc.fileName,
+    originalName: doc.originalName,
+    mimeType: doc.mimeType,
+    sizeBytes: doc.sizeBytes,
+    fileSize: doc.fileSize,
+    bucket: doc.bucket,
+    storagePath: doc.storagePath,
+    filePath: doc.filePath,
+  }));
+}
+
+function buildCleanPayload(params: {
+  applicationId?: string;
+  selectedBusinessId: string;
+  mode: PersistMode;
+  info: BusinessInfo;
+  documents: ApplicationDocumentInput[];
+}): SaveApplicationInput {
+  return {
+    applicationId: params.applicationId,
+    applicationType: "RENEWAL",
+    businessRecordId: params.selectedBusinessId || undefined,
+    formData: normalizeBusinessInfo(params.info),
+    documents: sanitizeDocumentMetadata(params.documents),
+    mode: params.mode,
+  };
 }
 
 function ReviewStat({
@@ -256,7 +323,6 @@ export function RenewalApplicationForm() {
   const [blockedRecords, setBlockedRecords] = useState<RenewalBlockedRecord[]>([]);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
-  const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [statusMessage, setStatusMessage] = useState<{
     kind: "success" | "error";
     text: string;
@@ -377,9 +443,9 @@ export function RenewalApplicationForm() {
     if (field === "grossProfit") {
       const grossRaw = normalizedInfo.grossProfit?.trim() ?? "";
       if (!grossRaw) {
-        nextErrors.grossProfit = "Gross Profit is required.";
+        nextErrors.grossProfit = "Gross Receipts / Gross Sales is required.";
       } else if (parsePositiveAmount(grossRaw) == null) {
-        nextErrors.grossProfit = "Gross Profit must be a positive amount.";
+        nextErrors.grossProfit = "Gross Receipts / Gross Sales must be a positive amount.";
       } else if (nextErrors.grossProfit !== "This already exist") {
         delete nextErrors.grossProfit;
       }
@@ -496,23 +562,27 @@ export function RenewalApplicationForm() {
     }
 
     if (step === 1) {
+      const normalizedInfo = normalizeBusinessInfo(info);
       const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
-      if (!info.email.trim()) nextErrors.email = "Email is required.";
-      if (!info.mainOfficeAddress.trim()) nextErrors.mainOfficeAddress = "Main Office Address is required.";
-      if (!info.phone.trim()) nextErrors.phone = "Contact Number is required.";
-      if (!info.businessAddress.trim()) {
-        nextErrors.businessAddress = "Business Address is required.";
-      }
-      if (!hasLockedRecordLineOfBusiness && !info.lineOfBusiness.trim()) {
+      if (!normalizedInfo.email.trim()) nextErrors.email = "Email is required.";
+      if (!normalizedInfo.mainOfficeAddress.trim()) nextErrors.mainOfficeAddress = "Main Office Address is required.";
+      if (!normalizedInfo.phone.trim()) nextErrors.phone = "Contact Number is required.";
+      if (!hasLockedRecordLineOfBusiness && !normalizedInfo.lineOfBusiness.trim()) {
         nextErrors.lineOfBusiness = "Line of Business is required.";
       }
-      if (requiresBarangay(info) && !info.mainOfficeBarangay?.trim()) {
+      if (requiresBarangay(normalizedInfo) && !normalizedInfo.mainOfficeBarangay?.trim()) {
         nextErrors.mainOfficeBarangay = "Barangay is required for Philippine main office addresses.";
       }
+      if (!normalizedInfo.businessBarangay?.trim()) {
+        nextErrors.businessBarangay = "Business Barangay is required.";
+      }
+      if (!normalizedInfo.businessStreetAddress?.trim()) {
+        nextErrors.businessStreetAddress = "Business Street / Purok / Building / Unit is required.";
+      }
 
-      Object.assign(nextErrors, validateFixedEbMagalonaAddress(info));
+      Object.assign(nextErrors, validateFixedEbMagalonaAddress(normalizedInfo));
 
-      const birthDateRaw = info.birthDate?.trim() ?? "";
+      const birthDateRaw = normalizedInfo.birthDate?.trim() ?? "";
       if (!birthDateRaw) {
         nextErrors.birthDate = "Birthdate is required.";
       } else {
@@ -526,22 +596,28 @@ export function RenewalApplicationForm() {
         }
       }
 
-      const grossRaw = info.grossProfit?.trim() ?? "";
+      const grossRaw = normalizedInfo.grossProfit?.trim() ?? "";
       if (!grossRaw) {
-        nextErrors.grossProfit = "Gross Profit is required.";
+        nextErrors.grossProfit = "Gross Receipts / Gross Sales is required.";
       } else if (parsePositiveAmount(grossRaw) == null) {
-        nextErrors.grossProfit = "Gross Profit must be a positive amount.";
+        nextErrors.grossProfit = "Gross Receipts / Gross Sales must be a positive amount.";
       }
 
-      const identityFormats = validateBusinessIdentityFormats(info);
-      if (info.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
+      const identityFormats = validateBusinessIdentityFormats(normalizedInfo);
+      if (normalizedInfo.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
         nextErrors.registrationNumber = "Wrong Format";
       }
-      if (info.tin.trim().length > 0 && !identityFormats.tin) {
+      if (normalizedInfo.tin.trim().length > 0 && !identityFormats.tin) {
         nextErrors.tin = "Wrong Format";
       }
 
-      Object.assign(nextErrors, validateBusinessLocation(info));
+      Object.assign(nextErrors, validateBusinessLocation(normalizedInfo));
+
+      logStepValidationDebug({
+        step,
+        missingKeys: Object.keys(nextErrors),
+        info: normalizedInfo,
+      });
 
       if (Object.keys(nextErrors).length > 0) {
         setFieldErrors(nextErrors);
@@ -652,8 +728,8 @@ export function RenewalApplicationForm() {
 
       const grossRaw = info.grossProfit?.trim() ?? "";
       if (!grossRaw || parsePositiveAmount(grossRaw) == null) {
-        setFieldErrors({ grossProfit: "Gross Profit must be a positive amount." });
-        setStatusMessage({ kind: "error", text: "Gross Profit must be a positive amount." });
+        setFieldErrors({ grossProfit: "Gross Receipts / Gross Sales must be a positive amount." });
+        setStatusMessage({ kind: "error", text: "Gross Receipts / Gross Sales must be a positive amount." });
         setSubmitting(false);
         return null;
       }
@@ -667,7 +743,6 @@ export function RenewalApplicationForm() {
 
       const missingDocuments = getMissingRequiredDocuments(requiredRenewalDocs, [
         ...Object.values(uploadedDocuments).map((doc) => doc.documentName),
-        ...Object.keys(pendingDocuments),
       ]);
       if (missingDocuments.length > 0) {
         setStep(2);
@@ -681,35 +756,19 @@ export function RenewalApplicationForm() {
       }
     }
 
-    const payload: SaveApplicationInput = {
+    const payload = buildCleanPayload({
       applicationId,
-      applicationType: "RENEWAL",
-      businessRecordId: selectedBusinessId || undefined,
-      formData: info,
-      documents: Object.values(uploadedDocuments),
+      selectedBusinessId,
       mode,
-    };
+      info,
+      documents: Object.values(uploadedDocuments),
+    });
 
-    const response =
-      mode === "SUBMIT"
-        ? await (async () => {
-            const formData = new FormData();
-            formData.append("payload", JSON.stringify(payload));
-            for (const [documentName, file] of Object.entries(pendingDocuments)) {
-              formData.append("documentNames", documentName);
-              formData.append("documentFiles", file, file.name);
-            }
-
-            return fetch("/api/applicant/applications", {
-              method: "POST",
-              body: formData,
-            });
-          })()
-        : await fetch("/api/applicant/applications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+    const response = await fetch("/api/applicant/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
     const data = (await response.json()) as {
       application?: { id: string; applicationNumber: string; status: string };
@@ -734,8 +793,6 @@ export function RenewalApplicationForm() {
     setApplicationId(data.application.id);
 
     if (mode === "SUBMIT") {
-      setPendingDocuments({});
-
       setStatusMessage({
         kind: "success",
         text: `Renewal ${data.application.applicationNumber} submitted successfully.`,
@@ -754,17 +811,56 @@ export function RenewalApplicationForm() {
     if (isReadOnly) return;
     if (!file) return;
 
+    const fileValidationError = validateDocumentFileUpload(file);
+    if (fileValidationError) {
+      setStatusMessage({ kind: "error", text: fileValidationError });
+      return;
+    }
+
+    let targetApplicationId = applicationId;
+    if (!targetApplicationId) {
+      const draftId = await persist("DRAFT");
+      if (!draftId) {
+        setStatusMessage({
+          kind: "error",
+          text: "Save a draft first before uploading documents.",
+        });
+        return;
+      }
+      targetApplicationId = draftId;
+    }
+
+    setSubmitting(true);
+    const uploadFormData = new FormData();
+    uploadFormData.append("documentName", documentName);
+    uploadFormData.append("file", file, file.name);
+
+    const response = await fetch(`/api/applicant/applications/${targetApplicationId}/documents`, {
+      method: "POST",
+      body: uploadFormData,
+    });
+
+    const data = (await response.json()) as { document?: ApplicationDocumentInput; error?: string };
+    setSubmitting(false);
+
+    if (!response.ok || !data.document) {
+      setStatusMessage({
+        kind: "error",
+        text: data.error ?? "Unable to upload document.",
+      });
+      return;
+    }
+
+    setApplicationId(targetApplicationId);
     setUploadedDocuments((current) => ({
       ...current,
       [documentName]: {
+        ...data.document,
+        documentType: data.document.documentType ?? documentName,
         documentName,
-        fileName: file.name,
       },
     }));
-    setPendingDocuments((current) => ({
-      ...current,
-      [documentName]: file,
-    }));
+    setStatusMessage({ kind: "success", text: `${documentName} uploaded successfully.` });
   }
 
   async function handleDocumentDelete(documentName: string) {
@@ -774,11 +870,6 @@ export function RenewalApplicationForm() {
 
     if (!hasSavedDocument) {
       setUploadedDocuments((current) => {
-        const nextState = { ...current };
-        delete nextState[documentName];
-        return nextState;
-      });
-      setPendingDocuments((current) => {
         const nextState = { ...current };
         delete nextState[documentName];
         return nextState;
@@ -795,11 +886,6 @@ export function RenewalApplicationForm() {
     if (!response.ok) return;
 
     setUploadedDocuments((current) => {
-      const nextState = { ...current };
-      delete nextState[documentName];
-      return nextState;
-    });
-    setPendingDocuments((current) => {
       const nextState = { ...current };
       delete nextState[documentName];
       return nextState;
@@ -939,7 +1025,27 @@ export function RenewalApplicationForm() {
             <BusinessInformationFields
               value={info}
               onChange={(nextInfo) => {
-                setInfo(normalizeBusinessInfo(nextInfo));
+                const normalizedNext = normalizeBusinessInfo(nextInfo);
+                setInfo({
+                  ...normalizedNext,
+                  businessStreetAddress: nextInfo.businessStreetAddress,
+                  streetAddress: nextInfo.streetAddress,
+                });
+                if (
+                  typeof normalizedNext.businessLatitude === "number" &&
+                  typeof normalizedNext.businessLongitude === "number" &&
+                  isWithinEbMagalona(normalizedNext.businessLatitude, normalizedNext.businessLongitude)
+                ) {
+                  setFieldErrors((current) => {
+                    if (!current.businessLatitude && !current.businessLongitude) {
+                      return current;
+                    }
+                    const nextErrors = { ...current };
+                    delete nextErrors.businessLatitude;
+                    delete nextErrors.businessLongitude;
+                    return nextErrors;
+                  });
+                }
               }}
               applicationType="RENEWAL"
               onFieldBlur={validateFieldOnBlur}
@@ -1004,6 +1110,23 @@ export function RenewalApplicationForm() {
                   />
                 </FormField>
               ))}
+
+              <FormField
+                label="Gross Receipts / Gross Sales"
+                hint="Enter the latest declared gross receipts or gross sales amount in pesos."
+                error={fieldErrors.grossProfit}
+              >
+                <input
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  value={info.grossProfit ?? ""}
+                  onBlur={() => validateFieldOnBlur("grossProfit")}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, grossProfit: event.target.value })
+                    )
+                  }
+                />
+              </FormField>
 
               <FormField label="Business Activity" error={fieldErrors.businessActivity}>
                 <select
@@ -1122,7 +1245,7 @@ export function RenewalApplicationForm() {
         <div className={`space-y-4 ${lockInteractivityClass}`}>
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredRenewalDocs.length}`}
-            description="Select files locally first, then the final submit will save the documents and timestamps."
+            description="Upload each required document now. Final submit sends only document metadata references."
             variant="info"
           />
           <SectionCard
@@ -1144,6 +1267,7 @@ export function RenewalApplicationForm() {
                     onFileChange={(file) => {
                       void handleDocumentUpload(doc, file);
                     }}
+                    accept={DOCUMENT_FILE_INPUT_ACCEPT}
                     onRemove={() => {
                       void handleDocumentDelete(uploadedDoc?.documentName ?? doc);
                     }}
@@ -1158,7 +1282,7 @@ export function RenewalApplicationForm() {
       {step === 3 ? (
         <div className={`space-y-4 ${lockInteractivityClass}`}>
           <SectionCard
-            title="Preferred Payment Frequency"
+            title="Preferred Mode of Payment"
             description="Choose how you prefer to pay the assessed fees. Final payment details are confirmed after BPLO assessment."
           >
             <div className="grid gap-3 md:grid-cols-3">

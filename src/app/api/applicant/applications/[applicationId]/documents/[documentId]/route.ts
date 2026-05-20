@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteApplicantDocument } from "@/lib/applications";
-import { requireApplicantSession } from "@/lib/applicant-api";
+import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import { removeApplicantDocument } from "@/lib/document-storage";
 
 interface RouteContext {
@@ -8,14 +8,14 @@ interface RouteContext {
 }
 
 export async function DELETE(_req: Request, context: RouteContext) {
-  const session = await requireApplicantSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authContext = await resolveApplicantSessionContext();
+  if (authContext.ok === false) {
+    return NextResponse.json({ error: authContext.error }, { status: authContext.status });
   }
 
   try {
     const { applicationId, documentId } = await context.params;
-    const removed = await deleteApplicantDocument(session.user.id, applicationId, documentId);
+    const removed = await deleteApplicantDocument(authContext.applicantId, applicationId, documentId);
     await removeApplicantDocument(removed.storagePath, removed.mimeType);
     return NextResponse.json({ ok: true });
   } catch (error) {

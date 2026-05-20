@@ -1,23 +1,27 @@
 import { NextResponse } from "next/server";
 
-import type { AddressApiErrorResponse, AddressOption, CountryStateCityState } from "@/lib/address-types";
+import {
+  ADDRESS_API_NOT_CONFIGURED_MESSAGE,
+  ADDRESS_API_REQUEST_FAILED_MESSAGE,
+  getCountryStateCityApiKey,
+  jsonAddressError,
+  normalizeCountryStateCityState,
+} from "@/lib/address-server";
+import type { CountryStateCityState } from "@/lib/address-types";
 
 export const dynamic = "force-dynamic";
 
-function jsonError(status: number, error: string) {
-  return NextResponse.json({ error } satisfies AddressApiErrorResponse, { status });
-}
-
 export async function GET(request: Request) {
-  const apiKey = process.env.COUNTRYSTATECITY_API_KEY;
+  const apiKey = getCountryStateCityApiKey();
   if (!apiKey) {
-    return jsonError(500, "Address API is not configured.");
+    console.error("[address/states] Missing COUNTRY_STATE_CITY_API_KEY");
+    return jsonAddressError(500, ADDRESS_API_NOT_CONFIGURED_MESSAGE);
   }
 
   const url = new URL(request.url);
   const countryCode = url.searchParams.get("countryCode")?.trim();
   if (!countryCode) {
-    return jsonError(400, "countryCode is required.");
+    return jsonAddressError(400, "countryCode is required.");
   }
 
   try {
@@ -29,19 +33,22 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
-      return jsonError(502, "Address list could not be loaded. Please try again.");
+      console.error("[address/states] CSC API failed", {
+        countryCode,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return jsonAddressError(502, ADDRESS_API_REQUEST_FAILED_MESSAGE);
     }
 
     const states = (await response.json()) as CountryStateCityState[];
-    const options: AddressOption[] = states.map((state) => ({
-      label: state.name,
-      value: state.iso2,
-      iso2: state.iso2,
-      name: state.name,
-    }));
+    const options = states
+      .map((state) => normalizeCountryStateCityState(state))
+      .filter((option): option is NonNullable<typeof option> => Boolean(option));
 
     return NextResponse.json(options);
-  } catch {
-    return jsonError(502, "Address list could not be loaded. Please try again.");
+  } catch (error) {
+    console.error("[address/states] Unexpected failure", { countryCode, error });
+    return jsonAddressError(502, ADDRESS_API_REQUEST_FAILED_MESSAGE);
   }
 }

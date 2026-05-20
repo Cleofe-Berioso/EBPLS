@@ -374,7 +374,7 @@ export function AssessmentFeeForm({ detail }: Props) {
       <SectionCard title="TOP Summary" description="Assessment totals are recalculated on the server during draft save and TOP generation.">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <SummaryTile
-            label="Payment Frequency"
+            label="Mode of Payment"
             value={displayPaymentFrequency ? PAYMENT_FREQ_LABELS[displayPaymentFrequency] : "Not selected"}
             helper="Applicant-selected frequency (read-only for BPLO)."
           />

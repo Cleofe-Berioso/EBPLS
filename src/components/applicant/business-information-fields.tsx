@@ -9,6 +9,7 @@ import {
   getRegistrationLabel,
   resolveNationalityOnBusinessTypeChange,
 } from "@/lib/business-rules";
+import { formatOwnerName } from "@/lib/person-name";
 import { NATIONALITY_OPTIONS } from "@/lib/nationality-options";
 import {
   buildEbMagalonaBusinessAddress,
@@ -54,31 +55,6 @@ function LockedHint({ visible }: { visible: boolean }) {
   );
 }
 
-/**
- * Normalizes a raw geocoded barangay string to the exact canonical spelling
- * in EB_MAGALONA_BARANGAYS. Handles "Brgy." / "Barangay" prefixes and case
- * differences. Returns undefined when no match is found.
- */
-function normalizeToEbMagalonaBarangay(raw: string): string | undefined {
-  const stripped = raw
-    .trim()
-    .replace(/^(brgy\.?|barangay|bgy\.?)\s*/i, "")
-    .trim();
-  if (!stripped) return undefined;
-  // Exact case-insensitive match
-  const exact = (EB_MAGALONA_BARANGAYS as readonly string[]).find(
-    (b) => b.toLowerCase() === stripped.toLowerCase()
-  );
-  if (exact) return exact;
-  // Prefix match: "Barangay 1" → "Barangay 1 (Pob.)"
-  const prefixMatch = (EB_MAGALONA_BARANGAYS as readonly string[]).find(
-    (b) =>
-      b.toLowerCase().startsWith(stripped.toLowerCase()) ||
-      stripped.toLowerCase().startsWith(b.toLowerCase())
-  );
-  return prefixMatch;
-}
-
 function normalizeAddressName(value: string): string {
   return value
     .trim()
@@ -96,9 +72,16 @@ export function BusinessInformationFields({
   lockedFields = [],
   fieldErrors = {},
   enableCascadingAddress = false,
+  onFieldBlur,
 }: BusinessInformationFieldsProps) {
   const registrationLabel = getRegistrationLabel(value.businessType);
   const registrationHelperText = getRegistrationHelperText(value.businessType);
+  const ownerIdentityLocked =
+    fieldLocked(lockedFields, "ownerName") ||
+    fieldLocked(lockedFields, "ownerFirstName") ||
+    fieldLocked(lockedFields, "ownerMiddleName") ||
+    fieldLocked(lockedFields, "ownerSurname") ||
+    fieldLocked(lockedFields, "ownerSuffix");
   const nationalityLocked = fieldLocked(lockedFields, "nationality");
   const selectedMainOfficeCountry = (value.mainOfficeCountry ?? "").trim();
   const selectedMainOfficeCountryCode = (value.mainOfficeCountryCode ?? "").trim();
@@ -122,22 +105,12 @@ export function BusinessInformationFields({
   const [barangayOptions, setBarangayOptions] = useState<AddressOption[]>([]);
   const [barangayLoading, setBarangayLoading] = useState(false);
   const [barangayError, setBarangayError] = useState<string | undefined>();
-  const [businessAddressStatus, setBusinessAddressStatus] = useState<{
-    type: "idle" | "loading" | "success" | "error";
-    message: string | null;
-  }>({
-    type: "idle",
-    message: null,
-  });
 
-  // Always-fresh ref to value — prevents stale closure in async callbacks
-  const valueRef = useRef(value);
-  valueRef.current = value;
-
-  // Holds the raw geocoded name when it didn't match EB_MAGALONA_BARANGAYS
-  const [geocodedBarangayUnmatched, setGeocodedBarangayUnmatched] = useState<
-    string | null
-  >(null);
+  // Keep refs to latest value/onChange so backfill effects don't re-run on every render.
+  const latestValueRef = useRef(value);
+  latestValueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const selectedMainOfficeCityCode = cityOptions.find(
     (option) =>
@@ -258,91 +231,43 @@ export function BusinessInformationFields({
     selectedMainOfficeCityCode,
   ]);
 
+  // Backfill country code from label when options first load (e.g. loading a saved draft).
+  // Only depends on the data that actually controls the backfill — not value/onChange refs —
+  // to avoid re-firing on every parent render.
   useEffect(() => {
     if (!selectedMainOfficeCountry || selectedMainOfficeCountryCode || countryOptions.length === 0) return;
     const match = countryOptions.find((option) => option.label === selectedMainOfficeCountry);
     if (match) {
-      onChange({ ...value, mainOfficeCountryCode: match.value });
+      onChangeRef.current({ ...latestValueRef.current, mainOfficeCountryCode: match.value });
     }
-  }, [countryOptions, onChange, selectedMainOfficeCountry, selectedMainOfficeCountryCode, value]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countryOptions, selectedMainOfficeCountry, selectedMainOfficeCountryCode]);
 
+  // Backfill province code from label when options first load.
   useEffect(() => {
     if (!selectedMainOfficeProvince || selectedMainOfficeProvinceCode || provinceOptions.length === 0) return;
     const match = provinceOptions.find((option) => option.label === selectedMainOfficeProvince);
     if (match) {
-      onChange({ ...value, mainOfficeProvinceCode: match.value });
+      onChangeRef.current({ ...latestValueRef.current, mainOfficeProvinceCode: match.value });
     }
-  }, [onChange, provinceOptions, selectedMainOfficeProvince, selectedMainOfficeProvinceCode, value]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provinceOptions, selectedMainOfficeProvince, selectedMainOfficeProvinceCode]);
 
-  // Pin moved — immediately clear stale resolved fields.
-  // Uses valueRef.current so we never spread pre-pin-move stale values back.
+  // Pin moved: update only coordinates, keep manual address fields intact.
+  // Use refs so the callback is stable and doesn't trigger downstream re-renders.
   const handlePickerChange = useCallback(
     (nextValue: { latitude: number; longitude: number } | null) => {
-      setGeocodedBarangayUnmatched(null);
-      onChange({
-        ...valueRef.current,
-        businessLatitude: nextValue?.latitude ?? null,
-        businessLongitude: nextValue?.longitude ?? null,
-        businessBarangay: undefined,
-        businessStreetAddress: undefined,
+      const latitude = nextValue == null ? null : Number(nextValue.latitude);
+      const longitude = nextValue == null ? null : Number(nextValue.longitude);
+
+      onChangeRef.current({
+        ...latestValueRef.current,
+        businessLatitude: latitude != null && Number.isFinite(latitude) ? latitude : null,
+        businessLongitude: longitude != null && Number.isFinite(longitude) ? longitude : null,
       });
     },
-    [onChange]
+    [] // stable for the lifetime of the component
   );
-
-  // Geocode result arrived — normalize the returned barangay to an exact
-  // EB_MAGALONA_BARANGAYS spelling before storing it. This prevents the
-  // mismatch where the <select> can't find "Santo Niño" (not in the list)
-  // and falls back to displaying the first option.
-  const handleAddressResolved = useCallback(
-    (
-      resolved: {
-        formattedAddress: string;
-        streetSuggestion?: string;
-        barangaySuggestion?: string;
-      },
-      coordinates: { latitude: number; longitude: number }
-    ) => {
-      const rawBarangay = resolved.barangaySuggestion?.trim() || undefined;
-      // Map geocoded name → exact dropdown option value
-      const matchedBarangay = rawBarangay
-        ? normalizeToEbMagalonaBarangay(rawBarangay)
-        : undefined;
-      if (rawBarangay && !matchedBarangay) {
-        // Geocode returned a place that's not in our official barangay list
-        setGeocodedBarangayUnmatched(rawBarangay);
-      } else {
-        setGeocodedBarangayUnmatched(null);
-      }
-      const newStreet = resolved.streetSuggestion?.trim() || undefined;
-      setBusinessAddressStatus({
-        type: "success",
-        message: "Business Address updated from pinned location.",
-      });
-      // valueRef.current is always the current state — no stale values spread back
-      onChange({
-        ...valueRef.current,
-        businessAddress: buildEbMagalonaBusinessAddress({
-          barangay: matchedBarangay,
-          streetAddress: newStreet,
-        }),
-        businessLatitude: coordinates.latitude,
-        businessLongitude: coordinates.longitude,
-        businessBarangay: matchedBarangay,
-        businessStreetAddress: newStreet,
-      });
-    },
-    [onChange]
-  );
-
-  const handleAddressResolveStart = useCallback(() => {
-    setGeocodedBarangayUnmatched(null);
-    setBusinessAddressStatus({ type: "loading", message: null });
-  }, []);
-
-  const handleAddressResolveError = useCallback((message: string) => {
-    setBusinessAddressStatus({ type: "error", message });
-  }, []);
 
   const generatedBusinessAddress = buildEbMagalonaBusinessAddress({
     barangay: value.businessBarangay,
@@ -482,12 +407,12 @@ export function BusinessInformationFields({
       </FormField>
 
       <FormField
-        label="Owner / President Name"
-        hint="Indicate the authorized owner or president."
+        label="Owner / President First Name"
+        hint="Indicate the authorized owner or president's first name."
         required
-        error={fieldErrors.ownerName}
+        error={fieldErrors.ownerFirstName ?? fieldErrors.ownerName}
       >
-        {fieldLocked(lockedFields, "ownerName") ? (
+        {ownerIdentityLocked ? (
           <div className="mb-2">
             <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
               Locked
@@ -495,12 +420,104 @@ export function BusinessInformationFields({
           </div>
         ) : null}
         <input
-          className={fieldClasses(fieldLocked(lockedFields, "ownerName"))}
-          value={value.ownerName}
-          disabled={fieldLocked(lockedFields, "ownerName")}
-          onChange={(event) => onChange({ ...value, ownerName: event.target.value })}
+          className={fieldClasses(ownerIdentityLocked)}
+          value={value.ownerFirstName ?? ""}
+          disabled={ownerIdentityLocked}
+          onChange={(event) => {
+            const ownerFirstName = event.target.value;
+            onChange({
+              ...value,
+              ownerFirstName,
+              ownerName: formatOwnerName({
+                ownerFirstName,
+                ownerMiddleName: value.ownerMiddleName,
+                ownerLastName: value.ownerSurname,
+                ownerSuffix: value.ownerSuffix,
+                ownerName: value.ownerName,
+              }),
+            });
+          }}
         />
-        <LockedHint visible={fieldLocked(lockedFields, "ownerName")} />
+        <LockedHint visible={ownerIdentityLocked} />
+      </FormField>
+
+      <FormField
+        label="Owner / President Middle Name"
+        hint="Optional. Leave blank if not applicable."
+        error={fieldErrors.ownerMiddleName}
+      >
+        <input
+          className={fieldClasses(ownerIdentityLocked)}
+          value={value.ownerMiddleName ?? ""}
+          disabled={ownerIdentityLocked}
+          onChange={(event) => {
+            const ownerMiddleName = event.target.value;
+            onChange({
+              ...value,
+              ownerMiddleName,
+              ownerName: formatOwnerName({
+                ownerFirstName: value.ownerFirstName,
+                ownerMiddleName,
+                ownerLastName: value.ownerSurname,
+                ownerSuffix: value.ownerSuffix,
+                ownerName: value.ownerName,
+              }),
+            });
+          }}
+        />
+      </FormField>
+
+      <FormField
+        label="Owner / President Surname"
+        hint="Indicate the authorized owner or president's surname."
+        required
+        error={fieldErrors.ownerSurname ?? fieldErrors.ownerName}
+      >
+        <input
+          className={fieldClasses(ownerIdentityLocked)}
+          value={value.ownerSurname ?? ""}
+          disabled={ownerIdentityLocked}
+          onChange={(event) => {
+            const ownerSurname = event.target.value;
+            onChange({
+              ...value,
+              ownerSurname,
+              ownerName: formatOwnerName({
+                ownerFirstName: value.ownerFirstName,
+                ownerMiddleName: value.ownerMiddleName,
+                ownerLastName: ownerSurname,
+                ownerSuffix: value.ownerSuffix,
+                ownerName: value.ownerName,
+              }),
+            });
+          }}
+        />
+      </FormField>
+
+      <FormField
+        label="Owner / President Suffix"
+        hint="Optional. Examples: Jr, Sr, III."
+        error={fieldErrors.ownerSuffix}
+      >
+        <input
+          className={fieldClasses(ownerIdentityLocked)}
+          value={value.ownerSuffix ?? ""}
+          disabled={ownerIdentityLocked}
+          onChange={(event) => {
+            const ownerSuffix = event.target.value;
+            onChange({
+              ...value,
+              ownerSuffix,
+              ownerName: formatOwnerName({
+                ownerFirstName: value.ownerFirstName,
+                ownerMiddleName: value.ownerMiddleName,
+                ownerLastName: value.ownerSurname,
+                ownerSuffix,
+                ownerName: value.ownerName,
+              }),
+            });
+          }}
+        />
       </FormField>
 
         <FormField
@@ -828,10 +845,10 @@ export function BusinessInformationFields({
             disabled={fieldLocked(lockedFields, "businessBarangay")}
             onChange={(event) => {
               const newBarangay = event.target.value || undefined;
-              setGeocodedBarangayUnmatched(null);
               onChange({
                 ...value,
                 businessBarangay: newBarangay,
+                barangay: newBarangay,
                 businessAddress: buildEbMagalonaBusinessAddress({
                   barangay: newBarangay,
                   streetAddress: value.businessStreetAddress,
@@ -848,13 +865,6 @@ export function BusinessInformationFields({
               </option>
             ))}
           </select>
-          {value.businessLatitude != null && businessAddressStatus.type !== "loading" && !value.businessBarangay ? (
-            <p className="mt-1 text-xs text-amber-700">
-              {geocodedBarangayUnmatched
-                ? `The resolved location (${geocodedBarangayUnmatched}) is not recognized as an EB Magalona barangay. Please select the correct barangay manually.`
-                : "Barangay could not be determined from the selected pin. Please select the correct barangay."}
-            </p>
-          ) : null}
         </FormField>
 
         <FormField
@@ -872,6 +882,7 @@ export function BusinessInformationFields({
               onChange({
                 ...value,
                 businessStreetAddress: newStreet,
+                streetAddress: newStreet,
                 businessAddress: buildEbMagalonaBusinessAddress({
                   barangay: value.businessBarangay,
                   streetAddress: newStreet,
@@ -880,17 +891,9 @@ export function BusinessInformationFields({
             }}
             placeholder="e.g., 123 Main St, Purok 5, or Building A Unit 201"
           />
-          {businessAddressStatus.type === "loading" ? (
-            <p className="mt-1 text-xs font-medium text-blue-700">Resolving from map pin…</p>
-          ) : null}
-          {value.businessLatitude != null && businessAddressStatus.type !== "loading" && !value.businessStreetAddress ? (
+          {value.businessLatitude != null && !value.businessStreetAddress ? (
             <p className="mt-1 text-xs text-amber-700">
-              Street/Purok could not be determined from the selected pin. Please enter the exact street, purok, building, or unit.
-            </p>
-          ) : null}
-          {businessAddressStatus.type === "error" && businessAddressStatus.message ? (
-            <p className="mt-1 text-xs text-amber-700">
-              {businessAddressStatus.message}
+              Enter the exact street, purok, building, or unit.
             </p>
           ) : null}
         </FormField>
@@ -905,10 +908,12 @@ export function BusinessInformationFields({
             onChange={handlePickerChange}
             readOnly={fieldLocked(lockedFields, "businessAddress")}
             error={fieldErrors.businessLatitude ?? fieldErrors.businessLongitude}
-            onAddressResolved={handleAddressResolved}
-            onAddressResolveStart={handleAddressResolveStart}
-            onAddressResolveError={handleAddressResolveError}
           />
+          {Number.isFinite(value.businessLatitude) && Number.isFinite(value.businessLongitude) ? (
+            <p className="mt-2 text-xs font-medium text-emerald-700">
+              Pinned coordinates: {value.businessLatitude.toFixed(6)}, {value.businessLongitude.toFixed(6)}
+            </p>
+          ) : null}
         </div>
       </div>
 

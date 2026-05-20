@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 
-import type { AddressApiErrorResponse, AddressOption, CountryStateCityCity } from "@/lib/address-types";
+import {
+  ADDRESS_API_NOT_CONFIGURED_MESSAGE,
+  ADDRESS_API_REQUEST_FAILED_MESSAGE,
+  getCountryStateCityApiKey,
+  jsonAddressError,
+  normalizeCountryStateCityCity,
+} from "@/lib/address-server";
+import type { CountryStateCityCity } from "@/lib/address-types";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +24,6 @@ type PsgcCloudCityMunicipality = {
   type?: string;
   province?: PsgcCloudProvince;
 };
-
-function jsonError(status: number, error: string) {
-  return NextResponse.json({ error } satisfies AddressApiErrorResponse, { status });
-}
 
 function parseCloudArrayPayload<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[];
@@ -67,9 +70,9 @@ async function fetchCloudArray<T>(url: string): Promise<T[]> {
   return parseCloudArrayPayload<T>(payload);
 }
 
-function toCityOptions(rows: PsgcCloudCityMunicipality[]): AddressOption[] {
+function toCityOptions(rows: PsgcCloudCityMunicipality[]) {
   const seen = new Set<string>();
-  const options: AddressOption[] = [];
+  const options = [] as NonNullable<ReturnType<typeof normalizeCountryStateCityCity>>[];
 
   for (const row of rows) {
     const code = normalizeCode(row.code);
@@ -83,6 +86,7 @@ function toCityOptions(rows: PsgcCloudCityMunicipality[]): AddressOption[] {
     options.push({
       label: name,
       value: code,
+      code,
       name,
     });
   }
@@ -91,14 +95,14 @@ function toCityOptions(rows: PsgcCloudCityMunicipality[]): AddressOption[] {
 }
 
 export async function GET(request: Request) {
-  const apiKey = process.env.COUNTRYSTATECITY_API_KEY;
+  const apiKey = getCountryStateCityApiKey();
 
   const url = new URL(request.url);
   const countryCode = url.searchParams.get("countryCode")?.trim();
   const stateCode = url.searchParams.get("stateCode")?.trim();
   const stateName = url.searchParams.get("stateName")?.trim() ?? "";
   if (!countryCode || !stateCode) {
-    return jsonError(400, "countryCode and stateCode are required.");
+    return jsonAddressError(400, "countryCode and stateCode are required.");
   }
 
   try {
@@ -140,7 +144,8 @@ export async function GET(request: Request) {
     }
 
     if (!apiKey) {
-      return jsonError(500, "Address API is not configured.");
+      console.error("[address/cities] Missing COUNTRY_STATE_CITY_API_KEY", { countryCode, stateCode });
+      return jsonAddressError(500, ADDRESS_API_NOT_CONFIGURED_MESSAGE);
     }
 
     const response = await fetch(
@@ -154,18 +159,23 @@ export async function GET(request: Request) {
     );
 
     if (!response.ok) {
-      return jsonError(502, "Address list could not be loaded. Please try again.");
+      console.error("[address/cities] CSC API failed", {
+        countryCode,
+        stateCode,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return jsonAddressError(502, ADDRESS_API_REQUEST_FAILED_MESSAGE);
     }
 
     const cities = (await response.json()) as CountryStateCityCity[];
-    const options: AddressOption[] = cities.map((city) => ({
-      label: city.name,
-      value: city.name,
-      name: city.name,
-    }));
+    const options = cities
+      .map((city) => normalizeCountryStateCityCity(city))
+      .filter((option): option is NonNullable<typeof option> => Boolean(option));
 
     return NextResponse.json(options);
-  } catch {
-    return jsonError(502, "Address list could not be loaded. Please try again.");
+  } catch (error) {
+    console.error("[address/cities] Unexpected failure", { countryCode, stateCode, error });
+    return jsonAddressError(502, ADDRESS_API_REQUEST_FAILED_MESSAGE);
   }
 }

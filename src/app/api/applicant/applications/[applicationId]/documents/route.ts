@@ -1,22 +1,28 @@
 import { NextResponse } from "next/server";
 import { createApplicantDocument, listApplicantDocuments } from "@/lib/applications";
-import { requireApplicantSession } from "@/lib/applicant-api";
+import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import { logDocumentAction } from "@/lib/audit-log";
+import {
+  DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
+  DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE,
+  isAllowedDocumentMimeType,
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
+} from "@/lib/document-upload-rules";
 
 interface RouteContext {
   params: Promise<{ applicationId: string }>;
 }
 
 export async function GET(_req: Request, context: RouteContext) {
-  const session = await requireApplicantSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authContext = await resolveApplicantSessionContext();
+  if (authContext.ok === false) {
+    return NextResponse.json({ error: authContext.error }, { status: authContext.status });
   }
 
   try {
     const { applicationId } = await context.params;
-    const documents = await listApplicantDocuments(session.user.id, applicationId);
+    const documents = await listApplicantDocuments(authContext.applicantId, applicationId);
     return NextResponse.json({ documents });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to load documents";
@@ -26,10 +32,12 @@ export async function GET(_req: Request, context: RouteContext) {
 }
 
 export async function POST(req: Request, context: RouteContext) {
-  const session = await requireApplicantSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authContext = await resolveApplicantSessionContext();
+  if (authContext.ok === false) {
+    return NextResponse.json({ error: authContext.error }, { status: authContext.status });
   }
+
+  const session = authContext.session;
 
   try {
     const { applicationId } = await context.params;
@@ -45,13 +53,21 @@ export async function POST(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
     }
 
+    if (fileValue.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+      return NextResponse.json({ error: DOCUMENT_UPLOAD_ERROR_MAX_SIZE }, { status: 400 });
+    }
+
+    if (!isAllowedDocumentMimeType(fileValue.type)) {
+      return NextResponse.json({ error: DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE }, { status: 400 });
+    }
+
     const uploaded = await storeApplicantDocument(fileValue, {
       applicationId,
       documentType: documentNameValue.trim(),
     });
     let document;
     try {
-      document = await createApplicantDocument(session.user.id, applicationId, {
+      document = await createApplicantDocument(authContext.applicantId, applicationId, {
         documentName: documentNameValue.trim(),
         fileName: uploaded.fileName,
         storagePath: uploaded.storagePath,
@@ -69,7 +85,7 @@ export async function POST(req: Request, context: RouteContext) {
 
     // Audit: Document upload
     void logDocumentAction(
-      session.user.id,
+      authContext.applicantId,
       session.user.name ?? session.user.email ?? null,
       "APPLICANT",
       document.id,
@@ -83,6 +99,7 @@ export async function POST(req: Request, context: RouteContext) {
     return NextResponse.json({
       document: {
         id: document.id,
+        documentType: document.documentName,
         documentName: document.documentName,
         fileName: document.fileName,
         mimeType: document.mimeType,

@@ -24,20 +24,11 @@ type LocationValue = {
   longitude: number;
 };
 
-type ResolvedAddress = {
-  formattedAddress: string;
-  streetSuggestion?: string;
-  barangaySuggestion?: string;
-};
-
 export interface BusinessLocationPickerProps {
   value?: LocationValue | null;
   onChange: (value: LocationValue | null) => void;
   readOnly?: boolean;
   error?: string;
-  onAddressResolved?: (resolved: ResolvedAddress, coordinates: LocationValue) => void;
-  onAddressResolveStart?: () => void;
-  onAddressResolveError?: (message: string) => void;
 }
 
 export function BusinessLocationPicker({
@@ -45,15 +36,8 @@ export function BusinessLocationPicker({
   onChange,
   readOnly = false,
   error,
-  onAddressResolved,
-  onAddressResolveStart,
-  onAddressResolveError,
 }: BusinessLocationPickerProps) {
-  const reverseGeocodeWarning =
-    "Address could not be fully detected from the pin. Please adjust the pin or try again.";
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [geocodeError, setGeocodeError] = useState<string | null>(null);
 
   const selectedPosition = useMemo<[number, number] | null>(() => {
     if (!value) return null;
@@ -64,56 +48,23 @@ export function BusinessLocationPicker({
     setValidationError(null);
   }, [readOnly, value?.latitude, value?.longitude]);
 
-  async function handleSelectPosition(next: LocationValue) {
+  function handleSelectPosition(next: LocationValue) {
     if (readOnly) return;
 
-    if (!isWithinEbMagalona(next.latitude, next.longitude)) {
+    const latitude = Number(next.latitude);
+    const longitude = Number(next.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setValidationError("Selected point is invalid. Please choose another location.");
+      return;
+    }
+
+    if (!isWithinEbMagalona(latitude, longitude)) {
       setValidationError("Selected point must stay within EB Magalona.");
       return;
     }
 
     setValidationError(null);
-    onChange(next);
-
-    if (onAddressResolved || onAddressResolveStart || onAddressResolveError) {
-      onAddressResolveStart?.();
-      setIsGeocoding(true);
-      setGeocodeError(null);
-      try {
-        const response = await fetch(
-          `/api/address/reverse-geocode?lat=${next.latitude}&lng=${next.longitude}`
-        );
-
-        if (!response.ok) {
-          const message = reverseGeocodeWarning;
-          setGeocodeError(message);
-          onAddressResolveError?.(message);
-          return;
-        }
-
-        const data = (await response.json()) as {
-          address: string;
-          street?: string;
-          barangay?: string;
-        };
-        onAddressResolved?.(
-          {
-            formattedAddress: data.address,
-            streetSuggestion: data.street,
-            barangaySuggestion: data.barangay,
-          },
-          next
-        );
-        setGeocodeError(null);
-      } catch (err) {
-        console.error("[BusinessLocationPicker] Reverse geocoding error:", err);
-        const message = reverseGeocodeWarning;
-        setGeocodeError(message);
-        onAddressResolveError?.(message);
-      } finally {
-        setIsGeocoding(false);
-      }
-    }
+    onChange({ latitude, longitude });
   }
 
   const displayError = error ?? validationError;
@@ -140,13 +91,7 @@ export function BusinessLocationPicker({
           Selected Business Location:{" "}
           {value ? `${value.latitude.toFixed(6)}, ${value.longitude.toFixed(6)}` : "Not selected"}
         </p>
-        {isGeocoding && (
-          <p className="text-sm font-medium text-blue-700">Finding address…</p>
-        )}
         {displayError ? <p className="text-sm font-medium text-red-700">{displayError}</p> : null}
-        {geocodeError && !isGeocoding ? (
-          <p className="text-sm font-medium text-amber-700">{geocodeError}</p>
-        ) : null}
       </div>
     </div>
   );
