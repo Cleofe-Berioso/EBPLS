@@ -36,13 +36,11 @@ export const EB_MAGALONA_BARANGAYS = [
 ] as const;
 
 export const BUSINESS_ACTIVITY_OPTIONS = [
-  "Retail",
-  "Services",
-  "Manufacturing",
-  "Food and Beverage",
-  "Agriculture",
-  "Market Stall",
-  "Other",
+  "Main Office",
+  "Branch Office",
+  "Admin Office Only",
+  "Warehouse",
+  "Others, please specify",
 ] as const;
 
 function parseBirthDateInput(value: string | Date): Date {

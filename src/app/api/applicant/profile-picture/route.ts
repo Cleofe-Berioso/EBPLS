@@ -14,6 +14,24 @@ import {
 
 const PROFILE_IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 30;
 
+type ProfileImagePayload = {
+  hasProfileImage: boolean;
+  storagePath: string | null;
+  bucket: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedAt: string | null;
+  signedUrl: string | null;
+};
+
+function buildProfileImageResponse(payload: ProfileImagePayload) {
+  return {
+    hasProfilePicture: payload.hasProfileImage,
+    profilePictureUrl: payload.signedUrl,
+    profileImage: payload,
+  };
+}
+
 async function resolveSignedProfileImageUrl(storagePath: string | null): Promise<string | null> {
   if (!storagePath) return null;
 
@@ -31,40 +49,56 @@ async function resolveSignedProfileImageUrl(storagePath: string | null): Promise
 export async function GET() {
   const authContext = await resolveApplicantSessionContext();
   if (authContext.ok === false) {
-    return NextResponse.json({ error: authContext.error }, { status: authContext.status });
+    const error = authContext.status === 401 ? "Unauthorized" : authContext.error;
+    return NextResponse.json({ error }, { status: authContext.status });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: authContext.applicantId },
-    select: {
-      id: true,
-      profileImageStoragePath: true,
-      profileImageBucket: true,
-      profileImageMimeType: true,
-      profileImageSizeBytes: true,
-      profileImageUploadedAt: true,
-    },
-  });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: authContext.applicantId },
+      select: {
+        id: true,
+        profileImageStoragePath: true,
+        profileImageBucket: true,
+        profileImageMimeType: true,
+        profileImageSizeBytes: true,
+        profileImageUploadedAt: true,
+      },
+    });
 
-  const signedUrl = await resolveSignedProfileImageUrl(user?.profileImageStoragePath ?? null);
+    if (!user) {
+      return NextResponse.json({ error: "Applicant account not found." }, { status: 404 });
+    }
 
-  return NextResponse.json({
-    profileImage: {
-      hasProfileImage: Boolean(user?.profileImageStoragePath),
-      storagePath: user?.profileImageStoragePath ?? null,
-      bucket: user?.profileImageBucket ?? null,
-      mimeType: user?.profileImageMimeType ?? null,
-      sizeBytes: user?.profileImageSizeBytes ?? null,
-      uploadedAt: user?.profileImageUploadedAt?.toISOString() ?? null,
-      signedUrl,
-    },
-  });
+    const signedUrl = await resolveSignedProfileImageUrl(user.profileImageStoragePath ?? null);
+
+    return NextResponse.json(
+      buildProfileImageResponse({
+        hasProfileImage: Boolean(user.profileImageStoragePath),
+        storagePath: user.profileImageStoragePath ?? null,
+        bucket: user.profileImageBucket ?? null,
+        mimeType: user.profileImageMimeType ?? null,
+        sizeBytes: user.profileImageSizeBytes ?? null,
+        uploadedAt: user.profileImageUploadedAt?.toISOString() ?? null,
+        signedUrl,
+      }),
+      {
+        headers: {
+          "Cache-Control": "private, no-store, must-revalidate",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Unable to load applicant profile picture status", error);
+    return NextResponse.json({ error: "Unable to load profile picture status." }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
   const authContext = await resolveApplicantSessionContext();
   if (authContext.ok === false) {
-    return NextResponse.json({ error: authContext.error }, { status: authContext.status });
+    const error = authContext.status === 401 ? "Unauthorized" : authContext.error;
+    return NextResponse.json({ error }, { status: authContext.status });
   }
 
   const formData = await req.formData();
@@ -129,7 +163,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      profileImage: {
+      ...buildProfileImageResponse({
         hasProfileImage: Boolean(updated.profileImageStoragePath),
         storagePath: updated.profileImageStoragePath,
         bucket: updated.profileImageBucket,
@@ -137,7 +171,7 @@ export async function POST(req: Request) {
         sizeBytes: updated.profileImageSizeBytes,
         uploadedAt: updated.profileImageUploadedAt?.toISOString() ?? null,
         signedUrl,
-      },
+      }),
     });
   } catch (error) {
     await removeApplicantDocument(uploaded.storagePath, uploaded.mimeType);

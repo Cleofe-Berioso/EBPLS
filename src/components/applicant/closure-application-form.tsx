@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
+import { DOCUMENT_FILE_INPUT_ACCEPT, validateDocumentFileUpload } from "@/lib/document-upload-rules";
 import type {
   ApplicationDocumentInput,
   BusinessInfo,
@@ -118,12 +119,26 @@ function humanizeClosureEligibilityReason(record: ClosureRecord | undefined): st
   return record?.closureEligibility.userFriendlyReason ?? null;
 }
 
+async function parseApiResponseSafely(response: Response): Promise<Record<string, unknown>> {
+  const responseText = await response.text();
+
+  try {
+    return responseText ? (JSON.parse(responseText) as Record<string, unknown>) : {};
+  } catch {
+    return {
+      error: "The server returned a non-JSON error response. Please check the server logs.",
+      rawResponse: responseText.slice(0, 300),
+    };
+  }
+}
+
 export function ClosureApplicationForm() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("applicationId");
 
   const [step, setStep] = useState(0);
   const [applicationId, setApplicationId] = useState<string | undefined>(editId ?? undefined);
+  const [draftLoading, setDraftLoading] = useState(Boolean(editId));
   const [selectedBusinessId, setSelectedBusinessId] = useState("");
   const [records, setRecords] = useState<
     ClosureRecord[]
@@ -134,6 +149,7 @@ export function ClosureApplicationForm() {
   const [closureTypeOtherReason, setClosureTypeOtherReason] = useState("");
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
+  const [pendingDocumentPreviews, setPendingDocumentPreviews] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<{
     kind: "success" | "error";
     text: string;
@@ -153,6 +169,24 @@ export function ClosureApplicationForm() {
   const uploadedRequiredCount = requiredDocs.filter((doc) => uploadedDocuments[doc]).length;
   const selectedRecord = records.find((item) => item.id === selectedBusinessId);
   const isComplianceForcedClosure = isComplianceForcedClosureRecord(selectedRecord);
+  const selectedBusinessIdRef = useRef(selectedBusinessId);
+  const pendingDocumentPreviewsRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    pendingDocumentPreviewsRef.current = pendingDocumentPreviews;
+  }, [pendingDocumentPreviews]);
+
+  useEffect(() => {
+    return () => {
+      for (const previewUrl of Object.values(pendingDocumentPreviewsRef.current)) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    selectedBusinessIdRef.current = selectedBusinessId;
+  }, [selectedBusinessId]);
 
   useEffect(() => {
     if (!isComplianceForcedClosure) return;
@@ -167,7 +201,7 @@ export function ClosureApplicationForm() {
 
     async function loadRecords() {
       const response = await fetch("/api/applicant/business-records?applicationType=CLOSURE", { cache: "no-store" });
-      const data = (await response.json()) as {
+      const data = (await parseApiResponseSafely(response)) as {
         records?: ClosureRecord[];
         complianceForcedRecords?: ClosureRecord[];
       };
@@ -175,7 +209,8 @@ export function ClosureApplicationForm() {
       if (!active || !response.ok || !data.records) return;
 
       setRecords(data.records);
-      if (data.records[0] && !selectedBusinessId) {
+      if (data.records[0] && !selectedBusinessIdRef.current) {
+        selectedBusinessIdRef.current = data.records[0].id;
         setSelectedBusinessId(data.records[0].id);
         setSelectedBusinessName(data.records[0].businessName);
         setSelectedBusinessInfo({
@@ -194,16 +229,20 @@ export function ClosureApplicationForm() {
     return () => {
       active = false;
     };
-  }, [selectedBusinessId]);
+  }, []);
 
   useEffect(() => {
     let active = true;
 
     async function loadExistingApplication() {
-      if (!editId) return;
+      if (!editId) {
+        setDraftLoading(false);
+        return;
+      }
+      setDraftLoading(true);
 
       const response = await fetch(`/api/applicant/applications/${editId}`, { cache: "no-store" });
-      const data = (await response.json()) as {
+      const data = (await parseApiResponseSafely(response)) as {
         application?: {
           id: string;
           businessRecordId?: string;
@@ -214,7 +253,10 @@ export function ClosureApplicationForm() {
         };
       };
 
-      if (!active || !response.ok || !data.application) return;
+      if (!active || !response.ok || !data.application) {
+        setDraftLoading(false);
+        return;
+      }
 
       setApplicationId(data.application.id);
       setSelectedBusinessInfo({
@@ -225,13 +267,19 @@ export function ClosureApplicationForm() {
       setSelectedBusinessName(data.application.formData.businessName);
       setClosureType(data.application.closureType ?? "");
       setClosureTypeOtherReason(data.application.closureTypeOtherReason ?? "");
-      if (data.application.businessRecordId) setSelectedBusinessId(data.application.businessRecordId);
+      if (data.application.businessRecordId) {
+        selectedBusinessIdRef.current = data.application.businessRecordId;
+        setSelectedBusinessId(data.application.businessRecordId);
+      }
       setUploadedDocuments(
         data.application.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
           acc[doc.documentName] = doc;
           return acc;
         }, {})
       );
+      setPendingDocuments({});
+      setPendingDocumentPreviews({});
+      setDraftLoading(false);
     }
 
     void loadExistingApplication();
@@ -239,6 +287,17 @@ export function ClosureApplicationForm() {
       active = false;
     };
   }, [editId]);
+
+  if (editId && draftLoading) {
+    return (
+      <SectionCard title="Loading saved draft" description="Restoring your closure draft values.">
+        <EmptyState
+          title="Loading draft"
+          description="Please wait while the saved closure application is loaded into the form."
+        />
+      </SectionCard>
+    );
+  }
 
   function next() {
     if (step === 0 && !selectedBusinessId) {
@@ -347,23 +406,31 @@ export function ClosureApplicationForm() {
               body: formData,
             });
           })()
-        : await fetch("/api/applicant/applications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+        : await fetch(
+            applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications",
+            {
+              method: applicationId ? "PATCH" : "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          );
 
-    const data = (await response.json()) as {
+    const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
       error?: string;
       detail?: SubmitValidationErrorDetail;
+      rawResponse?: string;
     };
     setSubmitting(false);
 
     if (!response.ok || !data.application) {
+      const detail =
+        typeof data.rawResponse === "string" && data.rawResponse.length > 0
+          ? ` (${data.rawResponse})`
+          : "";
       setStatusMessage({
         kind: "error",
-        text: data.error ?? "Unable to save closure application.",
+        text: data.error ?? `Unable to save closure application.${detail}`,
       });
       if (data.detail) setValidationDetail(data.detail);
       return null;
@@ -372,7 +439,11 @@ export function ClosureApplicationForm() {
     setApplicationId(data.application.id);
 
     if (mode === "SUBMIT") {
+      for (const previewUrl of Object.values(pendingDocumentPreviews)) {
+        URL.revokeObjectURL(previewUrl);
+      }
       setPendingDocuments({});
+      setPendingDocumentPreviews({});
 
       setStatusMessage({
         kind: "success",
@@ -391,6 +462,18 @@ export function ClosureApplicationForm() {
   async function handleDocumentUpload(documentName: string, file: File | null) {
     if (!file) return;
 
+    const fileValidationError = validateDocumentFileUpload(file);
+    if (fileValidationError) {
+      setStatusMessage({ kind: "error", text: fileValidationError });
+      return;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(file);
+    const previousPreviewUrl = pendingDocumentPreviews[documentName];
+    if (previousPreviewUrl) {
+      URL.revokeObjectURL(previousPreviewUrl);
+    }
+
     setUploadedDocuments((current) => ({
       ...current,
       [documentName]: {
@@ -402,6 +485,10 @@ export function ClosureApplicationForm() {
       ...current,
       [documentName]: file,
     }));
+    setPendingDocumentPreviews((current) => ({
+      ...current,
+      [documentName]: nextPreviewUrl,
+    }));
   }
 
   async function handleDocumentDelete(documentName: string) {
@@ -409,12 +496,21 @@ export function ClosureApplicationForm() {
     const hasSavedDocument = Boolean(doc?.id && applicationId);
 
     if (!hasSavedDocument) {
+      const previewUrl = pendingDocumentPreviews[documentName];
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
       setUploadedDocuments((current) => {
         const nextState = { ...current };
         delete nextState[documentName];
         return nextState;
       });
       setPendingDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      setPendingDocumentPreviews((current) => {
         const nextState = { ...current };
         delete nextState[documentName];
         return nextState;
@@ -436,6 +532,11 @@ export function ClosureApplicationForm() {
       return nextState;
     });
     setPendingDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setPendingDocumentPreviews((current) => {
       const nextState = { ...current };
       delete nextState[documentName];
       return nextState;
@@ -481,6 +582,7 @@ export function ClosureApplicationForm() {
                   disabled={records.length === 0}
                   onChange={(event) => {
                     const selectedId = event.target.value;
+                    selectedBusinessIdRef.current = selectedId;
                     setSelectedBusinessId(selectedId);
                     const selected = records.find((item) => item.id === selectedId);
                     if (selected) {
@@ -589,9 +691,16 @@ export function ClosureApplicationForm() {
                   disabled={submitting || records.length === 0}
                   fileName={uploadedDocuments[doc]?.fileName}
                   uploadedAt={uploadedDocuments[doc]?.uploadedAt}
+                  previewUrl={
+                    pendingDocumentPreviews[doc] ??
+                    (uploadedDocuments[doc]?.id && applicationId
+                      ? `/api/applicant/applications/${applicationId}/documents/${uploadedDocuments[doc].id}/download`
+                      : undefined)
+                  }
                   onFileChange={(file) => {
                     void handleDocumentUpload(doc, file);
                   }}
+                  accept={DOCUMENT_FILE_INPUT_ACCEPT}
                   onRemove={() => {
                     void handleDocumentDelete(doc);
                   }}

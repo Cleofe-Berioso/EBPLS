@@ -372,14 +372,13 @@ export function AssessmentFeeForm({ detail }: Props) {
       ) : null}
 
       <SectionCard title="TOP Summary" description="Assessment totals are recalculated on the server during draft save and TOP generation.">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-3">
           <SummaryTile
             label="Mode of Payment"
             value={displayPaymentFrequency ? PAYMENT_FREQ_LABELS[displayPaymentFrequency] : "Not selected"}
             helper="Applicant-selected frequency (read-only for BPLO)."
           />
           <SummaryTile label="Total Amount" value={`₱ ${totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
-          <SummaryTile label="Total Amount to Pay" value={`₱ ${releasePaymentAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
           <SummaryTile label="Remaining Balance" value={`₱ ${remainingBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
         </div>
 

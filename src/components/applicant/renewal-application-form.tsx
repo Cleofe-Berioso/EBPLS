@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
@@ -107,6 +107,19 @@ function resolveRenewalLineOfBusiness(value: string | null | undefined): string 
 }
 
 const BUSINESS_LOCATION_ERROR = "Please pin the business location inside EB Magalona.";
+
+async function parseApiResponseSafely(response: Response): Promise<Record<string, unknown>> {
+  const responseText = await response.text();
+
+  try {
+    return responseText ? (JSON.parse(responseText) as Record<string, unknown>) : {};
+  } catch {
+    return {
+      error: "The server returned a non-JSON error response. Please check the server logs.",
+      rawResponse: responseText.slice(0, 300),
+    };
+  }
+}
 
 function validateBusinessLocation(info: BusinessInfo): Partial<Record<keyof BusinessInfo, string>> {
   const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
@@ -316,6 +329,7 @@ export function RenewalApplicationForm() {
 
   const [step, setStep] = useState(0);
   const [applicationId, setApplicationId] = useState<string | undefined>(editId ?? undefined);
+  const [draftLoading, setDraftLoading] = useState(Boolean(editId));
   const [selectedBusinessId, setSelectedBusinessId] = useState("");
   const [records, setRecords] = useState<
     Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>
@@ -323,6 +337,8 @@ export function RenewalApplicationForm() {
   const [blockedRecords, setBlockedRecords] = useState<RenewalBlockedRecord[]>([]);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
+  const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
+  const [pendingDocumentPreviews, setPendingDocumentPreviews] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<{
     kind: "success" | "error";
     text: string;
@@ -335,9 +351,27 @@ export function RenewalApplicationForm() {
     canEdit: boolean;
     status: string;
   } | null>(null);
+  const selectedBusinessIdRef = useRef(selectedBusinessId);
+  const pendingDocumentPreviewsRef = useRef<Record<string, string>>({});
 
   const isReadOnly = Boolean(editId && existingApplicationAccess && !existingApplicationAccess.canEdit);
   const lockInteractivityClass = isReadOnly ? "pointer-events-none" : "";
+
+  useEffect(() => {
+    selectedBusinessIdRef.current = selectedBusinessId;
+  }, [selectedBusinessId]);
+
+  useEffect(() => {
+    pendingDocumentPreviewsRef.current = pendingDocumentPreviews;
+  }, [pendingDocumentPreviews]);
+
+  useEffect(() => {
+    return () => {
+      for (const previewUrl of Object.values(pendingDocumentPreviewsRef.current)) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const normalizedInfo = normalizeBusinessInfo(info);
@@ -477,7 +511,7 @@ export function RenewalApplicationForm() {
 
     async function loadRecords() {
       const response = await fetch("/api/applicant/business-records?applicationType=RENEWAL", { cache: "no-store" });
-      const data = (await response.json()) as {
+      const data = (await parseApiResponseSafely(response)) as {
         records?: Array<{ id: string; registrationNumber: string; businessName: string; businessInfo: BusinessInfo }>;
         blockedRecords?: RenewalBlockedRecord[];
       };
@@ -487,7 +521,8 @@ export function RenewalApplicationForm() {
       setRecords(data.records);
       setBlockedRecords(data.blockedRecords ?? []);
       setUnavailableCount(data.blockedRecords?.length ?? 0);
-      if (data.records[0] && !selectedBusinessId) {
+      if (data.records[0] && !selectedBusinessIdRef.current) {
+        selectedBusinessIdRef.current = data.records[0].id;
         setSelectedBusinessId(data.records[0].id);
           setInfo(
             normalizeBusinessInfo({
@@ -504,16 +539,20 @@ export function RenewalApplicationForm() {
     return () => {
       active = false;
     };
-  }, [selectedBusinessId]);
+  }, []);
 
   useEffect(() => {
     let active = true;
 
     async function loadExistingApplication() {
-      if (!editId) return;
+      if (!editId) {
+        setDraftLoading(false);
+        return;
+      }
+      setDraftLoading(true);
 
       const response = await fetch(`/api/applicant/applications/${editId}`, { cache: "no-store" });
-      const data = (await response.json()) as {
+      const data = (await parseApiResponseSafely(response)) as {
         application?: {
           id: string;
           status: string;
@@ -524,7 +563,10 @@ export function RenewalApplicationForm() {
         };
       };
 
-      if (!active || !response.ok || !data.application) return;
+      if (!active || !response.ok || !data.application) {
+        setDraftLoading(false);
+        return;
+      }
 
       setApplicationId(data.application.id);
       setExistingApplicationAccess({
@@ -538,13 +580,19 @@ export function RenewalApplicationForm() {
           paymentFrequency: data.application.formData.paymentFrequency ?? "ANNUAL",
         })
       );
-      if (data.application.businessRecordId) setSelectedBusinessId(data.application.businessRecordId);
+      if (data.application.businessRecordId) {
+        selectedBusinessIdRef.current = data.application.businessRecordId;
+        setSelectedBusinessId(data.application.businessRecordId);
+      }
       setUploadedDocuments(
         data.application.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
           acc[doc.documentName] = doc;
           return acc;
         }, {})
       );
+      setPendingDocuments({});
+      setPendingDocumentPreviews({});
+      setDraftLoading(false);
     }
 
     void loadExistingApplication();
@@ -552,6 +600,17 @@ export function RenewalApplicationForm() {
       active = false;
     };
   }, [editId]);
+
+  if (editId && draftLoading) {
+    return (
+      <SectionCard title="Loading saved draft" description="Restoring your renewal draft values.">
+        <EmptyState
+          title="Loading draft"
+          description="Please wait while the saved renewal application is loaded into the form."
+        />
+      </SectionCard>
+    );
+  }
 
   function next() {
     if (isReadOnly) return;
@@ -743,6 +802,7 @@ export function RenewalApplicationForm() {
 
       const missingDocuments = getMissingRequiredDocuments(requiredRenewalDocs, [
         ...Object.values(uploadedDocuments).map((doc) => doc.documentName),
+        ...Object.keys(pendingDocuments),
       ]);
       if (missingDocuments.length > 0) {
         setStep(2);
@@ -764,17 +824,36 @@ export function RenewalApplicationForm() {
       documents: Object.values(uploadedDocuments),
     });
 
-    const response = await fetch("/api/applicant/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const response =
+      mode === "SUBMIT"
+        ? await (async () => {
+            const formData = new FormData();
+            formData.append("payload", JSON.stringify(payload));
+            for (const [documentName, file] of Object.entries(pendingDocuments)) {
+              formData.append("documentNames", documentName);
+              formData.append("documentFiles", file, file.name);
+            }
 
-    const data = (await response.json()) as {
+            return fetch("/api/applicant/applications", {
+              method: "POST",
+              body: formData,
+            });
+          })()
+        : await fetch(
+            applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications",
+            {
+              method: applicationId ? "PATCH" : "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          );
+
+    const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
       error?: string;
       detail?: SubmitValidationErrorDetail;
       duplicateField?: string;
+      rawResponse?: string;
     };
     setSubmitting(false);
 
@@ -782,9 +861,13 @@ export function RenewalApplicationForm() {
       if (data.duplicateField === "registrationNumber" || data.duplicateField === "tin") {
         setFieldErrors({ [data.duplicateField]: "This already exist" });
       }
+      const detail =
+        typeof data.rawResponse === "string" && data.rawResponse.length > 0
+          ? ` (${data.rawResponse})`
+          : "";
       setStatusMessage({
         kind: "error",
-        text: data.error ?? "Unable to save renewal application.",
+        text: data.error ?? `Unable to save renewal application.${detail}`,
       });
       if (data.detail) setValidationDetail(data.detail);
       return null;
@@ -793,6 +876,11 @@ export function RenewalApplicationForm() {
     setApplicationId(data.application.id);
 
     if (mode === "SUBMIT") {
+      for (const previewUrl of Object.values(pendingDocumentPreviews)) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPendingDocuments({});
+      setPendingDocumentPreviews({});
       setStatusMessage({
         kind: "success",
         text: `Renewal ${data.application.applicationNumber} submitted successfully.`,
@@ -817,50 +905,33 @@ export function RenewalApplicationForm() {
       return;
     }
 
-    let targetApplicationId = applicationId;
-    if (!targetApplicationId) {
-      const draftId = await persist("DRAFT");
-      if (!draftId) {
-        setStatusMessage({
-          kind: "error",
-          text: "Save a draft first before uploading documents.",
-        });
-        return;
-      }
-      targetApplicationId = draftId;
+    const nextPreviewUrl = URL.createObjectURL(file);
+    const previousPreviewUrl = pendingDocumentPreviews[documentName];
+    if (previousPreviewUrl) {
+      URL.revokeObjectURL(previousPreviewUrl);
     }
 
-    setSubmitting(true);
-    const uploadFormData = new FormData();
-    uploadFormData.append("documentName", documentName);
-    uploadFormData.append("file", file, file.name);
+    setPendingDocuments((current) => ({
+      ...current,
+      [documentName]: file,
+    }));
+    setPendingDocumentPreviews((current) => ({
+      ...current,
+      [documentName]: nextPreviewUrl,
+    }));
 
-    const response = await fetch(`/api/applicant/applications/${targetApplicationId}/documents`, {
-      method: "POST",
-      body: uploadFormData,
-    });
-
-    const data = (await response.json()) as { document?: ApplicationDocumentInput; error?: string };
-    setSubmitting(false);
-
-    if (!response.ok || !data.document) {
-      setStatusMessage({
-        kind: "error",
-        text: data.error ?? "Unable to upload document.",
-      });
-      return;
-    }
-
-    setApplicationId(targetApplicationId);
     setUploadedDocuments((current) => ({
       ...current,
       [documentName]: {
-        ...data.document,
-        documentType: data.document.documentType ?? documentName,
+        documentType: documentName,
         documentName,
+        fileName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        fileSize: file.size,
       },
     }));
-    setStatusMessage({ kind: "success", text: `${documentName} uploaded successfully.` });
+    setStatusMessage({ kind: "success", text: `${documentName} selected. File will be saved on final submit.` });
   }
 
   async function handleDocumentDelete(documentName: string) {
@@ -869,7 +940,21 @@ export function RenewalApplicationForm() {
     const hasSavedDocument = Boolean(doc?.id && applicationId);
 
     if (!hasSavedDocument) {
+      const previewUrl = pendingDocumentPreviews[documentName];
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
       setUploadedDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      setPendingDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      setPendingDocumentPreviews((current) => {
         const nextState = { ...current };
         delete nextState[documentName];
         return nextState;
@@ -886,6 +971,16 @@ export function RenewalApplicationForm() {
     if (!response.ok) return;
 
     setUploadedDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setPendingDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setPendingDocumentPreviews((current) => {
       const nextState = { ...current };
       delete nextState[documentName];
       return nextState;
@@ -951,6 +1046,7 @@ export function RenewalApplicationForm() {
                   disabled={records.length === 0 || isReadOnly}
                   onChange={(event) => {
                     const selectedId = event.target.value;
+                    selectedBusinessIdRef.current = selectedId;
                     setSelectedBusinessId(selectedId);
                     const selected = records.find((item) => item.id === selectedId);
                     if (selected) {
@@ -1128,15 +1224,28 @@ export function RenewalApplicationForm() {
                 />
               </FormField>
 
-              <FormField label="Business Activity" error={fieldErrors.businessActivity}>
+              <FormField
+                label="Business Activity"
+                hint="Please select one"
+                required
+                error={fieldErrors.businessActivity}
+              >
                 <select
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
-                  value={info.businessActivity}
-                  onChange={(event) =>
+                  value={(() => {
+                    // If the value is "Others: <text>", show just "Others, please specify" in the dropdown
+                    if (info.businessActivity?.startsWith("Others:")) {
+                      return "Others, please specify";
+                    }
+                    return info.businessActivity;
+                  })()}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    // Set to empty string if "Others" selected so the text input shows
                     setInfo((current) =>
-                      normalizeBusinessInfo({ ...current, businessActivity: event.target.value })
-                    )
-                  }
+                      normalizeBusinessInfo({ ...current, businessActivity: value === "Others, please specify" ? "" : value })
+                    );
+                  }}
                 >
                   <option value="">Select business activity</option>
                   {BUSINESS_ACTIVITY_OPTIONS.map((opt) => (
@@ -1146,6 +1255,43 @@ export function RenewalApplicationForm() {
                   ))}
                 </select>
               </FormField>
+
+              {(() => {
+                // Show text input if "Others" was selected or if businessActivity starts with "Others:"
+                const isStandardOption = BUSINESS_ACTIVITY_OPTIONS.some(
+                  (opt) => opt !== "Others, please specify" && opt === info.businessActivity
+                );
+
+                return !isStandardOption && (info.businessActivity === "" || info.businessActivity?.startsWith("Others:")) ? (
+                  <FormField
+                    label="Please specify business activity"
+                    required
+                    error={fieldErrors.businessActivity}
+                  >
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                      placeholder="Enter your business activity"
+                      value={(() => {
+                        // Extract the custom text from "Others: <text>" format
+                        if (info.businessActivity?.startsWith("Others:")) {
+                          return info.businessActivity.substring(7).trim();
+                        }
+                        return "";
+                      })()}
+                      onChange={(event) => {
+                        const customText = event.target.value;
+                        setInfo((current) =>
+                          normalizeBusinessInfo({
+                            ...current,
+                            businessActivity: customText ? `Others: ${customText}` : "",
+                          })
+                        );
+                      }}
+                    />
+                  </FormField>
+                ) : null;
+              })()}
 
               <FormField
                 label="Line of Business"
@@ -1264,6 +1410,12 @@ export function RenewalApplicationForm() {
                     disabled={submitting || records.length === 0 || isReadOnly}
                     fileName={uploadedDoc?.fileName}
                     uploadedAt={uploadedDoc?.uploadedAt}
+                    previewUrl={
+                      pendingDocumentPreviews[doc] ??
+                      (uploadedDoc?.id && applicationId
+                        ? `/api/applicant/applications/${applicationId}/documents/${uploadedDoc.id}/download`
+                        : undefined)
+                    }
                     onFileChange={(file) => {
                       void handleDocumentUpload(doc, file);
                     }}

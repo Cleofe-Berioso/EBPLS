@@ -8,6 +8,7 @@ import { ApplicantSidebar } from "@/components/applicant/applicant-sidebar";
 import { actionButtonStyles } from "@/components/ui/action-button";
 
 const PROFILE_PICTURE_SETUP_PATH = "/applicant/profile-picture/setup";
+type ProfileGuardState = "checking" | "ready" | "require_profile_picture" | "error";
 
 function isAllowedNextPath(value: string | null): value is string {
   return Boolean(
@@ -30,7 +31,9 @@ export function ApplicantLayoutClient({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [guardReady, setGuardReady] = useState(false);
+  const [guardState, setGuardState] = useState<ProfileGuardState>("checking");
+  const [guardError, setGuardError] = useState<string | null>(null);
+  const [guardAttempt, setGuardAttempt] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
 
   // Refs to prevent repeated fetching. Reset when pathname changes so
@@ -47,42 +50,72 @@ export function ApplicantLayoutClient({
     // Fast path: profile already confirmed and we're not on the setup page.
     // Skip the fetch entirely — no loading flash, no network call.
     if (hasProfileRef.current && !onSetupPage) {
-      setGuardReady(true);
+      setGuardError(null);
+      setGuardState("ready");
       return;
     }
 
     let active = true;
     isCheckingRef.current = true;
-    setGuardReady(false);
+    setGuardError(null);
+    setGuardState("checking");
 
     async function runProfilePictureGuard() {
       try {
         const response = await fetch("/api/applicant/profile-picture", { cache: "no-store" });
         if (!response.ok) {
-          if (active) setGuardReady(true);
+          let message = "Unable to verify profile picture. Please retry.";
+          try {
+            const errorData = (await response.json()) as { error?: string };
+            message = errorData.error ?? message;
+          } catch {
+            // Keep default fallback error when payload is not JSON.
+          }
+
+          if (active) {
+            setGuardError(message);
+            setGuardState("error");
+          }
           return;
         }
 
         const data = (await response.json()) as {
+          hasProfilePicture?: boolean;
+          profilePictureUrl?: string | null;
           profileImage?: {
             hasProfileImage?: boolean;
             signedUrl?: string | null;
           };
         };
 
-        const hasProfileImage = Boolean(data.profileImage?.hasProfileImage);
+        const hasProfileImage = Boolean(
+          data.profileImage?.hasProfileImage ?? data.hasProfilePicture
+        );
 
         if (active) {
-          setProfileImageUrl(data.profileImage?.signedUrl ?? null);
+          setProfileImageUrl(data.profileImage?.signedUrl ?? data.profilePictureUrl ?? null);
         }
 
         if (!hasProfileImage && !onSetupPage) {
+          if (active) {
+            hasProfileRef.current = false;
+            setGuardState("require_profile_picture");
+          }
+
           // Read search string at execution time — not as a reactive dep.
           const rawSearch = typeof window !== "undefined" ? window.location.search : "";
           const rawQuery = rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch;
           const nextPath = rawQuery ? `${pathname}?${rawQuery}` : pathname;
           if (active) {
             router.replace(`${PROFILE_PICTURE_SETUP_PATH}?next=${encodeURIComponent(nextPath)}`);
+          }
+          return;
+        }
+
+        if (!hasProfileImage && onSetupPage) {
+          if (active) {
+            hasProfileRef.current = false;
+            setGuardState("ready");
           }
           return;
         }
@@ -98,6 +131,7 @@ export function ApplicantLayoutClient({
             : "/applicant/dashboard";
           if (active) {
             hasProfileRef.current = true;
+            setGuardState("ready");
             router.replace(target);
           }
           return;
@@ -105,7 +139,16 @@ export function ApplicantLayoutClient({
 
         if (active) {
           hasProfileRef.current = hasProfileImage;
-          setGuardReady(true);
+          setGuardState("ready");
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to verify profile picture. Please retry.";
+        if (active) {
+          setGuardError(message);
+          setGuardState("error");
         }
       } finally {
         if (active) {
@@ -121,15 +164,38 @@ export function ApplicantLayoutClient({
       // Reset the in-flight flag so the next pathname-triggered effect can run.
       isCheckingRef.current = false;
     };
-  }, [pathname, router]); // searchParams intentionally excluded — read via window.location inside effect
+  }, [pathname, guardAttempt]);
 
-  if (!guardReady) {
+  if (guardState === "error") {
+    return (
+      <div className="app-shell bg-transparent text-slate-900">
+        <main className="app-shell-main min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl rounded-2xl border border-red-200 bg-white p-6">
+            <p role="alert" className="text-sm font-medium text-red-700">
+              {guardError ?? "Unable to verify profile picture."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setGuardAttempt((value) => value + 1)}
+              className={`${actionButtonStyles("secondary", "sm")} mt-4`}
+            >
+              Retry Profile Check
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (guardState !== "ready") {
     return (
       <div className="app-shell bg-transparent text-slate-900">
         <main className="app-shell-main min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
           <div className="mx-auto w-full max-w-7xl rounded-2xl border border-slate-200 bg-white p-6">
             <p role="status" aria-live="polite" className="text-sm text-slate-600">
-              Checking profile picture requirement...
+              {guardState === "require_profile_picture"
+                ? "Profile picture is required. Redirecting to setup..."
+                : "Checking profile picture requirement..."}
             </p>
           </div>
         </main>

@@ -11,6 +11,7 @@ interface UploadSlotProps {
   helperText?: string;
   error?: string;
   accept?: string;
+  previewUrl?: string;
 }
 
 function formatUploadTimestamp(date: Date | string): string {
@@ -36,6 +37,7 @@ export function UploadSlot({
   helperText,
   error,
   accept,
+  previewUrl,
 }: UploadSlotProps) {
   const inputId = `upload-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
@@ -100,6 +102,16 @@ export function UploadSlot({
       <p className="mt-2 text-xs text-slate-700">
         {fileName ? `Selected: ${fileName}` : "No file selected"}
       </p>
+        {fileName && previewUrl ? (
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100"
+          >
+            Preview
+          </a>
+        ) : null}
       {fileName && !uploadedAt ? <p className="mt-1 text-xs text-slate-500">Ready to submit</p> : null}
       {uploadedAt && fileName ? (
         <p className="mt-1 text-xs text-slate-500">

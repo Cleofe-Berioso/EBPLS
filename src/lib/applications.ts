@@ -8,6 +8,7 @@ import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-
 import {
   DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
   MAX_DOCUMENT_FILE_SIZE_BYTES,
+  validateDocumentFileUpload,
 } from "@/lib/document-upload-rules";
 import { APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE } from "@/lib/applicant-api";
 import {
@@ -454,6 +455,13 @@ function sanitizeSubmitFiles(submitFiles: SubmitFileInput[]) {
   const oversized = sanitized.find((entry) => entry.file.size > MAX_DOCUMENT_FILE_SIZE_BYTES);
   if (oversized) {
     throw new Error(DOCUMENT_UPLOAD_ERROR_MAX_SIZE);
+  }
+
+  for (const entry of sanitized) {
+    const fileValidationError = validateDocumentFileUpload(entry.file);
+    if (fileValidationError) {
+      throw new Error(fileValidationError);
+    }
   }
 
   const seen = new Set<string>();
@@ -1008,6 +1016,7 @@ export async function saveApplicantApplication(
           const stored = await storeApplicantDocument(entry.file, {
             applicationId,
             documentType: entry.documentName,
+            applicantName: normalizedFormData.ownerName,
           });
           writtenStoragePaths.push(stored.storagePath);
           newDocumentsByName.set(entry.documentName.toLowerCase(), {

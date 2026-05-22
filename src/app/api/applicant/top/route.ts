@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getApplicantTopSummary, submitApplicantPaymentReference } from "@/lib/applications";
+import { getApplicantApplicationDetail, getApplicantTopSummary, submitApplicantPaymentReference } from "@/lib/applications";
 import { requireApplicantSession } from "@/lib/applicant-api";
 import { storeApplicantDocument } from "@/lib/document-storage";
 import { removeApplicantDocument } from "@/lib/document-storage";
+import { formatOwnerName } from "@/lib/person-name";
 
 export async function GET() {
   const session = await requireApplicantSession();
@@ -45,9 +46,24 @@ export async function POST(req: Request) {
   }
 
   try {
+    const application = await getApplicantApplicationDetail(session.user.id, applicationId.trim());
+    if (!application) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    }
+
+    const formDataRecord = application.formData as Record<string, unknown>;
+    const applicantName = formatOwnerName({
+      ownerFirstName: typeof formDataRecord.ownerFirstName === "string" ? formDataRecord.ownerFirstName : undefined,
+      ownerMiddleName: typeof formDataRecord.ownerMiddleName === "string" ? formDataRecord.ownerMiddleName : undefined,
+      ownerLastName: typeof formDataRecord.ownerSurname === "string" ? formDataRecord.ownerSurname : undefined,
+      ownerSuffix: typeof formDataRecord.ownerSuffix === "string" ? formDataRecord.ownerSuffix : undefined,
+      ownerName: typeof formDataRecord.ownerName === "string" ? formDataRecord.ownerName : undefined,
+    });
+
     const storedProof = await storeApplicantDocument(proofFile, {
       applicationId: applicationId.trim(),
       documentType: "payment-proof",
+      applicantName,
     });
     try {
       const result = await submitApplicantPaymentReference(

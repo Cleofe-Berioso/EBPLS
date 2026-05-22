@@ -7,7 +7,7 @@ interface RouteContext {
   params: Promise<{ applicationId: string; documentId: string }>;
 }
 
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   const session = await requireBploSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,7 +24,14 @@ export async function GET(_req: Request, context: RouteContext) {
       downloadFileName: document.fileName,
     });
 
-    return NextResponse.redirect(signed.signedUrl, { status: 302 });
+    // Ensure absolute URL for redirect. If relative, convert to absolute.
+    let redirectUrl = signed.signedUrl;
+    if (redirectUrl.startsWith("/") && !redirectUrl.startsWith("//")) {
+      const origin = new URL(req.url).origin;
+      redirectUrl = `${origin}${redirectUrl}`;
+    }
+
+    return NextResponse.redirect(redirectUrl, { status: 302 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to download document";
     const status =

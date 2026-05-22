@@ -7,7 +7,7 @@ interface RouteContext {
   params: Promise<{ applicationId: string; documentId: string }>;
 }
 
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   const authContext = await resolveApplicantSessionContext();
   if (authContext.ok === false) {
     return NextResponse.json({ error: authContext.error }, { status: authContext.status });
@@ -23,7 +23,14 @@ export async function GET(_req: Request, context: RouteContext) {
       expiresIn: 60,
     });
 
-    return NextResponse.redirect(signed.signedUrl, { status: 302 });
+    // Ensure absolute URL for redirect. If relative, convert to absolute.
+    let redirectUrl = signed.signedUrl;
+    if (redirectUrl.startsWith("/") && !redirectUrl.startsWith("//")) {
+      const origin = new URL(req.url).origin;
+      redirectUrl = `${origin}${redirectUrl}`;
+    }
+
+    return NextResponse.redirect(redirectUrl, { status: 302 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to download document";
     const status = message === "Document not found" ? 404 : 400;

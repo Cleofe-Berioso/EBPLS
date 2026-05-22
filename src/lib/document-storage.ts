@@ -1,7 +1,12 @@
 import "server-only";
 
+import fs from "node:fs/promises";
 import path from "node:path";
 import { getSupabaseStorageAdminClient } from "@/lib/supabase-storage-server";
+import { localWriteFile, localDeleteFile, resolveLocalFilePath } from "@/lib/local-storage";
+import { formatOwnerName } from "@/lib/person-name";
+
+const LOCAL_STORAGE = process.env.STORAGE_DRIVER === "local";
 import {
   ALLOWED_DOCUMENT_MIME_TYPES,
   DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
@@ -18,6 +23,67 @@ type DocumentBucket = typeof PDF_BUCKET | typeof IMAGE_BUCKET;
 
 function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function sanitizeFilenamePart(value: string, fallback: string): string {
+  const normalized = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "");
+
+  return normalized.length > 0 ? normalized : fallback;
+}
+
+function formatUploadTimestamp(date: Date): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string>;
+
+  return `${values.year ?? "0000"}${values.month ?? "00"}${values.day ?? "00"}-${values.hour ?? "00"}${values.minute ?? "00"}${values.second ?? "00"}`;
+}
+
+function fileExtensionFromName(fileName: string, mimeType: string): string {
+  const extension = path.extname(fileName).trim();
+  if (extension) {
+    return extension;
+  }
+
+  if (mimeType === "application/pdf") return ".pdf";
+  if (mimeType === "image/jpeg") return ".jpg";
+  if (mimeType === "image/png") return ".png";
+  if (mimeType === "image/webp") return ".webp";
+
+  return ".bin";
+}
+
+function buildApplicantDocumentFileName(params: {
+  applicantName: string;
+  documentType: string;
+  originalFileName: string;
+  mimeType: string;
+  uploadedAt: Date;
+  collisionSuffix?: string;
+}): string {
+  const baseApplicantName = sanitizeFilenamePart(params.applicantName, "Applicant");
+  const baseDocumentType = sanitizeFilenamePart(params.documentType, "Document");
+  const timestamp = formatUploadTimestamp(params.uploadedAt);
+  const suffix = params.collisionSuffix ? `-${sanitizeFilenamePart(params.collisionSuffix, "retry")}` : "";
+  const extension = fileExtensionFromName(params.originalFileName, params.mimeType);
+
+  return `${baseApplicantName}_${baseDocumentType}_${timestamp}${suffix}${extension}`;
 }
 
 function sanitizePathSegment(segment: string): string {
@@ -79,9 +145,8 @@ function buildApplicationObjectPath(params: {
   const applicationId = sanitizePathSegment(params.applicationId);
   const documentType = sanitizePathSegment(params.documentType);
   const safeFileName = sanitizeFileName(params.fileName || "upload.bin");
-  const fileName = `${Date.now()}-${safeFileName}`;
 
-  return joinObjectPath(["applications", applicationId, documentType, fileName]);
+  return joinObjectPath(["applications", applicationId, documentType, safeFileName]);
 }
 
 function buildProfileImageObjectPath(params: {
@@ -100,8 +165,9 @@ export async function uploadDocumentFile(params: {
   objectPath?: string;
   objectPrefix?: string;
   upsert?: boolean;
+  fileName?: string;
 }) {
-  const { file, objectPrefix, objectPath, upsert = false } = params;
+  const { file, objectPrefix, objectPath, fileName, upsert = false } = params;
 
   if (!ALLOWED_MIME_TYPES.has(file.type)) {
     throw new Error(DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE);
@@ -120,6 +186,28 @@ export async function uploadDocumentFile(params: {
       `${Date.now()}-${safeFileName}`,
     ]);
 
+  if (LOCAL_STORAGE) {
+    if (!upsert) {
+      try {
+        await fs.access(resolveLocalFilePath(storagePath));
+        throw new Error("Storage path already exists");
+      } catch (error) {
+        if (error instanceof Error && error.message === "Storage path already exists") {
+          throw error;
+        }
+      }
+    }
+
+    await localWriteFile(storagePath, file);
+    return {
+      fileName: fileName ?? safeFileName,
+      mimeType: file.type,
+      sizeBytes: file.size,
+      storagePath,
+      bucket,
+    };
+  }
+
   const supabase = getSupabaseStorageAdminClient();
   const uploadResult = await supabase.storage.from(bucket).upload(storagePath, file, {
     contentType: file.type,
@@ -131,7 +219,7 @@ export async function uploadDocumentFile(params: {
   }
 
   return {
-    fileName: safeFileName,
+    fileName: fileName ?? safeFileName,
     mimeType: file.type,
     sizeBytes: file.size,
     storagePath,
@@ -142,18 +230,53 @@ export async function uploadDocumentFile(params: {
 export async function uploadApplicationFile(params: {
   applicationId: string;
   documentType: string;
+  applicantName: string;
   file: File;
 }) {
-  const objectPath = buildApplicationObjectPath({
-    applicationId: params.applicationId,
+  const uploadedAt = new Date();
+  const baseFileName = buildApplicantDocumentFileName({
+    applicantName: params.applicantName,
     documentType: params.documentType,
-    fileName: params.file.name,
+    originalFileName: params.file.name,
+    mimeType: params.file.type,
+    uploadedAt,
   });
 
-  return uploadDocumentFile({
-    file: params.file,
-    objectPath,
-  });
+  const tryUpload = async (collisionSuffix?: string) => {
+    const fileName = collisionSuffix
+      ? buildApplicantDocumentFileName({
+          applicantName: params.applicantName,
+          documentType: params.documentType,
+          originalFileName: params.file.name,
+          mimeType: params.file.type,
+          uploadedAt,
+          collisionSuffix,
+        })
+      : baseFileName;
+
+    const objectPath = buildApplicationObjectPath({
+      applicationId: params.applicationId,
+      documentType: params.documentType,
+      fileName,
+    });
+
+    return uploadDocumentFile({
+      file: params.file,
+      objectPath,
+      fileName,
+    });
+  };
+
+  try {
+    return await tryUpload();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/already exists|Storage path already exists|duplicate|409/i.test(message)) {
+      throw error;
+    }
+
+    return tryUpload(`retry-${Math.random().toString(36).slice(2, 6)}`);
+  }
 }
 
 export async function uploadApplicantProfileImage(params: {
@@ -180,6 +303,14 @@ export async function createStorageSignedUrl(params: {
   download?: boolean;
 }) {
   const bucket = resolveBucketByMimeType(params.mimeType);
+
+  if (LOCAL_STORAGE) {
+    const qs = params.download && params.downloadFileName
+      ? `?download=${encodeURIComponent(params.downloadFileName)}`
+      : "";
+    return { bucket, signedUrl: `/api/uploads/${params.storagePath}${qs}` };
+  }
+
   const supabase = getSupabaseStorageAdminClient();
   const result = await supabase.storage.from(bucket).createSignedUrl(params.storagePath, params.expiresIn ?? 60, {
     download: params.download ? params.downloadFileName || true : false,
@@ -202,6 +333,14 @@ export async function createStorageSignedUrlByPath(params: {
   download?: boolean;
 }) {
   const bucket = resolveBucketByStoragePath(params.storagePath);
+
+  if (LOCAL_STORAGE) {
+    const qs = params.download && params.downloadFileName
+      ? `?download=${encodeURIComponent(params.downloadFileName)}`
+      : "";
+    return { bucket, signedUrl: `/api/uploads/${params.storagePath}${qs}` };
+  }
+
   const supabase = getSupabaseStorageAdminClient();
   const result = await supabase.storage.from(bucket).createSignedUrl(params.storagePath, params.expiresIn ?? 60, {
     download: params.download ? params.downloadFileName || true : false,
@@ -222,6 +361,12 @@ export async function deleteStorageObject(params: {
   mimeType?: string;
 }) {
   const bucket = params.mimeType ? resolveBucketByMimeType(params.mimeType) : inferBucketFromStoragePath(params.storagePath);
+
+  if (LOCAL_STORAGE) {
+    await localDeleteFile(params.storagePath);
+    return { bucket };
+  }
+
   const supabase = getSupabaseStorageAdminClient();
   const result = await supabase.storage.from(bucket).remove([params.storagePath]);
 
@@ -237,6 +382,7 @@ export async function storeApplicantDocument(
   options?: {
     applicationId?: string;
     documentType?: string;
+    applicantName?: string;
     objectPrefix?: string;
   }
 ) {
@@ -245,6 +391,7 @@ export async function storeApplicantDocument(
       file,
       applicationId: options.applicationId,
       documentType: options.documentType,
+      applicantName: options.applicantName ?? formatOwnerName({ ownerName: "Applicant" }),
     });
   }
 

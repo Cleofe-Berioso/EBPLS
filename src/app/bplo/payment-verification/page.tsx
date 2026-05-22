@@ -178,7 +178,7 @@ export default function BploPaymentVerificationPage() {
   }, [activeTab, lists.pending, lists.verified, lists.rejected]);
 
   const isUnderpaid =
-    detail ? detail.row.amountPaid < detail.top.releasePaymentAmount : false;
+    detail ? detail.row.amountPaid < detail.top.totalAmount : false;
 
   async function verifySelected() {
     if (!detail || detail.row.paymentStatus !== "PENDING") return;
@@ -206,7 +206,7 @@ export default function BploPaymentVerificationPage() {
     const warning =
       typeof data.result?.releasePaymentAmount === "number" &&
       typeof data.result.amountPaid === "number"
-        ? ` Verified payment ${money(data.result.amountPaid)} against required release payment ${money(data.result.releasePaymentAmount)}.`
+        ? ` Verified payment ${money(data.result.amountPaid)} against required payment amount ${money(data.result.releasePaymentAmount)}.`
         : "";
 
     setStatusMessage({
@@ -435,7 +435,7 @@ export default function BploPaymentVerificationPage() {
               {detail.row.paymentStatus === "PENDING" && isUnderpaid ? (
                 <InfoBanner
                   title="Underpaid amount detected"
-                  description={`Submitted payment is ${money(detail.row.amountPaid)} while required release payment is ${money(detail.top.releasePaymentAmount)}.`}
+                  description={`Submitted payment is ${money(detail.row.amountPaid)} while required payment amount is ${money(detail.top.totalAmount)}.`}
                   variant="warning"
                 />
               ) : null}
@@ -472,9 +472,9 @@ export default function BploPaymentVerificationPage() {
                   helper="Submitted by applicant"
                 />
                 <SummaryTile
-                  label="Required Release Payment"
-                  value={money(detail.top.releasePaymentAmount)}
-                  helper="Required before permit preparation"
+                  label="Required Payment Amount"
+                  value={money(detail.top.totalAmount)}
+                  helper="Total amount due for payment"
                 />
                 <SummaryTile
                   label="Payment Date"

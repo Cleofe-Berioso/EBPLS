@@ -84,6 +84,14 @@ export default async function MyApplicationsPage() {
                       <Link href={`/applicant/my-applications/${row.id}`} className={actionButtonStyles("secondary", "sm")}>
                         View Details
                       </Link>
+                      {row.status === "Draft" ? (
+                        <Link
+                          href={`/applicant/application/${row.applicationType.toLowerCase()}?applicationId=${row.id}`}
+                          className={actionButtonStyles("primary", "sm")}
+                        >
+                          Edit
+                        </Link>
+                      ) : null}
                       {row.status === "Returned for Correction" ? (
                         <Link
                           href={`/applicant/application/${row.applicationType.toLowerCase()}?applicationId=${row.id}`}
@@ -129,6 +137,14 @@ export default async function MyApplicationsPage() {
                   <p className="mt-2 text-xs text-slate-500">Submitted: {row.dateSubmitted}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link href={`/applicant/my-applications/${row.id}`} className={actionButtonStyles("secondary", "sm")}>View</Link>
+                    {row.status === "Draft" ? (
+                      <Link
+                        href={`/applicant/application/${row.applicationType.toLowerCase()}?applicationId=${row.id}`}
+                        className={actionButtonStyles("primary", "sm")}
+                      >
+                        Edit
+                      </Link>
+                    ) : null}
                     {row.status === "Returned for Correction" ? (
                       <Link
                         href={`/applicant/application/${row.applicationType.toLowerCase()}?applicationId=${row.id}`}

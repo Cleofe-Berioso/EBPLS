@@ -1,7 +1,5 @@
-import { loadEnvFile } from "node:process";
+import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
-
-loadEnvFile(".env");
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -10,6 +8,5 @@ export default defineConfig({
   },
   datasource: {
     url: env("DATABASE_URL"),
-    shadowDatabaseUrl: env("DIRECT_URL"),
   },
 });

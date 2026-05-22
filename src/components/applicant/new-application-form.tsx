@@ -46,6 +46,7 @@ import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SectionCard } from "@/components/ui/section-card";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const steps = [
   {
@@ -375,6 +376,19 @@ const READ_ONLY_LOCKED_FIELDS: Array<keyof BusinessInfo> = [
   "isLiquorOrTobacco",
 ];
 
+async function parseApiResponseSafely(response: Response): Promise<Record<string, unknown>> {
+  const responseText = await response.text();
+
+  try {
+    return responseText ? (JSON.parse(responseText) as Record<string, unknown>) : {};
+  } catch {
+    return {
+      error: "The server returned a non-JSON error response. Please check the server logs.",
+      rawResponse: responseText.slice(0, 300),
+    };
+  }
+}
+
 export function NewApplicationForm() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("applicationId");
@@ -382,7 +396,10 @@ export function NewApplicationForm() {
   const [step, setStep] = useState(0);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
+  const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
+  const [pendingDocumentPreviews, setPendingDocumentPreviews] = useState<Record<string, string>>({});
   const [applicationId, setApplicationId] = useState<string | undefined>(editId ?? undefined);
+  const [draftLoading, setDraftLoading] = useState(Boolean(editId));
   const [statusMessage, setStatusMessage] = useState<{
     kind: "success" | "error";
     text: string;
@@ -397,6 +414,7 @@ export function NewApplicationForm() {
 
   // Guard: ensures loadDraft cannot run concurrently for the same applicationId.
   const draftLoadingRef = useRef(false);
+  const pendingDocumentPreviewsRef = useRef<Record<string, string>>({});
 
   const isReadOnly = Boolean(editId && existingApplicationAccess && !existingApplicationAccess.canEdit);
   const lockInteractivityClass = isReadOnly ? "pointer-events-none" : "";
@@ -441,16 +459,32 @@ export function NewApplicationForm() {
   const uploadedRequiredCount = requiredDocs.filter((doc) => getUploadedDocumentForRequiredName(doc)).length;
 
   useEffect(() => {
+    pendingDocumentPreviewsRef.current = pendingDocumentPreviews;
+  }, [pendingDocumentPreviews]);
+
+  useEffect(() => {
+    return () => {
+      for (const previewUrl of Object.values(pendingDocumentPreviewsRef.current)) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     async function loadExistingApplication() {
-      if (!editId) return;
+      if (!editId) {
+        setDraftLoading(false);
+        return;
+      }
+      setDraftLoading(true);
       // Prevent concurrent loads for the same editId.
       if (draftLoadingRef.current) return;
       draftLoadingRef.current = true;
 
       const response = await fetch(`/api/applicant/applications/${editId}`, { cache: "no-store" });
-      const data = (await response.json()) as {
+      const data = (await parseApiResponseSafely(response)) as {
         application?: {
           id: string;
           status: string;
@@ -462,6 +496,7 @@ export function NewApplicationForm() {
 
       if (!active || !response.ok || !data.application) {
         draftLoadingRef.current = false;
+        setDraftLoading(false);
         return;
       }
 
@@ -483,7 +518,10 @@ export function NewApplicationForm() {
           return acc;
         }, {})
       );
+      setPendingDocuments({});
+      setPendingDocumentPreviews({});
       draftLoadingRef.current = false;
+      setDraftLoading(false);
     }
 
     void loadExistingApplication();
@@ -520,6 +558,17 @@ export function NewApplicationForm() {
       });
     }
   }, [isReadOnly]);
+
+  if (editId && draftLoading) {
+    return (
+      <SectionCard title="Loading saved draft" description="Restoring your saved application values.">
+        <EmptyState
+          title="Loading draft"
+          description="Please wait while the saved application is loaded into the form."
+        />
+      </SectionCard>
+    );
+  }
 
   function validateFieldOnBlur(field: keyof BusinessInfo) {
     if (isReadOnly) return;
@@ -765,6 +814,7 @@ export function NewApplicationForm() {
 
       const missingDocuments = getMissingRequiredDocuments(requiredDocs, [
         ...Object.values(uploadedDocuments).map((doc) => doc.documentName),
+        ...Object.keys(pendingDocuments),
       ]);
       if (missingDocuments.length > 0) {
         setMissingDocNames(missingDocuments);
@@ -785,16 +835,35 @@ export function NewApplicationForm() {
       documents: Object.values(uploadedDocuments),
     });
 
-    const response = await fetch("/api/applicant/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const response =
+      mode === "SUBMIT"
+        ? await (async () => {
+            const formData = new FormData();
+            formData.append("payload", JSON.stringify(payload));
+            for (const [documentName, file] of Object.entries(pendingDocuments)) {
+              formData.append("documentNames", documentName);
+              formData.append("documentFiles", file, file.name);
+            }
 
-    const data = (await response.json()) as {
+            return fetch("/api/applicant/applications", {
+              method: "POST",
+              body: formData,
+            });
+          })()
+        : await fetch(
+            applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications",
+            {
+              method: applicationId ? "PATCH" : "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          );
+
+    const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
       error?: string;
       duplicateField?: string;
+      rawResponse?: string;
     };
 
     setSubmitting(false);
@@ -803,9 +872,15 @@ export function NewApplicationForm() {
       if (data.duplicateField === "registrationNumber" || data.duplicateField === "tin") {
         setFieldErrors({ [data.duplicateField]: "This already exist" });
       }
+
+      const detail =
+        typeof data.rawResponse === "string" && data.rawResponse.length > 0
+          ? ` (${data.rawResponse})`
+          : "";
+
       setStatusMessage({
         kind: "error",
-        text: data.error ?? "Unable to save application.",
+        text: data.error ?? `Unable to save application.${detail}`,
       });
       setSubmitting(false);
       return null;
@@ -814,6 +889,11 @@ export function NewApplicationForm() {
     setApplicationId(data.application.id);
 
     if (mode === "SUBMIT") {
+      for (const previewUrl of Object.values(pendingDocumentPreviews)) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPendingDocuments({});
+      setPendingDocumentPreviews({});
       setStatusMessage({
         kind: "success",
         text: `Application ${data.application.applicationNumber} submitted successfully.`,
@@ -839,47 +919,30 @@ export function NewApplicationForm() {
       return;
     }
 
-    let targetApplicationId = applicationId;
-    if (!targetApplicationId) {
-      const draftId = await persist("DRAFT");
-      if (!draftId) {
-        setStatusMessage({
-          kind: "error",
-          text: "Save a draft first before uploading documents.",
-        });
-        return;
-      }
-      targetApplicationId = draftId;
+    const nextPreviewUrl = URL.createObjectURL(file);
+    const previousPreviewUrl = pendingDocumentPreviews[documentName];
+    if (previousPreviewUrl) {
+      URL.revokeObjectURL(previousPreviewUrl);
     }
 
-    setSubmitting(true);
-    const uploadFormData = new FormData();
-    uploadFormData.append("documentName", documentName);
-    uploadFormData.append("file", file, file.name);
+    setPendingDocuments((current) => ({
+      ...current,
+      [documentName]: file,
+    }));
+    setPendingDocumentPreviews((current) => ({
+      ...current,
+      [documentName]: nextPreviewUrl,
+    }));
 
-    const response = await fetch(`/api/applicant/applications/${targetApplicationId}/documents`, {
-      method: "POST",
-      body: uploadFormData,
-    });
-
-    const data = (await response.json()) as { document?: ApplicationDocumentInput; error?: string };
-    setSubmitting(false);
-
-    if (!response.ok || !data.document) {
-      setStatusMessage({
-        kind: "error",
-        text: data.error ?? "Unable to upload document.",
-      });
-      return;
-    }
-
-    setApplicationId(targetApplicationId);
     setUploadedDocuments((current) => ({
       ...current,
       [documentName]: {
-        ...data.document,
-        documentType: data.document.documentType ?? documentName,
+        documentType: documentName,
         documentName,
+        fileName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        fileSize: file.size,
       },
     }));
     setMissingDocNames((current) =>
@@ -887,7 +950,7 @@ export function NewApplicationForm() {
         (m) => normalizeDocumentName(m) !== normalizeDocumentName(documentName)
       )
     );
-    setStatusMessage({ kind: "success", text: `${documentName} uploaded successfully.` });
+    setStatusMessage({ kind: "success", text: `${documentName} selected. File will be saved on final submit.` });
   }
 
   async function handleDocumentDelete(documentName: string) {
@@ -896,7 +959,21 @@ export function NewApplicationForm() {
     const hasSavedDocument = Boolean(doc?.id && applicationId);
 
     if (!hasSavedDocument) {
+      const previewUrl = pendingDocumentPreviews[documentName];
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
       setUploadedDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      setPendingDocuments((current) => {
+        const nextState = { ...current };
+        delete nextState[documentName];
+        return nextState;
+      });
+      setPendingDocumentPreviews((current) => {
         const nextState = { ...current };
         delete nextState[documentName];
         return nextState;
@@ -913,6 +990,16 @@ export function NewApplicationForm() {
     if (!response.ok) return;
 
     setUploadedDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setPendingDocuments((current) => {
+      const nextState = { ...current };
+      delete nextState[documentName];
+      return nextState;
+    });
+    setPendingDocumentPreviews((current) => {
       const nextState = { ...current };
       delete nextState[documentName];
       return nextState;
@@ -1013,19 +1100,28 @@ export function NewApplicationForm() {
 
               <FormField
                 label="Business Activity"
+                hint="Please select one"
                 required
                 error={fieldErrors.businessActivity}
               >
                 <select
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
-                  value={info.businessActivity}
+                  value={(() => {
+                    // If the value is "Others: <text>", show just "Others, please specify" in the dropdown
+                    if (info.businessActivity?.startsWith("Others:")) {
+                      return "Others, please specify";
+                    }
+                    return info.businessActivity;
+                  })()}
                   disabled={isReadOnly}
                   onBlur={() => validateFieldOnBlur("businessActivity")}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    // Set to empty string if "Others" selected so the text input shows
                     setInfo((current) =>
-                      normalizeBusinessInfo({ ...current, businessActivity: event.target.value })
-                    )
-                  }
+                      normalizeBusinessInfo({ ...current, businessActivity: value === "Others, please specify" ? "" : value })
+                    );
+                  }}
                 >
                   <option value="">Select business activity</option>
                   {BUSINESS_ACTIVITY_OPTIONS.map((opt) => (
@@ -1035,6 +1131,51 @@ export function NewApplicationForm() {
                   ))}
                 </select>
               </FormField>
+
+              {(() => {
+                // Show text input if "Others" was selected or if businessActivity starts with "Others:"
+                const isOthersMode =
+                  (info.businessActivity === "" &&
+                    (fieldErrors.businessActivity || info.businessActivity === "")) ||
+                  info.businessActivity?.startsWith("Others:");
+
+                // More reliable check: if one of the standard BUSINESS_ACTIVITY_OPTIONS is selected, don't show input
+                const isStandardOption = BUSINESS_ACTIVITY_OPTIONS.some(
+                  (opt) => opt !== "Others, please specify" && opt === info.businessActivity
+                );
+
+                return !isStandardOption && (info.businessActivity === "" || info.businessActivity?.startsWith("Others:")) ? (
+                  <FormField
+                    label="Please specify business activity"
+                    required
+                    error={fieldErrors.businessActivity}
+                  >
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                      placeholder="Enter your business activity"
+                      value={(() => {
+                        // Extract the custom text from "Others: <text>" format
+                        if (info.businessActivity?.startsWith("Others:")) {
+                          return info.businessActivity.substring(7).trim();
+                        }
+                        return "";
+                      })()}
+                      disabled={isReadOnly}
+                      onBlur={() => validateFieldOnBlur("businessActivity")}
+                      onChange={(event) => {
+                        const customText = event.target.value;
+                        setInfo((current) =>
+                          normalizeBusinessInfo({
+                            ...current,
+                            businessActivity: customText ? `Others: ${customText}` : "",
+                          })
+                        );
+                      }}
+                    />
+                  </FormField>
+                ) : null;
+              })()}
 
               <FormField
                 label="Line of Business"
@@ -1190,6 +1331,12 @@ export function NewApplicationForm() {
                     disabled={submitting || isReadOnly}
                     fileName={uploadedDoc?.fileName}
                     uploadedAt={uploadedDoc?.uploadedAt}
+                    previewUrl={
+                      pendingDocumentPreviews[doc] ??
+                      (uploadedDoc?.id && applicationId
+                        ? `/api/applicant/applications/${applicationId}/documents/${uploadedDoc.id}/download`
+                        : undefined)
+                    }
                     error={
                       missingDocNames.some(
                         (m) => normalizeDocumentName(m) === normalizeDocumentName(doc)

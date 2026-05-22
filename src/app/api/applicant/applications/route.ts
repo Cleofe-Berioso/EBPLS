@@ -14,8 +14,11 @@ import type { SaveApplicationInput } from "@/lib/applicant-types";
 import { logApplicationAction } from "@/lib/audit-log";
 import {
   DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
+  DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE,
   MAX_DOCUMENT_FILE_SIZE_BYTES,
+  validateDocumentFileUpload,
 } from "@/lib/document-upload-rules";
+import { Prisma } from "@prisma/client";
 
 interface SubmitFileInput {
   documentName: string;
@@ -71,162 +74,226 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const authContext = await resolveApplicantSessionContext();
-  if (authContext.ok === false) {
-    return NextResponse.json({ error: authContext.error }, { status: authContext.status });
-  }
+  let resolvedUserId: string | null = null;
+  let resolvedMode: SaveApplicationInput["mode"] | null = null;
+  let resolvedApplicationType: SaveApplicationInput["applicationType"] | null = null;
+  let resolvedDocumentCount = 0;
+  let dbWriteAttempted = false;
 
-  const session = authContext.session;
-
-  let payload: SaveApplicationInput;
-  let submitFiles: SubmitFileInput[] = [];
   try {
-    const contentType = req.headers.get("content-type") ?? "";
+    const authContext = await resolveApplicantSessionContext();
+    if (authContext.ok === false) {
+      return NextResponse.json({ error: authContext.error }, { status: authContext.status });
+    }
 
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
-      const payloadRaw = formData.get("payload");
+    const session = authContext.session;
+    resolvedUserId = authContext.applicantId;
 
-      if (typeof payloadRaw !== "string") {
-        return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    let payload: SaveApplicationInput;
+    let submitFiles: SubmitFileInput[] = [];
+    try {
+      const contentType = req.headers.get("content-type") ?? "";
+
+      if (contentType.includes("multipart/form-data")) {
+        const formData = await req.formData();
+        const payloadRaw = formData.get("payload");
+
+        if (typeof payloadRaw !== "string") {
+          return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+        }
+
+        payload = JSON.parse(payloadRaw) as SaveApplicationInput;
+
+        const documentNames = formData
+          .getAll("documentNames")
+          .filter((value): value is string => typeof value === "string");
+        const documentFiles = formData
+          .getAll("documentFiles")
+          .filter((value): value is File => value instanceof File);
+
+        if (documentNames.length !== documentFiles.length) {
+          return NextResponse.json({ error: "Invalid document upload metadata" }, { status: 400 });
+        }
+
+        submitFiles = documentFiles.map((file, index) => ({
+          file,
+          documentName: (documentNames[index] ?? "").trim(),
+        }));
+      } else {
+        payload = (await req.json()) as SaveApplicationInput;
+      }
+    } catch {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+
+    resolvedMode = payload.mode;
+    resolvedApplicationType = payload.applicationType;
+    resolvedDocumentCount = Array.isArray(payload.documents) ? payload.documents.length : 0;
+
+    if (!payload?.applicationType || !payload?.formData || !payload?.mode) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (
+      payload.mode === "SUBMIT" &&
+      submitFiles.some((entry) => !entry.documentName || !(entry.file instanceof File))
+    ) {
+      return NextResponse.json({ error: "Invalid document upload metadata" }, { status: 400 });
+    }
+
+    if (payload.mode !== "SUBMIT" && submitFiles.length > 0) {
+      return NextResponse.json({ error: "Draft save cannot include uploaded files." }, { status: 400 });
+    }
+
+    for (const entry of submitFiles) {
+      const fileValidationError = validateDocumentFileUpload(entry.file);
+      if (fileValidationError) {
+        const status =
+          fileValidationError === DOCUMENT_UPLOAD_ERROR_MAX_SIZE ||
+          fileValidationError === DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE
+            ? 400
+            : 400;
+        return NextResponse.json({ error: fileValidationError }, { status });
+      }
+    }
+
+    if (hasUnsafeDocumentPayload(payload)) {
+      const oversizedDocument = payload.documents?.some(
+        (doc) =>
+          (typeof doc.sizeBytes === "number" && doc.sizeBytes > MAX_DOCUMENT_FILE_SIZE_BYTES) ||
+          (typeof doc.fileSize === "number" && doc.fileSize > MAX_DOCUMENT_FILE_SIZE_BYTES)
+      );
+
+      return NextResponse.json(
+        { error: oversizedDocument ? DOCUMENT_UPLOAD_ERROR_MAX_SIZE : "Invalid document payload." },
+        { status: 400 }
+      );
+    }
+
+    if (!["NEW", "RENEWAL", "CLOSURE"].includes(payload.applicationType)) {
+      return NextResponse.json({ error: "Invalid application type" }, { status: 400 });
+    }
+
+    if (!["DRAFT", "SUBMIT"].includes(payload.mode)) {
+      return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
+    }
+
+    logApplicantApi("request", {
+      userId: session.user.id,
+      userEmail: session.user.email ?? null,
+      mode: payload.mode,
+      applicationType: payload.applicationType,
+      applicationId: payload.applicationId ?? null,
+      uploadedDocuments: resolvedDocumentCount,
+      validationPassed: true,
+    });
+
+    try {
+      dbWriteAttempted = true;
+      const saved = await saveApplicantApplication(authContext.applicantId, payload, submitFiles);
+      logApplicantApi("success", {
+        userId: session.user.id,
+        userEmail: session.user.email ?? null,
+        applicationId: saved.id,
+        applicationNumber: saved.applicationNumber,
+        status: saved.status,
+        submittedAt: saved.submittedAt,
+      });
+
+      // Audit: Application submission
+      if (payload.mode === "SUBMIT") {
+        void logApplicationAction(
+          authContext.applicantId,
+          session.user.name ?? session.user.email ?? null,
+          "APPLICANT",
+          saved.id,
+          saved.applicationNumber,
+          "SUBMITTED",
+          "DRAFT",
+          saved.status,
+          `${payload.applicationType} application submitted`,
+          {
+            applicationType: payload.applicationType,
+            documentCount: submitFiles.length,
+            closureType: payload.closureType ?? null,
+            closureTypeOtherReason: payload.closureTypeOtherReason ?? null,
+          }
+        );
       }
 
-      payload = JSON.parse(payloadRaw) as SaveApplicationInput;
-
-      const documentNames = formData.getAll("documentNames").filter((value): value is string => typeof value === "string");
-      const documentFiles = formData.getAll("documentFiles").filter((value): value is File => value instanceof File);
-
-      if (documentFiles.length > 0) {
+      return NextResponse.json({ application: saved });
+    } catch (error) {
+      if (error instanceof SubmitValidationError) {
         return NextResponse.json(
           {
-            error:
-              "Upload documents per file using the documents endpoint before final submit. Final submit only accepts metadata.",
+            error: "Application is incomplete. Complete all required fields and documents before submitting.",
+            detail: error.detail,
           },
           { status: 400 }
         );
       }
 
-      submitFiles = documentFiles.map((file, index) => ({
-        file,
-        documentName: (documentNames[index] ?? "").trim(),
-      }));
-    } else {
-      payload = (await req.json()) as SaveApplicationInput;
+      if (error instanceof DuplicateBusinessIdentityError) {
+        return NextResponse.json(
+          { error: "This already exist", duplicateField: error.field },
+          { status: 400 }
+        );
+      }
+
+      if (error instanceof ApplicantEligibilityError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+
+      const message = error instanceof Error ? error.message : "Unable to save application";
+      const status =
+        message === APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE
+          ? 401
+          : message === "Application not found"
+            ? 404
+            : message === "This application has already been submitted and is now locked for review."
+              ? 403
+              : 400;
+
+      logApplicantApi("error", {
+        userId: session.user.id,
+        userEmail: session.user.email ?? null,
+        mode: payload.mode,
+        applicationType: payload.applicationType,
+        uploadedDocuments: resolvedDocumentCount,
+        dbWriteAttempted,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        error: message,
+        status,
+      });
+
+      return NextResponse.json({ error: message }, { status });
     }
-  } catch {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown server error";
 
-  if (!payload?.applicationType || !payload?.formData || !payload?.mode) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
+    const isPrismaInitError = error instanceof Prisma.PrismaClientInitializationError;
+    const isServiceUnavailable =
+      isPrismaInitError ||
+      /can't reach database server|database .* unavailable|connection.*refused|timed out/i.test(message);
 
-  if (payload.mode === "SUBMIT" && submitFiles.some((entry) => !entry.documentName || !(entry.file instanceof File))) {
-    return NextResponse.json({ error: "Invalid document upload metadata" }, { status: 400 });
-  }
-
-  if (hasUnsafeDocumentPayload(payload)) {
-    const oversizedDocument = payload.documents?.some(
-      (doc) =>
-        (typeof doc.sizeBytes === "number" && doc.sizeBytes > MAX_DOCUMENT_FILE_SIZE_BYTES) ||
-        (typeof doc.fileSize === "number" && doc.fileSize > MAX_DOCUMENT_FILE_SIZE_BYTES)
-    );
+    logApplicantApi("fatal", {
+      userId: resolvedUserId,
+      mode: resolvedMode,
+      applicationType: resolvedApplicationType,
+      uploadedDocuments: resolvedDocumentCount,
+      dbWriteAttempted,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      error: message,
+      status: isServiceUnavailable ? 503 : 500,
+    });
 
     return NextResponse.json(
-      { error: oversizedDocument ? DOCUMENT_UPLOAD_ERROR_MAX_SIZE : "Invalid document payload." },
-      { status: 400 }
+      {
+        error: isServiceUnavailable
+          ? "Application service is temporarily unavailable. Please try again in a few moments."
+          : "Application submission failed. Please try again.",
+      },
+      { status: isServiceUnavailable ? 503 : 500 }
     );
-  }
-
-  if (!["NEW", "RENEWAL", "CLOSURE"].includes(payload.applicationType)) {
-    return NextResponse.json({ error: "Invalid application type" }, { status: 400 });
-  }
-
-  if (!["DRAFT", "SUBMIT"].includes(payload.mode)) {
-    return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
-  }
-
-  logApplicantApi("request", {
-    userId: session.user.id,
-    userEmail: session.user.email ?? null,
-    mode: payload.mode,
-    applicationType: payload.applicationType,
-    applicationId: payload.applicationId ?? null,
-  });
-
-  try {
-    const saved = await saveApplicantApplication(authContext.applicantId, payload, submitFiles);
-    logApplicantApi("success", {
-      userId: session.user.id,
-      userEmail: session.user.email ?? null,
-      applicationId: saved.id,
-      applicationNumber: saved.applicationNumber,
-      status: saved.status,
-      submittedAt: saved.submittedAt,
-    });
-
-    // Audit: Application submission
-    if (payload.mode === "SUBMIT") {
-      void logApplicationAction(
-        authContext.applicantId,
-        session.user.name ?? session.user.email ?? null,
-        "APPLICANT",
-        saved.id,
-        saved.applicationNumber,
-        "SUBMITTED",
-        "DRAFT",
-        saved.status,
-        `${payload.applicationType} application submitted`,
-        {
-          applicationType: payload.applicationType,
-          documentCount: submitFiles.length,
-          closureType: payload.closureType ?? null,
-          closureTypeOtherReason: payload.closureTypeOtherReason ?? null,
-        }
-      );
-    }
-
-    return NextResponse.json({ application: saved });
-  } catch (error) {
-    if (error instanceof SubmitValidationError) {
-      return NextResponse.json(
-        {
-          error: "Application is incomplete. Complete all required fields and documents before submitting.",
-          detail: error.detail,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (error instanceof DuplicateBusinessIdentityError) {
-      return NextResponse.json(
-        { error: "This already exist", duplicateField: error.field },
-        { status: 400 }
-      );
-    }
-
-    if (error instanceof ApplicantEligibilityError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    const message = error instanceof Error ? error.message : "Unable to save application";
-    const status =
-      message === APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE
-        ? 401
-        :
-      message === "Application not found"
-        ? 404
-        : message === "This application has already been submitted and is now locked for review."
-          ? 403
-          : 400;
-    logApplicantApi("error", {
-      userId: session.user.id,
-      userEmail: session.user.email ?? null,
-      mode: payload.mode,
-      applicationType: payload.applicationType,
-      error: message,
-      status,
-    });
-    return NextResponse.json({ error: message }, { status });
   }
 }
