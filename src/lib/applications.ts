@@ -13,7 +13,10 @@ import {
 import { APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE } from "@/lib/applicant-api";
 import {
   applyLockedBusinessFields,
+  BUSINESS_ACTIVITY_OPTIONS,
   calculateAgeFromBirthDate,
+  resolveBusinessBarangayFromFormState,
+  isRecognizedEbMagalonaBarangay as isRecognizedEbMagalonaBarangayFromRules,
   isCorporation,
   isCorporationOwnershipClassification,
   normalizeBusinessInfo,
@@ -24,6 +27,7 @@ import {
   EB_MAGALONA_COUNTRY,
   EB_MAGALONA_COUNTRY_CODE,
   EB_MAGALONA_PROVINCE,
+  buildEbMagalonaBusinessAddress,
   isEbMagalonaCity,
   isEbMagalonaProvince,
   isPhilippinesCountry,
@@ -139,6 +143,94 @@ function parsePositiveAmount(value: string): number | null {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
+}
+
+function parseNonNegativeAmount(value: string): number | null {
+  const normalized = value.replace(/[,\s]/g, "").trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function normalizeEmployeeCountInput(value: string): string {
+  const compact = value.replace(/[,\s]/g, "").trim();
+  if (!compact) return "";
+
+  // Accept integer-like strings (e.g., "12", "12.0") and normalize to canonical integer string.
+  if (/^\d+(?:\.0+)?$/.test(compact)) {
+    return String(Number(compact));
+  }
+
+  return value.trim();
+}
+
+export function resolveBusinessBarangaySelection(
+  input: Pick<
+    BusinessInfo,
+    | "barangay"
+    | "businessBarangay"
+    | "sameAsMainOffice"
+    | "mainOfficeBarangay"
+    | "mainOfficeCountry"
+    | "mainOfficeCountryCode"
+    | "mainOfficeProvince"
+    | "mainOfficeCityMunicipality"
+  >
+): string {
+  return resolveBusinessBarangayFromFormState(input);
+}
+
+export function isRecognizedEbMagalonaBarangay(value: string): boolean {
+  return isRecognizedEbMagalonaBarangayFromRules(value);
+}
+
+function normalizeSubmitFormDataCandidate(input: BusinessInfo, applicantEmail: string | null): BusinessInfo {
+  const formEmail = input.email.trim();
+  const fallbackEmail = applicantEmail?.trim() ?? "";
+  const resolvedEmail = formEmail || fallbackEmail;
+
+  const resolvedBarangay = resolveBusinessBarangaySelection(input);
+  const resolvedTotalEmployees = normalizeEmployeeCountInput(input.totalEmployees ?? "");
+  const resolvedAssetSize = (input.assetSize?.trim() || input.capitalInvestment?.trim() || "").trim();
+  const resolvedStreetAddress = (input.businessStreetAddress?.trim() || input.streetAddress?.trim() || "").trim();
+
+  return normalizeBusinessInfo({
+    ...input,
+    email: resolvedEmail,
+    streetAddress: resolvedStreetAddress,
+    businessStreetAddress: resolvedStreetAddress,
+    barangay: resolvedBarangay,
+    businessBarangay: resolvedBarangay,
+    businessAddress: buildEbMagalonaBusinessAddress({
+      streetAddress: resolvedStreetAddress,
+      barangay: resolvedBarangay,
+    }),
+    totalEmployees: resolvedTotalEmployees,
+    assetSize: resolvedAssetSize,
+  });
+}
+
+function parseBusinessActivity(value: string): { selected: string; otherText: string } {
+  const trimmed = value.trim();
+  if (!trimmed) return { selected: "", otherText: "" };
+
+  if (trimmed.startsWith("Others:")) {
+    return {
+      selected: "Others, please specify",
+      otherText: trimmed.slice("Others:".length).trim(),
+    };
+  }
+
+  if (trimmed === "Others, please specify") {
+    return { selected: trimmed, otherText: "" };
+  }
+
+  if ((BUSINESS_ACTIVITY_OPTIONS as readonly string[]).includes(trimmed)) {
+    return { selected: trimmed, otherText: "" };
+  }
+
+  return { selected: "Others, please specify", otherText: trimmed };
 }
 
 function resolveRenewalLineOfBusiness(source: BusinessInfo | null, candidate: string): string {
@@ -288,6 +380,40 @@ function validateClosureSubmissionRules(input: SaveApplicationInput, closureElig
   if (closureType === "OTHERS" && !otherReason) {
     throw new Error("Please specify the closure reason when selecting Others.");
   }
+
+  // Validate closure operation fields stored in formData
+  const fd = input.formData;
+  const closureMissing: string[] = [];
+
+  if (!fd.closureLineOfBusiness?.trim()) {
+    closureMissing.push("closureLineOfBusiness");
+  }
+
+  const rawActivity = fd.closureBusinessActivity?.trim() ?? "";
+  if (!rawActivity) {
+    closureMissing.push("closureBusinessActivity");
+  } else if (rawActivity.startsWith("Others:") && rawActivity.substring(7).trim().length === 0) {
+    closureMissing.push("closureBusinessActivity (specify is required when Others is selected)");
+  }
+
+  if (!fd.closureLastDateOfOperation?.trim()) {
+    closureMissing.push("closureLastDateOfOperation");
+  } else {
+    const parsed = new Date(fd.closureLastDateOfOperation.trim());
+    if (!Number.isFinite(parsed.getTime())) {
+      closureMissing.push("closureLastDateOfOperation (invalid date)");
+    } else if (parsed.getTime() > Date.now()) {
+      closureMissing.push("closureLastDateOfOperation (cannot be in the future)");
+    }
+  }
+
+  if (!fd.closureReason?.trim()) {
+    closureMissing.push("closureReason");
+  }
+
+  if (closureMissing.length > 0) {
+    throw new SubmitValidationError({ missingFields: closureMissing, missingDocuments: [] });
+  }
 }
 
 async function assertEligibleBusinessRecord(
@@ -406,6 +532,27 @@ function mapApplicationToRow(app: ApplicationWithDocs): ApplicantApplicationRow 
     dateSubmitted: app.submittedAt ? toDateOnly(app.submittedAt) : "-",
     updatedAt: app.updatedAt.toISOString(),
     canEdit: isEditableStatus(app.status),
+  };
+}
+
+function mapSavedApplicationToRow(input: {
+  id: string;
+  applicationNumber: string;
+  applicationType: ApplicantApplicationRow["applicationType"];
+  status: DbApplicationStatus;
+  submittedAt: Date | null;
+  updatedAt: Date;
+  formData: BusinessInfo;
+}): ApplicantApplicationRow {
+  return {
+    id: input.id,
+    applicationNumber: input.applicationNumber,
+    businessName: resolveBusinessName(input.formData, null),
+    applicationType: input.applicationType,
+    status: mapDbStatusToUi(input.status),
+    dateSubmitted: input.submittedAt ? toDateOnly(input.submittedAt) : "-",
+    updatedAt: input.updatedAt.toISOString(),
+    canEdit: isEditableStatus(input.status),
   };
 }
 
@@ -538,6 +685,7 @@ function validateSubmitPayload(
   normalizedFormData: BusinessInfo,
   mergedDocuments: ApplicationDocumentInput[]
 ) {
+  const fieldErrors: Record<string, string> = {};
   const pinRequired = input.applicationType === "NEW" || input.applicationType === "RENEWAL";
 
   if (pinRequired) {
@@ -596,8 +744,15 @@ function validateSubmitPayload(
     const grossRaw = normalizedFormData.grossProfit?.trim() ?? "";
     if (!grossRaw) {
       missingFields.push("grossProfit");
-    } else if (parsePositiveAmount(grossRaw) == null) {
-      missingFields.push("grossProfit (must be a positive number)");
+    } else if (parseNonNegativeAmount(grossRaw) == null) {
+      missingFields.push("grossProfit (must be a non-negative number)");
+    }
+
+    const activity = parseBusinessActivity(normalizedFormData.businessActivity ?? "");
+    if (!activity.selected) {
+      missingFields.push("businessActivity");
+    } else if (activity.selected === "Others, please specify" && !activity.otherText) {
+      missingFields.push("businessActivity (specify activity is required when Others is selected)");
     }
   }
 
@@ -625,8 +780,10 @@ function validateSubmitPayload(
     missingFields.push("email (invalid format)");
   }
 
-  const assetValue = Number(normalizedFormData.assetSize.replace(/[₱,\s]/g, ""));
-  if (!Number.isFinite(assetValue) || assetValue < 0) {
+  const assetSizeRaw = normalizedFormData.assetSize.trim();
+  if (!assetSizeRaw) {
+    missingFields.push("assetSize");
+  } else if (parseNonNegativeAmount(assetSizeRaw) == null) {
     missingFields.push("assetSize (must be a non-negative number)");
   }
 
@@ -681,8 +838,16 @@ function validateSubmitPayload(
       missingFields.push("streetAddress");
     }
 
-    if (!normalizedFormData.barangay?.trim()) {
+    const resolvedBarangay = resolveBusinessBarangaySelection(normalizedFormData);
+    normalizedFormData.barangay = resolvedBarangay;
+    normalizedFormData.businessBarangay = resolvedBarangay;
+
+    if (!resolvedBarangay) {
       missingFields.push("barangay");
+    } else if (
+      !isRecognizedEbMagalonaBarangay(resolvedBarangay)
+    ) {
+      fieldErrors.barangay = "Business Barangay is not recognized. Please select from the EB Magalona barangay list.";
     }
   }
 
@@ -699,9 +864,14 @@ function validateSubmitPayload(
     missingFields.push("mainOfficeStreetAddress");
   }
 
-  const employees = Number(normalizedFormData.totalEmployees.replace(/[,\s]/g, ""));
-  if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
-    missingFields.push("totalEmployees (must be a non-negative integer)");
+  const totalEmployeesRaw = normalizedFormData.totalEmployees.trim();
+  if (!totalEmployeesRaw) {
+    missingFields.push("totalEmployees");
+  } else {
+    const employees = Number(totalEmployeesRaw.replace(/[,\s]/g, ""));
+    if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
+      missingFields.push("totalEmployees (must be a non-negative integer)");
+    }
   }
 
   if ((input.applicationType === "RENEWAL" || input.applicationType === "CLOSURE") && !input.businessRecordId) {
@@ -748,10 +918,17 @@ function validateSubmitPayload(
     })
     .map((doc) => `${doc.documentName} (exceeds 10MB max file size)`);
 
-  if (missingFields.length || missingDocuments.length || invalidDocumentMetadata.length || oversizedDocuments.length) {
+  if (
+    missingFields.length ||
+    Object.keys(fieldErrors).length > 0 ||
+    missingDocuments.length ||
+    invalidDocumentMetadata.length ||
+    oversizedDocuments.length
+  ) {
     throw new SubmitValidationError({
       missingFields: [...missingFields, ...invalidDocumentMetadata, ...oversizedDocuments],
       missingDocuments,
+      fieldErrors,
     });
   }
 }
@@ -877,17 +1054,28 @@ export async function saveApplicantApplication(
   }
 
   const nextStatus = input.mode === "SUBMIT" ? "SUBMITTED" : "DRAFT";
+  const normalizedInputFormData = normalizeSubmitFormDataCandidate(input.formData, applicantUser.email);
   const documents = sanitizeDocuments(input.documents);
   const normalizedSubmitFiles = sanitizeSubmitFiles(submitFiles);
 
-  const rawIdentityFormats = validateBusinessIdentityFormats({
-    businessType: input.formData.businessType,
-    registrationNumber: input.formData.registrationNumber,
-    tin: input.formData.tin,
-  });
-
-  if (!rawIdentityFormats.registrationNumber || !rawIdentityFormats.tin) {
-    throw new Error("Wrong Format");
+  // For DRAFT: only validate format for non-empty fields (allow partial data).
+  // For SUBMIT: both fields must be present and valid (format check runs in full).
+  const rawRegNum = (normalizedInputFormData.registrationNumber ?? "").trim();
+  const rawTin = (normalizedInputFormData.tin ?? "").trim();
+  if (rawRegNum || rawTin || input.mode === "SUBMIT") {
+    const rawIdentityFormats = validateBusinessIdentityFormats({
+      businessType: normalizedInputFormData.businessType,
+      registrationNumber: normalizedInputFormData.registrationNumber,
+      tin: normalizedInputFormData.tin,
+    });
+    if (input.mode === "SUBMIT") {
+      if (!rawIdentityFormats.registrationNumber || !rawIdentityFormats.tin) {
+        throw new Error("Wrong Format");
+      }
+    } else {
+      if (rawRegNum && !rawIdentityFormats.registrationNumber) throw new Error("Wrong Format");
+      if (rawTin && !rawIdentityFormats.tin) throw new Error("Wrong Format");
+    }
   }
 
   if (input.applicationType === "RENEWAL") {
@@ -945,9 +1133,32 @@ export async function saveApplicantApplication(
   const sourceBusinessInfo = await getApplicantBusinessRecordSource(applicantId, input.businessRecordId);
   const normalizedFormData = applyLockedBusinessFields(
     input.applicationType,
-    input.formData,
+    normalizedInputFormData,
     sourceBusinessInfo
   );
+
+  if (process.env.NODE_ENV !== "production" && input.mode === "SUBMIT") {
+    console.info("[ApplicantSubmission] submit-field-values", {
+      applicationType: input.applicationType,
+      usedEmailFallback:
+        normalizedInputFormData.email.trim().length > 0 &&
+        input.formData.email.trim().length === 0,
+      rawBarangay: input.formData.barangay ?? null,
+      rawBusinessBarangay: input.formData.businessBarangay ?? null,
+      canonicalBarangay: normalizedFormData.barangay ?? null,
+      barangayValidationState: normalizedFormData.barangay
+        ? isRecognizedEbMagalonaBarangay(normalizedFormData.barangay)
+          ? "valid"
+          : "invalid"
+        : "missing",
+      cityValueUsedForValidation: normalizedFormData.cityMunicipality,
+      email: normalizedFormData.email,
+      assetSize: normalizedFormData.assetSize,
+      barangay: normalizedFormData.barangay,
+      businessBarangay: normalizedFormData.businessBarangay ?? null,
+      totalEmployees: normalizedFormData.totalEmployees,
+    });
+  }
 
   const closureEligibility =
     input.applicationType === "CLOSURE" && input.businessRecordId
@@ -961,9 +1172,18 @@ export async function saveApplicantApplication(
     );
   }
 
-  const identityFormats = validateBusinessIdentityFormats(normalizedFormData);
-  if (!identityFormats.registrationNumber || !identityFormats.tin) {
-    throw new Error("Wrong Format");
+  const normalizedRegNum = normalizedFormData.registrationNumber.trim();
+  const normalizedTin = normalizedFormData.tin.trim();
+  if (normalizedRegNum || normalizedTin || input.mode === "SUBMIT") {
+    const identityFormats = validateBusinessIdentityFormats(normalizedFormData);
+    if (input.mode === "SUBMIT") {
+      if (!identityFormats.registrationNumber || !identityFormats.tin) {
+        throw new Error("Wrong Format");
+      }
+    } else {
+      if (normalizedRegNum && !identityFormats.registrationNumber) throw new Error("Wrong Format");
+      if (normalizedTin && !identityFormats.tin) throw new Error("Wrong Format");
+    }
   }
 
   await assertUniqueBusinessIdentity({
@@ -1136,12 +1356,15 @@ export async function saveApplicantApplication(
         });
       }
 
-      return {
+      return mapSavedApplicationToRow({
         id: updated.id,
         applicationNumber: updated.applicationNumber,
-        status: mapDbStatusToUi(updated.status),
-        submittedAt: updated.submittedAt ? updated.submittedAt.toISOString() : null,
-      };
+        applicationType: input.applicationType,
+        status: updated.status,
+        submittedAt: updated.submittedAt,
+        updatedAt: updated.updatedAt,
+        formData: normalizedFormData,
+      });
     }
 
     const applicationNumber = await generateApplicationNumber();
@@ -1214,12 +1437,15 @@ export async function saveApplicantApplication(
       });
     }
 
-    return {
+    return mapSavedApplicationToRow({
       id: created.id,
       applicationNumber: created.applicationNumber,
-      status: mapDbStatusToUi(created.status),
-      submittedAt: created.submittedAt ? created.submittedAt.toISOString() : null,
-    };
+      applicationType: input.applicationType,
+      status: created.status,
+      submittedAt: created.submittedAt,
+      updatedAt: created.updatedAt,
+      formData: normalizedFormData,
+    });
   } catch (error) {
     for (const storagePath of writtenStoragePaths) {
       await removeApplicantDocument(storagePath);

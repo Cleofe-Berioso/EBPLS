@@ -19,10 +19,23 @@ function logAuthRedirect(input: {
 export const proxy = auth((req) => {
   const { nextUrl } = req;
   const pathname = nextUrl.pathname;
+  const acceptHeader = req.headers.get("accept") ?? "";
+  const isServerActionRequest = req.headers.has("next-action");
+  const isRscRequest = req.headers.get("rsc") === "1" || acceptHeader.includes("text/x-component");
   const isLoggedIn = !!req.auth;
   const role = req.auth?.user?.role as Role | undefined;
   const userId = req.auth?.user?.id;
   const accountDisabled = nextUrl.searchParams.get("error") === "account-disabled";
+
+  // Never redirect/alter response expectations for server action or RSC transport requests.
+  if (isServerActionRequest || isRscRequest) {
+    return NextResponse.next();
+  }
+
+  // Auth callbacks should bypass dashboard role redirects.
+  if (pathname.startsWith("/api/auth/")) {
+    return NextResponse.next();
+  }
 
   // Redirect logged-in users away from the login page
   if (isLoggedIn && pathname === "/login" && !accountDisabled) {
@@ -84,8 +97,8 @@ export const config = {
   matcher: [
     /*
      * Match all request paths EXCEPT:
-     * - _next/static, _next/image, favicon.ico, public assets
+     * - all _next internals, favicon.ico, public assets
      */
-    "/((?!_next/static|_next/image|favicon.ico|images/).*)",
+    "/((?!_next/|favicon.ico|images/).*)",
   ],
 };

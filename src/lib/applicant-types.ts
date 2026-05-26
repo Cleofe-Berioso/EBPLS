@@ -70,6 +70,7 @@ export interface ApplicationDocumentInput {
 export interface SubmitValidationErrorDetail {
   missingFields: string[];
   missingDocuments: string[];
+  fieldErrors?: Record<string, string>;
 }
 
 export interface SaveApplicationInput {
@@ -153,4 +154,10 @@ export interface BusinessInfo {
   grossProfit?: string;
   barangay?: string;
   businessOperationType?: "Main" | "Branch";
+  // Closure-specific operation fields (stored in formData JSON — no migration needed)
+  closureLineOfBusiness?: string;
+  closureBusinessActivity?: string;
+  closureLastDateOfOperation?: string;
+  closureReason?: string;
+  closureRemarks?: string;
 }

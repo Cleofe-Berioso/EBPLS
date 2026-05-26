@@ -1,3 +1,6 @@
+-- CreateEnum
+CREATE TYPE "SmsDeliveryStatus" AS ENUM ('SKIPPED', 'SENT', 'FAILED');
+
 -- CreateTable
 CREATE TABLE "SmsDeliveryLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -5,10 +8,10 @@ CREATE TABLE "SmsDeliveryLog" (
     "applicantId" TEXT,
     "phoneNumber" TEXT,
     "provider" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
+    "status" "SmsDeliveryStatus" NOT NULL,
     "messageBody" TEXT NOT NULL,
     "providerResponse" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "SmsDeliveryLog_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "BusinessApplication" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "SmsDeliveryLog_applicantId_fkey" FOREIGN KEY ("applicantId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );

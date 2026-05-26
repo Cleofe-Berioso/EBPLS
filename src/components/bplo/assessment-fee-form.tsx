@@ -357,7 +357,7 @@ export function AssessmentFeeForm({ detail }: Props) {
           title="Closure Charges"
           description="Payment dues are BPLO-entered. The fixed closure certificate fee of ₱100 is added automatically."
         >
-          <FormField label="Payment Dues / Pending Fee" hint="Enter any outstanding payment dues or pending fees for the business before closure release.">
+          <FormField label="Settlement / Outstanding Amount" hint="Enter the full outstanding settlement amount required before closure can proceed.">
             <input
               type="number"
               min="0"

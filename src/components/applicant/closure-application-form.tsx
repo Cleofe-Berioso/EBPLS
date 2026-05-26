@@ -6,7 +6,12 @@ import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
-import { DOCUMENT_FILE_INPUT_ACCEPT, validateDocumentFileUpload } from "@/lib/document-upload-rules";
+import {
+  buildDocumentMaxSizeError,
+  DOCUMENT_FILE_INPUT_ACCEPT,
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
+  validateDocumentFileUpload,
+} from "@/lib/document-upload-rules";
 import type {
   ApplicationDocumentInput,
   BusinessInfo,
@@ -19,6 +24,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
+import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
+import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
+
+const CLOSURE_BUSINESS_ACTIVITY_OPTIONS = [...BUSINESS_ACTIVITY_OPTIONS] as string[];
 
 const steps = [
   {
@@ -147,6 +156,12 @@ export function ClosureApplicationForm() {
   const [selectedBusinessInfo, setSelectedBusinessInfo] = useState<BusinessInfo>(defaultBusinessInfo);
   const [closureType, setClosureType] = useState<ClosureTypeValue>("");
   const [closureTypeOtherReason, setClosureTypeOtherReason] = useState("");
+  const [closureLineOfBusiness, setClosureLineOfBusiness] = useState("");
+  const [closureBusinessActivity, setClosureBusinessActivity] = useState("");
+  const [closureBusinessActivityOther, setClosureBusinessActivityOther] = useState("");
+  const [closureLastDateOfOperation, setClosureLastDateOfOperation] = useState("");
+  const [closureReason, setClosureReason] = useState("");
+  const [closureRemarks, setClosureRemarks] = useState("");
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [pendingDocumentPreviews, setPendingDocumentPreviews] = useState<Record<string, string>>({});
@@ -267,6 +282,20 @@ export function ClosureApplicationForm() {
       setSelectedBusinessName(data.application.formData.businessName);
       setClosureType(data.application.closureType ?? "");
       setClosureTypeOtherReason(data.application.closureTypeOtherReason ?? "");
+      // Restore closure operation fields from saved formData
+      const savedFormData = data.application.formData as unknown as Record<string, string | undefined>;
+      setClosureLineOfBusiness(savedFormData.closureLineOfBusiness ?? "");
+      const savedActivity = savedFormData.closureBusinessActivity ?? "";
+      if (savedActivity.startsWith("Others:")) {
+        setClosureBusinessActivity("Others, please specify");
+        setClosureBusinessActivityOther(savedActivity.substring(7).trim());
+      } else {
+        setClosureBusinessActivity(savedActivity);
+        setClosureBusinessActivityOther("");
+      }
+      setClosureLastDateOfOperation(savedFormData.closureLastDateOfOperation ?? "");
+      setClosureReason(savedFormData.closureReason ?? "");
+      setClosureRemarks(savedFormData.closureRemarks ?? "");
       if (data.application.businessRecordId) {
         selectedBusinessIdRef.current = data.application.businessRecordId;
         setSelectedBusinessId(data.application.businessRecordId);
@@ -380,19 +409,36 @@ export function ClosureApplicationForm() {
     }
 
     const selected = records.find((item) => item.id === selectedBusinessId);
+    const resolvedActivity =
+      closureBusinessActivity === "Others, please specify"
+        ? closureBusinessActivityOther.trim()
+          ? `Others: ${closureBusinessActivityOther.trim()}`
+          : ""
+        : closureBusinessActivity;
+    const closureOperationData = {
+      closureLineOfBusiness: closureLineOfBusiness.trim() || undefined,
+      closureBusinessActivity: resolvedActivity || undefined,
+      closureLastDateOfOperation: closureLastDateOfOperation.trim() || undefined,
+      closureReason: closureReason.trim() || undefined,
+      closureRemarks: closureRemarks.trim() || undefined,
+    };
     const payload: SaveApplicationInput = {
       applicationId,
       applicationType: "CLOSURE",
       businessRecordId: selectedBusinessId || undefined,
       closureType: closureType || undefined,
       closureTypeOtherReason: closureTypeOtherReason.trim() || undefined,
-      formData: selected?.businessInfo ?? selectedBusinessInfo,
+      formData: { ...(selected?.businessInfo ?? selectedBusinessInfo), ...closureOperationData },
       documents: Object.values(uploadedDocuments),
       mode,
     };
 
+    const hasPendingFiles = Object.keys(pendingDocuments).length > 0;
+    const draftTargetUrl = applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications";
+    const draftTargetMethod = applicationId ? "PATCH" : "POST";
+
     const response =
-      mode === "SUBMIT"
+      mode === "SUBMIT" && hasPendingFiles
         ? await (async () => {
             const formData = new FormData();
             formData.append("payload", JSON.stringify(payload));
@@ -406,14 +452,11 @@ export function ClosureApplicationForm() {
               body: formData,
             });
           })()
-        : await fetch(
-            applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications",
-            {
-              method: applicationId ? "PATCH" : "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            }
-          );
+        : await fetch(mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl, {
+          method: mode === "SUBMIT" ? "POST" : draftTargetMethod,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
     const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
@@ -430,7 +473,9 @@ export function ClosureApplicationForm() {
           : "";
       setStatusMessage({
         kind: "error",
-        text: data.error ?? `Unable to save closure application.${detail}`,
+        text:
+          data.error ??
+          `Unable to save closure application (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).${detail}`,
       });
       if (data.detail) setValidationDetail(data.detail);
       return null;
@@ -461,6 +506,11 @@ export function ClosureApplicationForm() {
 
   async function handleDocumentUpload(documentName: string, file: File | null) {
     if (!file) return;
+
+    if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+      setStatusMessage({ kind: "error", text: buildDocumentMaxSizeError(file.name) });
+      return;
+    }
 
     const fileValidationError = validateDocumentFileUpload(file);
     if (fileValidationError) {
@@ -655,6 +705,104 @@ export function ClosureApplicationForm() {
                 </FormField>
               ) : null}
 
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
+                <p className="text-sm font-semibold text-slate-900">Business Operations</p>
+
+                <FormField
+                  label="Line of Business"
+                  hint="Indicate the line of business of the entity being closed."
+                  required
+                >
+                  <select
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    value={closureLineOfBusiness}
+                    onChange={(event) => setClosureLineOfBusiness(event.target.value)}
+                  >
+                    <option value="" disabled>Select line of business</option>
+                    {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField
+                  label="Business Activity"
+                  hint="Select the primary activity of the business being closed."
+                  required
+                >
+                  <select
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    value={closureBusinessActivity}
+                    onChange={(event) => {
+                      setClosureBusinessActivity(event.target.value);
+                      if (event.target.value !== "Others, please specify") {
+                        setClosureBusinessActivityOther("");
+                      }
+                    }}
+                  >
+                    <option value="" disabled>Select business activity</option>
+                    {CLOSURE_BUSINESS_ACTIVITY_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </FormField>
+
+                {closureBusinessActivity === "Others, please specify" ? (
+                  <FormField
+                    label="Please specify business activity"
+                    hint="Describe the specific business activity."
+                    required
+                  >
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                      value={closureBusinessActivityOther}
+                      onChange={(event) => setClosureBusinessActivityOther(event.target.value)}
+                      placeholder="Enter business activity"
+                    />
+                  </FormField>
+                ) : null}
+
+                <FormField
+                  label="Last Date of Operation"
+                  hint="The final day the business operated before cessation."
+                  required
+                >
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    value={closureLastDateOfOperation}
+                    max={new Date().toISOString().split("T")[0]}
+                    onChange={(event) => setClosureLastDateOfOperation(event.target.value)}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Reason for Closure"
+                  hint="Briefly explain the primary reason for cessation of business operations."
+                  required
+                >
+                  <textarea
+                    className="min-h-[80px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    value={closureReason}
+                    onChange={(event) => setClosureReason(event.target.value)}
+                    placeholder="e.g., Owner retired, business was sold, lease expired"
+                  />
+                </FormField>
+
+                <FormField
+                  label="Closure Remarks / Details"
+                  hint="Optional. Add any additional remarks or context."
+                >
+                  <textarea
+                    className="min-h-[72px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    value={closureRemarks}
+                    onChange={(event) => setClosureRemarks(event.target.value)}
+                    placeholder="Additional details or notes"
+                  />
+                </FormField>
+              </div>
+
               {selectedRecord ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                   <p className="font-semibold text-slate-900">{selectedRecord.businessName}</p>
@@ -775,6 +923,30 @@ export function ClosureApplicationForm() {
                 label="Required Documents"
                 value={`${uploadedRequiredCount} / ${requiredDocs.length}`}
                 helper="Uploaded required document count"
+              />
+              <ReviewStat
+                label="Line of Business"
+                value={closureLineOfBusiness || "-"}
+                helper="Declared line of business for closure"
+              />
+              <ReviewStat
+                label="Business Activity"
+                value={
+                  closureBusinessActivity === "Others, please specify" && closureBusinessActivityOther.trim()
+                    ? `Others: ${closureBusinessActivityOther.trim()}`
+                    : closureBusinessActivity || "-"
+                }
+                helper="Activity type of closing business"
+              />
+              <ReviewStat
+                label="Last Date of Operation"
+                value={closureLastDateOfOperation || "-"}
+                helper="Final day of business operations"
+              />
+              <ReviewStat
+                label="Reason for Closure"
+                value={closureReason.trim() ? (closureReason.length > 60 ? closureReason.slice(0, 60) + "…" : closureReason) : "-"}
+                helper="Primary reason for business cessation"
               />
             </div>
 

@@ -20,6 +20,15 @@ export async function GET(_req: Request, context: RouteContext) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
   }
 
+  if (process.env.NODE_ENV === "development") {
+    console.info("[ApplicantApplicationDetailAPI] response-shape", {
+      applicationId: detail.id,
+      keys: Object.keys(detail),
+      documentsCount: Array.isArray(detail.documents) ? detail.documents.length : 0,
+      historyCount: Array.isArray(detail.history) ? detail.history.length : 0,
+    });
+  }
+
   return NextResponse.json({ application: detail });
 }
 
@@ -35,7 +44,10 @@ export async function PATCH(req: Request, context: RouteContext) {
   try {
     payload = (await req.json()) as SaveApplicationInput;
   } catch {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request payload. Ensure the request body is valid JSON." },
+      { status: 400 }
+    );
   }
 
   if (!payload?.applicationType || !payload?.formData || !payload?.mode) {

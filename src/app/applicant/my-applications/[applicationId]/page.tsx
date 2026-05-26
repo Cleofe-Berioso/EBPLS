@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import { getApplicantApplicationDetail } from "@/lib/applications";
 import { StatusBadge } from "@/components/applicant/status-badge";
 import { StatusTracker } from "@/components/applicant/status-tracker";
@@ -131,11 +131,11 @@ function getStatusSummary(status: string): { meaning: string; nextStep: string }
 }
 
 export default async function ApplicationDetailPage({ params }: PageProps) {
-  const session = await auth();
-  if (!session?.user?.id) notFound();
+  const authContext = await resolveApplicantSessionContext();
+  if (!authContext.ok) notFound();
 
   const { applicationId } = await params;
-  const application = await getApplicantApplicationDetail(session.user.id, applicationId);
+  const application = await getApplicantApplicationDetail(authContext.applicantId, applicationId);
   if (!application) notFound();
 
   const formData = application.formData as Record<string, unknown>;
@@ -510,7 +510,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
                 <p><strong>Capital Investment:</strong> {readText(formData, ["capitalInvestment"])}</p>
               ) : null}
               {application.applicationType === "RENEWAL" ? (
-                <p><strong>Gross Profit:</strong> {readText(formData, ["grossProfit"])}</p>
+                <p><strong>Gross Profit / Gross Receipts:</strong> {readText(formData, ["grossProfit"])}</p>
               ) : null}
             </div>
           </SectionCard>

@@ -20,13 +20,13 @@ ALTER TABLE "Inspection" ADD COLUMN "violationSeverity" "ViolationSeverity";
 ALTER TABLE "Inspection" ADD COLUMN "isSettled" BOOLEAN NOT NULL DEFAULT false;
 
 -- AlterTable
-ALTER TABLE "Inspection" ADD COLUMN "settledAt" DATETIME;
+ALTER TABLE "Inspection" ADD COLUMN "settledAt" TIMESTAMP(3);
 
 -- AlterTable
 ALTER TABLE "Inspection" ADD COLUMN "settledById" TEXT;
 
 -- AlterTable
-ALTER TABLE "Inspection" ADD COLUMN "deadlineAt" DATETIME;
+ALTER TABLE "Inspection" ADD COLUMN "deadlineAt" TIMESTAMP(3);
 
 -- AlterTable
 ALTER TABLE "Inspection" ADD COLUMN "autoClosed" BOOLEAN NOT NULL DEFAULT false;
@@ -35,7 +35,7 @@ ALTER TABLE "Inspection" ADD COLUMN "autoClosed" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Inspection" ADD COLUMN "forcedClosure" BOOLEAN NOT NULL DEFAULT false;
 
 -- AlterTable
-ALTER TABLE "Inspection" ADD COLUMN "forcedClosureAt" DATETIME;
+ALTER TABLE "Inspection" ADD COLUMN "forcedClosureAt" TIMESTAMP(3);
 
 -- AlterTable
 ALTER TABLE "Inspection" ADD COLUMN "forcedClosureById" TEXT;

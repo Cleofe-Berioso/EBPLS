@@ -34,19 +34,29 @@ import {
   resolveRequiredDocuments,
 } from "@/lib/required-documents";
 import {
+  buildDocumentMaxSizeError,
   DOCUMENT_FILE_INPUT_ACCEPT,
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
   validateDocumentFileUpload,
 } from "@/lib/document-upload-rules";
 import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
+import { resolveBusinessBarangayFromFormState } from "@/lib/business-rules";
 import { BusinessInformationFields } from "./business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
+
+type NewApplicationFieldKey = keyof BusinessInfo | "requiredDocuments";
+
+type FieldNavigationConfig = {
+  step: number;
+  label: string;
+  selector: string;
+};
 
 const steps = [
   {
@@ -90,12 +100,6 @@ const operationFields: Array<{
 ];
 
 // taxIncentives removed from applicant form (field preserved in DB / type for existing records and BPLO display)
-
-const LINE_OF_BUSINESS_SELECT_OPTIONS = LINE_OF_BUSINESS_OPTIONS.map((option) => ({
-  value: option,
-  label: option,
-  name: option,
-}));
 
 const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   businessType: "Business Type",
@@ -184,6 +188,175 @@ const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
   ],
 };
 
+const FIELD_NAVIGATION_MAP: Record<NewApplicationFieldKey, FieldNavigationConfig> = {
+  email: { step: 0, label: "Email Address", selector: '[data-field-key="email"]' },
+  assetSize: {
+    step: 1,
+    label: "Capital Investment / Asset Size",
+    selector: '[data-field-key="assetSize"]',
+  },
+  barangay: { step: 0, label: "Business Barangay", selector: '[data-field-key="businessBarangay"]' },
+  businessBarangay: {
+    step: 0,
+    label: "Business Barangay",
+    selector: '[data-field-key="businessBarangay"]',
+  },
+  totalEmployees: {
+    step: 1,
+    label: "Total Employees",
+    selector: '[data-field-key="totalEmployees"]',
+  },
+  businessName: { step: 0, label: "Business Name", selector: '[data-field-key="businessName"]' },
+  registrationNumber: {
+    step: 0,
+    label: "Registration Number",
+    selector: '[data-field-key="registrationNumber"]',
+  },
+  tin: { step: 0, label: "TIN", selector: '[data-field-key="tin"]' },
+  businessAddress: { step: 0, label: "Business Address", selector: '[data-field-key="businessAddress"]' },
+  businessLatitude: {
+    step: 0,
+    label: "Business Location Pin",
+    selector: '[data-field-key="businessLatitude"]',
+  },
+  businessLongitude: {
+    step: 0,
+    label: "Business Location Pin",
+    selector: '[data-field-key="businessLongitude"]',
+  },
+  capitalInvestment: {
+    step: 1,
+    label: "Capital Investment / Asset Size",
+    selector: '[data-field-key="capitalInvestment"]',
+  },
+  paymentFrequency: {
+    step: 4,
+    label: "Mode of Payment",
+    selector: '[data-field-key="errorSummary"]',
+  },
+  lineOfBusiness: { step: 1, label: "Line of Business", selector: '[data-field-key="lineOfBusiness"]' },
+  businessActivity: {
+    step: 1,
+    label: "Business Activity",
+    selector: '[data-field-key="businessActivity"]',
+  },
+  requiredDocuments: {
+    step: 2,
+    label: "Required Documents",
+    selector: '[data-field-key="requiredDocuments"]',
+  },
+  businessType: { step: 0, label: "Business Type", selector: '[data-field-key="businessType"]' },
+  tradeName: { step: 0, label: "Trade Name", selector: '[data-field-key="tradeName"]' },
+  ownerName: { step: 0, label: "Owner / President Name", selector: '[data-field-key="ownerFirstName"]' },
+  ownerFirstName: { step: 0, label: "Owner / President First Name", selector: '[data-field-key="ownerFirstName"]' },
+  ownerMiddleName: { step: 0, label: "Owner / President Middle Name", selector: '[data-field-key="ownerMiddleName"]' },
+  ownerSurname: { step: 0, label: "Owner / President Surname", selector: '[data-field-key="ownerSurname"]' },
+  ownerSuffix: { step: 0, label: "Owner / President Suffix", selector: '[data-field-key="ownerSuffix"]' },
+  birthDate: { step: 0, label: "Birthdate", selector: '[data-field-key="birthDate"]' },
+  ownerAge: { step: 0, label: "Owner Age", selector: '[data-field-key="birthDate"]' },
+  sex: { step: 0, label: "Sex", selector: '[data-field-key="sex"]' },
+  nationality: { step: 0, label: "Nationality", selector: '[data-field-key="nationality"]' },
+  phone: { step: 0, label: "Contact Number", selector: '[data-field-key="phone"]' },
+  country: { step: 0, label: "Country", selector: '[data-field-key="businessAddress"]' },
+  countryCode: { step: 0, label: "Country Code", selector: '[data-field-key="businessAddress"]' },
+  province: { step: 0, label: "Province", selector: '[data-field-key="businessAddress"]' },
+  provinceCode: { step: 0, label: "Province", selector: '[data-field-key="businessAddress"]' },
+  cityMunicipality: { step: 0, label: "City / Municipality", selector: '[data-field-key="businessAddress"]' },
+  streetAddress: {
+    step: 0,
+    label: "Business Street / Purok / Building / Unit",
+    selector: '[data-field-key="businessStreetAddress"]',
+  },
+  mainOfficeCountry: { step: 0, label: "Main Office Country", selector: '[data-field-key="mainOfficeCountry"]' },
+  mainOfficeCountryCode: { step: 0, label: "Main Office Country", selector: '[data-field-key="mainOfficeCountry"]' },
+  mainOfficeProvince: {
+    step: 0,
+    label: "Main Office Province / State",
+    selector: '[data-field-key="mainOfficeProvince"]',
+  },
+  mainOfficeProvinceCode: {
+    step: 0,
+    label: "Main Office Province / State",
+    selector: '[data-field-key="mainOfficeProvince"]',
+  },
+  mainOfficeCityMunicipality: {
+    step: 0,
+    label: "Main Office City / Municipality",
+    selector: '[data-field-key="mainOfficeCityMunicipality"]',
+  },
+  mainOfficeStreetAddress: {
+    step: 0,
+    label: "Main Office Street / Address Line",
+    selector: '[data-field-key="mainOfficeStreetAddress"]',
+  },
+  mainOfficeBarangay: {
+    step: 0,
+    label: "Main Office Barangay",
+    selector: '[data-field-key="mainOfficeBarangay"]',
+  },
+  mainOfficeAddress: {
+    step: 0,
+    label: "Main Office Address",
+    selector: '[data-field-key="mainOfficeAddress"]',
+  },
+  businessStreetAddress: {
+    step: 0,
+    label: "Business Street / Purok / Building / Unit",
+    selector: '[data-field-key="businessStreetAddress"]',
+  },
+  businessArea: { step: 1, label: "Business Area", selector: '[data-field-key="businessArea"]' },
+  totalFloorArea: { step: 1, label: "Total Floor Area", selector: '[data-field-key="totalFloorArea"]' },
+  maleEmployees: { step: 1, label: "Male Employees", selector: '[data-field-key="maleEmployees"]' },
+  femaleEmployees: { step: 1, label: "Female Employees", selector: '[data-field-key="femaleEmployees"]' },
+  employeesWithinMunicipality: {
+    step: 1,
+    label: "Employees Residing within Municipality",
+    selector: '[data-field-key="employeesWithinMunicipality"]',
+  },
+  deliveryVehicles: { step: 1, label: "Delivery Vehicles", selector: '[data-field-key="deliveryVehicles"]' },
+  propertyOwnership: { step: 1, label: "Property Ownership", selector: '[data-field-key="propertyOwnership"]' },
+  taxDeclarationNumber: {
+    step: 1,
+    label: "Tax Declaration Number",
+    selector: '[data-field-key="taxDeclarationNumber"]',
+  },
+  propertyIdentificationNumber: {
+    step: 1,
+    label: "Property Identification Number",
+    selector: '[data-field-key="propertyIdentificationNumber"]',
+  },
+  taxIncentives: { step: 1, label: "Tax Incentives", selector: '[data-field-key="taxIncentives"]' },
+  isMarket: { step: 1, label: "Market Business", selector: '[data-field-key="isMarket"]' },
+  isAgriculture: { step: 1, label: "Agriculture-related Business", selector: '[data-field-key="isAgriculture"]' },
+  isLiquorOrTobacco: {
+    step: 0,
+    label: "Liquor/Tobacco Business",
+    selector: '[data-field-key="isLiquorOrTobacco"]',
+  },
+  sameAsMainOffice: { step: 0, label: "Same as Main Office", selector: '[data-field-key="mainOfficeAddress"]' },
+  grossProfit: { step: 1, label: "Gross Profit", selector: '[data-field-key="assetSize"]' },
+  businessOperationType: { step: 0, label: "Business Office Type", selector: '[data-field-key="businessAddress"]' },
+  closureLineOfBusiness: { step: 1, label: "Line of Business", selector: '[data-field-key="lineOfBusiness"]' },
+  closureBusinessActivity: {
+    step: 1,
+    label: "Business Activity",
+    selector: '[data-field-key="businessActivity"]',
+  },
+  closureLastDateOfOperation: {
+    step: 1,
+    label: "Last Date of Operation",
+    selector: '[data-field-key="assetSize"]',
+  },
+  closureReason: { step: 1, label: "Reason for Closure", selector: '[data-field-key="assetSize"]' },
+  closureRemarks: { step: 1, label: "Closure Remarks", selector: '[data-field-key="assetSize"]' },
+};
+
+function extractFieldKey(raw: string): string {
+  const trimmed = raw.trim();
+  const key = trimmed.split(/[\s(]/)[0] ?? trimmed;
+  return key.trim();
+}
+
 function normalizeBusinessInfo(next: BusinessInfo): BusinessInfo {
   return normalizeBusinessInfoRules(next);
 }
@@ -240,6 +413,36 @@ function parsePositiveAmount(value: string): number | null {
   return parsed;
 }
 
+function parseNonNegativeAmount(value: string): number | null {
+  const normalized = value.replace(/[,\s]/g, "").trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function normalizeEmployeeCountInput(value: string): string {
+  const compact = value.replace(/[,\s]/g, "").trim();
+  if (!compact) return "";
+  if (/^\d+(?:\.0+)?$/.test(compact)) {
+    return String(Number(compact));
+  }
+  return value.trim();
+}
+
+function resolveSelectedBusinessBarangay(info: BusinessInfo): string {
+  return resolveBusinessBarangayFromFormState({
+    barangay: info.barangay,
+    businessBarangay: info.businessBarangay,
+    sameAsMainOffice: info.sameAsMainOffice,
+    mainOfficeCountry: info.mainOfficeCountry,
+    mainOfficeCountryCode: info.mainOfficeCountryCode,
+    mainOfficeProvince: info.mainOfficeProvince,
+    mainOfficeCityMunicipality: info.mainOfficeCityMunicipality,
+    mainOfficeBarangay: info.mainOfficeBarangay,
+  });
+}
+
 function isMissingRequiredValue(value: unknown): boolean {
   if (value == null) return true;
   if (typeof value === "string") return value.trim().length === 0;
@@ -269,11 +472,22 @@ function buildCleanPayload(params: {
   info: BusinessInfo;
   documents: ApplicationDocumentInput[];
 }): SaveApplicationInput {
+  const normalizedInfo = normalizeBusinessInfo(params.info);
+  const resolvedBarangay = resolveSelectedBusinessBarangay(normalizedInfo);
+  const resolvedAssetSize = (normalizedInfo.assetSize.trim() || normalizedInfo.capitalInvestment?.trim() || "").trim();
+  const resolvedTotalEmployees = normalizeEmployeeCountInput(normalizedInfo.totalEmployees);
+
   return {
     applicationId: params.applicationId,
     applicationType: "NEW",
     mode: params.mode,
-    formData: normalizeBusinessInfo(params.info),
+    formData: normalizeBusinessInfo({
+      ...normalizedInfo,
+      barangay: resolvedBarangay,
+      businessBarangay: resolvedBarangay,
+      assetSize: resolvedAssetSize,
+      totalEmployees: resolvedTotalEmployees,
+    }),
     documents: sanitizeDocumentMetadata(params.documents),
   };
 }
@@ -304,6 +518,7 @@ function FieldCard({
   helperText,
   error,
   disabled,
+  fieldKey,
 }: {
   label: string;
   value: string;
@@ -312,10 +527,12 @@ function FieldCard({
   helperText?: string;
   error?: string;
   disabled?: boolean;
+  fieldKey?: keyof BusinessInfo;
 }) {
   return (
     <FormField label={label} required hint={helperText} error={error}>
       <input
+        data-field-key={fieldKey}
         className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
         value={value}
         disabled={disabled}
@@ -407,6 +624,7 @@ export function NewApplicationForm() {
   const [submitting, setSubmitting] = useState(false);
   const [missingDocNames, setMissingDocNames] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
+  const [errorSummaryItems, setErrorSummaryItems] = useState<string[]>([]);
   const [existingApplicationAccess, setExistingApplicationAccess] = useState<{
     canEdit: boolean;
     status: string;
@@ -415,6 +633,59 @@ export function NewApplicationForm() {
   // Guard: ensures loadDraft cannot run concurrently for the same applicationId.
   const draftLoadingRef = useRef(false);
   const pendingDocumentPreviewsRef = useRef<Record<string, string>>({});
+
+  const clearErrorSummary = useCallback(() => {
+    setErrorSummaryItems([]);
+  }, []);
+
+  const getFieldConfig = useCallback((rawFieldKey: string): FieldNavigationConfig => {
+    const extractedKey = extractFieldKey(rawFieldKey);
+    const normalizedKey = extractedKey in FIELD_NAVIGATION_MAP ? (extractedKey as NewApplicationFieldKey) : null;
+    if (normalizedKey) {
+      return FIELD_NAVIGATION_MAP[normalizedKey];
+    }
+
+    return {
+      step: 0,
+      label: FIELD_LABELS[extractedKey as keyof BusinessInfo] ?? extractedKey,
+      selector: `[data-field-key="${extractedKey}"]`,
+    };
+  }, []);
+
+  const focusFieldByConfig = useCallback((config: FieldNavigationConfig) => {
+    window.setTimeout(() => {
+      const el = document.querySelector(config.selector) as HTMLElement | null;
+      if (!el) return;
+
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (typeof el.focus === "function") {
+        el.focus({ preventScroll: true });
+      } else {
+        const focusable = el.querySelector("input, select, textarea, button") as HTMLElement | null;
+        focusable?.focus({ preventScroll: true });
+      }
+    }, 120);
+  }, []);
+
+  const navigateToFirstMissingField = useCallback(
+    (missingFieldKeys: string[], missingDocuments: string[]) => {
+      const firstKey = missingFieldKeys[0] ?? (missingDocuments.length > 0 ? "requiredDocuments" : null);
+      if (!firstKey) return;
+
+      const config = getFieldConfig(firstKey);
+      if (process.env.NODE_ENV === "development") {
+        console.info("[NewApplicationForm] first-missing-field", {
+          fieldKey: firstKey,
+          mappedStep: config.step,
+          mappedLabel: config.label,
+        });
+      }
+
+      setStep(config.step);
+      focusFieldByConfig(config);
+    },
+    [focusFieldByConfig, getFieldConfig]
+  );
 
   const isReadOnly = Boolean(editId && existingApplicationAccess && !existingApplicationAccess.canEdit);
   const lockInteractivityClass = isReadOnly ? "pointer-events-none" : "";
@@ -671,8 +942,10 @@ export function NewApplicationForm() {
     setFieldErrors(nextErrors);
   }
 
-  function validateCurrentStep(currentStep: number): boolean {
-    const normalizedInfo = normalizeBusinessInfo(info);
+  function getStepValidationErrors(
+    currentStep: number,
+    normalizedInfo: BusinessInfo
+  ): Partial<Record<keyof BusinessInfo, string>> {
     const requiredFields = STEP_REQUIRED_FIELDS[currentStep] ?? [];
     const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
 
@@ -720,14 +993,63 @@ export function NewApplicationForm() {
       }
     }
 
+    if (currentStep === 0) {
+      const birthDateRaw = normalizedInfo.birthDate?.trim() ?? "";
+      if (!birthDateRaw) {
+        nextErrors.birthDate = "Birthdate is required.";
+      } else {
+        try {
+          const computedAge = calculateAgeFromBirthDate(birthDateRaw);
+          if (computedAge < 18 || computedAge > 120) {
+            nextErrors.birthDate = "Birthdate must result in an age between 18 and 120.";
+          } else if (nextErrors.birthDate !== "This already exist") {
+            delete nextErrors.birthDate;
+          }
+        } catch (error) {
+          nextErrors.birthDate = error instanceof Error ? error.message : "Birthdate is invalid.";
+        }
+      }
+    }
+
+    if (currentStep === 1) {
+      const capitalRaw = normalizedInfo.capitalInvestment?.trim() ?? "";
+      if (!capitalRaw) {
+        nextErrors.capitalInvestment = "Capital Investment is required.";
+      } else if (parsePositiveAmount(capitalRaw) == null) {
+        nextErrors.capitalInvestment = "Capital Investment must be a positive amount.";
+      } else if (nextErrors.capitalInvestment !== "This already exist") {
+        delete nextErrors.capitalInvestment;
+      }
+    }
+
+    return nextErrors;
+  }
+
+  function validateCurrentStep(currentStep: number): boolean {
+    const normalizedInfo = normalizeBusinessInfo(info);
+    const nextErrors = getStepValidationErrors(currentStep, normalizedInfo);
+
     setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      const labels = Object.keys(nextErrors).map((rawKey) => getFieldConfig(rawKey).label);
+      setErrorSummaryItems(Array.from(new Set(labels)));
+    } else {
+      clearErrorSummary();
+    }
+
     return Object.keys(nextErrors).length === 0;
   }
 
   function next() {
     if (isReadOnly) return;
     if (step === 0 || step === 1) {
-      if (!validateCurrentStep(step)) {
+      const nextErrors = getStepValidationErrors(step, normalizeBusinessInfo(info));
+      if (Object.keys(nextErrors).length > 0) {
+        setFieldErrors(nextErrors);
+        setErrorSummaryItems(
+          Array.from(new Set(Object.keys(nextErrors).map((rawKey) => getFieldConfig(rawKey).label)))
+        );
+        navigateToFirstMissingField(Object.keys(nextErrors), []);
         setStatusMessage({
           kind: "error",
           text: "Complete required fields before moving to the next step.",
@@ -741,6 +1063,8 @@ export function NewApplicationForm() {
       const missing = getMissingRequiredDocuments(requiredDocs, uploadedKeys);
       if (missing.length > 0) {
         setMissingDocNames(missing);
+        setErrorSummaryItems(["Required Documents"]);
+        navigateToFirstMissingField([], missing);
         setStatusMessage({
           kind: "error",
           text: "Upload all required documents before proceeding.",
@@ -748,9 +1072,11 @@ export function NewApplicationForm() {
         return;
       }
       setMissingDocNames([]);
+      clearErrorSummary();
     }
 
     setStatusMessage(null);
+    clearErrorSummary();
     setStep((current) => Math.min(current + 1, steps.length - 1));
   }
 
@@ -771,6 +1097,7 @@ export function NewApplicationForm() {
     setSubmitting(true);
     setStatusMessage(null);
     setFieldErrors({});
+    clearErrorSummary();
 
     const normalizedInfo = normalizeBusinessInfo(info);
     const identityFormats = validateBusinessIdentityFormats(normalizedInfo);
@@ -786,46 +1113,86 @@ export function NewApplicationForm() {
 
     if (Object.keys(identityErrors).length > 0) {
       setFieldErrors(identityErrors);
+      setErrorSummaryItems(
+        Object.keys(identityErrors).map((rawKey) => getFieldConfig(rawKey).label)
+      );
+      navigateToFirstMissingField(Object.keys(identityErrors), []);
       setStatusMessage({ kind: "error", text: "Wrong Format" });
       setSubmitting(false);
       return null;
     }
 
     if (mode === "SUBMIT") {
-      if (!validateCurrentStep(0)) {
-        setStep(0);
-        setStatusMessage({
-          kind: "error",
-          text: "Complete all required business information fields before submitting.",
-        });
-        setSubmitting(false);
-        return null;
-      }
-
-      if (!validateCurrentStep(1)) {
-        setStep(1);
-        setStatusMessage({
-          kind: "error",
-          text: "Complete all required operation fields before submitting.",
-        });
-        setSubmitting(false);
-        return null;
-      }
+      const step0Errors = getStepValidationErrors(0, normalizedInfo);
+      const step1Errors = getStepValidationErrors(1, normalizedInfo);
+      const submitFieldErrors: Partial<Record<keyof BusinessInfo, string>> = {
+        ...step0Errors,
+        ...step1Errors,
+      };
 
       const missingDocuments = getMissingRequiredDocuments(requiredDocs, [
         ...Object.values(uploadedDocuments).map((doc) => doc.documentName),
         ...Object.keys(pendingDocuments),
       ]);
-      if (missingDocuments.length > 0) {
+
+      const submitEmail = normalizedInfo.email.trim();
+      const submitBarangay = resolveSelectedBusinessBarangay(normalizedInfo);
+      const submitAssetSize = (normalizedInfo.assetSize.trim() || normalizedInfo.capitalInvestment?.trim() || "").trim();
+      const submitTotalEmployees = normalizeEmployeeCountInput(normalizedInfo.totalEmployees);
+
+      if (!submitEmail) {
+        submitFieldErrors.email = "Email is required.";
+      }
+
+      if (!submitBarangay) {
+        submitFieldErrors.businessBarangay = "Business Barangay is required.";
+      }
+
+      if (!submitAssetSize) {
+        submitFieldErrors.assetSize = "Asset Size is required.";
+      } else if (parseNonNegativeAmount(submitAssetSize) == null) {
+        submitFieldErrors.assetSize = "Asset Size must be a non-negative amount.";
+      }
+
+      if (!submitTotalEmployees) {
+        submitFieldErrors.totalEmployees = "Total Employees is required.";
+      } else {
+        const parsedEmployees = Number(submitTotalEmployees);
+        if (!Number.isInteger(parsedEmployees) || parsedEmployees < 0) {
+          submitFieldErrors.totalEmployees = "Total Employees must be a non-negative integer.";
+        }
+      }
+
+      if (Object.keys(submitFieldErrors).length > 0 || missingDocuments.length > 0) {
+        const missingFieldKeys = Object.keys(submitFieldErrors);
+        const summaryLabels = [
+          ...missingFieldKeys.map((rawKey) => getFieldConfig(rawKey).label),
+          ...(missingDocuments.length > 0 ? ["Required Documents"] : []),
+        ];
+
+        if (process.env.NODE_ENV === "development") {
+          const firstKey = missingFieldKeys[0] ?? (missingDocuments.length > 0 ? "requiredDocuments" : null);
+          const mappedStep = firstKey ? getFieldConfig(firstKey).step : null;
+          console.info("[NewApplicationForm] pre-submit-validation", {
+            firstMissingFieldKey: firstKey,
+            mappedStep,
+            missingFieldLabels: Array.from(new Set(summaryLabels)),
+          });
+        }
+
+        setFieldErrors(submitFieldErrors);
         setMissingDocNames(missingDocuments);
-        setStep(2);
+        setErrorSummaryItems(Array.from(new Set(summaryLabels)));
+        navigateToFirstMissingField(missingFieldKeys, missingDocuments);
         setStatusMessage({
           kind: "error",
-          text: "Upload all required documents before submitting.",
+          text: "Complete the highlighted required fields and documents before submitting.",
         });
         setSubmitting(false);
         return null;
       }
+
+      setMissingDocNames([]);
     }
 
     const payload = buildCleanPayload({
@@ -835,8 +1202,12 @@ export function NewApplicationForm() {
       documents: Object.values(uploadedDocuments),
     });
 
+    const hasPendingFiles = Object.keys(pendingDocuments).length > 0;
+    const draftTargetUrl = applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications";
+    const draftTargetMethod = applicationId ? "PATCH" : "POST";
+
     const response =
-      mode === "SUBMIT"
+      mode === "SUBMIT" && hasPendingFiles
         ? await (async () => {
             const formData = new FormData();
             formData.append("payload", JSON.stringify(payload));
@@ -850,27 +1221,73 @@ export function NewApplicationForm() {
               body: formData,
             });
           })()
-        : await fetch(
-            applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications",
-            {
-              method: applicationId ? "PATCH" : "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            }
-          );
+        : await fetch(mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl, {
+          method: mode === "SUBMIT" ? "POST" : draftTargetMethod,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
     const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
       error?: string;
       duplicateField?: string;
       rawResponse?: string;
+      message?: string;
+      detail?: { missingFields?: string[]; missingDocuments?: string[] };
+      missingFieldKeys?: string[];
+      fieldErrors?: Record<string, string>;
+      missingDocuments?: string[];
     };
 
     setSubmitting(false);
 
     if (!response.ok || !data.application) {
+      if (process.env.NODE_ENV === "development") {
+        console.info("[NewApplicationForm] backend-submit-400", {
+          status: response.status,
+          body: data,
+        });
+      }
+
+      const backendMissingFieldKeys = Array.from(
+        new Set(
+          [
+            ...(Array.isArray(data.missingFieldKeys) ? data.missingFieldKeys : []),
+            ...((data.detail?.missingFields ?? []).map(extractFieldKey)),
+            ...Object.keys(data.fieldErrors ?? {}),
+          ]
+            .filter((key): key is string => typeof key === "string" && key.trim().length > 0)
+            .map((key) => extractFieldKey(key))
+        )
+      );
+      const backendMissingDocuments = Array.isArray(data.missingDocuments)
+        ? data.missingDocuments
+        : Array.isArray(data.detail?.missingDocuments)
+          ? data.detail.missingDocuments
+          : [];
+
+      const mappedBackendFieldErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+      for (const rawKey of backendMissingFieldKeys) {
+        const targetKey = rawKey === "barangay" ? "businessBarangay" : rawKey;
+        if (targetKey in FIELD_LABELS) {
+          mappedBackendFieldErrors[targetKey as keyof BusinessInfo] =
+            data.fieldErrors?.[rawKey] ?? `${getFieldConfig(rawKey).label} is required.`;
+        }
+      }
+
       if (data.duplicateField === "registrationNumber" || data.duplicateField === "tin") {
-        setFieldErrors({ [data.duplicateField]: "This already exist" });
+        mappedBackendFieldErrors[data.duplicateField] = "This already exist";
+      }
+
+      if (Object.keys(mappedBackendFieldErrors).length > 0 || backendMissingDocuments.length > 0) {
+        const summaryLabels = [
+          ...backendMissingFieldKeys.map((rawKey) => getFieldConfig(rawKey).label),
+          ...(backendMissingDocuments.length > 0 ? ["Required Documents"] : []),
+        ];
+        setFieldErrors((current) => ({ ...current, ...mappedBackendFieldErrors }));
+        setMissingDocNames(backendMissingDocuments);
+        setErrorSummaryItems(Array.from(new Set(summaryLabels)));
+        navigateToFirstMissingField(backendMissingFieldKeys, backendMissingDocuments);
       }
 
       const detail =
@@ -880,7 +1297,10 @@ export function NewApplicationForm() {
 
       setStatusMessage({
         kind: "error",
-        text: data.error ?? `Unable to save application.${detail}`,
+        text:
+          data.error ??
+          data.message ??
+          `Unable to save application (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).${detail}`,
       });
       setSubmitting(false);
       return null;
@@ -912,6 +1332,11 @@ export function NewApplicationForm() {
   async function handleDocumentUpload(documentName: string, file: File | null) {
     if (isReadOnly) return;
     if (!file) return;
+
+    if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+      setStatusMessage({ kind: "error", text: buildDocumentMaxSizeError(file.name) });
+      return;
+    }
 
     const fileValidationError = validateDocumentFileUpload(file);
     if (fileValidationError) {
@@ -1014,6 +1439,17 @@ export function NewApplicationForm() {
     <div className="space-y-6">
       <FormStepper steps={steps} currentStep={step} />
 
+      {errorSummaryItems.length > 0 ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" data-field-key="errorSummary">
+          <p className="font-semibold">Please complete the following fields:</p>
+          <ul className="mt-2 list-disc pl-5">
+            {errorSummaryItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {statusMessage ? (
         <InfoBanner
           title={statusMessage.kind === "success" ? "Application update" : "Application issue"}
@@ -1053,6 +1489,29 @@ export function NewApplicationForm() {
             fieldErrors={fieldErrors}
             enableCascadingAddress
           />
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <FormField
+              label="Owner / President Birthdate"
+              hint="Required. Used to compute and verify owner age."
+              required
+              error={fieldErrors.birthDate}
+            >
+              <input
+                data-field-key="birthDate"
+                type="date"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                value={info.birthDate ?? ""}
+                disabled={isReadOnly}
+                max={new Date().toISOString().split("T")[0]}
+                onBlur={() => validateFieldOnBlur("birthDate")}
+                onChange={(event) =>
+                  setInfo((current) =>
+                    normalizeBusinessInfo({ ...current, birthDate: event.target.value })
+                  )
+                }
+              />
+            </FormField>
+          </div>
           </div>
         </SectionCard>
       ) : null}
@@ -1074,6 +1533,7 @@ export function NewApplicationForm() {
                   key={field.key}
                   label={field.label}
                   value={info[field.key] as string}
+                  fieldKey={field.key}
                   helperText={field.helperText}
                   error={fieldErrors[field.key]}
                   disabled={isReadOnly}
@@ -1087,6 +1547,7 @@ export function NewApplicationForm() {
               <FieldCard
                 label="Capital Investment"
                 value={info.capitalInvestment ?? ""}
+                fieldKey="capitalInvestment"
                 helperText="Enter the declared capital investment amount in pesos."
                 error={fieldErrors.capitalInvestment}
                 disabled={isReadOnly}
@@ -1105,6 +1566,7 @@ export function NewApplicationForm() {
                 error={fieldErrors.businessActivity}
               >
                 <select
+                  data-field-key="businessActivity"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
                   value={(() => {
                     // If the value is "Others: <text>", show just "Others, please specify" in the dropdown
@@ -1151,6 +1613,7 @@ export function NewApplicationForm() {
                     error={fieldErrors.businessActivity}
                   >
                     <input
+                      data-field-key="businessActivity"
                       type="text"
                       className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
                       placeholder="Enter your business activity"
@@ -1182,15 +1645,14 @@ export function NewApplicationForm() {
                 required
                 error={fieldErrors.lineOfBusiness}
               >
-                <SearchableSelect
-                  options={LINE_OF_BUSINESS_SELECT_OPTIONS}
+                <select
+                  data-field-key="lineOfBusiness"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
                   value={info.lineOfBusiness}
-                  selectedLabel={info.lineOfBusiness}
-                  placeholder="Select line of business"
                   disabled={isReadOnly}
-                  onChange={(option) => {
+                  onChange={(event) => {
                     setInfo((current) =>
-                      normalizeBusinessInfo({ ...current, lineOfBusiness: option.name })
+                      normalizeBusinessInfo({ ...current, lineOfBusiness: event.target.value })
                     );
                     setFieldErrors((current) => {
                       const next = { ...current };
@@ -1198,7 +1660,12 @@ export function NewApplicationForm() {
                       return next;
                     });
                   }}
-                />
+                >
+                  <option value="" disabled>Select line of business</option>
+                  {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
                 {fieldErrors.lineOfBusiness ? (
                   <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.lineOfBusiness}</p>
                 ) : null}
@@ -1208,6 +1675,7 @@ export function NewApplicationForm() {
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                 <input
+                  data-field-key="isMarket"
                   type="checkbox"
                   className="mt-1"
                   checked={info.isMarket}
@@ -1226,6 +1694,7 @@ export function NewApplicationForm() {
 
               <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                 <input
+                  data-field-key="isAgriculture"
                   type="checkbox"
                   className="mt-1"
                   checked={info.isAgriculture}
@@ -1254,6 +1723,7 @@ export function NewApplicationForm() {
                   Property Ownership <span className="text-red-600">*</span>
                 </span>
                 <select
+                  data-field-key="propertyOwnership"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
                   value={info.propertyOwnership}
                   onChange={(event) =>
@@ -1281,6 +1751,7 @@ export function NewApplicationForm() {
                   <FieldCard
                     label="Tax Declaration Number"
                     value={info.taxDeclarationNumber}
+                    fieldKey="taxDeclarationNumber"
                     error={fieldErrors.taxDeclarationNumber}
                     onBlur={() => validateFieldOnBlur("taxDeclarationNumber")}
                     onChange={(value) =>
@@ -1290,6 +1761,7 @@ export function NewApplicationForm() {
                   <FieldCard
                     label="Property Identification Number"
                     value={info.propertyIdentificationNumber}
+                    fieldKey="propertyIdentificationNumber"
                     error={fieldErrors.propertyIdentificationNumber}
                     onBlur={() => validateFieldOnBlur("propertyIdentificationNumber")}
                     onChange={(value) =>
@@ -1310,6 +1782,7 @@ export function NewApplicationForm() {
 
       {step === 2 ? (
         <div className={`space-y-4 ${lockInteractivityClass}`}>
+          <div data-field-key="requiredDocuments" />
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredDocs.length}`}
             description="Upload each required document now. Final submit sends only document metadata references."

@@ -226,9 +226,11 @@ export default function TaxOrderOfPaymentPage() {
                       <p className="text-xs text-slate-500">Status: {record.status}</p>
                     </div>
                     <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                      {record.paymentFrequency
-                        ? PAYMENT_FREQ_LABELS[record.paymentFrequency] ?? record.paymentFrequency
-                        : "No Frequency"}
+                      {record.applicationType === "CLOSURE"
+                        ? "Full Payment Required"
+                        : record.paymentFrequency
+                          ? PAYMENT_FREQ_LABELS[record.paymentFrequency] ?? record.paymentFrequency
+                          : "No Frequency"}
                     </span>
                   </div>
 
@@ -269,11 +271,15 @@ export default function TaxOrderOfPaymentPage() {
                     </p>
                   </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Mode of Payment</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">
+                    {summary.applicationType === "CLOSURE" ? "Settlement Payment" : "Mode of Payment"}
+                  </p>
                   <p className="mt-1 font-medium text-slate-900">
-                    {summary.paymentFrequency
-                      ? PAYMENT_FREQ_LABELS[summary.paymentFrequency] ?? summary.paymentFrequency
-                      : "-"}
+                    {summary.applicationType === "CLOSURE"
+                      ? "Full Payment Required"
+                      : summary.paymentFrequency
+                        ? PAYMENT_FREQ_LABELS[summary.paymentFrequency] ?? summary.paymentFrequency
+                        : "-"}
                   </p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">

@@ -3,11 +3,11 @@ CREATE TABLE "PasswordResetOtp" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,
     "otpHash" TEXT NOT NULL,
-    "expiresAt" DATETIME NOT NULL,
-    "verifiedAt" DATETIME,
-    "usedAt" DATETIME,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "verifiedAt" TIMESTAMP(3),
+    "usedAt" TIMESTAMP(3),
     "attempts" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateIndex

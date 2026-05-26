@@ -6,6 +6,9 @@ import {
   EB_MAGALONA_COUNTRY,
   EB_MAGALONA_COUNTRY_CODE,
   EB_MAGALONA_PROVINCE,
+  isEbMagalonaCity,
+  isEbMagalonaProvince,
+  normalizeEbMagalonaCityName,
   isPhilippinesCountry,
 } from "@/lib/address-options";
 import { formatOwnerName } from "@/lib/person-name";
@@ -13,27 +16,109 @@ import { formatOwnerName } from "@/lib/person-name";
 export { isPhilippinesCountry } from "@/lib/address-options";
 
 export const EB_MAGALONA_BARANGAYS = [
-  "Aurel",
-  "Barangay 1 (Pob.)",
-  "Barangay 2 (Pob.)",
-  "Barangay 3 (Pob.)",
-  "Barangay 4 (Pob.)",
-  "Barangay 5 (Pob.)",
-  "Barangay 6 (Pob.)",
-  "Barangay 7 (Pob.)",
-  "Caidiocan",
-  "Calampisawan",
-  "Canmoros",
-  "Guinguinabang",
-  "Ilijan",
-  "Mangiliol",
-  "Matagoy",
-  "Motherchurch",
-  "Nayon",
-  "Quinagaringan",
-  "Suba",
-  "Talabaan",
+  "Alacaygan",
+  "Alicante",
+  "Poblacion I (Barangay 1)",
+  "Poblacion II (Barangay 2)",
+  "Poblacion III (Barangay 3)",
+  "Batea",
+  "Consing",
+  "Cudangdang",
+  "Damgo",
+  "Gahit",
+  "Canlusong",
+  "Latasan",
+  "Madalag",
+  "Manta-angan",
+  "Nanca",
+  "Pasil",
+  "San Isidro",
+  "San Jose",
+  "Santo Niño",
+  "Tabigue",
+  "Tanza",
+  "Tuburan",
+  "Tomongtong",
 ] as const;
+
+const EB_MAGALONA_BARANGAY_VARIANTS: Array<[string, (typeof EB_MAGALONA_BARANGAYS)[number]]> = [
+  ["Barangay 1 (Pob.)", "Poblacion I (Barangay 1)"],
+  ["Barangay 2 (Pob.)", "Poblacion II (Barangay 2)"],
+  ["Barangay 3 (Pob.)", "Poblacion III (Barangay 3)"],
+  ["Poblacion 1", "Poblacion I (Barangay 1)"],
+  ["Poblacion 2", "Poblacion II (Barangay 2)"],
+  ["Poblacion 3", "Poblacion III (Barangay 3)"],
+];
+
+function normalizeBarangayToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[()]/g, " ")
+    .replace(/[.'’,-]/g, " ")
+    .replace(/\b(barangay|pob|pob\.)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const EB_MAGALONA_BARANGAY_LOOKUP = new Map<string, (typeof EB_MAGALONA_BARANGAYS)[number]>();
+
+for (const barangay of EB_MAGALONA_BARANGAYS) {
+  EB_MAGALONA_BARANGAY_LOOKUP.set(normalizeBarangayToken(barangay), barangay);
+}
+
+for (const [variant, canonical] of EB_MAGALONA_BARANGAY_VARIANTS) {
+  EB_MAGALONA_BARANGAY_LOOKUP.set(normalizeBarangayToken(variant), canonical);
+}
+
+export function normalizeEbMagalonaBarangayName(value: string): string {
+  const normalized = normalizeBarangayToken(value);
+  return EB_MAGALONA_BARANGAY_LOOKUP.get(normalized) ?? value.trim();
+}
+
+export function isRecognizedEbMagalonaBarangay(value: string): boolean {
+  return EB_MAGALONA_BARANGAY_LOOKUP.has(normalizeBarangayToken(value));
+}
+
+export function canUseMainOfficeAsBusinessLocation(
+  input: Pick<
+    BusinessInfo,
+    "sameAsMainOffice" | "mainOfficeCountry" | "mainOfficeCountryCode" | "mainOfficeProvince" | "mainOfficeCityMunicipality"
+  >
+): boolean {
+  if (!input.sameAsMainOffice) {
+    return false;
+  }
+
+  return (
+    isPhilippinesCountry(input.mainOfficeCountry, input.mainOfficeCountryCode) &&
+    isEbMagalonaProvince(input.mainOfficeProvince) &&
+    isEbMagalonaCity(input.mainOfficeCityMunicipality)
+  );
+}
+
+export function resolveBusinessBarangayFromFormState(
+  input: Pick<
+    BusinessInfo,
+    | "barangay"
+    | "businessBarangay"
+    | "sameAsMainOffice"
+    | "mainOfficeBarangay"
+    | "mainOfficeCountry"
+    | "mainOfficeCountryCode"
+    | "mainOfficeProvince"
+    | "mainOfficeCityMunicipality"
+  >
+): string {
+  const resolved = (
+    input.businessBarangay?.trim() ||
+    input.barangay?.trim() ||
+    (canUseMainOfficeAsBusinessLocation(input) ? input.mainOfficeBarangay?.trim() : "") ||
+    ""
+  ).trim();
+
+  return resolved ? normalizeEbMagalonaBarangayName(resolved) : "";
+}
 
 export const BUSINESS_ACTIVITY_OPTIONS = [
   "Main Office",
@@ -281,7 +366,7 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
   const countryCode = EB_MAGALONA_COUNTRY_CODE;
   const province = EB_MAGALONA_PROVINCE;
   const provinceCode = input.provinceCode?.trim() ?? "";
-  const cityMunicipality = EB_MAGALONA_CITY;
+  const cityMunicipality = normalizeEbMagalonaCityName(input.cityMunicipality) || EB_MAGALONA_CITY;
 
   const legacyMainOfficeAddressParts = (input.mainOfficeAddress?.trim() ?? "")
     .split(",")
@@ -304,7 +389,7 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
 
   const legacyParts = legacyBusinessAddress.split(",").map((part) => part.trim()).filter(Boolean);
   const inferredStreet = !rawStreetAddress && legacyParts.length > 0 ? legacyParts[0] ?? "" : "";
-  const inferredBarangay = !rawBarangay && legacyParts.length > 1
+  const inferredBarangay = !rawBarangay && legacyParts.length >= 5
     ? (legacyParts[1] ?? "").replace(/^barangay\s+/i, "")
     : "";
 

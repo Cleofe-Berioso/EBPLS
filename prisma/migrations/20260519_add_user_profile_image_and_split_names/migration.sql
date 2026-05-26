@@ -7,7 +7,7 @@ ALTER TABLE "User" ADD COLUMN "profileImageStoragePath" TEXT;
 ALTER TABLE "User" ADD COLUMN "profileImageBucket" TEXT;
 ALTER TABLE "User" ADD COLUMN "profileImageMimeType" TEXT;
 ALTER TABLE "User" ADD COLUMN "profileImageSizeBytes" INTEGER;
-ALTER TABLE "User" ADD COLUMN "profileImageUploadedAt" DATETIME;
+ALTER TABLE "User" ADD COLUMN "profileImageUploadedAt" TIMESTAMP(3);
 
 -- Additive owner split-name fields for BusinessRecord compatibility.
 ALTER TABLE "BusinessRecord" ADD COLUMN "ownerFirstName" TEXT;

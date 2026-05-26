@@ -1,12 +1,41 @@
 import { NextResponse } from "next/server";
 
 import type { AddressApiErrorResponse, AddressOption, BarangayOption } from "@/lib/address-types";
+import { EB_MAGALONA_CITY, normalizeEbMagalonaCityName } from "@/lib/address-options";
+import { EB_MAGALONA_BARANGAYS } from "@/lib/business-rules";
 
 export const dynamic = "force-dynamic";
 
 const PSGC_CLOUD_BASE_URL = "https://psgc.cloud/api/v2";
 const EB_MAGALONA_PSGC_CODE = "0604508000";
-const BARANGAY_FRIENDLY_MESSAGE = "Barangay list could not be loaded. Please try again.";
+const BARANGAY_FETCH_TIMEOUT_MS = 8000;
+
+const EB_MAGALONA_CITY_VARIANTS = [
+  "EB Magalona",
+  "E.B. Magalona",
+  "Enrique B. Magalona",
+  "Enrique B. Magalona (E.B. Magalona)",
+] as const;
+
+function logBarangayLookup(event: string, data: Record<string, unknown>) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
+  console.info(`[address/barangays] ${event}`, data);
+}
+
+class CloudFetchError extends Error {
+  status: number;
+  url: string;
+
+  constructor(message: string, status: number, url: string) {
+    super(message);
+    this.name = "CloudFetchError";
+    this.status = status;
+    this.url = url;
+  }
+}
 
 type PsgcCloudProvince = {
   code?: string;
@@ -60,12 +89,27 @@ function normalizeName(value: string): string {
   return value
     .trim()
     .toLowerCase()
+    .replace(/[()]/g, " ")
     .replace(/[.'’,-]/g, " ")
     .replace(/\b(city|municipality|province)\s+of\b/g, "")
     .replace(/\b(city|municipality)\b/g, "")
     .replace(/\be\s*b\b/g, "eb")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isEbMagalonaRequestedCity(cityName: string): boolean {
+  const normalized = normalizeName(cityName);
+  return EB_MAGALONA_CITY_VARIANTS.some((variant) => normalizeName(variant) === normalized);
+}
+
+function buildLocalEbMagalonaFallbackOptions(): BarangayOption[] {
+  return EB_MAGALONA_BARANGAYS.map((name, index) => ({
+    code: `local-ebm-${String(index + 1).padStart(3, "0")}`,
+    value: `local-ebm-${String(index + 1).padStart(3, "0")}`,
+    label: name,
+    name,
+  }));
 }
 
 function matchesName(candidate: string, target: string): boolean {
@@ -160,9 +204,29 @@ function dedupeAndSortBarangays(rows: BarangayOption[]): BarangayOption[] {
 }
 
 async function fetchCloudArray<T>(url: string): Promise<T[]> {
-  const response = await fetch(url, { cache: "no-store" });
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(BARANGAY_FETCH_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const isAbortError =
+      typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      (error as { name?: string }).name === "TimeoutError";
+
+    throw new CloudFetchError(
+      isAbortError ? "Request timed out" : "Request failed",
+      isAbortError ? 504 : 500,
+      url
+    );
+  }
+
   if (!response.ok) {
-    throw new Error("Request failed");
+    throw new CloudFetchError(`Request failed with status ${response.status}`, response.status, url);
   }
 
   const payload = (await response.json().catch(() => null)) as unknown;
@@ -403,7 +467,15 @@ async function loadBarangaysFromCloud(input: {
       if (mapped.length > 0) {
         collected.push(...mapped);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof CloudFetchError) {
+        logBarangayLookup("external-fetch-failed", {
+          status: error.status,
+          url: error.url,
+          cityName: input.cityName,
+          candidate,
+        });
+      }
       // Try next candidate.
     }
   }
@@ -462,21 +534,41 @@ export async function GET(request: Request) {
     return NextResponse.json([] satisfies BarangayOption[]);
   }
 
+  const normalizedCityName = normalizeEbMagalonaCityName(cityName) || cityName;
+  const ebMagalonaCityRequest = isEbMagalonaRequestedCity(cityName);
+
+  logBarangayLookup("request", {
+    countryCode,
+    provinceName,
+    cityName,
+    normalizedCityName,
+    provinceCode: provinceCode || null,
+    cityCode: cityCode || null,
+  });
+
   try {
     const options = await loadBarangaysFromCloud({
-      cityName,
+      cityName: normalizedCityName,
       cityCode: cityCode || undefined,
       provinceName: provinceName || undefined,
       provinceCode: provinceCode || undefined,
     });
 
-    // Preserve existing behavior: return empty array when lookup yields no rows.
-    if (!matchesName(cityName, "Enrique B. Magalona") && !matchesName(cityName, "EB Magalona")) {
+    if (!ebMagalonaCityRequest) {
+      logBarangayLookup("response", {
+        normalizedCityName,
+        source: "external",
+        count: options.length,
+      });
       return NextResponse.json(options);
     }
 
-    // For EB Magalona specifically, prefer municipality code if alias lookup failed.
     if (options.length > 0) {
+      logBarangayLookup("response", {
+        normalizedCityName,
+        source: "external",
+        count: options.length,
+      });
       return NextResponse.json(options);
     }
 
@@ -486,8 +578,45 @@ export async function GET(request: Request) {
       provinceCode: provinceCode || undefined,
     });
 
-    return NextResponse.json(ebMagalonaOptions);
-  } catch {
-    return jsonError(502, BARANGAY_FRIENDLY_MESSAGE);
+    if (ebMagalonaOptions.length > 0) {
+      logBarangayLookup("response", {
+        normalizedCityName,
+        source: "external-eb-code",
+        count: ebMagalonaOptions.length,
+      });
+      return NextResponse.json(ebMagalonaOptions);
+    }
+
+    const localFallback = buildLocalEbMagalonaFallbackOptions();
+    logBarangayLookup("response", {
+      normalizedCityName,
+      source: "local-fallback",
+      count: localFallback.length,
+      fallbackUsed: true,
+    });
+
+    return NextResponse.json(localFallback);
+  } catch (error) {
+    if (error instanceof CloudFetchError) {
+      logBarangayLookup("external-failure", {
+        status: error.status,
+        url: error.url,
+        normalizedCityName,
+        fallbackUsed: ebMagalonaCityRequest,
+      });
+    }
+
+    if (ebMagalonaCityRequest) {
+      const localFallback = buildLocalEbMagalonaFallbackOptions();
+      logBarangayLookup("response", {
+        normalizedCityName,
+        source: "local-fallback-on-error",
+        count: localFallback.length,
+        fallbackUsed: true,
+      });
+      return NextResponse.json(localFallback);
+    }
+
+    return NextResponse.json([] satisfies BarangayOption[]);
   }
 }

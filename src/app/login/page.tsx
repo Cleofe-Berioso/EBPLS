@@ -9,7 +9,9 @@ export const metadata: Metadata = {
 };
 
 type LoginPageProps = {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  searchParams?:
+    | Promise<Record<string, string | string[] | undefined>>
+    | Record<string, string | string[] | undefined>;
 };
 
 function getSingleParam(value: string | string[] | undefined): string {
@@ -20,7 +22,7 @@ function getSingleParam(value: string | string[] | undefined): string {
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const params = searchParams ? await searchParams : {};
+  const params = searchParams ? await Promise.resolve(searchParams) : {};
   const email = getSingleParam(params.email).trim();
   const error = getSingleParam(params.error).trim();
   const disabledAccountNotice = error === "account-disabled";

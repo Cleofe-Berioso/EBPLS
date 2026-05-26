@@ -31,7 +31,7 @@ export async function POST(
   try {
     const saved = await saveAssessmentDraft(applicationId, session.user.id, {
       lineItems: Array.isArray(body.lineItems) ? body.lineItems : [],
-      closurePaymentDues: body.closurePaymentDues ?? 0,
+      closurePaymentDues: body.closurePaymentDues,
       remarks: body.remarks,
     });
     return NextResponse.json({ saved });

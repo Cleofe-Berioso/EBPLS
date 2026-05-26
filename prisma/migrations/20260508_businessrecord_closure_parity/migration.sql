@@ -2,11 +2,14 @@
 -- Purpose: align migration chain with current schema/runtime soft-close fields.
 -- Non-destructive: additive columns only; no table drops/rebuilds.
 
-ALTER TABLE "BusinessRecord"
-ADD COLUMN "businessStatus" TEXT NOT NULL DEFAULT 'ACTIVE';
+-- CreateEnum
+CREATE TYPE "BusinessRecordStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'CLOSED');
 
 ALTER TABLE "BusinessRecord"
-ADD COLUMN "closedAt" DATETIME;
+ADD COLUMN "businessStatus" "BusinessRecordStatus" NOT NULL DEFAULT 'ACTIVE';
+
+ALTER TABLE "BusinessRecord"
+ADD COLUMN "closedAt" TIMESTAMP(3);
 
 ALTER TABLE "BusinessRecord"
 ADD COLUMN "closureApplicationId" TEXT;

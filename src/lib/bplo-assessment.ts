@@ -496,6 +496,7 @@ function buildAssessmentTotals(
     });
   }
   if (isClosure) {
+    // Closure Certificate Fee remains system-fixed. Outstanding/settlement amount is BPLO-entered.
     systemLineItems.push({
       description: CLOSURE_CERTIFICATE_FEE_LABEL,
       amount: 100,
@@ -537,6 +538,36 @@ function sanitizeAssessmentInput(input: AssessmentInput): AssessmentInput {
     closurePaymentDues: clampMoney(input.closurePaymentDues),
     remarks: input.remarks?.trim() ?? undefined,
   };
+}
+
+function parseClosureSettlementAmountForValidation(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return Number.NaN;
+  return parsed;
+}
+
+function validateClosureSettlementAmountForTopGeneration(
+  applicationType: "NEW" | "RENEWAL" | "CLOSURE",
+  mode: "DRAFT" | "GENERATED",
+  rawClosurePaymentDues: unknown
+): void {
+  if (applicationType !== "CLOSURE" || mode !== "GENERATED") {
+    return;
+  }
+
+  const settlementAmount = parseClosureSettlementAmountForValidation(rawClosurePaymentDues);
+  if (settlementAmount === null) {
+    throw new Error("Settlement / Outstanding Amount is required before generating the Closure TOP.");
+  }
+  if (Number.isNaN(settlementAmount)) {
+    throw new Error("Settlement / Outstanding Amount must be a valid number greater than 0 before generating the Closure TOP.");
+  }
+  if (settlementAmount <= 0) {
+    throw new Error("Settlement / Outstanding Amount must be greater than 0 before generating the Closure TOP.");
+  }
 }
 
 function ensureTopHasPayableItems(applicationType: "NEW" | "RENEWAL" | "CLOSURE", totals: ReturnType<typeof buildAssessmentTotals>) {
@@ -757,10 +788,18 @@ async function persistAssessment(
     throw new Error("Tax Order of Payment has already been generated. Cannot revert to draft.");
   }
 
+  validateClosureSettlementAmountForTopGeneration(
+    preCheckApplication.applicationType as "NEW" | "RENEWAL" | "CLOSURE",
+    mode,
+    input.closurePaymentDues
+  );
+
   const applicantPaymentFrequency = resolveApplicantPaymentFrequency(preCheckApplication.formData);
-  if (!applicantPaymentFrequency) {
+  const isClosureApplication = preCheckApplication.applicationType === "CLOSURE";
+  if (!isClosureApplication && !applicantPaymentFrequency) {
     throw new Error("Payment frequency must be selected by the applicant before assessment finalization.");
   }
+  const effectivePaymentFrequency: PaymentFrequency = applicantPaymentFrequency ?? "ANNUAL";
 
   // Validate and compute totals outside transaction
   validateCustomLineItems(sanitized.lineItems);
@@ -820,7 +859,7 @@ async function persistAssessment(
     }
 
     const annualAssessedAmount = totals.totalAmount;
-    const releasePaymentAmount = toReleasePaymentAmount(annualAssessedAmount, applicantPaymentFrequency);
+    const releasePaymentAmount = toReleasePaymentAmount(annualAssessedAmount, effectivePaymentFrequency);
     const now = new Date();
 
     const saved = await tx.feeAssessment.upsert({
@@ -829,7 +868,7 @@ async function persistAssessment(
         applicationId,
         assessmentNumber,
         status: mode,
-        paymentFrequency: applicantPaymentFrequency,
+        paymentFrequency: effectivePaymentFrequency,
         annualAssessedAmount,
         releasePaymentAmount,
         amountPaid: 0,
@@ -852,7 +891,7 @@ async function persistAssessment(
       },
       update: {
         status: mode,
-        paymentFrequency: applicantPaymentFrequency,
+        paymentFrequency: effectivePaymentFrequency,
         annualAssessedAmount,
         releasePaymentAmount,
         amountPaid: 0,

@@ -1,13 +1,58 @@
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('APPLICANT', 'BPLO', 'SUPER_ADMIN', 'DEPARTMENT_HEAD', 'JIT');
+
+-- CreateEnum
+CREATE TYPE "ApplicationType" AS ENUM ('NEW', 'RENEWAL', 'CLOSURE');
+
+-- CreateEnum
+CREATE TYPE "ApplicationStatus" AS ENUM (
+    'DRAFT',
+    'SUBMITTED',
+    'UNDER_REVIEW',
+    'DEPARTMENT_HEAD_REVIEW',
+    'DEPARTMENT_HEAD_APPROVED',
+    'ASSESSED',
+    'APPROVED_FOR_PAYMENT',
+    'PAID',
+    'FOR_RELEASE',
+    'RELEASED',
+    'REVOCATION_REVIEW',
+    'REVOKED',
+    'RETURNED_FOR_CORRECTION',
+    'REJECTED'
+);
+
+-- CreateEnum
+CREATE TYPE "BusinessLocationStatus" AS ENUM ('PENDING', 'VERIFIED', 'NEEDS_CORRECTION');
+
+-- CreateEnum
+CREATE TYPE "PermitDocumentType" AS ENUM ('BUSINESS_PERMIT', 'CLOSURE_CERTIFICATE');
+
+-- CreateEnum
+CREATE TYPE "PermitIssuanceStatus" AS ENUM ('PREPARED', 'FOR_RELEASE', 'RELEASED');
+
+-- CreateEnum
+CREATE TYPE "FeeAssessmentStatus" AS ENUM ('DRAFT', 'GENERATED');
+
+-- CreateEnum
+CREATE TYPE "PaymentFrequency" AS ENUM ('ANNUAL', 'BI_ANNUAL', 'QUARTERLY');
+
+-- CreateEnum
+CREATE TYPE "PaymentSettlementStatus" AS ENUM ('UNPAID', 'PARTIALLY_PAID', 'PAID');
+
+-- CreateEnum
+CREATE TYPE "PaymentReferenceStatus" AS ENUM ('PENDING', 'VERIFIED', 'REJECTED');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
-    "role" TEXT NOT NULL DEFAULT 'APPLICANT',
+    "role" "Role" NOT NULL DEFAULT 'APPLICANT',
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -40,8 +85,8 @@ CREATE TABLE "BusinessRecord" (
     "businessActivity" TEXT,
     "lineOfBusiness" TEXT,
     "assetSize" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "BusinessRecord_applicantId_fkey" FOREIGN KEY ("applicantId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -53,12 +98,12 @@ CREATE TABLE "BusinessLocation" (
     "longitude" REAL NOT NULL,
     "address" TEXT,
     "barangay" TEXT,
-    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "status" "BusinessLocationStatus" NOT NULL DEFAULT 'PENDING',
     "submittedById" TEXT NOT NULL,
     "verifiedById" TEXT,
     "remarks" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "BusinessLocation_businessRecordId_fkey" FOREIGN KEY ("businessRecordId") REFERENCES "BusinessRecord" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "BusinessLocation_submittedById_fkey" FOREIGN KEY ("submittedById") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "BusinessLocation_verifiedById_fkey" FOREIGN KEY ("verifiedById") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -70,12 +115,12 @@ CREATE TABLE "BusinessApplication" (
     "applicationNumber" TEXT NOT NULL,
     "applicantId" TEXT NOT NULL,
     "businessRecordId" TEXT,
-    "applicationType" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "applicationType" "ApplicationType" NOT NULL,
+    "status" "ApplicationStatus" NOT NULL DEFAULT 'DRAFT',
     "formData" JSONB NOT NULL,
-    "submittedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "submittedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "BusinessApplication_applicantId_fkey" FOREIGN KEY ("applicantId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "BusinessApplication_businessRecordId_fkey" FOREIGN KEY ("businessRecordId") REFERENCES "BusinessRecord" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -85,16 +130,16 @@ CREATE TABLE "PermitIssuance" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "applicationId" TEXT NOT NULL,
     "documentNumber" TEXT NOT NULL,
-    "documentType" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'PREPARED',
-    "issuedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "releasedAt" DATETIME,
+    "documentType" "PermitDocumentType" NOT NULL,
+    "status" "PermitIssuanceStatus" NOT NULL DEFAULT 'PREPARED',
+    "issuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "releasedAt" TIMESTAMP(3),
     "preparedById" TEXT NOT NULL,
     "releasedById" TEXT,
     "documentPath" TEXT,
     "remarks" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "PermitIssuance_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "BusinessApplication" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "PermitIssuance_preparedById_fkey" FOREIGN KEY ("preparedById") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "PermitIssuance_releasedById_fkey" FOREIGN KEY ("releasedById") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -109,7 +154,7 @@ CREATE TABLE "ApplicationDocument" (
     "storagePath" TEXT NOT NULL,
     "mimeType" TEXT NOT NULL,
     "sizeBytes" INTEGER NOT NULL,
-    "uploadedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "uploadedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ApplicationDocument_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "BusinessApplication" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -118,11 +163,11 @@ CREATE TABLE "ApplicationHistory" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "applicationId" TEXT NOT NULL,
     "actorId" TEXT,
-    "actorRole" TEXT,
-    "fromStatus" TEXT,
-    "toStatus" TEXT NOT NULL,
+    "actorRole" "Role",
+    "fromStatus" "ApplicationStatus",
+    "toStatus" "ApplicationStatus" NOT NULL,
     "remarks" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ApplicationHistory_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "BusinessApplication" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "ApplicationHistory_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -132,13 +177,13 @@ CREATE TABLE "FeeAssessment" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "applicationId" TEXT NOT NULL,
     "assessmentNumber" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'DRAFT',
-    "paymentFrequency" TEXT NOT NULL DEFAULT 'ANNUAL',
+    "status" "FeeAssessmentStatus" NOT NULL DEFAULT 'DRAFT',
+    "paymentFrequency" "PaymentFrequency" NOT NULL DEFAULT 'ANNUAL',
     "annualAssessedAmount" DECIMAL NOT NULL DEFAULT 0,
     "releasePaymentAmount" DECIMAL NOT NULL DEFAULT 0,
     "amountPaid" DECIMAL NOT NULL DEFAULT 0,
     "remainingBalance" DECIMAL NOT NULL DEFAULT 0,
-    "paymentStatus" TEXT NOT NULL DEFAULT 'UNPAID',
+    "paymentStatus" "PaymentSettlementStatus" NOT NULL DEFAULT 'UNPAID',
     "mayorsPermitFee" DECIMAL NOT NULL DEFAULT 0,
     "regulatoryFees" DECIMAL NOT NULL DEFAULT 0,
     "additionalCharges" DECIMAL NOT NULL DEFAULT 0,
@@ -151,9 +196,9 @@ CREATE TABLE "FeeAssessment" (
     "totalAmount" DECIMAL NOT NULL DEFAULT 0,
     "remarks" TEXT,
     "computedById" TEXT,
-    "generatedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "generatedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "FeeAssessment_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "BusinessApplication" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "FeeAssessment_computedById_fkey" FOREIGN KEY ("computedById") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -164,18 +209,18 @@ CREATE TABLE "PaymentReference" (
     "applicationId" TEXT NOT NULL,
     "transactionNumber" TEXT NOT NULL,
     "amountPaid" DECIMAL NOT NULL DEFAULT 0,
-    "paymentDate" DATETIME NOT NULL,
+    "paymentDate" TIMESTAMP(3) NOT NULL,
     "proofFileName" TEXT NOT NULL,
     "proofStoragePath" TEXT NOT NULL,
     "proofMimeType" TEXT NOT NULL,
     "proofSizeBytes" INTEGER NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "status" "PaymentReferenceStatus" NOT NULL DEFAULT 'PENDING',
     "reviewerRemarks" TEXT,
-    "submittedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "reviewedAt" DATETIME,
+    "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewedAt" TIMESTAMP(3),
     "reviewedById" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "PaymentReference_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "BusinessApplication" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "PaymentReference_reviewedById_fkey" FOREIGN KEY ("reviewedById") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -188,8 +233,8 @@ CREATE TABLE "FeeConfigurationItem" (
     "amount" DECIMAL NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "updatedById" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "FeeConfigurationItem_updatedById_fkey" FOREIGN KEY ("updatedById") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
@@ -202,8 +247,8 @@ CREATE TABLE "SystemFeeSetting" (
     "powerDistributionFixedFee" DECIMAL NOT NULL DEFAULT 10000,
     "privatePortFixedFee" DECIMAL NOT NULL DEFAULT 50000,
     "updatedById" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "SystemFeeSetting_updatedById_fkey" FOREIGN KEY ("updatedById") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
@@ -211,15 +256,15 @@ CREATE TABLE "SystemFeeSetting" (
 CREATE TABLE "RenewalExtension" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "title" TEXT NOT NULL,
-    "startDate" DATETIME NOT NULL,
-    "endDate" DATETIME NOT NULL,
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "endDate" TIMESTAMP(3) NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "waiveSurcharge" BOOLEAN NOT NULL DEFAULT true,
     "waiveInterest" BOOLEAN NOT NULL DEFAULT false,
     "remarks" TEXT,
     "updatedById" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "RenewalExtension_updatedById_fkey" FOREIGN KEY ("updatedById") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 

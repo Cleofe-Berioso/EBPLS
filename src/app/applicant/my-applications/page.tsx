@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import { listApplicantApplications } from "@/lib/applications";
 import { StatusBadge } from "@/components/applicant/status-badge";
 import { StatusTracker } from "@/components/applicant/status-tracker";
@@ -12,8 +12,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
 
 export default async function MyApplicationsPage() {
-  const session = await auth();
-  const applications = session?.user?.id ? await listApplicantApplications(session.user.id) : [];
+  const authContext = await resolveApplicantSessionContext();
+  const applications = authContext.ok ? await listApplicantApplications(authContext.applicantId) : [];
   const latest = applications[0];
 
   return (

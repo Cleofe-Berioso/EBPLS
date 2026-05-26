@@ -14,7 +14,6 @@ import {
   isEbMagalonaCity,
   isEbMagalonaProvince,
 } from "@/lib/address-options";
-import type { AddressOption } from "@/lib/address-types";
 
 import { BusinessInformationFields } from "./business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
@@ -25,7 +24,9 @@ import {
   resolveRequiredDocuments,
 } from "@/lib/required-documents";
 import {
+  buildDocumentMaxSizeError,
   DOCUMENT_FILE_INPUT_ACCEPT,
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
   validateDocumentFileUpload,
 } from "@/lib/document-upload-rules";
 import { isValidLineOfBusiness, LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
@@ -41,7 +42,6 @@ import { actionButtonStyles } from "@/components/ui/action-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SectionCard } from "@/components/ui/section-card";
 
 const steps = [
@@ -81,12 +81,6 @@ const lockedFields: Array<keyof BusinessInfo> = [
   "nationality",
 ];
 
-const LINE_OF_BUSINESS_SELECT_OPTIONS: AddressOption[] = LINE_OF_BUSINESS_OPTIONS.map((option) => ({
-  value: option,
-  label: option,
-  name: option,
-}));
-
 const RENEWAL_OPERATION_FIELDS: Array<{ label: string; key: keyof BusinessInfo; helperText?: string }> = [
   { label: "Business Area", key: "businessArea", helperText: "Use the declared operating area." },
   { label: "Total Floor Area", key: "totalFloorArea" },
@@ -97,6 +91,8 @@ const RENEWAL_OPERATION_FIELDS: Array<{ label: string; key: keyof BusinessInfo; 
   { label: "Delivery Vehicles", key: "deliveryVehicles" },
   { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos." },
 ];
+
+const BUSINESS_ACTIVITY_OTHER_OPTION = "Others, please specify";
 
 function normalizeBusinessInfo(next: BusinessInfo): BusinessInfo {
   return normalizeBusinessInfoRules(next);
@@ -204,8 +200,63 @@ function parsePositiveAmount(value: string): number | null {
   const normalized = value.replace(/[,\s]/g, "").trim();
   if (!normalized) return null;
   const parsed = Number(normalized);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
   return parsed;
+}
+
+function readBusinessActivitySelection(value: string | undefined): {
+  selected: string;
+  otherText: string;
+} {
+  const trimmed = (value ?? "").trim();
+
+  if (!trimmed) {
+    return { selected: "", otherText: "" };
+  }
+
+  if (trimmed.startsWith("Others:")) {
+    return {
+      selected: BUSINESS_ACTIVITY_OTHER_OPTION,
+      otherText: trimmed.slice("Others:".length).trim(),
+    };
+  }
+
+  if (trimmed === BUSINESS_ACTIVITY_OTHER_OPTION) {
+    return { selected: BUSINESS_ACTIVITY_OTHER_OPTION, otherText: "" };
+  }
+
+  if ((BUSINESS_ACTIVITY_OPTIONS as readonly string[]).includes(trimmed)) {
+    return { selected: trimmed, otherText: "" };
+  }
+
+  return {
+    selected: BUSINESS_ACTIVITY_OTHER_OPTION,
+    otherText: trimmed,
+  };
+}
+
+function validateRenewalBusinessOperations(info: BusinessInfo): Partial<Record<keyof BusinessInfo, string>> {
+  const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+  const activity = readBusinessActivitySelection(info.businessActivity);
+
+  if (!activity.selected) {
+    nextErrors.businessActivity = "Business Activity is required.";
+  } else if (activity.selected === BUSINESS_ACTIVITY_OTHER_OPTION && !activity.otherText) {
+    nextErrors.businessActivity = "Please specify the Business Activity when selecting Others.";
+  }
+
+  const grossRaw = info.grossProfit?.trim() ?? "";
+  if (!grossRaw) {
+    nextErrors.grossProfit = "Gross Profit / Gross Receipts is required.";
+  } else if (parsePositiveAmount(grossRaw) == null) {
+    nextErrors.grossProfit = "Gross Profit / Gross Receipts must be a non-negative amount.";
+  }
+
+  if (!["ANNUAL", "BI_ANNUAL", "QUARTERLY"].includes(info.paymentFrequency)) {
+    nextErrors.paymentFrequency = "Mode of Payment is required.";
+  }
+
+  return nextErrors;
 }
 
 function sanitizeDocumentMetadata(documents: ApplicationDocumentInput[]): ApplicationDocumentInput[] {
@@ -412,6 +463,7 @@ export function RenewalApplicationForm() {
 
   const uploadedRequiredCount = requiredRenewalDocs.filter((doc) => getUploadedDocumentForRequiredName(doc)).length;
   const selectedRecord = records.find((item) => item.id === selectedBusinessId);
+  const selectedBusinessActivity = readBusinessActivitySelection(info.businessActivity);
   const selectedRecordLineOfBusiness = (selectedRecord?.businessInfo.lineOfBusiness ?? "").trim();
   const hasLockedRecordLineOfBusiness = isValidLineOfBusiness(selectedRecordLineOfBusiness);
   const renewalLineOfBusinessLocked = hasLockedRecordLineOfBusiness || isReadOnly;
@@ -477,11 +529,20 @@ export function RenewalApplicationForm() {
     if (field === "grossProfit") {
       const grossRaw = normalizedInfo.grossProfit?.trim() ?? "";
       if (!grossRaw) {
-        nextErrors.grossProfit = "Gross Receipts / Gross Sales is required.";
+        nextErrors.grossProfit = "Gross Profit / Gross Receipts is required.";
       } else if (parsePositiveAmount(grossRaw) == null) {
-        nextErrors.grossProfit = "Gross Receipts / Gross Sales must be a positive amount.";
+        nextErrors.grossProfit = "Gross Profit / Gross Receipts must be a non-negative amount.";
       } else if (nextErrors.grossProfit !== "This already exist") {
         delete nextErrors.grossProfit;
+      }
+    }
+
+    if (field === "businessActivity") {
+      const activityError = validateRenewalBusinessOperations(normalizedInfo).businessActivity;
+      if (activityError) {
+        nextErrors.businessActivity = activityError;
+      } else if (nextErrors.businessActivity !== "This already exist") {
+        delete nextErrors.businessActivity;
       }
     }
 
@@ -657,9 +718,9 @@ export function RenewalApplicationForm() {
 
       const grossRaw = normalizedInfo.grossProfit?.trim() ?? "";
       if (!grossRaw) {
-        nextErrors.grossProfit = "Gross Receipts / Gross Sales is required.";
+        nextErrors.grossProfit = "Gross Profit / Gross Receipts is required.";
       } else if (parsePositiveAmount(grossRaw) == null) {
-        nextErrors.grossProfit = "Gross Receipts / Gross Sales must be a positive amount.";
+        nextErrors.grossProfit = "Gross Profit / Gross Receipts must be a non-negative amount.";
       }
 
       const identityFormats = validateBusinessIdentityFormats(normalizedInfo);
@@ -671,6 +732,7 @@ export function RenewalApplicationForm() {
       }
 
       Object.assign(nextErrors, validateBusinessLocation(normalizedInfo));
+      Object.assign(nextErrors, validateRenewalBusinessOperations(normalizedInfo));
 
       logStepValidationDebug({
         step,
@@ -787,8 +849,16 @@ export function RenewalApplicationForm() {
 
       const grossRaw = info.grossProfit?.trim() ?? "";
       if (!grossRaw || parsePositiveAmount(grossRaw) == null) {
-        setFieldErrors({ grossProfit: "Gross Receipts / Gross Sales must be a positive amount." });
-        setStatusMessage({ kind: "error", text: "Gross Receipts / Gross Sales must be a positive amount." });
+        setFieldErrors({ grossProfit: "Gross Profit / Gross Receipts must be a non-negative amount." });
+        setStatusMessage({ kind: "error", text: "Gross Profit / Gross Receipts must be a non-negative amount." });
+        setSubmitting(false);
+        return null;
+      }
+
+      const operationErrors = validateRenewalBusinessOperations(info);
+      if (Object.keys(operationErrors).length > 0) {
+        setFieldErrors(operationErrors);
+        setStatusMessage({ kind: "error", text: "Complete Business Operations fields before submitting." });
         setSubmitting(false);
         return null;
       }
@@ -824,8 +894,12 @@ export function RenewalApplicationForm() {
       documents: Object.values(uploadedDocuments),
     });
 
+    const hasPendingFiles = Object.keys(pendingDocuments).length > 0;
+    const draftTargetUrl = applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications";
+    const draftTargetMethod = applicationId ? "PATCH" : "POST";
+
     const response =
-      mode === "SUBMIT"
+      mode === "SUBMIT" && hasPendingFiles
         ? await (async () => {
             const formData = new FormData();
             formData.append("payload", JSON.stringify(payload));
@@ -839,14 +913,11 @@ export function RenewalApplicationForm() {
               body: formData,
             });
           })()
-        : await fetch(
-            applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications",
-            {
-              method: applicationId ? "PATCH" : "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            }
-          );
+        : await fetch(mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl, {
+          method: mode === "SUBMIT" ? "POST" : draftTargetMethod,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
     const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
@@ -867,7 +938,9 @@ export function RenewalApplicationForm() {
           : "";
       setStatusMessage({
         kind: "error",
-        text: data.error ?? `Unable to save renewal application.${detail}`,
+        text:
+          data.error ??
+          `Unable to save renewal application (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).${detail}`,
       });
       if (data.detail) setValidationDetail(data.detail);
       return null;
@@ -898,6 +971,11 @@ export function RenewalApplicationForm() {
   async function handleDocumentUpload(documentName: string, file: File | null) {
     if (isReadOnly) return;
     if (!file) return;
+
+    if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+      setStatusMessage({ kind: "error", text: buildDocumentMaxSizeError(file.name) });
+      return;
+    }
 
     const fileValidationError = validateDocumentFileUpload(file);
     if (fileValidationError) {
@@ -1188,8 +1266,8 @@ export function RenewalApplicationForm() {
           </SectionCard>
 
           <SectionCard
-            title="Operations and Staffing"
-            description="Update operating profile details for this renewal period."
+            title="Business Operations"
+            description="Update operation details for this renewal period before document upload and review."
           >
             <div className="grid gap-4 md:grid-cols-2">
               {RENEWAL_OPERATION_FIELDS.map((field) => (
@@ -1208,8 +1286,8 @@ export function RenewalApplicationForm() {
               ))}
 
               <FormField
-                label="Gross Receipts / Gross Sales"
-                hint="Enter the latest declared gross receipts or gross sales amount in pesos."
+                label="Gross Profit / Gross Receipts"
+                hint="Enter the latest declared gross receipts or gross profit amount in pesos (0 or higher)."
                 error={fieldErrors.grossProfit}
               >
                 <input
@@ -1232,18 +1310,18 @@ export function RenewalApplicationForm() {
               >
                 <select
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
-                  value={(() => {
-                    // If the value is "Others: <text>", show just "Others, please specify" in the dropdown
-                    if (info.businessActivity?.startsWith("Others:")) {
-                      return "Others, please specify";
-                    }
-                    return info.businessActivity;
-                  })()}
+                  value={selectedBusinessActivity.selected}
+                  onBlur={() => validateFieldOnBlur("businessActivity")}
                   onChange={(event) => {
                     const value = event.target.value;
-                    // Set to empty string if "Others" selected so the text input shows
                     setInfo((current) =>
-                      normalizeBusinessInfo({ ...current, businessActivity: value === "Others, please specify" ? "" : value })
+                      normalizeBusinessInfo({
+                        ...current,
+                        businessActivity:
+                          value === BUSINESS_ACTIVITY_OTHER_OPTION
+                            ? BUSINESS_ACTIVITY_OTHER_OPTION
+                            : value,
+                      })
                     );
                   }}
                 >
@@ -1256,42 +1334,79 @@ export function RenewalApplicationForm() {
                 </select>
               </FormField>
 
-              {(() => {
-                // Show text input if "Others" was selected or if businessActivity starts with "Others:"
-                const isStandardOption = BUSINESS_ACTIVITY_OPTIONS.some(
-                  (opt) => opt !== "Others, please specify" && opt === info.businessActivity
-                );
+              {selectedBusinessActivity.selected === BUSINESS_ACTIVITY_OTHER_OPTION ? (
+                <FormField
+                  label="Other Business Activity / Specify Activity"
+                  required
+                  error={fieldErrors.businessActivity}
+                >
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    placeholder="Enter your business activity"
+                    value={selectedBusinessActivity.otherText}
+                    onBlur={() => validateFieldOnBlur("businessActivity")}
+                    onChange={(event) => {
+                      const customText = event.target.value;
+                      setInfo((current) =>
+                        normalizeBusinessInfo({
+                          ...current,
+                          businessActivity: customText ? `Others: ${customText}` : BUSINESS_ACTIVITY_OTHER_OPTION,
+                        })
+                      );
+                    }}
+                  />
+                </FormField>
+              ) : null}
 
-                return !isStandardOption && (info.businessActivity === "" || info.businessActivity?.startsWith("Others:")) ? (
-                  <FormField
-                    label="Please specify business activity"
-                    required
-                    error={fieldErrors.businessActivity}
-                  >
+              <FormField
+                label="Mode of Payment"
+                hint="Applicant-selected payment preference for renewal assessment."
+                required
+                error={fieldErrors.paymentFrequency}
+              >
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
                     <input
-                      type="text"
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
-                      placeholder="Enter your business activity"
-                      value={(() => {
-                        // Extract the custom text from "Others: <text>" format
-                        if (info.businessActivity?.startsWith("Others:")) {
-                          return info.businessActivity.substring(7).trim();
-                        }
-                        return "";
-                      })()}
-                      onChange={(event) => {
-                        const customText = event.target.value;
-                        setInfo((current) =>
-                          normalizeBusinessInfo({
-                            ...current,
-                            businessActivity: customText ? `Others: ${customText}` : "",
-                          })
-                        );
-                      }}
+                      type="radio"
+                      name="renewalPaymentFrequency"
+                      value="ANNUAL"
+                      checked={info.paymentFrequency === "ANNUAL"}
+                      disabled={isReadOnly}
+                      onChange={() =>
+                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "ANNUAL" }))
+                      }
                     />
-                  </FormField>
-                ) : null;
-              })()}
+                    Annual
+                  </label>
+                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                    <input
+                      type="radio"
+                      name="renewalPaymentFrequency"
+                      value="BI_ANNUAL"
+                      checked={info.paymentFrequency === "BI_ANNUAL"}
+                      disabled={isReadOnly}
+                      onChange={() =>
+                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "BI_ANNUAL" }))
+                      }
+                    />
+                    Bi-Annual
+                  </label>
+                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                    <input
+                      type="radio"
+                      name="renewalPaymentFrequency"
+                      value="QUARTERLY"
+                      checked={info.paymentFrequency === "QUARTERLY"}
+                      disabled={isReadOnly}
+                      onChange={() =>
+                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "QUARTERLY" }))
+                      }
+                    />
+                    Quarterly
+                  </label>
+                </div>
+              </FormField>
 
               <FormField
                 label="Line of Business"
@@ -1302,15 +1417,13 @@ export function RenewalApplicationForm() {
                 }
                 error={fieldErrors.lineOfBusiness}
               >
-                <SearchableSelect
-                  options={LINE_OF_BUSINESS_SELECT_OPTIONS}
+                <select
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
                   value={info.lineOfBusiness}
-                  selectedLabel={info.lineOfBusiness}
-                  placeholder="Select line of business"
                   disabled={renewalLineOfBusinessLocked}
-                  onChange={(option) => {
+                  onChange={(event) => {
                     setInfo((current) =>
-                      normalizeBusinessInfo({ ...current, lineOfBusiness: option.name })
+                      normalizeBusinessInfo({ ...current, lineOfBusiness: event.target.value })
                     );
                     setFieldErrors((current) => {
                       const next = { ...current };
@@ -1318,7 +1431,12 @@ export function RenewalApplicationForm() {
                       return next;
                     });
                   }}
-                />
+                >
+                  <option value="" disabled>Select line of business</option>
+                  {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
                 {fieldErrors.lineOfBusiness ? (
                   <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.lineOfBusiness}</p>
                 ) : null}
@@ -1433,52 +1551,18 @@ export function RenewalApplicationForm() {
 
       {step === 3 ? (
         <div className={`space-y-4 ${lockInteractivityClass}`}>
-          <SectionCard
-            title="Preferred Mode of Payment"
-            description="Choose how you prefer to pay the assessed fees. Final payment details are confirmed after BPLO assessment."
-          >
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
-                <input
-                  type="radio"
-                  name="renewalPaymentFrequency"
-                  value="ANNUAL"
-                  checked={info.paymentFrequency === "ANNUAL"}
-                  disabled={isReadOnly}
-                  onChange={() => setInfo((current) => ({ ...current, paymentFrequency: "ANNUAL" }))}
-                />
-                Annual
-              </label>
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
-                <input
-                  type="radio"
-                  name="renewalPaymentFrequency"
-                  value="BI_ANNUAL"
-                  checked={info.paymentFrequency === "BI_ANNUAL"}
-                  disabled={isReadOnly}
-                  onChange={() => setInfo((current) => ({ ...current, paymentFrequency: "BI_ANNUAL" }))}
-                />
-                Bi-Annual
-              </label>
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
-                <input
-                  type="radio"
-                  name="renewalPaymentFrequency"
-                  value="QUARTERLY"
-                  checked={info.paymentFrequency === "QUARTERLY"}
-                  disabled={isReadOnly}
-                  onChange={() => setInfo((current) => ({ ...current, paymentFrequency: "QUARTERLY" }))}
-                />
-                Quarterly
-              </label>
-            </div>
-          </SectionCard>
-
           <InfoBanner
             title="BPLO assessment"
             description="Fees will be assessed by BPLO after application review."
             variant="info"
           />
+
+          <SectionCard
+            title="Applicant-selected payment preference"
+            description="This selected mode is included in your renewal submission form data."
+          >
+            <p className="text-sm font-semibold text-slate-900">{info.paymentFrequency.replace("_", "-")}</p>
+          </SectionCard>
         </div>
       ) : null}
 
@@ -1527,6 +1611,25 @@ export function RenewalApplicationForm() {
                 label="Required Documents"
                 value={`${uploadedRequiredCount} / ${requiredRenewalDocs.length}`}
                 helper="Uploaded required document count"
+              />
+              <ReviewStat
+                label="Business Activity"
+                value={
+                  selectedBusinessActivity.selected === BUSINESS_ACTIVITY_OTHER_OPTION
+                    ? selectedBusinessActivity.otherText || "Others"
+                    : selectedBusinessActivity.selected || "-"
+                }
+                helper="Renewal business activity declaration"
+              />
+              <ReviewStat
+                label="Business Gross / Gross Profit"
+                value={info.grossProfit?.trim() || "-"}
+                helper="Latest declared renewal gross amount"
+              />
+              <ReviewStat
+                label="Mode of Payment"
+                value={info.paymentFrequency.replace("_", "-")}
+                helper="Applicant-selected payment preference"
               />
             </div>
 

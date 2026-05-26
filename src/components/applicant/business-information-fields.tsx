@@ -5,8 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { BusinessInfo } from "@/lib/applicant-types";
 import {
   EB_MAGALONA_BARANGAYS,
+  canUseMainOfficeAsBusinessLocation,
   getRegistrationHelperText,
   getRegistrationLabel,
+  normalizeEbMagalonaBarangayName,
   resolveNationalityOnBusinessTypeChange,
 } from "@/lib/business-rules";
 import { formatOwnerName } from "@/lib/person-name";
@@ -92,6 +94,17 @@ export function BusinessInformationFields({
   const hasMainOfficeCountry = selectedMainOfficeCountry.length > 0;
   const hasMainOfficeProvince = selectedMainOfficeProvince.length > 0;
   const hasMainOfficeCity = selectedMainOfficeCity.length > 0;
+  const sameAsMainOffice = Boolean(value.sameAsMainOffice);
+  const mainOfficeBarangayValue = value.mainOfficeBarangay?.trim() ?? "";
+  const businessBarangayValue = value.businessBarangay?.trim() ?? "";
+  const barangayValue = value.barangay?.trim() ?? "";
+  const sameAsMainOfficeAllowed = canUseMainOfficeAsBusinessLocation({
+    sameAsMainOffice,
+    mainOfficeCountry: value.mainOfficeCountry,
+    mainOfficeCountryCode: value.mainOfficeCountryCode,
+    mainOfficeProvince: value.mainOfficeProvince,
+    mainOfficeCityMunicipality: value.mainOfficeCityMunicipality,
+  });
 
   const [countryOptions, setCountryOptions] = useState<AddressOption[]>([]);
   const [countryLoading, setCountryLoading] = useState(false);
@@ -105,6 +118,10 @@ export function BusinessInformationFields({
   const [barangayOptions, setBarangayOptions] = useState<AddressOption[]>([]);
   const [barangayLoading, setBarangayLoading] = useState(false);
   const [barangayError, setBarangayError] = useState<string | undefined>();
+
+  // Business address barangays: loaded from API, with static EB_MAGALONA_BARANGAYS as fallback.
+  const [businessBarangayOptions, setBusinessBarangayOptions] = useState<string[]>([...EB_MAGALONA_BARANGAYS]);
+  const [businessBarangayLoading, setBusinessBarangayLoading] = useState(false);
 
   // Keep refs to latest value/onChange so backfill effects don't re-run on every render.
   const latestValueRef = useRef(value);
@@ -231,6 +248,64 @@ export function BusinessInformationFields({
     selectedMainOfficeCityCode,
   ]);
 
+  // Load business address barangays from API on mount; fall back to static list on failure.
+  useEffect(() => {
+    let active = true;
+    setBusinessBarangayLoading(true);
+    loadBarangays({
+      countryCode: EB_MAGALONA_COUNTRY_CODE,
+      provinceName: EB_MAGALONA_PROVINCE,
+      cityName: EB_MAGALONA_CITY,
+    })
+      .then((options) => {
+        if (!active) return;
+        const names = options.map((opt) => opt.name).filter(Boolean);
+        if (names.length > 0) {
+          setBusinessBarangayOptions(names);
+        }
+        // If API returns empty, keep the static fallback already in state.
+      })
+      .catch(() => {
+        // API failed — static fallback is already in state, do nothing.
+      })
+      .finally(() => {
+        if (active) setBusinessBarangayLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Keep business barangay mirrored to main office barangay only when sameAsMainOffice is enabled.
+  useEffect(() => {
+    if (!sameAsMainOffice) {
+      return;
+    }
+
+    if (!sameAsMainOfficeAllowed) {
+      return;
+    }
+
+    const mainOfficeBarangay = normalizeEbMagalonaBarangayName(mainOfficeBarangayValue);
+    if (!mainOfficeBarangay) {
+      return;
+    }
+
+    if (businessBarangayValue === mainOfficeBarangay && barangayValue === mainOfficeBarangay) {
+      return;
+    }
+
+    onChangeRef.current({
+      ...latestValueRef.current,
+      businessBarangay: mainOfficeBarangay,
+      barangay: mainOfficeBarangay,
+      businessAddress: buildEbMagalonaBusinessAddress({
+        barangay: mainOfficeBarangay,
+        streetAddress: latestValueRef.current.businessStreetAddress,
+      }),
+    });
+  }, [sameAsMainOffice, sameAsMainOfficeAllowed, mainOfficeBarangayValue, businessBarangayValue, barangayValue, onChange]);
+
   // Backfill country code from label when options first load (e.g. loading a saved draft).
   // Only depends on the data that actually controls the backfill — not value/onChange refs —
   // to avoid re-firing on every parent render.
@@ -290,6 +365,7 @@ export function BusinessInformationFields({
           </div>
         ) : null}
         <select
+          data-field-key="businessType"
           className={fieldClasses(fieldLocked(lockedFields, "businessType"))}
           value={value.businessType}
           disabled={fieldLocked(lockedFields, "businessType")}
@@ -327,6 +403,7 @@ export function BusinessInformationFields({
           </div>
         ) : null}
         <input
+          data-field-key="registrationNumber"
           className={fieldClasses(fieldLocked(lockedFields, "registrationNumber"))}
           value={value.registrationNumber}
           disabled={fieldLocked(lockedFields, "registrationNumber")}
@@ -351,6 +428,7 @@ export function BusinessInformationFields({
           </div>
         ) : null}
           <input
+            data-field-key="tin"
             className={fieldClasses(fieldLocked(lockedFields, "tin"))}
             value={value.tin}
             disabled={fieldLocked(lockedFields, "tin")}
@@ -376,6 +454,7 @@ export function BusinessInformationFields({
           </div>
         ) : null}
         <input
+          data-field-key="businessName"
           className={fieldClasses(fieldLocked(lockedFields, "businessName"))}
           value={value.businessName}
           disabled={fieldLocked(lockedFields, "businessName")}
@@ -398,6 +477,7 @@ export function BusinessInformationFields({
           </div>
         ) : null}
         <input
+          data-field-key="tradeName"
           className={fieldClasses(fieldLocked(lockedFields, "tradeName"))}
           value={value.tradeName}
           disabled={fieldLocked(lockedFields, "tradeName")}
@@ -420,6 +500,7 @@ export function BusinessInformationFields({
           </div>
         ) : null}
         <input
+          data-field-key="ownerFirstName"
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerFirstName ?? ""}
           disabled={ownerIdentityLocked}
@@ -447,6 +528,7 @@ export function BusinessInformationFields({
         error={fieldErrors.ownerMiddleName}
       >
         <input
+          data-field-key="ownerMiddleName"
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerMiddleName ?? ""}
           disabled={ownerIdentityLocked}
@@ -474,6 +556,7 @@ export function BusinessInformationFields({
         error={fieldErrors.ownerSurname ?? fieldErrors.ownerName}
       >
         <input
+          data-field-key="ownerSurname"
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerSurname ?? ""}
           disabled={ownerIdentityLocked}
@@ -500,6 +583,7 @@ export function BusinessInformationFields({
         error={fieldErrors.ownerSuffix}
       >
         <input
+          data-field-key="ownerSuffix"
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerSuffix ?? ""}
           disabled={ownerIdentityLocked}
@@ -526,6 +610,7 @@ export function BusinessInformationFields({
           error={fieldErrors.sex}
         >
           <select
+            data-field-key="sex"
             className={fieldClasses(fieldLocked(lockedFields, "sex"))}
             value={value.sex ?? ""}
             disabled={fieldLocked(lockedFields, "sex")}
@@ -554,6 +639,7 @@ export function BusinessInformationFields({
             </div>
           ) : null}
           <select
+            data-field-key="nationality"
             className={fieldClasses(nationalityLocked)}
             value={value.nationality}
             disabled={nationalityLocked}
@@ -578,6 +664,7 @@ export function BusinessInformationFields({
         error={fieldErrors.email}
       >
         <input
+          data-field-key="email"
           type="email"
           className={fieldClasses(fieldLocked(lockedFields, "email"))}
           value={value.email}
@@ -594,6 +681,7 @@ export function BusinessInformationFields({
             required
             error={fieldErrors.mainOfficeCountry}
           >
+            <div data-field-key="mainOfficeCountry">
             <SearchableSelect
               options={countryOptions}
               value={value.mainOfficeCountryCode ?? ""}
@@ -615,6 +703,7 @@ export function BusinessInformationFields({
               disabled={fieldLocked(lockedFields, "mainOfficeCountry")}
               placeholder="Select country"
             />
+            </div>
           </FormField>
 
           <FormField
@@ -623,6 +712,7 @@ export function BusinessInformationFields({
             required
             error={fieldErrors.mainOfficeProvince}
           >
+            <div data-field-key="mainOfficeProvince">
             <SearchableSelect
               options={provinceOptions}
               value={value.mainOfficeProvinceCode ?? ""}
@@ -642,6 +732,7 @@ export function BusinessInformationFields({
               disabled={fieldLocked(lockedFields, "mainOfficeProvince") || !hasMainOfficeCountry}
               placeholder={!hasMainOfficeCountry ? "Select country first" : "Select province/state"}
             />
+            </div>
           </FormField>
 
           <FormField
@@ -650,6 +741,7 @@ export function BusinessInformationFields({
             required
             error={fieldErrors.mainOfficeCityMunicipality}
           >
+            <div data-field-key="mainOfficeCityMunicipality">
             <SearchableSelect
               options={cityOptions}
               value={selectedMainOfficeCityCode ?? value.mainOfficeCityMunicipality ?? ""}
@@ -667,6 +759,7 @@ export function BusinessInformationFields({
               disabled={fieldLocked(lockedFields, "mainOfficeCityMunicipality") || !hasMainOfficeCountry || !hasMainOfficeProvince}
               placeholder={!hasMainOfficeCountry ? "Select country first" : !hasMainOfficeProvince ? "Select province/state first" : "Select city/municipality"}
             />
+            </div>
           </FormField>
 
           {hasMainOfficeCountry && isMainOfficePhilippines ? (
@@ -676,6 +769,7 @@ export function BusinessInformationFields({
               required
               error={fieldErrors.mainOfficeBarangay}
             >
+              <div data-field-key="mainOfficeBarangay">
               <SearchableSelect
                 options={barangayOptions}
                 value={value.mainOfficeBarangay ?? ""}
@@ -686,6 +780,16 @@ export function BusinessInformationFields({
                   onChange({
                     ...value,
                     mainOfficeBarangay: nextBarangay.name,
+                    ...(value.sameAsMainOffice && sameAsMainOfficeAllowed
+                      ? {
+                          businessBarangay: normalizeEbMagalonaBarangayName(nextBarangay.name),
+                          barangay: normalizeEbMagalonaBarangayName(nextBarangay.name),
+                          businessAddress: buildEbMagalonaBusinessAddress({
+                            barangay: normalizeEbMagalonaBarangayName(nextBarangay.name),
+                            streetAddress: value.businessStreetAddress,
+                          }),
+                        }
+                      : {}),
                     mainOfficeStreetAddress: "",
                   })
                 }
@@ -705,6 +809,7 @@ export function BusinessInformationFields({
                         : "Select barangay"
                 }
               />
+                </div>
             </FormField>
           ) : null}
 
@@ -716,6 +821,7 @@ export function BusinessInformationFields({
               error={fieldErrors.mainOfficeStreetAddress}
             >
               <input
+                data-field-key="mainOfficeStreetAddress"
                 className={fieldClasses(fieldLocked(lockedFields, "mainOfficeStreetAddress"))}
                 value={value.mainOfficeStreetAddress ?? ""}
                 disabled={
@@ -747,7 +853,7 @@ export function BusinessInformationFields({
             >
               {value.mainOfficeAddress ? (
                 <div className={fieldClasses(true)}>
-                  {value.mainOfficeAddress}
+                  <span data-field-key="mainOfficeAddress">{value.mainOfficeAddress}</span>
                 </div>
               ) : (
                 <div className="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm italic text-slate-400">
@@ -773,6 +879,7 @@ export function BusinessInformationFields({
               </div>
             ) : null}
             <input
+              data-field-key="mainOfficeAddress"
               className={fieldClasses(fieldLocked(lockedFields, "mainOfficeAddress"))}
               value={value.mainOfficeAddress}
               disabled={fieldLocked(lockedFields, "mainOfficeAddress")}
@@ -784,9 +891,24 @@ export function BusinessInformationFields({
 
       <div className="md:col-span-2">
         <div className="mb-4">
+          <div data-field-key="businessAddress" />
           <p className="mb-1 text-sm font-semibold text-slate-700">
             Business Address / Place of Operation
           </p>
+          <label className="mb-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
+            <input
+              type="checkbox"
+              checked={Boolean(value.sameAsMainOffice)}
+              disabled={fieldLocked(lockedFields, "businessAddress")}
+              onChange={(event) => onChange({ ...value, sameAsMainOffice: event.target.checked })}
+            />
+            Use Main Office Barangay for Business Address
+          </label>
+          {value.sameAsMainOffice && !sameAsMainOfficeAllowed ? (
+            <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Main Office Address is outside EB Magalona. Please enter the Business Address separately.
+            </p>
+          ) : null}
           {generatedBusinessAddress ? (
             <div className="w-full rounded-xl border border-slate-300 bg-slate-100 px-3 py-3 text-sm text-slate-800 shadow-inner">
               {generatedBusinessAddress}
@@ -840,11 +962,12 @@ export function BusinessInformationFields({
           error={fieldErrors.businessBarangay}
         >
           <select
-            className={fieldClasses(fieldLocked(lockedFields, "businessBarangay"))}
+            data-field-key="businessBarangay"
+            className={fieldClasses(businessBarangayLoading || fieldLocked(lockedFields, "businessBarangay"))}
             value={value.businessBarangay ?? ""}
-            disabled={fieldLocked(lockedFields, "businessBarangay")}
+            disabled={businessBarangayLoading || fieldLocked(lockedFields, "businessBarangay")}
             onChange={(event) => {
-              const newBarangay = event.target.value || undefined;
+              const newBarangay = event.target.value ? normalizeEbMagalonaBarangayName(event.target.value) : undefined;
               onChange({
                 ...value,
                 businessBarangay: newBarangay,
@@ -857,9 +980,9 @@ export function BusinessInformationFields({
             }}
           >
             <option value="" disabled>
-              Select barangay
+              {businessBarangayLoading ? "Loading barangays…" : "Select barangay"}
             </option>
-            {EB_MAGALONA_BARANGAYS.map((brgy) => (
+            {businessBarangayOptions.map((brgy) => (
               <option key={brgy} value={brgy}>
                 {brgy}
               </option>
@@ -874,6 +997,7 @@ export function BusinessInformationFields({
           error={fieldErrors.businessStreetAddress}
         >
           <input
+            data-field-key="businessStreetAddress"
             className={fieldClasses(fieldLocked(lockedFields, "businessStreetAddress"))}
             value={value.businessStreetAddress ?? ""}
             disabled={fieldLocked(lockedFields, "businessStreetAddress")}
@@ -899,6 +1023,8 @@ export function BusinessInformationFields({
         </FormField>
 
         <div className="mt-4">
+          <div data-field-key="businessLatitude" />
+          <div data-field-key="businessLongitude" />
           <BusinessLocationPicker
             value={
               value.businessLatitude != null && value.businessLongitude != null
@@ -924,6 +1050,7 @@ export function BusinessInformationFields({
         error={fieldErrors.phone}
       >
         <input
+          data-field-key="phone"
           className={fieldClasses(fieldLocked(lockedFields, "phone"))}
           value={value.phone}
           disabled={fieldLocked(lockedFields, "phone")}
@@ -938,6 +1065,7 @@ export function BusinessInformationFields({
         >
           <label className="flex items-center gap-2 text-sm text-slate-800">
             <input
+              data-field-key="isLiquorOrTobacco"
               type="checkbox"
               checked={Boolean(value.isLiquorOrTobacco)}
               disabled={fieldLocked(lockedFields, "isLiquorOrTobacco")}

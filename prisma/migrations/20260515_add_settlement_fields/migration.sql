@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE "Inspection" ADD COLUMN "revocationSettledAt" DATETIME;
+ALTER TABLE "Inspection" ADD COLUMN "revocationSettledAt" TIMESTAMP(3);
 
 -- AlterTable
 ALTER TABLE "Inspection" ADD COLUMN "revocationSettlementRemarks" TEXT;

@@ -268,6 +268,12 @@ function sanitize(value?: string): string {
 
 export const EB_MAGALONA_CITY = "EB Magalona";
 export const EB_MAGALONA_CITY_ALIAS = "Enrique B. Magalona";
+const EB_MAGALONA_CITY_ALIASES = [
+  EB_MAGALONA_CITY,
+  "E.B. Magalona",
+  EB_MAGALONA_CITY_ALIAS,
+  "Enrique B. Magalona (E.B. Magalona)",
+] as const;
 export const EB_MAGALONA_PROVINCE = "Negros Occidental";
 export const EB_MAGALONA_COUNTRY = "Philippines";
 export const EB_MAGALONA_COUNTRY_CODE = "PH";
@@ -275,14 +281,21 @@ export const EB_MAGALONA_COUNTRY_CODE = "PH";
 function normalizeNameToken(value?: string): string {
   return sanitize(value)
     .toLowerCase()
+    .replace(/[()]/g, " ")
     .replace(/[.'’,-]/g, " ")
+    .replace(/\b(city|municipality)\s+of\b/g, "")
+    .replace(/\b(city|municipality)\b/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 export function isEbMagalonaCity(city?: string): boolean {
   const normalized = normalizeNameToken(city);
-  return normalized === normalizeNameToken(EB_MAGALONA_CITY) || normalized === normalizeNameToken(EB_MAGALONA_CITY_ALIAS);
+  return EB_MAGALONA_CITY_ALIASES.some((alias) => normalizeNameToken(alias) === normalized);
+}
+
+export function normalizeEbMagalonaCityName(city?: string): string {
+  return isEbMagalonaCity(city) ? EB_MAGALONA_CITY : sanitize(city);
 }
 
 export function isEbMagalonaProvince(province?: string): boolean {
