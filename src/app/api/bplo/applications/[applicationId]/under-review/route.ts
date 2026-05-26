@@ -1,0 +1,52 @@
+import { NextResponse } from "next/server";
+import { requireBploSession } from "@/lib/bplo-api";
+import { applyBploReviewAction } from "@/lib/bplo-applications";
+import { logApplicationAction } from "@/lib/audit-log";
+
+interface RouteContext {
+  params: Promise<{ applicationId: string }>;
+}
+
+export async function POST(req: Request, context: RouteContext) {
+  const session = await requireBploSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let payload: { remarks?: string } = {};
+  try {
+    payload = (await req.json()) as { remarks?: string };
+  } catch {
+    payload = {};
+  }
+
+  try {
+    const { applicationId } = await context.params;
+    const application = await applyBploReviewAction(
+      applicationId,
+      session.user.id,
+      "MARK_UNDER_REVIEW",
+      payload.remarks
+    );
+
+    // Audit: Application marked under review
+    void logApplicationAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "BPLO",
+      applicationId,
+      application.applicationNumber,
+      "REVIEWED",
+      "SUBMITTED",
+      application.status,
+      "Application marked under review",
+      { remarks: payload.remarks }
+    );
+
+    return NextResponse.json({ application });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to update application";
+    const status = message === "Application not found" ? 404 : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
+}

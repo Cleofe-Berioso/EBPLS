@@ -1,0 +1,63 @@
+"use client";
+
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { DashboardChartCard } from "@/components/ui/dashboard-chart-card";
+
+export interface DashboardBarDatum {
+  label: string;
+  value: number;
+}
+
+export function DashboardBarChart({
+  title,
+  description,
+  data,
+  loading,
+  error,
+  barLabel = "Average Hours",
+  emptyTitle,
+  emptyDescription,
+}: {
+  title: string;
+  description?: string;
+  data: DashboardBarDatum[];
+  loading?: boolean;
+  error?: string | null;
+  barLabel?: string;
+  emptyTitle?: string;
+  emptyDescription?: string;
+}) {
+  const hasData = data.some((item) => item.value > 0);
+
+  return (
+    <DashboardChartCard
+      title={title}
+      description={description}
+      loading={loading}
+      error={error}
+      isEmpty={!hasData}
+      emptyTitle={emptyTitle ?? "No processing duration records yet."}
+      emptyDescription={emptyDescription}
+    >
+      <div className="w-full min-w-0">
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={data} margin={{ top: 12, right: 20, left: 8, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} />
+            <Tooltip formatter={(value: number) => `${value.toFixed(1)} hrs`} />
+            <Bar dataKey="value" name={barLabel} fill="#0f766e" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </DashboardChartCard>
+  );
+}

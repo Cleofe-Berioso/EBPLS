@@ -1,0 +1,197 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f7fb;
+  --foreground: #132238;
+  --surface: #ffffff;
+  --muted-surface: #eef3f8;
+  --border-color: #d9e2ed;
+  --primary: #0b7a5c;
+  --primary-strong: #075c45;
+  --primary-soft: #e8f5f1;
+  --ink-muted: #5a6d85;
+  --danger: #b63a3a;
+  --warning: #b66a13;
+  --info: #1e6db6;
+  --card-shadow: 0 14px 34px -24px rgb(17 43 74 / 0.28);
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), "Segoe UI Variable Text", "Trebuchet MS", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  min-width: 320px;
+  background-image:
+    radial-gradient(circle at 8% -6%, rgb(11 122 92 / 0.13), transparent 32%),
+    radial-gradient(circle at 92% -10%, rgb(30 109 182 / 0.09), transparent 34%),
+    linear-gradient(180deg, #f9fbff 0%, #f4f7fb 36%, #f1f5fa 100%);
+}
+
+* {
+  box-sizing: border-box;
+  border-color: var(--border-color);
+}
+
+html {
+  background: var(--background);
+}
+
+input,
+textarea,
+select {
+  color: #132238;
+  background-color: #ffffff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #7d8da3;
+  opacity: 1;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled,
+input[readonly],
+textarea[readonly] {
+  background-color: #f5f8fb;
+  border-color: #d9e2ed;
+  color: #3c516c;
+  -webkit-text-fill-color: #3c516c;
+  opacity: 1;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.leaflet-business-map-popup .leaflet-popup-content-wrapper {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgb(226 232 240 / 0.95);
+  border-radius: 1.25rem;
+  box-shadow: 0 18px 45px -28px rgba(15, 23, 42, 0.42);
+  padding: 0;
+}
+
+.leaflet-business-map-popup .leaflet-popup-content {
+  margin: 0;
+  min-width: 240px;
+  padding: 0.9rem;
+}
+
+.leaflet-business-map-popup .leaflet-popup-tip {
+  background: #ffffff;
+  border: 1px solid rgb(226 232 240 / 0.95);
+  box-shadow: none;
+}
+
+.leaflet-container {
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+}
+
+.leaflet-container,
+.leaflet-container a {
+  color: #0f172a;
+}
+
+.leaflet-map-shell {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.leaflet-map-shell .leaflet-container {
+  position: relative;
+  z-index: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  color: var(--foreground);
+}
+
+.app-shell-main {
+  max-width: 1440px;
+  margin-inline: auto;
+}
+
+.app-sidebar {
+  border-right: 1px solid var(--border-color);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  z-index: 1100;
+}
+
+.app-header {
+  border-bottom: 1px solid var(--border-color);
+  background: rgb(255 255 255 / 0.92);
+  backdrop-filter: blur(10px);
+  z-index: 1100;
+}
+
+.app-surface {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+
+input,
+select,
+textarea {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-control);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: color-mix(in srgb, var(--primary) 60%, #ffffff 40%);
+  box-shadow: 0 0 0 3px rgb(11 122 92 / 0.12);
+  outline: none;
+}
+
+table thead {
+  background: #f6f9fd;
+}
+
+table th {
+  color: #3f5570;
+  letter-spacing: 0.01em;
+}
+
+table tbody tr:hover {
+  background: #f9fcff;
+}
+
+@media (max-width: 640px) {
+  body {
+    background-image:
+      radial-gradient(circle at -18% -14%, rgb(11 122 92 / 0.11), transparent 35%),
+      radial-gradient(circle at 120% -20%, rgb(30 109 182 / 0.08), transparent 38%),
+      linear-gradient(180deg, #f9fbff 0%, #f4f7fb 36%, #f1f5fa 100%);
+  }
+}

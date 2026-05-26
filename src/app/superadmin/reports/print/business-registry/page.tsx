@@ -1,0 +1,152 @@
+import { notFound } from "next/navigation";
+import { requireSuperAdminSession } from "@/lib/superadmin-api";
+import { buildReportMetadata, BUSINESS_STATUS_OPTIONS } from "@/lib/printable-reports";
+import {
+  getBusinessRegistryReport,
+  type BusinessRegistryReportFilters,
+} from "@/lib/superadmin-data";
+import { ReportPageHeader } from "@/components/print/reports/report-page-header";
+import { ReportSummaryCard } from "@/components/print/reports/report-summary-card";
+import { ReportTable } from "@/components/print/reports/report-table";
+import { ReportEmptyState } from "@/components/print/reports/report-empty-state";
+
+interface PageProps {
+  searchParams: Promise<{
+    barangay?: string;
+    businessType?: string;
+    status?: string;
+  }>;
+}
+
+const COLUMNS = [
+  { key: "businessName", label: "Business Name" },
+  { key: "tradeName", label: "Trade Name" },
+  { key: "owner", label: "Owner" },
+  { key: "businessType", label: "Business Type" },
+  { key: "lineOfBusiness", label: "Line of Business" },
+  { key: "address", label: "Barangay / Address" },
+  { key: "permitNumber", label: "Permit No.", className: "font-mono text-xs whitespace-nowrap" },
+  { key: "permitValidity", label: "Permit Validity", className: "whitespace-nowrap" },
+  { key: "businessStatus", label: "Status", className: "whitespace-nowrap" },
+];
+
+export default async function BusinessRegistryReportPage({ searchParams }: PageProps) {
+  const session = await requireSuperAdminSession();
+  if (!session) notFound();
+
+  const params = await searchParams;
+  const filters: BusinessRegistryReportFilters = {
+    barangay: params.barangay,
+    businessType: params.businessType,
+    status: params.status,
+  };
+
+  const rows = await getBusinessRegistryReport(filters);
+
+  const meta = buildReportMetadata({
+    title: "Business Registry Report",
+    generatedBy: session.user.name ?? "Super Admin",
+  });
+
+  const activeCount = rows.filter((r) => r.businessStatus === "Active").length;
+  const inactiveCount = rows.filter((r) => r.businessStatus === "Inactive").length;
+  const closedCount = rows.filter((r) => r.businessStatus === "Closed").length;
+  const withPermit = rows.filter((r) => r.permitNumber !== "-").length;
+
+  const resetHref = "/superadmin/reports/print/business-registry";
+
+  return (
+    <div className="report-print-container mx-auto max-w-[1300px] space-y-6 p-4 sm:p-8">
+      <ReportPageHeader meta={meta} backHref="/superadmin/reports" />
+
+      {/* ── Filter form (screen only) ──────────────────────────────── */}
+      <div className="no-print rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Filter Records
+        </p>
+        <form method="GET" className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="barangay" className="text-xs font-medium text-slate-600">
+              Barangay
+            </label>
+            <input
+              id="barangay"
+              type="text"
+              name="barangay"
+              defaultValue={params.barangay ?? ""}
+              placeholder="e.g. Tagumpay"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="businessType" className="text-xs font-medium text-slate-600">
+              Business Type
+            </label>
+            <input
+              id="businessType"
+              type="text"
+              name="businessType"
+              defaultValue={params.businessType ?? ""}
+              placeholder="e.g. Single Proprietorship"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="status" className="text-xs font-medium text-slate-600">
+              Business Status
+            </label>
+            <select
+              id="status"
+              name="status"
+              defaultValue={params.status ?? ""}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              {BUSINESS_STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end gap-2">
+            <button
+              type="submit"
+              className="rounded-lg border border-indigo-500 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+            >
+              Apply Filters
+            </button>
+            <a
+              href={resetHref}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Reset
+            </a>
+          </div>
+        </form>
+      </div>
+
+      {/* ── Summary ──────────────────────────────────────────────────── */}
+      <ReportSummaryCard
+        title="Summary"
+        items={[
+          { label: "Total Records", value: rows.length, tone: "slate" },
+          { label: "Active", value: activeCount, tone: "green" },
+          { label: "Inactive", value: inactiveCount, tone: "amber" },
+          { label: "Closed", value: closedCount, tone: "red" },
+          { label: "With Permit", value: withPermit, tone: "indigo" },
+        ]}
+      />
+
+      {/* ── Detail table ─────────────────────────────────────────────── */}
+      {rows.length === 0 ? (
+        <ReportEmptyState description="No business registry records match the selected filters." />
+      ) : (
+        <ReportTable
+          caption={`${rows.length.toLocaleString("en-PH")} record${rows.length !== 1 ? "s" : ""}`}
+          columns={COLUMNS}
+          rows={(rows as unknown) as Record<string, unknown>[]}
+        />
+      )}
+    </div>
+  );
+}

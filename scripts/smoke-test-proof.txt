@@ -1,0 +1,6 @@
+EBPLS smoke test proof document.
+Safe local dummy file for payment verification download checks.
+
+Reference:
+- Use only for local smoke testing.
+- No real payment information.
