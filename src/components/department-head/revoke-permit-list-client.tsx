@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { SectionCard } from "@/components/ui/section-card";
 
 type RevokedPermitRow = {
@@ -260,61 +261,52 @@ export function RevokePermitListClient() {
               </div>
             ) : null}
 
-            {isModalOpen ? (
-              <div className="fixed inset-0 z-50 flex items-center justify-center">
-                <div className="absolute inset-0 bg-black/40" onClick={() => setIsModalOpen(false)} />
-                <div className="relative w-[720px] rounded-lg bg-white p-6 shadow-lg">
-                  <h3 className="text-lg font-semibold">Mark as Settled</h3>
-                  <p className="mt-2 text-sm text-slate-600">Provide settlement remarks (required).</p>
-                  <textarea
-                    value={remarksInput}
-                    onChange={(e) => setRemarksInput(e.target.value)}
-                    className="mt-3 w-full rounded-md border p-2 text-sm"
-                    rows={5}
-                    placeholder="Enter settlement remarks"
-                  />
-                  <div className="mt-4 flex justify-end gap-3">
-                    <button type="button" className={actionButtonStyles("secondary", "sm")} onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className={actionButtonStyles("danger", "sm")}
-                      onClick={async () => {
-                        const remarks = remarksInput.trim();
-                        if (!remarks) {
-                          setMessage({ type: "error", text: "Settlement remarks are required." });
-                          return;
-                        }
-                        if (!selected) return;
-                        try {
-                          setIsSubmitting(true);
-                          const res = await fetch(`/api/department-head/revoke-permit-list/${selected.inspectionId}/mark-settled`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ remarks }),
-                          });
-                          const data = await res.json();
-                          if (!res.ok) {
-                            setMessage({ type: "error", text: data.error ?? "Unable to mark as settled." });
-                            return;
-                          }
-                          setIsModalOpen(false);
-                          await loadRows();
-                          setMessage(null);
-                        } catch (err) {
-                          setMessage({ type: "error", text: "Unable to mark as settled." });
-                        } finally {
-                          setIsSubmitting(false);
-                        }
-                      }}
-                    >
-                      Confirm
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            <ConfirmModal
+              open={isModalOpen}
+              title="Mark as Settled"
+              message="Provide settlement remarks (required)."
+              confirmLabel="Confirm"
+              cancelLabel="Cancel"
+              variant="danger"
+              loading={isSubmitting}
+              onClose={() => setIsModalOpen(false)}
+              onConfirm={async () => {
+                const remarks = remarksInput.trim();
+                if (!remarks) {
+                  setMessage({ type: "error", text: "Settlement remarks are required." });
+                  return;
+                }
+                if (!selected) return;
+                try {
+                  setIsSubmitting(true);
+                  const res = await fetch(`/api/department-head/revoke-permit-list/${selected.inspectionId}/mark-settled`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ remarks }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) {
+                    setMessage({ type: "error", text: data.error ?? "Unable to mark as settled." });
+                    return;
+                  }
+                  setIsModalOpen(false);
+                  await loadRows();
+                  setMessage(null);
+                } catch (err) {
+                  setMessage({ type: "error", text: "Unable to mark as settled." });
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+            >
+              <textarea
+                value={remarksInput}
+                onChange={(e) => setRemarksInput(e.target.value)}
+                className="w-full rounded-md border p-2 text-sm"
+                rows={5}
+                placeholder="Enter settlement remarks"
+              />
+            </ConfirmModal>
           </div>
         )}
 

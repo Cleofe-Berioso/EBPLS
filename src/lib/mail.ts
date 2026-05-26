@@ -125,12 +125,12 @@ export function generatePasswordResetEmailHtml(
         <div class="container">
           <div class="card">
             <div class="header">
-              <h1>EBPLS Password Reset</h1>
+              <h1>eBPPS Password Reset</h1>
             </div>
             
             <p>Hello,</p>
             
-            <p>We received a request to reset your EBPLS account password. Use the OTP code below to proceed with your password reset:</p>
+            <p>We received a request to reset your eBPPS account password. Use the OTP code below to proceed with your password reset:</p>
             
             <div class="otp-box">
               <div class="otp-code">${otp}</div>
@@ -145,7 +145,7 @@ export function generatePasswordResetEmailHtml(
             </p>
             <ul style="margin: 10px 0; padding-left: 20px;">
               <li>Never share this code with anyone</li>
-              <li>EBPLS staff will never ask for this code</li>
+              <li>eBPPS staff will never ask for this code</li>
               <li>After ${expirationMinutes} minutes, this code will expire</li>
               <li>If you did not request this, please ignore this email and your account remains secure</li>
             </ul>
@@ -155,12 +155,12 @@ export function generatePasswordResetEmailHtml(
               If you did not request a password reset, no action is needed. Your account is safe and this code cannot be used without your confirmation.
             </div>
             
-            <p style="margin: 20px 0; font-size: 14px; color: #666;">
-              For security reasons, do not reply to this email. If you need help, contact EBPLS support directly.
+              <p style="margin: 20px 0; font-size: 14px; color: #666;">
+              For security reasons, do not reply to this email. If you need help, contact eBPPS support directly.
             </p>
             
             <div class="footer">
-              <p>© 2026 EBPLS. All rights reserved.</p>
+              <p>© 2026 eBPPS. All rights reserved.</p>
               <p>This is an automated message - please do not reply to this email.</p>
             </div>
           </div>

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 
 export const metadata: Metadata = {
-  title: "EBPLS | Electronic Business Permits and Licensing System",
+  title: "eBPPS | Electronic Business Permits and Licensing System",
   description:
     "Electronic Business Permits and Licensing System for online business permit applications, assessment, payment tracking, and permit release.",
 };

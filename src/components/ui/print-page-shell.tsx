@@ -26,27 +26,27 @@ export function PrintPageShell({
           <button
             type="button"
             onClick={onPrint ?? (() => window.print())}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="px-3 py-1 text-sm font-medium text-black border"
           >
             Print Document
           </button>
         </div>
       ) : null}
 
-      <article className="rounded-xl border border-slate-200 bg-white p-8 text-slate-900 shadow-sm print:border-0 print:shadow-none">
-        <header className="border-b border-slate-200 pb-4">
-          <h1 className="text-2xl font-bold tracking-tight">{documentTitle}</h1>
-          <div className="mt-2 grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
-            <p>
-              Document No.: <span className="font-semibold text-slate-900">{documentNumber ?? "-"}</span>
-            </p>
-            <p>
-              Issued: <span className="font-semibold text-slate-900">{issuedAtLabel ?? "-"}</span>
-            </p>
+      <article className="bg-white text-black">
+        <header className="pb-3">
+          <h1 className="text-xl font-bold">{documentTitle}</h1>
+          <div className="mt-1 text-sm">
+            <div>
+              <strong>Document No.:</strong> {documentNumber ?? "-"}
+            </div>
+            <div>
+              <strong>Issued:</strong> {issuedAtLabel ?? "-"}
+            </div>
           </div>
         </header>
 
-        <div className="mt-6 space-y-4 leading-7">{children}</div>
+        <div className="mt-4 leading-7">{children}</div>
       </article>
 
       <style jsx global>{`

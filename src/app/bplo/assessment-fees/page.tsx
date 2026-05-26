@@ -67,11 +67,16 @@ export default async function BploAssessmentFeesPage() {
                   </td>
                   <td className="px-4 py-3">
                     {row.assessmentStatus ? (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${ASSESSMENT_STATUS_BADGE[row.assessmentStatus] ?? ""}`}
-                      >
-                        {row.assessmentStatus === "GENERATED" ? "TOP Generated" : "Draft Saved"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${ASSESSMENT_STATUS_BADGE[row.assessmentStatus] ?? ""}`}
+                        >
+                          {row.assessmentStatus === "GENERATED" ? "TOP Generated" : "Draft Saved"}
+                        </span>
+                        {row.reassessmentRequested ? (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">Re-assessment Requested</span>
+                        ) : null}
+                      </div>
                     ) : (
                       <span className="text-xs text-slate-600">Not started</span>
                     )}

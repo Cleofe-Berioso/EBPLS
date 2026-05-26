@@ -66,6 +66,10 @@ function logApplicantApi(event: string, data: Record<string, unknown>) {
   }
 }
 
+function extractValidationFieldKey(message: string): string {
+  return message.trim().split(/\s+/)[0] ?? message.trim();
+}
+
 export async function GET() {
   const authContext = await resolveApplicantSessionContext();
   if (authContext.ok === false) {
@@ -296,7 +300,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ application: saved });
     } catch (error) {
       if (error instanceof SubmitValidationError) {
-        const missingFieldKeys = error.detail.missingFields.map((item) => item.split(" ")[0]);
+        const missingFieldKeys = error.detail.missingFields.map(extractValidationFieldKey);
         const submittedFormData =
           payload.formData && typeof payload.formData === "object"
             ? (payload.formData as unknown as Record<string, unknown>)
@@ -349,13 +353,19 @@ export async function POST(req: Request) {
         }
 
         if (process.env.NODE_ENV === "development") {
+          const submittedNationality =
+            typeof submittedFormData.nationality === "string" ? submittedFormData.nationality.trim() : "";
           console.info("[ApplicantApplicationsAPI] submit-validation-summary", {
             missingFieldsCount: error.detail.missingFields.length,
             missingDocumentsCount: error.detail.missingDocuments.length,
+            missingFields: error.detail.missingFields,
+            missingDocuments: error.detail.missingDocuments,
             missingFieldKeys,
             missingDocumentNames: error.detail.missingDocuments,
             fieldErrors,
+            nationalityValidationResult: missingFieldKeys.includes("nationality") ? "missing" : "present",
             debugFieldValues: {
+              nationality: submittedNationality || null,
               email: submittedFormData.email ?? null,
               assetSize: submittedFormData.assetSize ?? null,
               rawBarangay,

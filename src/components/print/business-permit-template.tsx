@@ -43,42 +43,24 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
       issuedAtLabel={dateLabel(permit.dateIssued)}
       showPrintButton={!applicantPreview}
     >
-      <div className="relative space-y-6 text-slate-900">
-        {applicantPreview ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-            <div className="rotate-[-28deg] rounded-2xl border-4 border-red-300/80 bg-white/65 px-8 py-6 text-center">
-              <p className="text-3xl font-extrabold tracking-[0.16em] text-red-700">APPLICANT COPY</p>
-              <p className="mt-2 text-lg font-bold tracking-[0.12em] text-red-700">FOR VIEWING ONLY</p>
-              <p className="mt-1 text-sm font-semibold tracking-[0.08em] text-red-700">
-                NOT VALID WITHOUT OFFICIAL RELEASE/SIGNATURE
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        {applicantPreview ? (
-          <section className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900">
-            Applicant preview copy only. This is not an official printable permit and is not valid without official release/signature.
-          </section>
-        ) : null}
-
-        <header className="space-y-1 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em]">{permit.heading.republic}</p>
-          <p className="text-sm font-semibold uppercase tracking-[0.12em]">{permit.heading.province}</p>
-          <p className="text-sm font-semibold uppercase tracking-[0.12em]">{permit.heading.municipality}</p>
-          <p className="text-base font-semibold uppercase tracking-[0.12em]">{permit.heading.office}</p>
-          <h2 className="pt-2 text-2xl font-bold uppercase tracking-[0.16em]">{permit.heading.title}</h2>
+      <div className="space-y-6 text-black">
+        <header className="text-center">
+          <p className="text-sm font-semibold uppercase">{permit.heading.republic}</p>
+          <p className="text-sm font-semibold uppercase">{permit.heading.province}</p>
+          <p className="text-sm font-semibold uppercase">{permit.heading.municipality}</p>
+          <p className="text-base font-semibold uppercase">{permit.heading.office}</p>
+          <h2 className="pt-2 text-lg font-bold uppercase">{permit.heading.title}</h2>
         </header>
 
-        <section className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-          <p className="text-sm"><span className="font-semibold">Permit Number:</span> {permit.permitNumber}</p>
-          <p className="text-sm"><span className="font-semibold">Application Number:</span> {permit.applicationNumber}</p>
-          <p className="text-sm"><span className="font-semibold">Tax Year:</span> {permit.taxYear}</p>
-          <p className="text-sm"><span className="font-semibold">Date Issued:</span> {dateLabel(permit.dateIssued)}</p>
-          <p className="text-sm md:col-span-2"><span className="font-semibold">Valid Until:</span> {dateLabel(permit.validUntil)}</p>
+        <section className="grid gap-2" aria-label="Permit details">
+          <p className="text-sm"><strong>Permit Number:</strong> {permit.permitNumber}</p>
+          <p className="text-sm"><strong>Application Number:</strong> {permit.applicationNumber}</p>
+          <p className="text-sm"><strong>Tax Year:</strong> {permit.taxYear}</p>
+          <p className="text-sm"><strong>Date Issued:</strong> {dateLabel(permit.dateIssued)}</p>
+          <p className="text-sm"><strong>Valid Until:</strong> {dateLabel(permit.validUntil)}</p>
         </section>
 
-        <section className="rounded-xl border border-slate-200 p-4">
+        <section>
           <InfoRow label="Business Name" value={permit.businessName} />
           <InfoRow label="Trade Name" value={permit.tradeName} />
           <InfoRow label="Owner / President" value={permit.ownerOrPresident} />
@@ -98,13 +80,11 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
           />
         </section>
 
-        <section className="rounded-xl border border-dashed border-slate-300 p-4">
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-700">Verification</p>
-          <div className="mt-3 flex items-center gap-4">
-            <div className="flex h-20 w-20 items-center justify-center border border-slate-300 bg-slate-100 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-              QR
-            </div>
-            <p className="text-sm text-slate-700">{permit.verificationPlaceholder}</p>
+        <section>
+          <p className="text-sm font-semibold">Verification</p>
+          <div className="mt-2 flex items-center gap-4">
+            <div className="flex h-20 w-20 items-center justify-center border border-black text-[10px] font-semibold">QR</div>
+            <p className="text-sm">{permit.verificationPlaceholder}</p>
           </div>
         </section>
 
@@ -114,8 +94,8 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
           <SignatoryBlock title={permit.signatories.mayor} />
         </section>
 
-        <footer className="border-t border-slate-200 pt-4">
-          <p className="text-sm font-semibold italic text-slate-700">{permit.legalNote}</p>
+        <footer className="pt-4">
+          <p className="text-sm italic">{permit.legalNote}</p>
         </footer>
       </div>
     </PrintPageShell>

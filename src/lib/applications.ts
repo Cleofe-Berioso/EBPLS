@@ -14,11 +14,8 @@ import { APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE } from "@/lib/applicant-api";
 import {
   applyLockedBusinessFields,
   BUSINESS_ACTIVITY_OPTIONS,
-  calculateAgeFromBirthDate,
   resolveBusinessBarangayFromFormState,
   isRecognizedEbMagalonaBarangay as isRecognizedEbMagalonaBarangayFromRules,
-  isCorporation,
-  isCorporationOwnershipClassification,
   normalizeBusinessInfo,
   validateBusinessIdentityFormats,
 } from "@/lib/business-rules";
@@ -708,29 +705,6 @@ function validateSubmitPayload(
     throw new Error("Wrong Format");
   }
 
-  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
-    const birthDateRaw = normalizedFormData.birthDate?.trim() ?? "";
-    if (!birthDateRaw) {
-      missingFields.push("birthDate");
-    } else {
-      try {
-        const providedAgeRaw = normalizedFormData.ownerAge?.trim() ?? "";
-        const computedAge = calculateAgeFromBirthDate(birthDateRaw);
-        if (computedAge < 18 || computedAge > 120) {
-          missingFields.push("birthDate (must result in age between 18 and 120)");
-        } else {
-          if (providedAgeRaw && Number(providedAgeRaw) !== computedAge) {
-            missingFields.push("ownerAge (does not match birthDate)");
-          }
-          normalizedFormData.ownerAge = String(computedAge);
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Birthdate is invalid.";
-        missingFields.push(`birthDate (${message})`);
-      }
-    }
-  }
-
   if (input.applicationType === "NEW") {
     const capitalRaw = normalizedFormData.capitalInvestment?.trim() ?? "";
     if (!capitalRaw) {
@@ -757,11 +731,7 @@ function validateSubmitPayload(
   }
 
   const normalizedNationality = normalizedFormData.nationality.trim();
-  if (isCorporation(normalizedFormData.businessType)) {
-    if (!isCorporationOwnershipClassification(normalizedNationality)) {
-      missingFields.push("nationality (select a corporation ownership classification)");
-    }
-  } else if (normalizedNationality.length === 0) {
+  if (normalizedNationality.length === 0) {
     missingFields.push("nationality");
   }
 
@@ -1776,6 +1746,12 @@ export async function submitApplicantPaymentReference(
 
   if (!application.feeAssessment || application.feeAssessment.status !== "GENERATED") {
     throw new Error("Generated TOP is required before submitting payment reference");
+  }
+
+  if (application.feeAssessment.reassessmentRequestedAt) {
+    throw new Error(
+      "Your assessment is under re-assessment request. Please wait for BPLO to review before submitting payment."
+    );
   }
 
   const duplicate = await prisma.paymentReference.findUnique({

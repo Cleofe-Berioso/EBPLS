@@ -21,6 +21,8 @@ interface TopSummary {
   status: string;
   topNumber: string | null;
   assessmentStatus: "DRAFT" | "GENERATED" | null;
+  reassessmentRequestedAt?: string | null;
+  rawStatus?: string;
   paymentFrequency: "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null;
   mayorsPermitFee: number;
   regulatoryFees: number;
@@ -73,6 +75,12 @@ export default function TaxOrderOfPaymentPage() {
   const isPaidStatus = summary?.status === "Paid";
   const canSubmitPaymentReference =
     !!summary && !isPaidStatus && paymentRefStatus !== "PENDING";
+  const canRequestReassessment =
+    !!summary &&
+    summary.assessmentStatus === "GENERATED" &&
+    !summary.reassessmentRequestedAt &&
+    !summary.paymentReference &&
+    !["FOR_RELEASE", "RELEASED"].includes(summary.rawStatus ?? "");
 
   useEffect(() => {
     let active = true;
@@ -225,7 +233,7 @@ export default function TaxOrderOfPaymentPage() {
                       <p className="mt-1 text-sm font-semibold text-slate-900">{record.applicationType}</p>
                       <p className="text-xs text-slate-500">Status: {record.status}</p>
                     </div>
-                    <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+                      <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
                       {record.applicationType === "CLOSURE"
                         ? "Full Payment Required"
                         : record.paymentFrequency
@@ -251,6 +259,34 @@ export default function TaxOrderOfPaymentPage() {
             title="TOP Summary"
             description={`${summary.applicationNumber} • ${summary.applicationType} • ${summary.businessName}`}
           >
+            <div className="mb-3 flex items-center justify-end">
+              {summary.reassessmentRequestedAt ? (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Re-assessment Requested</span>
+              ) : canRequestReassessment ? (
+                <button
+                  type="button"
+                  className={actionButtonStyles("secondary", "sm")}
+                  onClick={async () => {
+                    const ok = confirm("Request re-assessment? BPLO will review your TOP before payment.");
+                    if (!ok) return;
+                    const res = await fetch(`/api/applicant/applications/${summary.applicationId}/request-reassessment`, { method: "POST" });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      setMessage(data.error ?? "Unable to request reassessment");
+                      return;
+                    }
+                    setMessage(data.message ?? data.ok ? "Re-assessment requested. BPLO will review your TOP before payment." : "Re-assessment requested");
+                    setTopData((curr) => ({
+                      ...curr,
+                      activeSummary: curr.activeSummary ? { ...curr.activeSummary, reassessmentRequestedAt: new Date().toISOString() } : curr.activeSummary,
+                      records: curr.records.map((r) => (r.applicationId === summary.applicationId ? { ...r, reassessmentRequestedAt: new Date().toISOString() } : r)),
+                    }));
+                  }}
+                >
+                  Request Re-assessment
+                </button>
+              ) : null}
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-xl border border-green-200 bg-green-50 p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-green-700">TOP Number</p>

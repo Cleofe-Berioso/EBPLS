@@ -337,24 +337,11 @@ export function isCorporationOwnershipClassification(value: string): boolean {
 }
 
 export function resolveNationalityOnBusinessTypeChange(
-  previousBusinessType: BusinessType,
-  nextBusinessType: BusinessType,
+  _previousBusinessType: BusinessType,
+  _nextBusinessType: BusinessType,
   currentNationality: string
 ): string {
-  const trimmedNationality = currentNationality.trim();
-
-  if (isCorporation(nextBusinessType)) {
-    if (
-      isCorporation(previousBusinessType) &&
-      isCorporationOwnershipClassification(trimmedNationality)
-    ) {
-      return trimmedNationality;
-    }
-
-    return "";
-  }
-
-  return trimmedNationality;
+  return currentNationality.trim();
 }
 
 export function normalizeNationality(businessType: BusinessType, nationality: string): string {

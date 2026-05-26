@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
 import { isWithinEbMagalona } from "@/lib/eb-magalona";
-import { calculateAgeFromBirthDate, isPhilippinesCountry, validateBusinessIdentityFormats } from "@/lib/business-rules";
+import { isPhilippinesCountry, validateBusinessIdentityFormats } from "@/lib/business-rules";
 import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
 import {
   EB_MAGALONA_CITY,
@@ -509,21 +509,7 @@ export function RenewalApplicationForm() {
     }
 
     if (field === "birthDate") {
-      const birthDateRaw = normalizedInfo.birthDate?.trim() ?? "";
-      if (!birthDateRaw) {
-        nextErrors.birthDate = "Birthdate is required.";
-      } else {
-        try {
-          const computedAge = calculateAgeFromBirthDate(birthDateRaw);
-          if (computedAge < 18 || computedAge > 120) {
-            nextErrors.birthDate = "Birthdate results in an age outside 18 to 120.";
-          } else if (nextErrors.birthDate !== "This already exist") {
-            delete nextErrors.birthDate;
-          }
-        } catch (error) {
-          nextErrors.birthDate = error instanceof Error ? error.message : "Birthdate is invalid.";
-        }
-      }
+      // Birthdate removed from Renewal form per Phase 1.
     }
 
     if (field === "grossProfit") {
@@ -702,19 +688,7 @@ export function RenewalApplicationForm() {
 
       Object.assign(nextErrors, validateFixedEbMagalonaAddress(normalizedInfo));
 
-      const birthDateRaw = normalizedInfo.birthDate?.trim() ?? "";
-      if (!birthDateRaw) {
-        nextErrors.birthDate = "Birthdate is required.";
-      } else {
-        try {
-          const computedAge = calculateAgeFromBirthDate(birthDateRaw);
-          if (computedAge < 18 || computedAge > 120) {
-            nextErrors.birthDate = "Birthdate results in an age outside 18 to 120.";
-          }
-        } catch (error) {
-          nextErrors.birthDate = error instanceof Error ? error.message : "Birthdate is invalid.";
-        }
-      }
+      // Birthdate validation removed from Renewal form per Phase 1.
 
       const grossRaw = normalizedInfo.grossProfit?.trim() ?? "";
       if (!grossRaw) {
@@ -823,29 +797,7 @@ export function RenewalApplicationForm() {
         return null;
       }
 
-      const birthDateRaw = info.birthDate?.trim() ?? "";
-      if (!birthDateRaw) {
-        setFieldErrors({ birthDate: "Birthdate is required." });
-        setStatusMessage({ kind: "error", text: "Birthdate is required." });
-        setSubmitting(false);
-        return null;
-      }
-
-      try {
-        const computedAge = calculateAgeFromBirthDate(birthDateRaw);
-        if (computedAge < 18 || computedAge > 120) {
-          setFieldErrors({ birthDate: "Birthdate results in an age outside 18 to 120." });
-          setStatusMessage({ kind: "error", text: "Birthdate results in an age outside 18 to 120." });
-          setSubmitting(false);
-          return null;
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Birthdate is invalid.";
-        setFieldErrors({ birthDate: message });
-        setStatusMessage({ kind: "error", text: message });
-        setSubmitting(false);
-        return null;
-      }
+      // Birthdate validation removed from Renewal form per Phase 1.
 
       const grossRaw = info.grossProfit?.trim() ?? "";
       if (!grossRaw || parsePositiveAmount(grossRaw) == null) {

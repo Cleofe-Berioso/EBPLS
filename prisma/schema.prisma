@@ -104,6 +104,8 @@ model User {
   systemFeeSettingUpdates SystemFeeSetting[] @relation("SystemFeeSettingUpdatedBy")
   renewalExtensionUpdates RenewalExtension[] @relation("RenewalExtensionUpdatedBy")
   smsDeliveryLogs SmsDeliveryLog[] @relation("SmsDeliveryLogApplicant")
+  reassessmentRequests FeeAssessment[] @relation("FeeAssessmentReassessmentRequestedBy")
+  jitNoPermitRecords JitNoPermitRecord[] @relation("JitNoPermitRecordCreatedBy")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -439,14 +441,18 @@ model FeeAssessment {
   remarks               String?
   computedById          String?
   generatedAt           DateTime?
+  reassessmentRequestedAt DateTime?
+  reassessmentRequestedById String?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
   application  BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   computedBy   User?               @relation("AssessmentComputedBy", fields: [computedById], references: [id], onDelete: SetNull)
+  reassessmentRequestedBy User?    @relation("FeeAssessmentReassessmentRequestedBy", fields: [reassessmentRequestedById], references: [id], onDelete: SetNull)
   lineItems    FeeAssessmentLineItem[]
 
   @@index([applicationId])
+  @@index([reassessmentRequestedAt])
 }
 
 model FeeAssessmentLineItem {
@@ -540,6 +546,26 @@ model RenewalExtension {
   updatedBy User? @relation("RenewalExtensionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([isActive, startDate, endDate])
+}
+
+model JitNoPermitRecord {
+  id             String   @id @default(cuid())
+  businessName   String
+  personAttended String
+  lineOfBusiness String
+  remarks        String?
+  latitude       Float
+  longitude      Float
+  address        String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  createdBy User @relation("JitNoPermitRecordCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([createdById, createdAt])
+  @@index([businessName])
+  @@index([createdAt])
 }
 
 model AuditLog {

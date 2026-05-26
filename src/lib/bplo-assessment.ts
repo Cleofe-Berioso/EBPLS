@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createAuditLog } from "@/lib/audit-log";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { assertStatusTransition } from "@/lib/application-status";
 import { computeMayorsPermitFee } from "@/lib/fee-computation";
@@ -91,6 +92,7 @@ export interface AssessmentFeeRow {
   lastUpdated: string;
   hasAssessment: boolean;
   assessmentStatus: "DRAFT" | "GENERATED" | null;
+  reassessmentRequested?: boolean;
 }
 
 export interface AssessmentLineItem {
@@ -169,6 +171,7 @@ export interface SavedAssessment {
   createdAt: string;
   updatedAt: string;
   lineItems: AssessmentLineItem[];
+  reassessmentRequestedAt: string | null;
 }
 
 export interface AssessmentInput {
@@ -251,6 +254,7 @@ function toSavedAssessment(row: any): SavedAssessment {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lineItems: (row.lineItems ?? []).map(toAssessmentLineItem),
+    reassessmentRequestedAt: row.reassessmentRequestedAt ? (row.reassessmentRequestedAt as Date).toISOString() : null,
   };
 }
 
@@ -626,7 +630,7 @@ export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[
     include: {
       applicant: { select: { name: true, email: true } },
       businessRecord: { select: { businessName: true } },
-      feeAssessment: { select: { status: true } },
+      feeAssessment: { select: { status: true, reassessmentRequestedAt: true } },
     },
     orderBy: [{ updatedAt: "desc" }],
   });
@@ -643,6 +647,7 @@ export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[
     lastUpdated: toDateOnly(row.updatedAt),
     hasAssessment: row.feeAssessment !== null,
     assessmentStatus: (row.feeAssessment?.status as "DRAFT" | "GENERATED" | null) ?? null,
+    reassessmentRequested: Boolean(row.feeAssessment?.reassessmentRequestedAt),
   }));
 }
 
@@ -761,7 +766,13 @@ async function persistAssessment(
   // Fetch application outside transaction for pre-validation
   const preCheckApplication = await prisma.businessApplication.findUnique({
     where: { id: applicationId },
-    select: { id: true, status: true, applicationType: true, formData: true, feeAssessment: { select: { id: true, assessmentNumber: true, status: true } } },
+    select: {
+      id: true,
+      status: true,
+      applicationType: true,
+      formData: true,
+      feeAssessment: { select: { id: true, assessmentNumber: true, status: true, reassessmentRequestedAt: true } },
+    },
   });
 
   if (!preCheckApplication) {
@@ -888,6 +899,8 @@ async function persistAssessment(
         remarks: sanitized.remarks ?? null,
         computedById: bploUserId,
         generatedAt: mode === "GENERATED" ? now : null,
+        reassessmentRequestedAt: null,
+        reassessmentRequestedById: null,
       },
       update: {
         status: mode,
@@ -911,6 +924,7 @@ async function persistAssessment(
         remarks: sanitized.remarks ?? null,
         computedById: bploUserId,
         generatedAt: mode === "GENERATED" ? now : null,
+        ...(mode === "GENERATED" ? { reassessmentRequestedAt: null, reassessmentRequestedById: null } : {}),
       },
     });
 
@@ -970,9 +984,26 @@ async function persistAssessment(
       },
     });
 
+    // If reassessment was previously requested and BPLO generated/updated the TOP, record resolution
+    if (mode === "GENERATED" && application.feeAssessment?.reassessmentRequestedAt) {
+      await tx.applicationHistory.create({
+        data: {
+          applicationId,
+          actorId: bploUserId,
+          actorRole: "BPLO",
+          fromStatus: application.status as DbApplicationStatus,
+          toStatus: "APPROVED_FOR_PAYMENT",
+          remarks: "Re-assessment request reviewed and resolved by BPLO. TOP updated.",
+        },
+      });
+      // Audit log entry (non-blocking outside transaction)
+    }
+
     // Return saved ID for post-transaction fetch
     return saved.id;
   }, { maxWait: 10000, timeout: 10000 });
+
+  const hadReassessment = Boolean(preCheckApplication?.feeAssessment?.reassessmentRequestedAt);
 
   // Fetch complete assessment after transaction completes
   const savedWithLineItems = await prisma.feeAssessment.findUniqueOrThrow({
@@ -983,6 +1014,19 @@ async function persistAssessment(
       },
     },
   });
+
+  if (hadReassessment && mode === "GENERATED") {
+    void createAuditLog({
+      actorId: bploUserId,
+      actorRole: "BPLO",
+      action: "REASSESSMENT_RESOLVED",
+      module: "ASSESSMENT",
+      entityType: "FEE_ASSESSMENT",
+      entityId: savedWithLineItems.assessmentNumber ?? null,
+      applicationId: applicationId,
+      description: "BPLO reviewed and resolved a previously requested reassessment. TOP regenerated/updated.",
+    });
+  }
 
   return toSavedAssessment(savedWithLineItems);
 }

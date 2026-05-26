@@ -627,7 +627,7 @@ export function BusinessInformationFields({
 
         <FormField
           label="Nationality"
-          hint="Select the owner's nationality or country of origin."
+          hint="Select the owner/applicant nationality."
           required
           error={fieldErrors.nationality}
         >

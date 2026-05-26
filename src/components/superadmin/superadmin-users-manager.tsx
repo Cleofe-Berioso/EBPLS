@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -9,6 +9,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Modal } from "@/components/ui/modal";
 
 type RoleFilter = "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
 type StatusFilter = "ALL" | "ACTIVE" | "DISABLED";
@@ -93,6 +95,9 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
     temporaryPassword: "",
     confirmPassword: "",
   });
+
+  const createBploFormId = useId();
+  const resetPasswordFormId = useId();
 
   async function loadUsers(next?: { search?: string; role?: RoleFilter; status?: StatusFilter }) {
     const search = next?.search ?? searchApplied;
@@ -514,202 +519,189 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         }
       />
 
-      {showCreateBplo ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="app-surface w-full max-w-lg p-5">
-            <h3 className="text-lg font-semibold text-slate-900">Create BPLO Account</h3>
-            <p className="mt-1 text-sm text-slate-600">Role is fixed to BPLO for controlled account provisioning.</p>
-
-            <form className="mt-4 space-y-3" onSubmit={submitCreateBplo}>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Full Name</label>
-                <input
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
-                  required
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
-                <input
-                  value={createForm.email}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
-                  required
-                  type="email"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Temporary Password</label>
-                  <input
-                    value={createForm.password}
-                    onChange={(e) => setCreateForm((prev) => ({ ...prev, password: e.target.value }))}
-                    required
-                    minLength={8}
-                    type="password"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Confirm Password</label>
-                  <input
-                    value={createForm.confirmPassword}
-                    onChange={(e) => setCreateForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                    required
-                    minLength={8}
-                    type="password"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Role</label>
-                <input
-                  value="BPLO"
-                  disabled
-                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm font-semibold text-slate-700"
-                />
-              </div>
-
-              <div className="flex flex-wrap justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  className={actionButtonStyles("secondary", "sm")}
-                  onClick={() => setShowCreateBplo(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className={actionButtonStyles("primary", "sm")}>Create BPLO Account</button>
-              </div>
-            </form>
+      <Modal
+        open={showCreateBplo}
+        title="Create BPLO Account"
+        description="Role is fixed to BPLO for controlled account provisioning."
+        onClose={() => setShowCreateBplo(false)}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className={actionButtonStyles("secondary", "sm")}
+              onClick={() => setShowCreateBplo(false)}
+            >
+              Cancel
+            </button>
+            <button type="submit" form={createBploFormId} className={actionButtonStyles("primary", "sm")}>Create BPLO Account</button>
           </div>
-        </div>
-      ) : null}
+        }
+      >
+        <form id={createBploFormId} className="space-y-3" onSubmit={submitCreateBplo}>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Full Name</label>
+            <input
+              value={createForm.name}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
+              required
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+            />
+          </div>
 
-      {disableTarget ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="app-surface w-full max-w-lg p-5">
-            <h3 className="text-lg font-semibold text-slate-900">Disable Account</h3>
-            <p className="mt-1 text-sm text-slate-600">
-              Confirm disabling <span className="font-semibold">{disableTarget.email}</span>.
-            </p>
-            <p className="mt-1 text-xs text-slate-500">Role: {disableTarget.role}</p>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
+            <input
+              value={createForm.email}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
+              required
+              type="email"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+            />
+          </div>
 
-            <div className="mt-4">
-              <label className="mb-1 block text-sm font-medium text-slate-700">Reason (optional)</label>
-              <textarea
-                value={disableReason}
-                onChange={(e) => setDisableReason(e.target.value)}
-                rows={3}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Temporary Password</label>
+              <input
+                value={createForm.password}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, password: e.target.value }))}
+                required
+                minLength={8}
+                type="password"
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                placeholder="Enter optional reason for disable action"
               />
             </div>
-
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                className={actionButtonStyles("secondary", "sm")}
-                onClick={() => {
-                  setDisableTarget(null);
-                  setDisableReason("");
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={actionButtonStyles("warning", "sm")}
-                onClick={() => void disableUser(disableTarget)}
-              >
-                Confirm Disable
-              </button>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Confirm Password</label>
+              <input
+                value={createForm.confirmPassword}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                required
+                minLength={8}
+                type="password"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+              />
             </div>
           </div>
-        </div>
-      ) : null}
 
-      {viewedUser ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="app-surface w-full max-w-md p-5">
-            <h3 className="text-lg font-semibold text-slate-900">User Details</h3>
-            <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50/85 p-3 text-sm text-slate-700">
-              <p><span className="font-semibold">Name:</span> {viewedUser.name}</p>
-              <p><span className="font-semibold">Email:</span> {viewedUser.email}</p>
-              <p><span className="font-semibold">Role:</span> {viewedUser.role}</p>
-              <p><span className="font-semibold">Status:</span> {viewedUser.status}</p>
-              <p><span className="font-semibold">Created:</span> {formatDate(viewedUser.createdAt)}</p>
-              <p><span className="font-semibold">Updated:</span> {formatDate(viewedUser.updatedAt)}</p>
-              <p><span className="font-semibold">Last Login:</span> -</p>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                className={actionButtonStyles("secondary", "sm")}
-                onClick={() => {
-                  setViewedUser(null);
-                }}
-              >
-                Close
-              </button>
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Role</label>
+            <input
+              value="BPLO"
+              disabled
+              className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm font-semibold text-slate-700"
+            />
           </div>
+        </form>
+      </Modal>
+
+      <ConfirmModal
+        open={Boolean(disableTarget)}
+        title="Disable Account"
+        message={disableTarget ? <><span>Confirm disabling <span className="font-semibold">{disableTarget.email}</span>.</span><p className="mt-1 text-xs text-slate-500">Role: {disableTarget.role}</p></> : undefined}
+        confirmLabel="Confirm Disable"
+        cancelLabel="Cancel"
+        variant="danger"
+        onClose={() => {
+          setDisableTarget(null);
+          setDisableReason("");
+        }}
+        onConfirm={() => void disableUser(disableTarget as UserRow)}
+      >
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Reason (optional)</label>
+          <textarea
+            value={disableReason}
+            onChange={(e) => setDisableReason(e.target.value)}
+            rows={3}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+            placeholder="Enter optional reason for disable action"
+          />
         </div>
-      ) : null}
+      </ConfirmModal>
 
-      {showResetPassword && resetUser ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="app-surface w-full max-w-lg p-5">
-            <h3 className="text-lg font-semibold text-slate-900">Reset Temporary Password</h3>
-            <p className="mt-1 text-sm text-slate-600">Set a temporary password for {resetUser.email}.</p>
-
-            <form className="mt-4 space-y-3" onSubmit={submitResetPassword}>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Temporary Password</label>
-                <input
-                  value={resetForm.temporaryPassword}
-                  onChange={(e) => setResetForm((prev) => ({ ...prev, temporaryPassword: e.target.value }))}
-                  required
-                  minLength={8}
-                  type="password"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Confirm Password</label>
-                <input
-                  value={resetForm.confirmPassword}
-                  onChange={(e) => setResetForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                  required
-                  minLength={8}
-                  type="password"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                />
-              </div>
-
-              <div className="flex flex-wrap justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  className={actionButtonStyles("secondary", "sm")}
-                  onClick={() => {
-                    setShowResetPassword(false);
-                    setResetUser(null);
-                    setResetForm({ temporaryPassword: "", confirmPassword: "" });
-                  }}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className={actionButtonStyles("primary", "sm")}>Reset Password</button>
-              </div>
-            </form>
+      <Modal
+        open={Boolean(viewedUser)}
+        title="User Details"
+        onClose={() => setViewedUser(null)}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className={actionButtonStyles("secondary", "sm")}
+              onClick={() => {
+                setViewedUser(null);
+              }}
+            >
+              Close
+            </button>
           </div>
-        </div>
-      ) : null}
+        }
+      >
+        {viewedUser ? (
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/85 p-3 text-sm text-slate-700">
+            <p><span className="font-semibold">Name:</span> {viewedUser.name}</p>
+            <p><span className="font-semibold">Email:</span> {viewedUser.email}</p>
+            <p><span className="font-semibold">Role:</span> {viewedUser.role}</p>
+            <p><span className="font-semibold">Status:</span> {viewedUser.status}</p>
+            <p><span className="font-semibold">Created:</span> {formatDate(viewedUser.createdAt)}</p>
+            <p><span className="font-semibold">Updated:</span> {formatDate(viewedUser.updatedAt)}</p>
+            <p><span className="font-semibold">Last Login:</span> -</p>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={showResetPassword && Boolean(resetUser)}
+        title="Reset Temporary Password"
+        description={resetUser ? `Set a temporary password for ${resetUser.email}.` : undefined}
+        onClose={() => {
+          setShowResetPassword(false);
+          setResetUser(null);
+          setResetForm({ temporaryPassword: "", confirmPassword: "" });
+        }}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className={actionButtonStyles("secondary", "sm")}
+              onClick={() => {
+                setShowResetPassword(false);
+                setResetUser(null);
+                setResetForm({ temporaryPassword: "", confirmPassword: "" });
+              }}
+            >
+              Cancel
+            </button>
+            <button type="submit" form={resetPasswordFormId} className={actionButtonStyles("primary", "sm")}>Reset Password</button>
+          </div>
+        }
+      >
+        <form id={resetPasswordFormId} className="space-y-3" onSubmit={submitResetPassword}>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Temporary Password</label>
+            <input
+              value={resetForm.temporaryPassword}
+              onChange={(e) => setResetForm((prev) => ({ ...prev, temporaryPassword: e.target.value }))}
+              required
+              minLength={8}
+              type="password"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Confirm Password</label>
+            <input
+              value={resetForm.confirmPassword}
+              onChange={(e) => setResetForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+              required
+              minLength={8}
+              type="password"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+            />
+          </div>
+        </form>
+      </Modal>
     </section>
   );
 }

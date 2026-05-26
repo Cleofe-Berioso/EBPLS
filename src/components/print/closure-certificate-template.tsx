@@ -43,23 +43,23 @@ export function ClosureCertificateTemplate({ certificate }: ClosureCertificateTe
       documentNumber={certificate.certificateNumber}
       issuedAtLabel={dateLabel(certificate.dateIssued)}
     >
-      <div className="space-y-6 text-slate-900">
-        <header className="space-y-1 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em]">{certificate.heading.republic}</p>
-          <p className="text-sm font-semibold uppercase tracking-[0.12em]">{certificate.heading.province}</p>
-          <p className="text-sm font-semibold uppercase tracking-[0.12em]">{certificate.heading.municipality}</p>
-          <p className="text-base font-semibold uppercase tracking-[0.12em]">{certificate.heading.office}</p>
-          <h2 className="pt-2 text-2xl font-bold uppercase tracking-[0.16em]">{certificate.heading.title}</h2>
+      <div className="space-y-6 text-black">
+        <header className="text-center">
+          <p className="text-sm font-semibold uppercase">{certificate.heading.republic}</p>
+          <p className="text-sm font-semibold uppercase">{certificate.heading.province}</p>
+          <p className="text-sm font-semibold uppercase">{certificate.heading.municipality}</p>
+          <p className="text-base font-semibold uppercase">{certificate.heading.office}</p>
+          <h2 className="pt-2 text-lg font-bold uppercase">{certificate.heading.title}</h2>
         </header>
 
-        <section className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-          <p className="text-sm"><span className="font-semibold">Certificate Number:</span> {certificate.certificateNumber}</p>
-          <p className="text-sm"><span className="font-semibold">Application Number:</span> {certificate.applicationNumber}</p>
-          <p className="text-sm"><span className="font-semibold">Date Issued:</span> {dateLabel(certificate.dateIssued)}</p>
-          <p className="text-sm"><span className="font-semibold">Effective Date of Closure:</span> {dateLabel(certificate.effectiveClosureDate)}</p>
+        <section aria-label="Certificate details">
+          <p className="text-sm"><strong>Certificate Number:</strong> {certificate.certificateNumber}</p>
+          <p className="text-sm"><strong>Application Number:</strong> {certificate.applicationNumber}</p>
+          <p className="text-sm"><strong>Date Issued:</strong> {dateLabel(certificate.dateIssued)}</p>
+          <p className="text-sm"><strong>Effective Date of Closure:</strong> {dateLabel(certificate.effectiveClosureDate)}</p>
         </section>
 
-        <section className="rounded-xl border border-slate-200 p-4">
+        <section>
           <InfoRow label="Business Name" value={certificate.businessName} />
           <InfoRow label="Trade Name" value={certificate.tradeName} />
           <InfoRow label="Owner / President" value={certificate.ownerOrPresident} />
@@ -76,18 +76,16 @@ export function ClosureCertificateTemplate({ certificate }: ClosureCertificateTe
           <InfoRow label="Total Paid" value={money(certificate.totalPaid)} />
         </section>
 
-        <section className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-          <p className="text-sm font-semibold text-blue-900">Certification Statement</p>
-          <p className="mt-2 text-sm leading-6 text-blue-900">{certificate.certificationStatement}</p>
+        <section>
+          <p className="text-sm font-semibold">Certification Statement</p>
+          <p className="mt-2 text-sm leading-6">{certificate.certificationStatement}</p>
         </section>
 
-        <section className="rounded-xl border border-dashed border-slate-300 p-4">
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-700">Verification</p>
-          <div className="mt-3 flex items-center gap-4">
-            <div className="flex h-20 w-20 items-center justify-center border border-slate-300 bg-slate-100 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-              QR
-            </div>
-            <p className="text-sm text-slate-700">{certificate.verificationPlaceholder}</p>
+        <section>
+          <p className="text-sm font-semibold">Verification</p>
+          <div className="mt-2 flex items-center gap-4">
+            <div className="flex h-20 w-20 items-center justify-center border border-black text-[10px] font-semibold">QR</div>
+            <p className="text-sm">{certificate.verificationPlaceholder}</p>
           </div>
         </section>
 

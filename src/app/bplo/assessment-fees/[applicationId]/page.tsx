@@ -88,6 +88,14 @@ export default async function BploAssessmentDetailPage({
         }
       />
 
+      {detail.assessment?.reassessmentRequestedAt ? (
+        <div className="px-6">
+          <span className="inline-block rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+            Re-assessment Requested
+          </span>
+        </div>
+      ) : null}
+
       <AssessmentFeeForm detail={detail} />
     </section>
   );

@@ -5,9 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
 import {
-  calculateAgeFromBirthDate,
-  isCorporation,
-  isCorporationOwnershipClassification,
   isPhilippinesCountry,
   validateBusinessIdentityFormats,
   BUSINESS_ACTIVITY_OPTIONS,
@@ -111,7 +108,6 @@ const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   ownerFirstName: "First Name",
   ownerSurname: "Last Name",
   ownerSuffix: "Suffix",
-  birthDate: "Birthdate",
   ownerAge: "Owner Age",
   capitalInvestment: "Capital Investment",
   barangay: "Barangay",
@@ -252,8 +248,8 @@ const FIELD_NAVIGATION_MAP: Record<NewApplicationFieldKey, FieldNavigationConfig
   ownerMiddleName: { step: 0, label: "Owner / President Middle Name", selector: '[data-field-key="ownerMiddleName"]' },
   ownerSurname: { step: 0, label: "Owner / President Surname", selector: '[data-field-key="ownerSurname"]' },
   ownerSuffix: { step: 0, label: "Owner / President Suffix", selector: '[data-field-key="ownerSuffix"]' },
-  birthDate: { step: 0, label: "Birthdate", selector: '[data-field-key="birthDate"]' },
-  ownerAge: { step: 0, label: "Owner Age", selector: '[data-field-key="birthDate"]' },
+  birthDate: { step: 0, label: "Birthdate", selector: '[data-field-key="ownerFirstName"]' },
+  ownerAge: { step: 0, label: "Owner Age", selector: '[data-field-key="ownerFirstName"]' },
   sex: { step: 0, label: "Sex", selector: '[data-field-key="sex"]' },
   nationality: { step: 0, label: "Nationality", selector: '[data-field-key="nationality"]' },
   phone: { step: 0, label: "Contact Number", selector: '[data-field-key="phone"]' },
@@ -554,7 +550,6 @@ const READ_ONLY_LOCKED_FIELDS: Array<keyof BusinessInfo> = [
   "ownerMiddleName",
   "ownerSurname",
   "ownerSuffix",
-  "birthDate",
   "ownerAge",
   "sex",
   "nationality",
@@ -604,6 +599,20 @@ async function parseApiResponseSafely(response: Response): Promise<Record<string
       rawResponse: responseText.slice(0, 300),
     };
   }
+}
+
+function buildSubmitValidationMessage(params: { missingFields: string[]; missingDocuments: string[] }): string {
+  const parts: string[] = [];
+
+  if (params.missingFields.length > 0) {
+    parts.push(`Missing required fields: ${params.missingFields.join(", ")}`);
+  }
+
+  if (params.missingDocuments.length > 0) {
+    parts.push(`Missing required documents: ${params.missingDocuments.join(", ")}`);
+  }
+
+  return parts.join(" ");
 }
 
 export function NewApplicationForm() {
@@ -907,21 +916,7 @@ export function NewApplicationForm() {
     }
 
     if (field === "birthDate") {
-      const birthDateRaw = normalizedInfo.birthDate?.trim() ?? "";
-      if (!birthDateRaw) {
-        nextErrors.birthDate = "Birthdate is required.";
-      } else {
-        try {
-          const computedAge = calculateAgeFromBirthDate(birthDateRaw);
-          if (computedAge < 18 || computedAge > 120) {
-            nextErrors.birthDate = "Birthdate results in an age outside 18 to 120.";
-          } else if (nextErrors.birthDate !== "This already exist") {
-            delete nextErrors.birthDate;
-          }
-        } catch (error) {
-          nextErrors.birthDate = error instanceof Error ? error.message : "Birthdate is invalid.";
-        }
-      }
+      // Birthdate field removed from New application form per Phase 1.
     }
 
     if (field === "capitalInvestment") {
@@ -993,23 +988,7 @@ export function NewApplicationForm() {
       }
     }
 
-    if (currentStep === 0) {
-      const birthDateRaw = normalizedInfo.birthDate?.trim() ?? "";
-      if (!birthDateRaw) {
-        nextErrors.birthDate = "Birthdate is required.";
-      } else {
-        try {
-          const computedAge = calculateAgeFromBirthDate(birthDateRaw);
-          if (computedAge < 18 || computedAge > 120) {
-            nextErrors.birthDate = "Birthdate must result in an age between 18 and 120.";
-          } else if (nextErrors.birthDate !== "This already exist") {
-            delete nextErrors.birthDate;
-          }
-        } catch (error) {
-          nextErrors.birthDate = error instanceof Error ? error.message : "Birthdate is invalid.";
-        }
-      }
-    }
+    // Birthdate validation removed from New application form per Phase 1.
 
     if (currentStep === 1) {
       const capitalRaw = normalizedInfo.capitalInvestment?.trim() ?? "";
@@ -1202,6 +1181,14 @@ export function NewApplicationForm() {
       documents: Object.values(uploadedDocuments),
     });
 
+    if (process.env.NODE_ENV === "development") {
+      console.info("[NewApplicationForm] submit-nationality", {
+        selectedNationality: normalizeBusinessInfo(info).nationality,
+        payloadNationality: payload.formData.nationality,
+        applicationType: payload.applicationType,
+      });
+    }
+
     const hasPendingFiles = Object.keys(pendingDocuments).length > 0;
     const draftTargetUrl = applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications";
     const draftTargetMethod = applicationId ? "PATCH" : "POST";
@@ -1279,6 +1266,14 @@ export function NewApplicationForm() {
         mappedBackendFieldErrors[data.duplicateField] = "This already exist";
       }
 
+      const backendValidationMessage =
+        backendMissingFieldKeys.length > 0 || backendMissingDocuments.length > 0
+          ? buildSubmitValidationMessage({
+              missingFields: backendMissingFieldKeys.map((rawKey) => getFieldConfig(rawKey).label),
+              missingDocuments: backendMissingDocuments,
+            })
+          : null;
+
       if (Object.keys(mappedBackendFieldErrors).length > 0 || backendMissingDocuments.length > 0) {
         const summaryLabels = [
           ...backendMissingFieldKeys.map((rawKey) => getFieldConfig(rawKey).label),
@@ -1298,6 +1293,7 @@ export function NewApplicationForm() {
       setStatusMessage({
         kind: "error",
         text:
+          backendValidationMessage ??
           data.error ??
           data.message ??
           `Unable to save application (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).${detail}`,
@@ -1489,29 +1485,7 @@ export function NewApplicationForm() {
             fieldErrors={fieldErrors}
             enableCascadingAddress
           />
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <FormField
-              label="Owner / President Birthdate"
-              hint="Required. Used to compute and verify owner age."
-              required
-              error={fieldErrors.birthDate}
-            >
-              <input
-                data-field-key="birthDate"
-                type="date"
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
-                value={info.birthDate ?? ""}
-                disabled={isReadOnly}
-                max={new Date().toISOString().split("T")[0]}
-                onBlur={() => validateFieldOnBlur("birthDate")}
-                onChange={(event) =>
-                  setInfo((current) =>
-                    normalizeBusinessInfo({ ...current, birthDate: event.target.value })
-                  )
-                }
-              />
-            </FormField>
-          </div>
+          <div className="mt-4" />
           </div>
         </SectionCard>
       ) : null}
