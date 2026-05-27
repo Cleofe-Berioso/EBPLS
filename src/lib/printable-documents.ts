@@ -62,6 +62,7 @@ export interface BusinessPermitPrintData {
   };
   permitNumber: string;
   applicationNumber: string;
+  classification: "NEW" | "RENEWAL";
   taxYear: string;
   dateIssued: string | null;
   validUntil: string | null;
@@ -73,16 +74,16 @@ export interface BusinessPermitPrintData {
   tin: string;
   businessAddress: string;
   natureOfBusiness: string;
+  businessActivity: string;
   topNumber: string;
   orNumber: string;
   datePaid: string | null;
-  annualAmountPaid: number;
+  amountPaid: number;
   signatories: {
     bploOfficer: string;
     municipalTreasurer: string;
     mayor: string;
   };
-  verificationPlaceholder: string;
   legalNote: string;
 }
 
@@ -198,6 +199,7 @@ function toPrintableSnapshot(app: {
 
 function toBusinessPermitPrintData(app: {
   applicationNumber: string;
+  applicationType: ApplicationTypeForPrint;
   formData: unknown;
   permitIssuance: {
     documentNumber: string;
@@ -206,6 +208,7 @@ function toBusinessPermitPrintData(app: {
   feeAssessment: {
     assessmentNumber: string;
     annualAssessedAmount: any;
+    amountPaid: any;
   } | null;
   paymentReferences: Array<{
     transactionNumber: string;
@@ -214,6 +217,7 @@ function toBusinessPermitPrintData(app: {
 }): BusinessPermitPrintData {
   const issuedAt = app.permitIssuance?.issuedAt ?? null;
   const formData = app.formData;
+  const businessActivity = readText(formData, "businessActivity", readText(formData, "lineOfBusiness"));
 
   return {
     heading: {
@@ -221,10 +225,11 @@ function toBusinessPermitPrintData(app: {
       province: readText(formData, "province", "Province"),
       municipality: readText(formData, "cityMunicipality", "Municipality"),
       office: "Office of the Mayor",
-      title: "MAYOR'S / BUSINESS PERMIT",
+      title: "MAYOR'S BUSINESS PERMIT",
     },
     permitNumber: app.permitIssuance?.documentNumber ?? "-",
     applicationNumber: app.applicationNumber,
+    classification: app.applicationType === "RENEWAL" ? "RENEWAL" : "NEW",
     taxYear: toYear(issuedAt),
     dateIssued: toIsoOrNull(issuedAt),
     validUntil: toPermitExpiry(issuedAt),
@@ -236,16 +241,16 @@ function toBusinessPermitPrintData(app: {
     tin: readText(formData, "tin"),
     businessAddress: readText(formData, "businessAddress"),
     natureOfBusiness: readText(formData, "lineOfBusiness", readText(formData, "businessActivity")),
+    businessActivity,
     topNumber: app.feeAssessment?.assessmentNumber ?? "-",
     orNumber: app.paymentReferences[0]?.transactionNumber ?? "-",
     datePaid: toIsoOrNull(app.paymentReferences[0]?.paymentDate),
-    annualAmountPaid: toMoneyNumber(app.feeAssessment?.annualAssessedAmount),
+    amountPaid: toMoneyNumber(app.feeAssessment?.amountPaid),
     signatories: {
       bploOfficer: "BPLO Officer",
       municipalTreasurer: "Municipal Treasurer",
       mayor: "Mayor",
     },
-    verificationPlaceholder: "Verification QR placeholder",
     legalNote: "This permit must be displayed conspicuously at the place of business.",
   };
 }
@@ -441,16 +446,20 @@ export function canBploPrintDocument(
   const reasons: string[] = [];
   const documentType = getPrintableDocumentType(application.applicationType);
 
-  if (application.status !== "FOR_RELEASE" && application.status !== "RELEASED") {
-    reasons.push("Application must be FOR_RELEASE or RELEASED.");
+  if (application.status !== "RELEASED") {
+    reasons.push("Application must be RELEASED before document printing.");
   }
 
   if (!application.payment?.hasVerifiedPaymentReference) {
     reasons.push("Verified payment is required before document printing.");
   }
 
-  if (!hasIssuanceRecord(application) && !isDocumentReleaseReady(application)) {
-    reasons.push("Permit issuance record must exist or be release-ready.");
+  if (!hasIssuanceRecord(application)) {
+    reasons.push("Released permit issuance record is required before document printing.");
+  }
+
+  if (application.permitIssuance?.status !== "RELEASED") {
+    reasons.push("Permit issuance must be RELEASED before document printing.");
   }
 
   return {
@@ -477,6 +486,10 @@ export function canApplicantPrintDocument(
 
   if (!hasIssuanceRecord(application)) {
     reasons.push("Permit issuance record is required for applicant printing.");
+  }
+
+  if (application.permitIssuance?.status !== "RELEASED") {
+    reasons.push("Permit issuance must be RELEASED for applicant printing.");
   }
 
   if (!application.payment?.hasVerifiedPaymentReference) {
