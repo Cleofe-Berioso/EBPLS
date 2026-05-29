@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, PanelLeftClose, PanelLeftOpen, UserCircle2, X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, UserCircle2, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ApplicantSidebar } from "@/components/applicant/applicant-sidebar";
+import { NotificationDropdown } from "@/components/applicant/notification-dropdown";
 import { actionButtonStyles } from "@/components/ui/action-button";
 
 const PROFILE_PICTURE_SETUP_PATH = "/applicant/profile-picture/setup";
@@ -221,7 +222,7 @@ export function ApplicantLayoutClient({
 
       <div className={`min-w-0 transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-72"}`}>
         <header className="app-header sticky top-0 z-30">
-          <div className="flex min-h-[76px] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex min-h-[72px] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
@@ -242,16 +243,14 @@ export function ApplicantLayoutClient({
                 {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               </button>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Applicant Portal</p>
-                <h1 className="truncate text-base font-semibold text-slate-900 sm:text-lg">Welcome, {userName}</h1>
-                <p className="truncate text-sm text-slate-500">Status-focused filing workspace</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Applicant Portal</p>
+                <h1 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">Welcome, {userName}</h1>
+                <p className="truncate text-sm text-slate-600">Track applications, payments, and permit status.</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600">
-                <Bell className="h-4 w-4" />
-              </span>
+              <NotificationDropdown />
               <div className="hidden min-w-0 text-right sm:block">
                 <p className="truncate text-sm font-semibold text-slate-900">{userName}</p>
                 <p className="truncate text-xs text-slate-500">Applicant Portal</p>
@@ -260,11 +259,11 @@ export function ApplicantLayoutClient({
                 <img
                   src={profileImageUrl}
                   alt={`${userName} profile picture`}
-                  className="h-10 w-10 rounded-xl object-cover ring-1 ring-emerald-100"
+                  className="h-10 w-10 rounded-xl object-cover ring-1 ring-emerald-100 shadow-sm"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shadow-sm">
                   <UserCircle2 className="h-5 w-5" />
                 </span>
               )}
@@ -280,7 +279,7 @@ export function ApplicantLayoutClient({
           </div>
         </header>
 
-        <main className="app-shell-main min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+        <main className="app-shell-main min-w-0 px-4 pb-8 pt-5 sm:px-6 sm:pb-10 sm:pt-6 lg:px-8 lg:pb-12">
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>

@@ -20,8 +20,8 @@ export function PageHeader({
       <div className="min-w-0 space-y-2">
         {eyebrow ? (
           <p
-            className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${
-              eyebrowClassName ?? "text-emerald-700"
+            className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${
+              eyebrowClassName ?? "text-slate-600"
             }`}
           >
             {eyebrow}

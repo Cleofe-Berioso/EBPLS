@@ -91,37 +91,37 @@ function getStateMeta(state: StepState) {
     case "current":
       return {
         pill: "Current stage",
-        pillClassName: "border-emerald-200 bg-emerald-100 text-emerald-800",
-        containerClassName: "border-emerald-200 bg-emerald-50/70",
+        pillClassName: "border-emerald-200 bg-emerald-50 text-emerald-800",
+        containerClassName: "border-emerald-200 bg-white",
         labelClassName: "text-emerald-950",
-        circleClassName: "border-emerald-600 bg-white text-emerald-700 ring-4 ring-emerald-100",
+        circleClassName: "border-emerald-600 bg-white text-emerald-700 ring-2 ring-emerald-100",
         icon: null,
       };
     case "released":
       return {
         pill: "Released",
-        pillClassName: "border-emerald-200 bg-emerald-100 text-emerald-800",
-        containerClassName: "border-emerald-200 bg-emerald-50/70",
+        pillClassName: "border-emerald-200 bg-emerald-50 text-emerald-800",
+        containerClassName: "border-emerald-200 bg-white",
         labelClassName: "text-emerald-950",
-        circleClassName: "border-emerald-600 bg-emerald-600 text-white ring-4 ring-emerald-100 shadow-sm shadow-emerald-200",
+        circleClassName: "border-emerald-600 bg-emerald-600 text-white ring-2 ring-emerald-100 shadow-sm shadow-emerald-200",
         icon: Check,
       };
     case "returned":
       return {
         pill: "Returned",
         pillClassName: "border-amber-200 bg-amber-50 text-amber-700",
-        containerClassName: "border-amber-200 bg-amber-50/70",
+        containerClassName: "border-amber-200 bg-white",
         labelClassName: "text-amber-950",
-        circleClassName: "border-amber-400 bg-amber-100 text-amber-700 ring-4 ring-amber-100",
+        circleClassName: "border-amber-400 bg-amber-100 text-amber-700 ring-2 ring-amber-100",
         icon: AlertCircle,
       };
     case "rejected":
       return {
         pill: "Rejected",
         pillClassName: "border-rose-200 bg-rose-50 text-rose-700",
-        containerClassName: "border-rose-200 bg-rose-50/70",
+        containerClassName: "border-rose-200 bg-white",
         labelClassName: "text-rose-950",
-        circleClassName: "border-rose-500 bg-rose-100 text-rose-700 ring-4 ring-rose-100",
+        circleClassName: "border-rose-500 bg-rose-100 text-rose-700 ring-2 ring-rose-100",
         icon: X,
       };
     case "pending":
@@ -170,7 +170,7 @@ function StepCard({
   const meta = getStateMeta(state);
 
   return (
-    <li className={`relative flex gap-4 rounded-2xl border p-4 shadow-sm before:absolute before:left-5 before:top-10 before:bottom-[-0.75rem] before:border-l before:border-dashed before:border-slate-200 before:content-[''] last:before:hidden ${meta.containerClassName}`}>
+    <li className={`relative flex gap-4 rounded-xl border p-4 shadow-sm before:absolute before:left-5 before:top-10 before:bottom-[-0.5rem] before:border-l before:border-dashed before:border-slate-200 before:content-[''] last:before:hidden ${meta.containerClassName}`}>
       <div className="relative flex flex-col items-center pt-0.5">
         <StepCircle index={index} state={state} />
       </div>
@@ -203,9 +203,9 @@ function DesktopStep({
   const footerLabel = state === "current" ? "In progress" : state === "released" ? "Complete" : null;
 
   return (
-    <li className="relative flex min-h-full flex-col items-center px-2 text-center">
+    <li className="relative flex flex-col items-center px-2 text-center">
       <StepCircle index={index} state={state} />
-      <div className={`mt-3 flex min-h-[8.5rem] w-full flex-col items-center rounded-2xl border px-3 py-4 shadow-sm transition-colors duration-200 ${meta.containerClassName}`}>
+      <div className={`mt-3 flex min-h-[7.25rem] w-full flex-col items-center rounded-xl border px-3 py-3.5 shadow-sm transition-colors duration-200 ${meta.containerClassName}`}>
         <p className={`max-w-full text-sm font-semibold leading-6 ${meta.labelClassName}`}>{label}</p>
         <div className="mt-2 flex flex-col items-center gap-2">
           <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.04em] ${meta.pillClassName}`}>
@@ -246,19 +246,19 @@ export function ApplicationProgressOverview({
 
   return (
     <div className="space-y-5" aria-label={`Application progress for ${application.applicationNumber}`}>
-      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:grid-cols-3">
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Current Status</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">Current Status</p>
           <div className="mt-2">
             <StatusBadge status={application.status} />
           </div>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Application No</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">Application No</p>
           <p className="mt-2 font-mono text-sm font-semibold text-slate-900">{application.applicationNumber}</p>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Last Updated</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">Last Updated</p>
           <p className="mt-2 text-sm font-medium text-slate-900">{lastUpdated ?? submittedAt ?? "-"}</p>
         </div>
       </div>
@@ -306,7 +306,7 @@ export function ApplicationProgressOverview({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4 text-xs text-slate-600">
+      <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600">
         {[
           { label: "Completed", state: "completed" as const },
           { label: "Current Stage", state: "current" as const },

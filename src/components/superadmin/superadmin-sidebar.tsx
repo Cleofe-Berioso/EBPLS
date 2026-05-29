@@ -133,14 +133,6 @@ export function SuperAdminSidebar({
         })}
       </nav>
 
-      <div className={`border-t border-slate-200 px-4 py-4 ${collapsed ? "lg:hidden" : ""}`}>
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-xs text-slate-700 shadow-sm">
-          <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">Workflow Guide</p>
-          <p className="mt-2 leading-6">
-          Draft → Submitted → Under Review → Assessed → Approved for Payment → Paid → For Release → Released
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }

@@ -64,40 +64,42 @@ export function RegisterForm() {
   if (state.status === "success") {
     return (
       <div className="relative z-10 w-full max-w-md">
-        <div className="overflow-hidden rounded-[26px] border border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-8 py-8 text-center">
+        <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
+          <div className="bg-[#0b8754] px-8 py-8 text-center text-white">
             <div className="mb-4 flex justify-center">
-              <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+              <div className="rounded-full bg-white p-2 shadow-sm">
                 <Image
                   src="/images/logo.png"
                   alt="Municipality of Enrique B. Magalona Logo"
-                  width={80}
-                  height={80}
-                  className="h-20 w-20 object-contain"
+                  width={64}
+                  height={64}
+                  className="h-16 w-16 object-contain"
                 />
               </div>
             </div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Municipality eBPLS</p>
-              <h1 className="mt-2 text-2xl font-semibold text-slate-900">Registration Successful</h1>
-              <p className="mt-2 text-sm text-slate-600">Your applicant account is ready for sign in.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality eBPLS</p>
+            <h1 className="mt-2 text-2xl font-bold text-white">Registration Successful</h1>
+            <p className="mt-2 text-sm text-[#d1fae5]">Your applicant account is ready for sign in.</p>
           </div>
 
-          <div className="p-8 text-center space-y-4">
+          <div className="p-8">
             <InfoBanner
               title="Your account is ready"
               description="Your applicant account has been created. You can now sign in."
               variant="success"
             />
-            <Link
-              href="/login"
-              className="inline-block w-full rounded-xl border border-emerald-700 bg-emerald-700 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-800"
-            >
-              Go to Login
-            </Link>
+            <div className="mt-6 text-center">
+              <Link
+                href="/login"
+                className="inline-flex w-full items-center justify-center rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] shadow-sm"
+              >
+                Go to Login
+              </Link>
+            </div>
           </div>
 
-          <div className="border-t border-slate-200 bg-slate-50 px-8 py-4">
-            <p className="text-xs text-center text-slate-600">
+          <div className="bg-slate-50 px-8 py-4">
+            <p className="text-[10px] sm:text-xs text-center text-slate-500">
               © 2026 Municipality of Enrique B. Magalona - BPLO. All rights
               reserved.
             </p>
@@ -109,22 +111,22 @@ export function RegisterForm() {
 
   return (
     <div className="relative z-10 w-full max-w-md">
-      <div className="overflow-hidden rounded-[26px] border border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10">
-        <div className="border-b border-slate-200 bg-slate-50/80 px-8 py-8 text-center">
+      <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
+        <div className="bg-[#0b8754] px-8 py-8 text-center text-white">
           <div className="mb-4 flex justify-center">
-            <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+            <div className="rounded-full bg-white p-2 shadow-sm">
               <Image
                 src="/images/logo.png"
                 alt="Municipality of Enrique B. Magalona Logo"
-                width={80}
-                height={80}
-                className="h-20 w-20 object-contain"
+                width={64}
+                height={64}
+                className="h-16 w-16 object-contain"
               />
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Municipality eBPLS</p>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Create Account</h1>
-          <p className="mt-2 text-sm text-slate-600">Register as an applicant to start filing and tracking permits.</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality eBPLS</p>
+          <h1 className="mt-2 text-2xl font-bold text-white">Create Account</h1>
+          <p className="mt-2 text-sm text-[#d1fae5]">Register as an applicant to start filing and tracking permits.</p>
         </div>
 
         <div className="p-8">
@@ -142,7 +144,7 @@ export function RegisterForm() {
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-500" />
+                  <User className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="firstName"
@@ -150,7 +152,7 @@ export function RegisterForm() {
                   type="text"
                   autoComplete="given-name"
                   required
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
                   placeholder="Juan"
                 />
               </div>
@@ -163,14 +165,14 @@ export function RegisterForm() {
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-500" />
+                  <User className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="middleName"
                   name="middleName"
                   type="text"
                   autoComplete="additional-name"
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
                   placeholder="Santos"
                 />
               </div>
@@ -183,7 +185,7 @@ export function RegisterForm() {
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-500" />
+                  <User className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="lastName"
@@ -191,7 +193,7 @@ export function RegisterForm() {
                   type="text"
                   autoComplete="family-name"
                   required
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
                   placeholder="Dela Cruz"
                 />
               </div>
@@ -204,14 +206,14 @@ export function RegisterForm() {
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-500" />
+                  <User className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="suffix"
                   name="suffix"
                   type="text"
                   autoComplete="honorific-suffix"
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
                   placeholder="Jr."
                 />
               </div>
@@ -226,7 +228,7 @@ export function RegisterForm() {
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-500" />
+                  <Mail className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="email"
@@ -234,7 +236,7 @@ export function RegisterForm() {
                   type="email"
                   autoComplete="email"
                   required
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
                   placeholder="your.email@example.com"
                 />
               </div>
@@ -249,7 +251,7 @@ export function RegisterForm() {
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Phone className="h-5 w-5 text-slate-500" />
+                  <Phone className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="contactNumber"
@@ -258,7 +260,7 @@ export function RegisterForm() {
                   autoComplete="tel"
                   required
                   pattern="^(\\+63|0)9\\d{9}$"
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
                   placeholder="09XX-XXX-XXXX"
                 />
               </div>
@@ -273,7 +275,7 @@ export function RegisterForm() {
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-500" />
+                  <Lock className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="password"
@@ -282,7 +284,7 @@ export function RegisterForm() {
                   autoComplete="new-password"
                   required
                   minLength={8}
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
                   placeholder="At least 8 characters"
                 />
                 <button
@@ -292,9 +294,9 @@ export function RegisterForm() {
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-slate-500 hover:text-slate-700" />
+                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
                   ) : (
-                    <Eye className="h-5 w-5 text-slate-500 hover:text-slate-700" />
+                    <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
                   )}
                 </button>
               </div>
@@ -309,7 +311,7 @@ export function RegisterForm() {
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-500" />
+                  <Lock className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="confirmPassword"
@@ -318,7 +320,7 @@ export function RegisterForm() {
                   autoComplete="new-password"
                   required
                   minLength={8}
-                  className="block w-full rounded-xl border border-slate-300 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
                   placeholder="Re-enter your password"
                 />
                 <button
@@ -328,9 +330,9 @@ export function RegisterForm() {
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showConfirm ? (
-                    <EyeOff className="h-5 w-5 text-slate-500 hover:text-slate-700" />
+                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
                   ) : (
-                    <Eye className="h-5 w-5 text-slate-500 hover:text-slate-700" />
+                    <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
                   )}
                 </button>
               </div>
@@ -339,7 +341,7 @@ export function RegisterForm() {
             <button
               type="submit"
               disabled={state.status === "loading"}
-              className="w-full rounded-xl border border-emerald-700 bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 disabled:bg-emerald-400"
+              className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm"
             >
               {state.status === "loading" ? "Creating account…" : "Create Account"}
             </button>
@@ -350,7 +352,7 @@ export function RegisterForm() {
               Already have an account?{" "}
               <Link
                 href="/login"
-                className="text-emerald-600 hover:text-emerald-700 font-medium"
+                className="font-semibold text-[#0b8754] hover:text-[#096a42]"
               >
                 Sign in
               </Link>
@@ -358,20 +360,20 @@ export function RegisterForm() {
           </div>
         </div>
 
-        <div className="border-t border-slate-200 bg-slate-50 px-8 py-4">
-          <p className="text-xs text-center text-slate-600">
+        <div className="bg-slate-50 px-8 py-4">
+          <p className="text-[10px] sm:text-xs text-center text-slate-500">
             © 2026 Municipality of Enrique B. Magalona - BPLO. All rights
             reserved.
           </p>
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-center shadow-lg shadow-slate-900/10">
-        <p className="text-sm font-medium text-slate-800">
+      <div className="mt-4 rounded-xl border border-white/40 bg-white/90 px-4 py-3 text-center shadow-lg backdrop-blur-md">
+        <p className="text-sm font-medium text-slate-700">
           Need account assistance? Contact BPLO at{" "}
           <a
             href="mailto:support@bplo.gov.ph"
-            className="text-emerald-600 hover:text-emerald-700"
+            className="font-semibold text-[#0b8754] hover:text-[#096a42]"
           >
             support@bplo.gov.ph
           </a>

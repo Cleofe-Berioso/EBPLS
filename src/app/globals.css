@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f7fb;
+  --background: #ffffff;
   --foreground: #132238;
   --surface: #ffffff;
-  --muted-surface: #eef3f8;
-  --border-color: #d9e2ed;
+  --muted-surface: #f8fafc;
+  --border-color: #e6eaf0;
   --primary: #0b7a5c;
   --primary-strong: #075c45;
-  --primary-soft: #e8f5f1;
+  --primary-soft: #eef6f2;
   --ink-muted: #5a6d85;
   --danger: #b63a3a;
   --warning: #b66a13;
   --info: #1e6db6;
-  --card-shadow: 0 14px 34px -24px rgb(17 43 74 / 0.28);
+  --card-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
   --radius-card: 1rem;
-  --radius-control: 0.75rem;
+  --radius-control: 0.5rem;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -39,10 +39,6 @@ body {
   line-height: 1.5;
   text-rendering: optimizeLegibility;
   min-width: 320px;
-  background-image:
-    radial-gradient(circle at 8% -6%, rgb(11 122 92 / 0.13), transparent 32%),
-    radial-gradient(circle at 92% -10%, rgb(30 109 182 / 0.09), transparent 34%),
-    linear-gradient(180deg, #f9fbff 0%, #f4f7fb 36%, #f1f5fa 100%);
 }
 
 * {
@@ -130,7 +126,7 @@ textarea {
 }
 
 .app-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   color: var(--foreground);
 }
 
@@ -141,14 +137,13 @@ textarea {
 
 .app-sidebar {
   border-right: 1px solid var(--border-color);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: #ffffff;
   z-index: 1100;
 }
 
 .app-header {
   border-bottom: 1px solid var(--border-color);
-  background: rgb(255 255 255 / 0.92);
-  backdrop-filter: blur(10px);
+  background: rgb(255 255 255 / 1);
   z-index: 1100;
 }
 

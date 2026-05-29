@@ -127,14 +127,6 @@ export function BploSidebar({
         })}
       </nav>
 
-      <div className={`border-t border-slate-200 px-4 py-4 ${collapsed ? "lg:hidden" : ""}`}>
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm">
-          <p className="font-semibold uppercase tracking-[0.15em] text-slate-500">Workflow Pipeline</p>
-          <p className="mt-2 leading-relaxed">
-            Draft → Submitted → Under Review → Assessed → Approved for Payment → Paid → For Release → Released
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }

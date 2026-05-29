@@ -57,14 +57,14 @@ export function ApplicantSidebar({
         key={item.href}
         href={item.href}
         onClick={onCloseMobile}
-        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition ${
+        className={`flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-medium transition-colors ${
           active
-            ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-100"
-            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            ? "bg-emerald-50 text-emerald-800"
+            : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
         } ${collapsed ? "lg:justify-center" : ""}`}
         title={collapsed ? item.label : undefined}
       >
-        {Icon && <Icon className={`h-4 w-4 ${active ? "text-emerald-700" : "text-slate-400"}`} />}
+        {Icon && <Icon className={`h-4 w-4 ${active ? "text-emerald-700" : "text-slate-500"}`} />}
         <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>
       </Link>
     );
@@ -79,9 +79,9 @@ export function ApplicantSidebar({
       <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Municipality eBPLS</p>
-            <h2 className={`mt-2 text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Applicant Portal</h2>
-            <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Submit, track, and monitor your applications.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Municipality eBPLS</p>
+            <h2 className={`mt-2 text-xl font-semibold tracking-tight text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Applicant Portal</h2>
+            <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Submit, track, and monitor applications.</p>
           </div>
         </div>
         <div className={`mt-3 flex items-center gap-2 ${collapsed ? "lg:justify-center" : ""}`}>
@@ -89,14 +89,14 @@ export function ApplicantSidebar({
         </div>
       </div>
 
-      <nav className={`overflow-y-auto py-4 lg:flex-1 ${collapsed ? "px-2" : "px-3"}`}>
+      <nav className={`overflow-y-auto py-5 lg:flex-1 ${collapsed ? "px-2" : "px-3"}`}>
         {APPLICANT_SIDEBAR_STRUCTURE.map((item, idx) => {
           if ("href" in item) {
             return <div key={item.href}>{renderNavItem(item)}</div>;
           } else {
             return (
-              <div key={item.group} className={`${idx > 0 ? "mt-4" : ""}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide text-slate-500 ${collapsed ? "lg:hidden" : "px-3 py-2"}`}>
+              <div key={item.group} className={`${idx > 0 ? "mt-5" : ""}`}>
+                <p className={`text-xs font-semibold uppercase tracking-[0.1em] text-slate-500 ${collapsed ? "lg:hidden" : "px-3 pb-2 pt-1"}`}>
                   {collapsed ? "" : item.group}
                 </p>
                 <div className="space-y-1">
@@ -108,14 +108,6 @@ export function ApplicantSidebar({
         })}
       </nav>
 
-      <div className={`border-t border-slate-200 px-4 py-4 ${collapsed ? "lg:hidden" : ""}`}>
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-xs text-slate-700 shadow-sm">
-          <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">Workflow Guide</p>
-          <p className="mt-2 leading-6">
-            Draft → Submitted → Under Review → Assessed → Approved for Payment → Paid → For Release → Released
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }
