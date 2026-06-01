@@ -540,7 +540,6 @@ export function SuperAdminFeeSettingsManager() {
   return (
     <section className="space-y-6">
       <PageHeader
-        eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
         title="System Fee Settings"
         description="Configure fee tables, renewal penalties, and official extension rules."

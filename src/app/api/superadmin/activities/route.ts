@@ -4,6 +4,15 @@ import { listSuperAdminActivities } from "@/lib/superadmin-data";
 
 type ActivityActorRole = "ALL" | "APPLICANT" | "BPLO" | "DEPARTMENT_HEAD" | "JIT" | "SUPER_ADMIN" | "SYSTEM";
 
+function sanitizeFilterText(raw: string | null, maxLength = 100): string | undefined {
+  if (!raw) return undefined;
+
+  const trimmed = raw.trim().replace(/\0/g, "");
+  if (!trimmed) return undefined;
+
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+}
+
 function parseActorRole(raw: string | null): ActivityActorRole | null {
   if (!raw || raw === "") return "ALL";
   if (
@@ -38,12 +47,12 @@ export async function GET(req: Request) {
   if (!actorRole) {
     return NextResponse.json({ error: "Invalid actorRole filter" }, { status: 400 });
   }
-  const searchKeyword = searchParams.get("search") ?? undefined;
-  const module = searchParams.get("module") ?? undefined;
-  const action = searchParams.get("action") ?? undefined;
-  const dateFrom = searchParams.get("dateFrom") ?? undefined;
-  const dateTo = searchParams.get("dateTo") ?? undefined;
-  const applicationNumber = searchParams.get("applicationNumber") ?? undefined;
+  const searchKeyword = sanitizeFilterText(searchParams.get("search"), 120);
+  const module = sanitizeFilterText(searchParams.get("module"), 80);
+  const action = sanitizeFilterText(searchParams.get("action"), 80);
+  const dateFrom = sanitizeFilterText(searchParams.get("dateFrom"), 20);
+  const dateTo = sanitizeFilterText(searchParams.get("dateTo"), 20);
+  const applicationNumber = sanitizeFilterText(searchParams.get("applicationNumber"), 100);
   const page = parsePositiveInt(searchParams.get("page"), 1);
   const pageSize = parsePositiveInt(searchParams.get("pageSize"), 25);
 

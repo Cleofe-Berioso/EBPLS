@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import {
   ApplicantEligibilityError,
   DuplicateBusinessIdentityError,
@@ -425,8 +426,7 @@ export async function POST(req: Request) {
         error: message,
         status,
       });
-
-      return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to save application") }, { status });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown server error";

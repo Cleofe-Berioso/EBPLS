@@ -13,7 +13,8 @@ export function generateOtp(): string {
  * Hash OTP using bcrypt
  */
 export async function hashOtp(otp: string): Promise<string> {
-  return bcrypt.hash(otp, 10);
+  // Cost factor 12 — consistent with password hashing in the auth flow.
+  return bcrypt.hash(otp, 12);
 }
 
 /**
@@ -41,6 +42,24 @@ export async function requestPasswordResetOtp(email: string): Promise<string> {
   const expiresAt = new Date(Date.now() + otpExpirationMinutes * 60 * 1000);
 
   try {
+    // ── 60-second cooldown ──────────────────────────────────────────────────
+    // Prevent inbox flooding: if a non-expired OTP was issued within the last
+    // 60 seconds, silently skip creation so the caller can return the generic
+    // success response without sending another email.
+    const recentOtp = await prisma.passwordResetOtp.findFirst({
+      where: {
+        email: normalizedEmail,
+        usedAt: null,
+        createdAt: { gte: new Date(Date.now() - 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (recentOtp) {
+      // Return empty string — caller must treat this as "cooldown active".
+      return "";
+    }
+
     // Invalidate previous unused OTPs for this email
     await prisma.passwordResetOtp.updateMany({
       where: {
@@ -61,10 +80,15 @@ export async function requestPasswordResetOtp(email: string): Promise<string> {
       },
     });
 
-    console.log(`Password reset OTP requested for: ${normalizedEmail}`);
+    // Avoid logging PII (email) in production.
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[password-reset] OTP generated for: ${normalizedEmail}`);
+    }
     return plainOtp;
   } catch (error) {
-    console.error("Error creating password reset OTP:", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Error creating password reset OTP:", error);
+    }
     throw new Error("Failed to generate OTP. Please try again later.");
   }
 }
@@ -132,10 +156,15 @@ export async function verifyPasswordResetOtp(
       data: { verifiedAt: new Date() },
     });
 
-    console.log(`Password reset OTP verified for: ${normalizedEmail}`);
+    // Avoid logging PII (email) in production.
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[password-reset] OTP verified for: ${normalizedEmail}`);
+    }
     return { valid: true };
   } catch (error) {
-    console.error("Error verifying password reset OTP:", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Error verifying password reset OTP:", error);
+    }
     return { valid: false, error: "Failed to verify OTP. Please try again later." };
   }
 }
@@ -153,11 +182,16 @@ export async function resetUserPassword(
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    // Find verified OTP for this email
+    // ── 15-minute recency gate ──────────────────────────────────────────────
+    // The OTP must have been verified in the last 15 minutes.
+    // Without this, a previously-verified-but-unused OTP could remain
+    // exploitable indefinitely, allowing a stale session to reset the password.
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+
     const otpRecord = await prisma.passwordResetOtp.findFirst({
       where: {
         email: normalizedEmail,
-        verifiedAt: { not: null },
+        verifiedAt: { not: null, gte: fifteenMinutesAgo },
         usedAt: null,
       },
       orderBy: {
@@ -165,15 +199,16 @@ export async function resetUserPassword(
       },
     });
 
-    // Check if verified OTP exists
+    // Check if a recently-verified OTP exists
     if (!otpRecord) {
-      return { success: false, error: "No verified OTP found" };
+      return { success: false, error: "OTP session expired or not found. Please request a new OTP and try again." };
     }
 
-    // Check if OTP is still valid
+    // Check if OTP is still within its absolute expiry window
     if (new Date() > otpRecord.expiresAt) {
       return { success: false, error: "OTP has expired" };
     }
+
 
     // Find user by email
     const user = await prisma.user.findUnique({
@@ -181,11 +216,14 @@ export async function resetUserPassword(
     });
 
     if (!user) {
-      return { success: false, error: "User not found" };
+      return {
+        success: false,
+        error: "Unable to reset password. Please request a new OTP and try again.",
+      };
     }
 
-    // Hash new password using bcryptjs (same as existing system)
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    // Hash new password — cost 12 consistent with registration flow.
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
     // Update user password
     await prisma.user.update({
@@ -199,10 +237,15 @@ export async function resetUserPassword(
       data: { usedAt: new Date() },
     });
 
-    console.log(`Password reset completed for: ${normalizedEmail}`);
+    // Avoid logging PII (email) in production.
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[password-reset] password reset completed for: ${normalizedEmail}`);
+    }
     return { success: true };
   } catch (error) {
-    console.error("Error resetting password:", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Error resetting password:", error);
+    }
     return { success: false, error: "Failed to reset password. Please try again later." };
   }
 }

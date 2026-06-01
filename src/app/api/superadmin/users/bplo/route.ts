@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
+import { createAuditLog } from "@/lib/audit-log";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { prisma } from "@/lib/prisma";
 
@@ -63,6 +64,22 @@ export async function POST(req: Request) {
       isActive: true,
       createdAt: true,
       updatedAt: true,
+    },
+  });
+
+  void createAuditLog({
+    actorId: session.user.id,
+    actorName: session.user.name ?? session.user.email ?? null,
+    actorRole: "SUPER_ADMIN",
+    action: "STAFF_ACCOUNT_CREATED",
+    module: "USER_MANAGEMENT",
+    entityType: "USER",
+    entityId: user.id,
+    description: "Super Admin created new BPLO staff account",
+    metadata: {
+      newUserId: user.id,
+      newUserEmail: user.email,
+      newUserRole: "BPLO",
     },
   });
 

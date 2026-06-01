@@ -76,12 +76,9 @@ model User {
   lastName     String?
   suffix       String?
   profileImageStoragePath String?
-  profileImageFileName String?
   profileImageBucket String?
   profileImageMimeType String?
-  profileImageSize Int?
   profileImageSizeBytes Int?
-  profileImageUpdatedAt DateTime?
   profileImageUploadedAt DateTime?
   passwordHash String
   role         Role     @default(APPLICANT)

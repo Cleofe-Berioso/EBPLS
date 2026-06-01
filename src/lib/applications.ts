@@ -1554,6 +1554,106 @@ export async function deleteApplicantDocument(applicantId: string, applicationId
   return doc;
 }
 
+// Map a DB application status to a NotificationType for the notification dropdown.
+function dbStatusToNotificationType(
+  dbStatus: string
+): "APPLICATION_SUBMITTED" | "RETURNED_FOR_CORRECTION" | "APPROVED_FOR_PAYMENT" | "REJECTED" | "ASSESSMENT_GENERATED" | "PAYMENT_VERIFIED" | "PERMIT_RELEASED" | "CLOSURE_APPROVED" | "INSPECTION_RELATED" {
+  switch (dbStatus) {
+    case "SUBMITTED":
+      return "APPLICATION_SUBMITTED";
+    case "RETURNED_FOR_CORRECTION":
+      return "RETURNED_FOR_CORRECTION";
+    case "ASSESSED":
+    case "APPROVED_FOR_PAYMENT":
+      return "APPROVED_FOR_PAYMENT";
+    case "REJECTED":
+    case "REVOKED":
+      return "REJECTED";
+    case "PAID":
+    case "FOR_RELEASE":
+      return "PAYMENT_VERIFIED";
+    case "RELEASED":
+      return "PERMIT_RELEASED";
+    default:
+      return "APPLICATION_SUBMITTED";
+  }
+}
+
+// Build a human-readable title and message for a history event.
+function buildNotificationContent(
+  dbStatus: string,
+  applicationNumber: string,
+  remarks: string | null
+): { title: string; message: string } {
+  const appNum = applicationNumber ?? "your application";
+  switch (dbStatus) {
+    case "SUBMITTED":
+      return {
+        title: "Application Submitted",
+        message: `Your application ${appNum} has been successfully submitted for review.`,
+      };
+    case "RETURNED_FOR_CORRECTION":
+      return {
+        title: "Returned for Correction",
+        message: remarks
+          ? `Application ${appNum} was returned: ${remarks}`
+          : `Application ${appNum} has been returned. Please review the remarks and resubmit.`,
+      };
+    case "ASSESSED":
+      return {
+        title: "Assessment Generated",
+        message: `Fee assessment for application ${appNum} is now available for review.`,
+      };
+    case "APPROVED_FOR_PAYMENT":
+      return {
+        title: "Approved for Payment",
+        message: `Application ${appNum} has been assessed. Please proceed to payment.`,
+      };
+    case "PAID":
+      return {
+        title: "Payment Verified",
+        message: `Payment for application ${appNum} has been verified successfully.`,
+      };
+    case "FOR_RELEASE":
+      return {
+        title: "Ready for Release",
+        message: `Your permit for application ${appNum} is being prepared for release.`,
+      };
+    case "RELEASED":
+      return {
+        title: "Permit Released",
+        message: `Your business permit for application ${appNum} is now available for pickup.`,
+      };
+    case "REJECTED":
+      return {
+        title: "Application Rejected",
+        message: remarks
+          ? `Application ${appNum} was rejected: ${remarks}`
+          : `Application ${appNum} has been rejected. Please contact BPLO for details.`,
+      };
+    case "REVOKED":
+      return {
+        title: "Permit Revoked",
+        message: remarks
+          ? `Permit for application ${appNum} was revoked: ${remarks}`
+          : `Your business permit for application ${appNum} has been revoked.`,
+      };
+    case "UNDER_REVIEW":
+    case "DEPARTMENT_HEAD_REVIEW":
+    case "DEPARTMENT_HEAD_APPROVED":
+    case "REVOCATION_REVIEW":
+      return {
+        title: "Application Under Review",
+        message: `Application ${appNum} is currently being reviewed by the BPLO.`,
+      };
+    default:
+      return {
+        title: "Application Updated",
+        message: `There has been an update to your application ${appNum}.`,
+      };
+  }
+}
+
 // Cached query for applicant notifications - deduplicates per-request
 const getCachedApplicantNotifications = cache(async (applicantId: string) => {
   const apps = await prisma.businessApplication.findMany({
@@ -1572,19 +1672,28 @@ const getCachedApplicantNotifications = cache(async (applicantId: string) => {
   });
 
   const notifications = apps.flatMap((app: any) =>
-    app.history.map((item: any) => ({
-      id: item.id,
-      applicationId: app.id,
-      applicationNumber: app.applicationNumber,
-      applicationType: app.applicationType,
-      toStatus: mapDbStatusToUi(item.toStatus),
-      remarks: item.remarks,
-      createdAt: item.createdAt.toISOString(),
-    }))
+    app.history.map((item: any) => {
+      const { title, message } = buildNotificationContent(
+        item.toStatus,
+        app.applicationNumber,
+        item.remarks ?? null
+      );
+      return {
+        id: item.id,
+        applicationId: app.id,
+        applicationNumber: app.applicationNumber,
+        type: dbStatusToNotificationType(item.toStatus),
+        title,
+        message,
+        timestamp: item.createdAt.toISOString(),
+        isRead: false,
+      };
+    })
   );
 
-  return notifications.sort((a: { createdAt: string }, b: { createdAt: string }) =>
-    b.createdAt.localeCompare(a.createdAt)
+  return notifications.sort(
+    (a: { timestamp: string }, b: { timestamp: string }) =>
+      b.timestamp.localeCompare(a.timestamp)
   );
 });
 

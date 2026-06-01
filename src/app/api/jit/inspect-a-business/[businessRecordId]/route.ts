@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import { requireJitSession } from "@/lib/jit-api";
 import { createJitInspection } from "@/lib/jit-inspections";
@@ -108,14 +109,13 @@ export async function POST(
       await removeApplicantDocument(storedEvidencePath, storedEvidenceMimeType ?? undefined);
     }
 
-    const message = error instanceof Error ? error.message : "Unable to create inspection";
+    const message = error instanceof Error ? error.message : "";
     const status =
       message === "Only active released businesses can be inspected"
         ? 404
         : message.includes("required") || message.includes("must be")
           ? 422
           : 400;
-
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to create inspection") }, { status });
   }
 }

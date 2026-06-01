@@ -71,9 +71,8 @@ export default async function SuperAdminDashboard() {
   return (
     <section className="space-y-6">
       <PageHeader
-        eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
-        title="SuperAdmin Dashboard"
+        title="IT ADMINISTRATOR Dashboard"
         description="Operational analytics for system activity, workflow volume, compliance, and messaging logs."
         badge={<RoleBadge role="VIEW_ONLY" label="Read-Only Monitoring" />}
       />

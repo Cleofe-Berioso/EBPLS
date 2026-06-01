@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireBploSession } from "@/lib/bplo-api";
 import { returnBusinessLocationForCorrection } from "@/lib/business-location";
 
@@ -28,13 +29,18 @@ export async function POST(
     );
     return NextResponse.json({ row });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to return business location for correction";
+    const message = error instanceof Error ? error.message : "";
 
     if (message === "Business location not found") {
-      return NextResponse.json({ error: message }, { status: 404 });
+      return NextResponse.json(
+        { error: safeApiErrorMessage(error, "Business location not found") },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ error: message }, { status: 422 });
+    return NextResponse.json(
+      { error: safeApiErrorMessage(error, "Unable to return business location for correction") },
+      { status: 422 }
+    );
   }
 }

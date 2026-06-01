@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireApplicantSession } from "@/lib/applicant-api";
 import { submitApplicantBusinessLocation } from "@/lib/business-location";
 
@@ -42,10 +43,13 @@ export async function POST(
 
     return NextResponse.json({ record });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to submit business location";
+    const message = error instanceof Error ? error.message : "";
 
     if (message === "Released business record not found") {
-      return NextResponse.json({ error: message }, { status: 404 });
+      return NextResponse.json(
+        { error: safeApiErrorMessage(error, "Released business record not found") },
+        { status: 404 }
+      );
     }
 
     if (
@@ -57,6 +61,9 @@ export async function POST(
       return NextResponse.json({ error: message }, { status: 422 });
     }
 
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json(
+      { error: safeApiErrorMessage(error, "Unable to submit business location") },
+      { status: 400 }
+    );
   }
 }

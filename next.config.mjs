@@ -1,16 +1,55 @@
 /** @type {import('next').NextConfig} */
+
+const isProduction = process.env.NODE_ENV === "production";
+
+/**
+ * HTTP security headers applied to every response.
+ * These do not replace a WAF but add browser-level protections.
+ */
+const securityHeaders = [
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), payment=()" },
+  { key: "X-XSS-Protection", value: "1; mode=block" },
+  { key: "X-DNS-Prefetch-Control", value: "on" },
+  {
+    key: "Content-Security-Policy-Report-Only",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https:",
+      "frame-ancestors 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; "),
+  },
+];
+
 const nextConfig = {
   outputFileTracingRoot: process.cwd(),
   experimental: {
-    // Total request-body cap for middleware handling; per-file 10 MB is still enforced in app validation.
-    middlewareClientMaxBodySize: "150mb",
+    proxyClientMaxBodySize: "20mb",
   },
-  allowedDevOrigins: [
-    "localhost:3000",
-    "127.0.0.1:3000",
-    "supereffectively-mycostatic-lilla.ngrok-free.dev",
-    "*.ngrok-free.dev",
-  ],
+  allowedDevOrigins: isProduction
+    ? ["localhost:3000", "127.0.0.1:3000"]
+    : [
+        "localhost:3000",
+        "127.0.0.1:3000",
+        "supereffectively-mycostatic-lilla.ngrok-free.dev",
+      ],
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: securityHeaders,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

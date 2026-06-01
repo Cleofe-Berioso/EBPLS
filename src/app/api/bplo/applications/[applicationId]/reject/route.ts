@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireBploSession } from "@/lib/bplo-api";
 import { applyBploReviewAction } from "@/lib/bplo-applications";
 import { logApplicationAction } from "@/lib/audit-log";
@@ -45,8 +46,8 @@ export async function POST(req: Request, context: RouteContext) {
 
     return NextResponse.json({ application });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to reject application";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Application not found" ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to reject application") }, { status });
   }
 }

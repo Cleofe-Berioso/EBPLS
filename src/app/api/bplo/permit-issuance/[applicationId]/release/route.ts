@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireBploSession } from "@/lib/bplo-api";
 import { logPermitAction } from "@/lib/audit-log";
 import { releasePermitIssuance } from "@/lib/bplo-permit-issuance";
@@ -45,8 +46,8 @@ export async function POST(
 
     return NextResponse.json({ result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to release permit issuance";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Application not found" ? 404 : 422;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to release permit issuance") }, { status });
   }
 }

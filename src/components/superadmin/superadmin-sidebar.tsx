@@ -68,7 +68,7 @@ export function SuperAdminSidebar({
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700">Municipality eBPLS</p>
             <div className={`mt-2 flex items-center gap-2 ${collapsed ? "lg:justify-center" : ""}`}>
               <ShieldCheck className="h-5 w-5 shrink-0 text-slate-600" />
-              <h2 className={`text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Super Admin Portal</h2>
+              <h2 className={`text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>IT ADMINISTRATOR</h2>
             </div>
             <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Oversight and audit visibility across all modules.</p>
           </div>

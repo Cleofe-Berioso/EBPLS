@@ -126,10 +126,17 @@ export async function POST(req: Request) {
     },
   });
 
-  const uploaded = await uploadApplicantProfileImage({
-    applicantId: authContext.applicantId,
-    file: fileValue,
-  });
+  let uploaded;
+  try {
+    uploaded = await uploadApplicantProfileImage({
+      applicantId: authContext.applicantId,
+      file: fileValue,
+    });
+  } catch (uploadErr) {
+    console.error("[ProfilePictureUpload] File storage failed:", uploadErr);
+    const errorMessage = uploadErr instanceof Error ? uploadErr.message : "Failed to store profile image";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
 
   try {
     const updated = await prisma.user.update({
@@ -175,7 +182,12 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     await removeApplicantDocument(uploaded.storagePath, uploaded.mimeType);
-    const message = error instanceof Error ? error.message : "Unable to save profile image.";
+    // In production, do not surface raw Prisma error messages — they can
+    // include table/column names, index details, or connection strings.
+    const message =
+      process.env.NODE_ENV !== "production" && error instanceof Error
+        ? error.message
+        : "Unable to save profile image. Please try again.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

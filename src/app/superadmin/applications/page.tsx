@@ -21,7 +21,6 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
   return (
     <section className="space-y-4">
       <PageHeader
-        eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
         title="All Applications"
         description="Read-only directory of application records across the full applicant-to-BPLO workflow."

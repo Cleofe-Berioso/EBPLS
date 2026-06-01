@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireBploSession } from "@/lib/bplo-api";
 import { approvePaymentReference } from "@/lib/bplo-payment-verification";
 import { logPaymentAction } from "@/lib/audit-log";
@@ -46,9 +47,8 @@ export async function POST(
 
     return NextResponse.json({ result });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to verify payment reference";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Payment reference not found" ? 404 : 422;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to verify payment reference") }, { status });
   }
 }

@@ -11,6 +11,7 @@ type ModalProps = {
   footer?: ReactNode;
   onClose: () => void;
   closeOnBackdropClick?: boolean;
+  size?: "sm" | "md" | "lg" | "full";
 };
 
 export function Modal({
@@ -21,6 +22,7 @@ export function Modal({
   footer,
   onClose,
   closeOnBackdropClick = true,
+  size = "lg",
 }: ModalProps) {
   const [mounted, setMounted] = useState(false);
   const titleId = useId();
@@ -67,7 +69,17 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className="relative z-10 flex max-h-[min(90vh,52rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className={`relative z-10 flex flex-col overflow-hidden bg-white ${
+          size === "full"
+            ? "h-full w-full max-h-screen max-w-none rounded-none border-0 shadow-none"
+            : `border border-slate-200 shadow-2xl sm:rounded-2xl ${
+                size === "lg"
+                  ? "max-h-[min(90vh,52rem)] w-full max-w-4xl"
+                  : size === "md"
+                    ? "max-h-[min(90vh,48rem)] w-full max-w-2xl"
+                    : "max-h-[min(90vh,42rem)] w-full max-w-lg"
+              }`
+        }`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">

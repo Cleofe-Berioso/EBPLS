@@ -1045,6 +1045,18 @@ export async function requireDepartmentHeadSession() {
     return null;
   }
 
+  // Re-verify against DB so disabled or role-changed accounts lose access
+  // immediately — not after JWT expiry. Mirrors requireBploSession and
+  // requireSuperAdminSession which were hardened in security pass 1.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, role: true, isActive: true },
+  });
+
+  if (!dbUser || dbUser.role !== "DEPARTMENT_HEAD" || !dbUser.isActive) {
+    return null;
+  }
+
   return session;
 }
 

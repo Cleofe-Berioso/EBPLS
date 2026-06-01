@@ -2,8 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { formatPersonName } from "@/lib/person-name";
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  REGISTER_RATE_LIMIT,
+} from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-client-ip";
 
 export async function POST(req: NextRequest) {
+  const ipLimit = checkRateLimit(`register:ip:${getClientIp(req)}`, REGISTER_RATE_LIMIT);
+  if (!ipLimit.ok) {
+    return rateLimitResponse(ipLimit.resetAt);
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -62,7 +73,7 @@ export async function POST(req: NextRequest) {
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
     return NextResponse.json(
-      { error: "An account with this email address already exists." },
+      { error: "Unable to create account. If you already have an account, try signing in." },
       { status: 409 }
     );
   }
@@ -97,8 +108,8 @@ export async function POST(req: NextRequest) {
       id: true,
       email: true,
       name: true,
-      role: true,
-      createdAt: true,
+      // role and createdAt intentionally omitted: not needed client-side
+      // and would expose information useful for account enumeration.
     },
   });
 

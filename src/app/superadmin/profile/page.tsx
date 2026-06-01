@@ -19,7 +19,6 @@ export default async function SuperAdminProfilePage() {
   return (
     <section className="space-y-4">
       <PageHeader
-        eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
         title="Profile"
         description="Account overview for the read-only oversight role."

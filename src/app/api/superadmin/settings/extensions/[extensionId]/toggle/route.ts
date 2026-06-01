@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { logSettingsAction } from "@/lib/audit-log";
 import { toggleRenewalExtension } from "@/lib/fee-settings";
@@ -50,9 +51,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, extension });
   } catch (error) {
-    if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Failed to update extension status.") }, { status: 400 });
     return NextResponse.json({ error: "Failed to update extension status." }, { status: 500 });
   }
 }

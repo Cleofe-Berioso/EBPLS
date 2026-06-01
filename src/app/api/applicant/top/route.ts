@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { getApplicantApplicationDetail, getApplicantTopSummary, submitApplicantPaymentReference } from "@/lib/applications";
 import { requireApplicantSession } from "@/lib/applicant-api";
 import { storeApplicantDocument } from "@/lib/document-storage";
@@ -85,8 +86,8 @@ export async function POST(req: Request) {
       throw innerError;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to submit OR details";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Application not found" ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to submit OR details") }, { status });
   }
 }

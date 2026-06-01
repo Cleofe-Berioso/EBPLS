@@ -1,21 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Notification } from "@/types/notifications";
 import {
-  getRecentMockNotifications,
   getUnreadCount,
   markNotificationAsRead,
   markAllNotificationsAsRead,
 } from "@/lib/mock-notifications";
 
 /**
- * Custom hook for managing notification state and interactions
- * Provides:
- * - Loading and fetching notifications
- * - Mark as read functionality
- * - Unread count tracking
- * - Error handling
+ * Custom hook for managing notification state and interactions.
  */
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -23,58 +17,49 @@ export function useNotifications() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Track if component is mounted to avoid state updates on unmounted components
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  /**
-   * Fetch notifications from API or mock data
-   * Phase 1: Uses mock data
-   * Phase 2: Will use real API
-   */
-  const fetchNotifications = useCallback(async () => {
-    if (!isMountedRef.current) return;
-
+  const fetchNotifications = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Phase 1: Mock data
-      const mockData = getRecentMockNotifications(5);
+      const response = await fetch("/api/applicant/notifications", {
+        cache: "no-store",
+        signal,
+      });
 
-      if (isMountedRef.current) {
-        setNotifications(mockData);
-        setUnreadCount(getUnreadCount(mockData));
+      let data: { notifications?: Notification[]; error?: string } = {};
+      try {
+        data = await response.json();
+      } catch {
+        if (!response.ok) {
+          throw new Error(`Server error (${response.status})`);
+        }
       }
 
-      // Future: Replace with real API call
-      // const response = await fetch("/api/applicant/notifications", {
-      //   cache: "no-store",
-      // });
-      // const data = await response.json();
-      // if (isMountedRef.current && response.ok) {
-      //   setNotifications(data.notifications ?? []);
-      //   setUnreadCount(getUnreadCount(data.notifications ?? []));
-      // }
+      const notifs = data.notifications ?? [];
+      setNotifications(notifs);
+      setUnreadCount(getUnreadCount(notifs));
+      setError(null);
     } catch (err) {
-      if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : "Failed to load notifications");
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Unknown error loading notifications");
       }
     } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
   }, []);
 
-  /**
-   * Mark a single notification as read
-   */
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchNotifications(controller.signal);
+    return () => controller.abort();
+  }, [fetchNotifications]);
+
   const markAsRead = useCallback((notificationId: string) => {
     setNotifications((prev) => {
       const updated = prev.map((n) =>
@@ -85,9 +70,6 @@ export function useNotifications() {
     });
   }, []);
 
-  /**
-   * Mark all notifications as read
-   */
   const markAllAsRead = useCallback(() => {
     setNotifications((prev) => {
       const updated = markAllNotificationsAsRead(prev);
@@ -96,27 +78,30 @@ export function useNotifications() {
     });
   }, []);
 
-  /**
-   * Clear all notifications (optional feature)
-   */
   const clearAll = useCallback(() => {
     setNotifications([]);
     setUnreadCount(0);
   }, []);
 
-  // Auto-fetch on mount
-  useEffect(() => {
-    void fetchNotifications();
-  }, [fetchNotifications]);
+  const addLocalNotification = useCallback((partial?: Partial<Notification>) => {
+    const notif: Notification = {
+      id:
+        partial?.id ?? `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: partial?.title ?? "New notification",
+      message: partial?.message ?? "You have a new notification",
+      type: partial?.type ?? ("APPLICATION_SUBMITTED" as Notification["type"]),
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      applicationId: partial?.applicationId,
+      applicationNumber: partial?.applicationNumber,
+    } as Notification;
 
-  // Auto-refresh every 30 seconds (can be made configurable)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      void fetchNotifications();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
+    setNotifications((prev) => {
+      const updated = [notif, ...prev];
+      setUnreadCount(getUnreadCount(updated));
+      return updated;
+    });
+  }, []);
 
   return {
     notifications,
@@ -126,6 +111,7 @@ export function useNotifications() {
     markAsRead,
     markAllAsRead,
     clearAll,
+    addLocalNotification,
     refetch: fetchNotifications,
   };
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { logInspectionAction, logRevocationAction } from "@/lib/audit-log";
 import { applyDepartmentHeadRevocationDecision, requireDepartmentHeadSession } from "@/lib/department-head-api";
 
@@ -61,14 +62,13 @@ export async function POST(
 
     return NextResponse.json({ result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to approve revocation";
+    const message = error instanceof Error ? error.message : "";
     const status =
       message === "Inspection not found"
         ? 404
         : message.includes("required") || message.includes("review") || message.includes("finalized") || message.includes("verified")
           ? 422
           : 400;
-
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to approve revocation") }, { status });
   }
 }

@@ -254,7 +254,6 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         {isLoading ? "Loading users." : "Users loaded."}
       </div>
       <PageHeader
-        eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
         title="User Management"
         description="Manage controlled system accounts and monitor registered applicants."

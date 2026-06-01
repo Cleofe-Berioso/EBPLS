@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 
 export default function ClosureApplicationPage() {
   return (
-    <section className="space-y-6">
+    <section className="space-y-6 pb-4">
       <PageHeader
         eyebrow="Applicant"
         title="Closure Application"

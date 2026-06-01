@@ -57,9 +57,9 @@ export function SuperAdminLayoutClient({
                 {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               </button>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700">Super Admin Portal</p>
-                <h1 className="truncate text-base font-semibold text-slate-900 sm:text-lg">Welcome, {userName}</h1>
-                <p className="truncate text-sm text-slate-500">Read-only oversight and audit workspace</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700"></p>
+                <h1 className="truncate text-base font-semibold text-slate-900 sm:text-lg">Welcome</h1>
+                <p className="truncate text-sm text-slate-500"></p>
               </div>
             </div>
 
@@ -68,8 +68,8 @@ export function SuperAdminLayoutClient({
                 <Bell className="h-4 w-4" />
               </span>
               <div className="hidden min-w-0 text-right sm:block">
-                <p className="truncate text-sm font-semibold text-slate-900">{userName}</p>
-                <p className="truncate text-xs text-slate-500">Super Admin Portal</p>
+                <p className="truncate text-sm font-semibold text-slate-900"></p>
+                <p className="truncate text-xs text-slate-500"></p>
               </div>
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 ring-1 ring-slate-200">
                 <UserCircle2 className="h-5 w-5" />

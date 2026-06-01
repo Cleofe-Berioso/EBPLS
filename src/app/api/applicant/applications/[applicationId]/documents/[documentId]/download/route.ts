@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import { getApplicantOwnedDocument } from "@/lib/applications";
 import { createStorageSignedUrl } from "@/lib/document-storage";
@@ -32,8 +33,8 @@ export async function GET(req: Request, context: RouteContext) {
 
     return NextResponse.redirect(redirectUrl, { status: 302 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to download document";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Document not found" ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to download document") }, { status });
   }
 }

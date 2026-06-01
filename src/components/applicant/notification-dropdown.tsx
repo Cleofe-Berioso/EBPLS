@@ -17,7 +17,7 @@ export function NotificationDropdown() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const { notifications, unreadCount, isLoading, error, markAsRead, markAllAsRead } =
+  const { notifications, unreadCount, isLoading, error, markAsRead, markAllAsRead, addLocalNotification, refetch } =
     useNotifications();
 
   /**
@@ -111,8 +111,15 @@ export function NotificationDropdown() {
                 <p className="text-sm text-slate-500">Loading notifications...</p>
               </div>
             ) : error ? (
-              <div className="px-4 py-8">
+              <div className="px-4 py-8 text-center">
                 <p className="text-sm text-red-600">Failed to load notifications</p>
+                <button
+                  type="button"
+                  onClick={() => void refetch()}
+                  className="mt-3 text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+                >
+                  Retry
+                </button>
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-4 py-8">
@@ -121,6 +128,12 @@ export function NotificationDropdown() {
                 <p className="text-xs text-slate-500 mt-1">
                   You're all caught up! Check back soon.
                 </p>
+                <button
+                  onClick={() => addLocalNotification()}
+                  className="mt-3 inline-flex items-center rounded-md bg-emerald-600 px-3 py-1 text-sm font-semibold text-white hover:bg-emerald-700"
+                >
+                  Add test notification
+                </button>
               </div>
             ) : (
               <div className="space-y-1 p-2">

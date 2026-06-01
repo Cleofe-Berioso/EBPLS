@@ -81,6 +81,15 @@ function sanitizeMetadata(metadata: Record<string, unknown> | null | undefined):
   return Object.keys(sanitized).length > 0 ? sanitized : null;
 }
 
+function sanitizeQueryText(value?: string, maxLength = 100): string | undefined {
+  if (!value) return undefined;
+
+  const normalized = value.trim().replace(/\0/g, "");
+  if (!normalized) return undefined;
+
+  return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized;
+}
+
 /**
  * Base audit log creation function
  * Non-blocking - errors are caught and logged, not thrown
@@ -440,40 +449,47 @@ export interface AuditLogListItem {
 function buildAuditLogWhere(filters: AuditLogQueryFilters) {
   const andClauses: Array<Record<string, unknown>> = [];
 
-  if (filters.actorId?.trim()) {
-    andClauses.push({ actorId: filters.actorId.trim() });
+  const actorId = sanitizeQueryText(filters.actorId, 100);
+  if (actorId) {
+    andClauses.push({ actorId });
   }
 
-  if (filters.actorRole?.trim()) {
-    andClauses.push({ actorRole: filters.actorRole.trim() });
+  const actorRole = sanitizeQueryText(filters.actorRole, 50);
+  if (actorRole) {
+    andClauses.push({ actorRole });
   }
 
-  if (filters.action?.trim()) {
-    andClauses.push({ action: filters.action.trim() });
+  const action = sanitizeQueryText(filters.action, 80);
+  if (action) {
+    andClauses.push({ action });
   }
 
-  if (filters.module?.trim()) {
-    andClauses.push({ module: filters.module.trim() });
+  const module = sanitizeQueryText(filters.module, 80);
+  if (module) {
+    andClauses.push({ module });
   }
 
-  if (filters.entityType?.trim()) {
-    andClauses.push({ entityType: filters.entityType.trim() });
+  const entityType = sanitizeQueryText(filters.entityType, 80);
+  if (entityType) {
+    andClauses.push({ entityType });
   }
 
-  if (filters.applicationId?.trim()) {
-    andClauses.push({ applicationId: filters.applicationId.trim() });
+  const applicationId = sanitizeQueryText(filters.applicationId, 100);
+  if (applicationId) {
+    andClauses.push({ applicationId });
   }
 
-  if (filters.businessRecordId?.trim()) {
-    andClauses.push({ businessRecordId: filters.businessRecordId.trim() });
+  const businessRecordId = sanitizeQueryText(filters.businessRecordId, 100);
+  if (businessRecordId) {
+    andClauses.push({ businessRecordId });
   }
 
   if (filters.applicationIds && filters.applicationIds.length > 0) {
     andClauses.push({ applicationId: { in: filters.applicationIds } });
   }
 
-  if (filters.applicationNumberSearch?.trim()) {
-    const applicationNumberSearch = filters.applicationNumberSearch.trim();
+  const applicationNumberSearch = sanitizeQueryText(filters.applicationNumberSearch, 100);
+  if (applicationNumberSearch) {
     const orClauses: Array<Record<string, unknown>> = [{ entityId: { contains: applicationNumberSearch } }];
 
     if (filters.applicationIds && filters.applicationIds.length > 0) {
@@ -494,8 +510,8 @@ function buildAuditLogWhere(filters: AuditLogQueryFilters) {
     andClauses.push({ createdAt });
   }
 
-  if (filters.search?.trim()) {
-    const searchValue = filters.search.trim();
+  const searchValue = sanitizeQueryText(filters.search, 120);
+  if (searchValue) {
     const orClauses: Array<Record<string, unknown>> = [
       { actorName: { contains: searchValue } },
       { actorRole: { contains: searchValue } },

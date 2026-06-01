@@ -36,6 +36,7 @@ export function ApplicantLayoutClient({
   const [guardError, setGuardError] = useState<string | null>(null);
   const [guardAttempt, setGuardAttempt] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [profileImageFailed, setProfileImageFailed] = useState(false);
 
   // Refs to prevent repeated fetching. Reset when pathname changes so
   // post-upload navigation re-checks once, then stabilises.
@@ -95,6 +96,7 @@ export function ApplicantLayoutClient({
 
         if (active) {
           setProfileImageUrl(data.profileImage?.signedUrl ?? data.profilePictureUrl ?? null);
+          setProfileImageFailed(false);
         }
 
         if (!hasProfileImage && !onSetupPage) {
@@ -255,12 +257,13 @@ export function ApplicantLayoutClient({
                 <p className="truncate text-sm font-semibold text-slate-900">{userName}</p>
                 <p className="truncate text-xs text-slate-500">Applicant Portal</p>
               </div>
-              {profileImageUrl ? (
+              {profileImageUrl && !profileImageFailed ? (
                 <img
                   src={profileImageUrl}
                   alt={`${userName} profile picture`}
                   className="h-10 w-10 rounded-xl object-cover ring-1 ring-emerald-100 shadow-sm"
                   referrerPolicy="no-referrer"
+                  onError={() => setProfileImageFailed(true)}
                 />
               ) : (
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shadow-sm">

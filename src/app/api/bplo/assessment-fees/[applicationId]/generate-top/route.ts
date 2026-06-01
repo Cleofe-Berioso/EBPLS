@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireBploSession } from "@/lib/bplo-api";
 import { generateTop } from "@/lib/bplo-assessment";
 import type { AssessmentInput } from "@/lib/bplo-assessment";
@@ -36,13 +37,13 @@ export async function POST(
     });
     return NextResponse.json({ generated });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to generate Tax Order of Payment";
+    const message = error instanceof Error ? error.message : "";
     const status =
       message === "Application not found"
         ? 404
         : message.includes("can only be") || message.includes("Current status")
           ? 422
           : 400;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to generate Tax Order of Payment") }, { status });
   }
 }

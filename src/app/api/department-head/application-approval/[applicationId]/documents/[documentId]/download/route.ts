@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { getDepartmentHeadApprovalDocument, requireDepartmentHeadSession } from "@/lib/department-head-api";
 import { createStorageSignedUrl } from "@/lib/document-storage";
 
@@ -30,8 +31,8 @@ export async function GET(req: Request, context: RouteContext) {
 
     return NextResponse.redirect(redirectUrl, { status: 302 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to preview document";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Application not found" || message === "Document not found" ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to preview document") }, { status });
   }
 }
