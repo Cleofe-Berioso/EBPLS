@@ -144,13 +144,16 @@ function resolveDocumentType(applicationType: ApplicationType): IssuanceDocument
   return applicationType === "CLOSURE" ? "CLOSURE_CERTIFICATE" : "BUSINESS_PERMIT";
 }
 
-function resolvePermitExpirationDateForRelease(applicationType: ApplicationType): Date | null {
+function resolvePermitExpirationDateForRelease(
+  applicationType: ApplicationType,
+  issuedAt?: Date | null
+): Date | null {
   if (applicationType === "CLOSURE") {
     return null;
   }
 
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
+  const issuanceDate = issuedAt ?? new Date();
+  return new Date(Date.UTC(issuanceDate.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
 }
 
 const PERMIT_NUMBER_YEAR_SEQ_REGEX = /^(\d{4})-(\d{6})$/;
@@ -462,7 +465,10 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any): Promise<string 
     assetSize: typeof form.assetSize === "string" ? form.assetSize : null,
     isMarket: typeof form.isMarket === "boolean" ? form.isMarket : false,
     isAgriculture: typeof form.isAgriculture === "boolean" ? form.isAgriculture : false,
-    permitExpirationDate: resolvePermitExpirationDateForRelease(app.applicationType as ApplicationType),
+    permitExpirationDate: resolvePermitExpirationDateForRelease(
+      app.applicationType as ApplicationType,
+      app.permitIssuance?.issuedAt ?? null
+    ),
     businessStatus: "ACTIVE" as const,
     closedAt: null,
     closureApplicationId: null,

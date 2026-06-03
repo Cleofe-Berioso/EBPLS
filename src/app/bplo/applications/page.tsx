@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { listBploApplications } from "@/lib/bplo-applications";
+import { resolveApplicantProfileImageUrl } from "@/lib/profile-image-url";
 import { StatusBadge } from "@/components/applicant/status-badge";
 import type { ApplicationStatus } from "@/lib/applicant-types";
 import { PageHeader } from "@/components/ui/page-header";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { SectionCard } from "@/components/ui/section-card";
+import { UserAvatar } from "@/components/ui/user-avatar";
 
 interface PageProps {
   searchParams: Promise<{
@@ -32,6 +34,16 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
     type: filters.type ?? "ALL",
     status: filters.status ?? "ALL",
   });
+
+  // Resolve applicant profile picture signed URLs in parallel (server-side)
+  const rowsWithPics = await Promise.all(
+    rows.map(async (row) => {
+      const profilePictureUrl = await resolveApplicantProfileImageUrl(row.applicantProfilePicturePath, {
+        expiresInSeconds: 300,
+      });
+      return { ...row, profilePictureUrl };
+    })
+  );
 
   const hasActiveFilters = filters.search || filters.type !== "ALL" || filters.status !== "ALL";
 
@@ -108,9 +120,9 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
       {/* Review Queue Card */}
       <SectionCard
         title="Review Queue"
-        description={`${rows.length} application${rows.length === 1 ? "" : "s"} match${rows.length === 1 ? "es" : ""} your filters.`}
+        description={`${rowsWithPics.length} application${rowsWithPics.length === 1 ? "" : "s"} match${rowsWithPics.length === 1 ? "es" : ""} your filters.`}
       >
-        {rows.length === 0 ? (
+        {rowsWithPics.length === 0 ? (
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-6 py-12 text-center">
             <AlertCircle className="mx-auto mb-3 h-8 w-8 text-slate-400" />
             <h3 className="text-sm font-medium text-slate-900">No applications found.</h3>
@@ -140,14 +152,23 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {rows.map((row) => (
+                  {rowsWithPics.map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="px-5 py-4 align-middle">
                         <StatusBadge status={row.status as ApplicationStatus} />
                       </td>
                       <td className="px-5 py-4 text-slate-900 font-mono text-xs">{row.applicationNumber}</td>
                       <td className="px-5 py-4 text-slate-900 font-medium">{row.businessName}</td>
-                      <td className="px-5 py-4 text-slate-700">{row.applicantName || row.applicantEmail}</td>
+                      <td className="px-5 py-4 text-slate-700">
+                        <div className="flex items-center gap-2">
+                          <UserAvatar
+                            src={row.profilePictureUrl}
+                            name={row.applicantName || row.applicantEmail}
+                            size="sm"
+                          />
+                          <span>{row.applicantName || row.applicantEmail}</span>
+                        </div>
+                      </td>
                       <td className="px-5 py-4 text-slate-700">{row.applicationType}</td>
                       <td className="px-5 py-4 text-slate-600">{formatDate(row.dateSubmitted)}</td>
                       <td className="px-5 py-4">
@@ -163,7 +184,7 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
 
             {/* Mobile Cards */}
             <div className="space-y-3 lg:hidden">
-              {rows.map((row) => (
+              {rowsWithPics.map((row) => (
                 <article key={row.id} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-grow">
@@ -175,7 +196,15 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
                     </div>
                   </div>
                   <div className="space-y-1 text-xs text-slate-600">
-                    <p><span className="font-medium">Applicant:</span> {row.applicantName || row.applicantEmail}</p>
+                    <div className="flex items-center gap-1.5">
+                      <UserAvatar
+                        src={row.profilePictureUrl}
+                        name={row.applicantName || row.applicantEmail}
+                        size="sm"
+                        className="h-6 w-6 text-[10px]"
+                      />
+                      <span><span className="font-medium">Applicant:</span> {row.applicantName || row.applicantEmail}</span>
+                    </div>
                     <p><span className="font-medium">Type:</span> {row.applicationType}</p>
                     <p><span className="font-medium">Submitted:</span> {formatDate(row.dateSubmitted)}</p>
                   </div>

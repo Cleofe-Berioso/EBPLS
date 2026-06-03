@@ -13,7 +13,7 @@ function dateLabel(value: string | null): string {
   return new Date(value).toLocaleDateString("en-PH", {
     year: "numeric",
     month: "long",
-    day: "numeric",
+    day: "2-digit",
   });
 }
 
@@ -21,29 +21,35 @@ function moneyLabel(value: number): string {
   return `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function DetailRow({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
-  return (
-    <div className="grid grid-cols-[170px_1fr] gap-3 border-b border-black/30 py-2 text-[13px] leading-tight sm:grid-cols-[190px_1fr]">
-      <p className="font-semibold text-black">{label}</p>
-      <p className={multiline ? "whitespace-pre-line font-semibold text-black" : "font-semibold text-black"}>{value || "-"}</p>
-    </div>
-  );
+function printDateLabel(): string {
+  return new Date().toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+  });
 }
 
-function SignatureBlock() {
+function displayText(value: string | null | undefined): string {
+  if (!value) return "";
+  return value === "—" ? "" : value;
+}
+
+function InlineUnderlinedField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="pt-4 text-center text-black">
-      <div className="mx-auto h-12 w-full max-w-[220px] border-b border-black" />
-      <p className="mt-2 text-[14px] font-bold uppercase tracking-wide">MUNICIPAL MAYOR</p>
+    <div className="flex items-end gap-2 text-[14px]">
+      <p className="whitespace-nowrap font-semibold">{label}</p>
+      <p className="min-h-[24px] flex-1 border-b border-black pb-0.5 font-bold">{value || "-"}</p>
     </div>
   );
 }
 
 export function BusinessPermitTemplate({ permit, variant = "official" }: BusinessPermitTemplateProps) {
   const applicantPreview = variant === "applicant-preview";
+  const lineOfBusiness = displayText(permit.lineOfBusiness || permit.natureOfBusiness || permit.businessActivity).trim();
+  const lineOfBusinessLabel = lineOfBusiness ? lineOfBusiness.toUpperCase() : "LINE OF BUSINESS NOT SPECIFIED";
 
   return (
-    <section className="mx-auto w-full max-w-[820px] bg-white px-3 py-4 text-black sm:px-4 print:max-w-none print:px-0 print:py-0">
+    <section className="mx-auto w-full max-w-[860px] bg-white px-3 py-4 text-black sm:px-4 print:max-w-none print:px-0 print:py-0">
       <div className="no-print mb-3 flex items-center justify-between gap-3">
         <p className="text-sm text-slate-600">
           {applicantPreview ? "Applicant permit preview only. Official printing and release remain under BPLO." : "Official permit print preview."}
@@ -57,126 +63,102 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
         </button>
       </div>
 
-      <article className="relative overflow-hidden border-[3px] border-black bg-white px-4 py-4 sm:px-6 sm:py-5 print:border-[2px]">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.08]">
-          <div className="absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-black" />
-          <div className="absolute left-1/2 top-1/2 flex h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-black/60 bg-white/20">
-            <Image src="/images/logo.png" alt="Municipal seal watermark" width={220} height={220} className="h-[220px] w-[220px] object-contain" />
+      <article className="relative overflow-hidden rounded-[26px] border border-slate-300 bg-white px-7 py-5 shadow-[0_0_40px_rgba(15,23,42,0.06)] print:rounded-none print:shadow-none sm:px-9 sm:py-6">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.06]">
+          <div className="absolute left-1/2 top-[54%] h-[580px] w-[580px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-500" />
+          <div className="absolute left-1/2 top-[54%] flex h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-400/60 bg-white/10">
+            <Image src="/images/logo.png" alt="Municipal seal watermark" width={360} height={360} className="h-[360px] w-[360px] object-contain" />
           </div>
         </div>
 
         <header className="relative z-10">
-          <div className="grid grid-cols-[76px_1fr_76px] items-start gap-3 sm:grid-cols-[90px_1fr_90px]">
+          <div className="grid grid-cols-[82px_1fr_82px] items-start gap-3 sm:grid-cols-[100px_1fr_100px]">
             <div className="flex justify-start">
-              <div className="flex h-[74px] w-[74px] items-center justify-center rounded-full border border-black bg-white p-1 sm:h-[86px] sm:w-[86px]">
-                <Image src="/images/logo.png" alt="Municipality seal" width={78} height={78} className="h-full w-full object-contain" />
+              <div className="flex h-[76px] w-[76px] items-center justify-center bg-white sm:h-[88px] sm:w-[88px]">
+                <Image src="/images/logo.png" alt="Municipality seal" width={84} height={84} className="h-full w-full object-contain" />
               </div>
             </div>
 
             <div className="text-center">
-              <p className="text-[12px] font-semibold uppercase leading-tight sm:text-[13px]">{permit.heading.republic}</p>
-              <p className="text-[12px] font-semibold uppercase leading-tight sm:text-[13px]">{permit.heading.province}</p>
-              <p className="text-[14px] font-bold uppercase leading-tight sm:text-[15px]">{permit.heading.municipality}</p>
-              <p className="text-[12px] font-semibold uppercase leading-tight sm:text-[13px]">Office of the Municipal Mayor</p>
+              <p className="text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.republic}</p>
+              <p className="mt-1 text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.province}</p>
+              <p className="mt-2 text-[24px] font-black uppercase leading-none tracking-[0.02em] sm:text-[34px]">{permit.heading.municipality}</p>
+              <p className="mt-2 text-[16px] font-extrabold uppercase leading-tight tracking-[0.08em]">{permit.heading.office}</p>
             </div>
 
             <div />
           </div>
 
-          <div className="mt-4 border-[3px] border-black px-3 py-2 text-center sm:px-4 sm:py-3">
-            <h1 className="text-[24px] font-extrabold tracking-[0.02em] text-[#b11d1d] sm:text-[30px]">
+          <div className="mt-5 border-[2px] border-slate-200 px-4 py-3 text-center">
+            <h1 className="text-[28px] font-black tracking-[0.01em] text-[#bf1d18] sm:text-[32px]">
               {permit.heading.title}
             </h1>
           </div>
         </header>
 
-        <section className="relative z-10 mt-4 grid gap-0 border-t border-black text-[13px]">
-          <div className="grid grid-cols-1 gap-0 border-b border-black/60 sm:grid-cols-3">
-            <div className="border-b border-black/60 px-3 py-2 sm:border-b-0 sm:border-r sm:border-black/60">
-              <p className="text-[11px] font-semibold uppercase">Permit No.</p>
-              <p className="mt-1 text-[16px] font-bold">{permit.permitNumber}</p>
+        <section className="relative z-10 mt-6 text-[13px] text-slate-950">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 border-b border-slate-200 pb-4 sm:grid-cols-3">
+            <div className="text-center">
+              <p className="text-[13px]">Date Issued:</p>
+              <p className="text-[17px] font-bold leading-tight">{dateLabel(permit.dateIssued)}</p>
             </div>
-            <div className="border-b border-black/60 px-3 py-2 sm:border-b-0 sm:border-r sm:border-black/60">
-              <p className="text-[11px] font-semibold uppercase">Application No.</p>
-              <p className="mt-1 text-[16px] font-bold">{permit.applicationNumber}</p>
+            <div className="text-center">
+              <p className="text-[13px]">Mayor&apos;s Permit No.:</p>
+              <p className="text-[17px] font-bold leading-tight">{permit.permitNumber}</p>
             </div>
-            <div className="px-3 py-2">
-              <p className="text-[11px] font-semibold uppercase">Permit Year</p>
-              <p className="mt-1 text-[16px] font-bold">{permit.taxYear}</p>
+            <div className="text-center">
+              <p className="text-[13px]">Permit Year:</p>
+              <p className="text-[17px] font-bold leading-tight">{permit.taxYear}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-0 border-b border-black/60 sm:grid-cols-3">
-            <div className="border-b border-black/60 px-3 py-2 sm:border-b-0 sm:border-r sm:border-black/60">
-              <p className="text-[11px] font-semibold uppercase">Date Issued</p>
-              <p className="mt-1 text-[14px] font-bold">{dateLabel(permit.dateIssued)}</p>
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 border-b border-slate-200 py-4 sm:grid-cols-3">
+            <div className="text-center">
+              <p className="text-[13px]">Permit Expires:</p>
+              <p className="text-[17px] font-bold leading-tight">{dateLabel(permit.validUntil)}</p>
             </div>
-            <div className="border-b border-black/60 px-3 py-2 sm:border-b-0 sm:border-r sm:border-black/60">
-              <p className="text-[11px] font-semibold uppercase">Expiry Date</p>
-              <p className="mt-1 text-[14px] font-bold">{dateLabel(permit.validUntil)}</p>
-            </div>
-            <div className="px-3 py-2">
-              <p className="text-[11px] font-semibold uppercase">Classification</p>
-              <p className="mt-1 text-[14px] font-bold">{permit.classification}</p>
+            <div />
+            <div className="text-center">
+              <p className="text-[13px]">Classification:</p>
+              <p className="text-[17px] font-bold leading-tight">{permit.classification}</p>
             </div>
           </div>
         </section>
 
-        <section className="relative z-10 mt-3 text-[13px]">
-          <DetailRow label="Business Trade Name:" value={permit.tradeName || permit.businessName} />
-          <DetailRow label="Owner/Applicant:" value={permit.ownerOrPresident} />
-          <DetailRow label="Business Address:" value={permit.businessAddress} multiline />
-          <DetailRow label="Line of Business:" value={permit.natureOfBusiness} />
-          <DetailRow label="Business Activity:" value={permit.businessActivity} />
-        </section>
+        <section className="relative z-10 mt-5 space-y-4 text-[14px]">
+          <p className="text-[28px] font-black leading-none sm:text-[30px]">This CERTIFIES that</p>
+          <InlineUnderlinedField label="Business Tradename:" value={permit.tradeName || permit.businessName} />
+          <InlineUnderlinedField label="Owner/Applicant Name:" value={permit.ownerOrPresident} />
+          <InlineUnderlinedField label="Business Address:" value={permit.businessAddress} />
 
-        <section className="relative z-10 mt-4 rounded border border-black px-4 py-3 text-[13px] leading-relaxed">
-          <p className="text-justify font-medium">
-            THIS CERTIFIES that the above-named business is hereby granted permission to operate within the Municipality of E.B. Magalona,
-            Province of Negros Occidental, subject to the provisions of existing laws, ordinances, rules and regulations, and other
-            issuances of this Municipality.
+          <p className="pt-1 text-justify leading-relaxed">
+            has been granted a <span className="font-extrabold uppercase">BUSINESS PERMIT</span> to operate the following business/activity subject to existing laws,
+            ordinances, rules and regulations of the Municipality of {permit.municipalityNameForBody} and to the pertinent provisions of
+            Republic Act 7160 otherwise known as the Local Government Code of 1991. Conditions stipulated in the application must be
+            complied with, and any infraction or violation may be sufficient ground for the revocation of the <span className="font-extrabold uppercase">PERMIT</span>.
           </p>
         </section>
 
-        <section className="relative z-10 mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-3">
-            <div className="rounded border border-black px-3 py-3 text-[13px]">
-              <p className="border-b border-black pb-1 text-[13px] font-bold uppercase tracking-wide">Payment Information</p>
-              <div className="mt-2 space-y-1.5">
-                <div className="grid grid-cols-[1fr_auto] gap-3">
-                  <span className="font-semibold">Official Receipt Number:</span>
-                  <span className="font-bold">{permit.orNumber}</span>
-                </div>
-                <div className="grid grid-cols-[1fr_auto] gap-3">
-                  <span className="font-semibold">Date:</span>
-                  <span className="font-bold">{dateLabel(permit.datePaid)}</span>
-                </div>
-                <div className="grid grid-cols-[1fr_auto] gap-3">
-                  <span className="font-semibold">Amount Paid:</span>
-                  <span className="font-bold">{permit.amountPaid > 0 ? moneyLabel(permit.amountPaid) : "-"}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded border-2 border-black px-3 py-3 text-center text-[15px] font-extrabold uppercase leading-tight">
-              Erasure and/or alteration will invalidate this permit
-            </div>
-          </div>
-
-          <div className="rounded border border-black px-3 py-3">
-            <p className="text-[13px] font-bold uppercase">Approved:</p>
-            <div className="flex min-h-[150px] items-end justify-center pb-2 sm:min-h-[170px]">
-              <SignatureBlock />
-            </div>
-          </div>
+        <section className="relative z-10 mt-8 rounded-none border-[2px] border-slate-200 px-4 py-7 text-center">
+          <p className="text-[24px] font-black uppercase leading-tight sm:text-[28px]">{lineOfBusinessLabel}</p>
+          <p className="mt-1 text-[12px] font-medium uppercase tracking-[0.08em] text-slate-700">Line of Business</p>
         </section>
 
-        <footer className="relative z-10 mt-4 border-t border-black pt-3 text-center text-[12px] leading-snug">
-          <p>
-            This permit shall be posted conspicuously at the place of business indicated herein and is <span className="font-bold uppercase">not transferable</span> to any other person, firm, or entity.
-          </p>
-          <p className="mt-1 text-[11px] font-medium">{permit.legalNote}</p>
-        </footer>
+        <section className="relative z-10 mt-10 grid min-h-[122px] grid-cols-[1fr_auto] items-end gap-6">
+          <div className="flex min-h-[88px] items-end">
+            <div className="text-[12px] text-slate-700">
+              <p>Generated by Electronic Business Permit and Licensing System (eBPLS)</p>
+              <p>Date Printed: {printDateLabel()}</p>
+              <p>{permit.legalNote}</p>
+            </div>
+          </div>
+
+          <div className="w-full max-w-[238px] text-center">
+            <div className="h-8 border-b border-black" />
+            <p className="mt-2 text-[16px] font-extrabold sm:text-[18px]">{permit.municipalMayorName}</p>
+            <p className="text-[14px]">Municipal Mayor</p>
+          </div>
+        </section>
       </article>
     </section>
   );

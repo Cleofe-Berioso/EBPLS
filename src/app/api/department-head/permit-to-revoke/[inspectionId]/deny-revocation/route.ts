@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { safeApiErrorMessage } from "@/lib/api-errors";
 import { logInspectionAction, logRevocationAction } from "@/lib/audit-log";
 import { applyDepartmentHeadRevocationDecision, requireDepartmentHeadSession } from "@/lib/department-head-api";
 
@@ -63,12 +62,18 @@ export async function POST(
     return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+
     const status =
-      message === "Inspection not found"
-        ? 404
-        : message.includes("required") || message.includes("review") || message.includes("finalized") || message.includes("verified")
-          ? 422
-          : 400;
-    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to deny revocation") }, { status });
+      message.includes("not found") ? 404
+        : message.includes("already been recorded") || message.includes("already marked as REVOKED")
+          ? 409
+          : message.includes("remarks are required") || message.includes("expected VERIFIED_NON_COMPLIANT")
+            || message.includes("expected NON_COMPLIANT") || message.includes("expected REVOCATION_REVIEW")
+            ? 422
+            : message.includes("Unauthorized") ? 403
+              : 500;
+
+    const responseMessage = message || "Unable to deny revocation. Please contact the system administrator.";
+    return NextResponse.json({ error: responseMessage }, { status });
   }
 }

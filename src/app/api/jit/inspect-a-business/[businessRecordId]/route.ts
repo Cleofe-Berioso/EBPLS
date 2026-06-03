@@ -20,9 +20,13 @@ export async function POST(
   const complianceStatusRaw = formData.get("complianceStatus");
   const commentRaw = formData.get("comment");
   const evidence = formData.get("evidencePhoto");
+  const recommendRevocationRaw = formData.get("recommendRevocation");
+  const revocationRemarksRaw = formData.get("revocationRemarks");
 
   const complianceStatus = typeof complianceStatusRaw === "string" ? complianceStatusRaw.trim() : "";
   const comment = typeof commentRaw === "string" ? commentRaw : undefined;
+  const recommendRevocation = typeof recommendRevocationRaw === "string" && recommendRevocationRaw === "1";
+  const revocationRemarks = typeof revocationRemarksRaw === "string" ? revocationRemarksRaw : undefined;
 
   if (complianceStatus !== "COMPLIANT" && complianceStatus !== "NON_COMPLIANT") {
     return NextResponse.json({ error: "complianceStatus must be COMPLIANT or NON_COMPLIANT" }, { status: 422 });
@@ -54,6 +58,8 @@ export async function POST(
     const inspection = await createJitInspection(businessRecordId, session.user.id, {
       complianceStatus,
       comment,
+      recommendRevocation,
+      revocationRemarks,
       evidence: storedEvidence
         ? {
             fileName: storedEvidence.fileName,

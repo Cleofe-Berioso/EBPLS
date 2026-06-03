@@ -626,7 +626,18 @@ async function getAssessmentApplication(applicationId: string, dbClient: any = p
 
 export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[]> {
   const rows = await prisma.businessApplication.findMany({
-    where: { status: { in: ASSESSMENT_QUEUE_STATUSES } },
+    where: {
+      OR: [
+        { status: { in: ASSESSMENT_QUEUE_STATUSES } },
+        {
+          feeAssessment: {
+            is: {
+              reassessmentRequestedAt: { not: null },
+            },
+          },
+        },
+      ],
+    },
     include: {
       applicant: { select: { name: true, email: true } },
       businessRecord: { select: { businessName: true } },
@@ -745,12 +756,24 @@ export async function getApplicationForAssessment(applicationId: string): Promis
   };
 }
 
-function canMutateAssessment(status: DbApplicationStatus): boolean {
-  return ASSESSMENT_MUTATION_ALLOWED_STATUSES.includes(status);
+function canMutateAssessment(status: DbApplicationStatus, hasPendingReassessment: boolean): boolean {
+  if (ASSESSMENT_MUTATION_ALLOWED_STATUSES.includes(status)) {
+    return true;
+  }
+
+  return status === "APPROVED_FOR_PAYMENT" && hasPendingReassessment;
 }
 
-function moveToAssessedWhenNeeded(status: DbApplicationStatus): DbApplicationStatus {
-  return status === "DEPARTMENT_HEAD_APPROVED" ? "ASSESSED" : status;
+function moveToAssessedWhenNeeded(status: DbApplicationStatus, hasPendingReassessment: boolean): DbApplicationStatus {
+  if (status === "DEPARTMENT_HEAD_APPROVED") {
+    return "ASSESSED";
+  }
+
+  if (status === "APPROVED_FOR_PAYMENT" && hasPendingReassessment) {
+    return "ASSESSED";
+  }
+
+  return status;
 }
 
 async function persistAssessment(
@@ -779,7 +802,8 @@ async function persistAssessment(
     throw new Error("Application not found");
   }
 
-  if (!canMutateAssessment(preCheckApplication.status as DbApplicationStatus)) {
+  const preCheckHasPendingReassessment = Boolean(preCheckApplication.feeAssessment?.reassessmentRequestedAt);
+  if (!canMutateAssessment(preCheckApplication.status as DbApplicationStatus, preCheckHasPendingReassessment)) {
     throw new Error(
       mode === "GENERATED"
         ? `Tax Order of Payment can only be generated for DEPARTMENT_HEAD_APPROVED or ASSESSED applications. Current status: ${preCheckApplication.status}`
@@ -827,7 +851,8 @@ async function persistAssessment(
     }
 
     // Re-validate status hasn't changed
-    if (!canMutateAssessment(application.status as DbApplicationStatus)) {
+    const hasPendingReassessment = Boolean(application.feeAssessment?.reassessmentRequestedAt);
+    if (!canMutateAssessment(application.status as DbApplicationStatus, hasPendingReassessment)) {
       throw new Error(
         mode === "GENERATED"
           ? `Tax Order of Payment can only be generated for DEPARTMENT_HEAD_APPROVED or ASSESSED applications. Current status: ${application.status}`
@@ -836,7 +861,7 @@ async function persistAssessment(
     }
 
     const initialStatus = application.status as DbApplicationStatus;
-    const workingStatus = moveToAssessedWhenNeeded(initialStatus);
+    const workingStatus = moveToAssessedWhenNeeded(initialStatus, hasPendingReassessment);
 
     if (workingStatus !== initialStatus) {
       assertStatusTransition(initialStatus, "ASSESSED");
@@ -960,7 +985,10 @@ async function persistAssessment(
           actorRole: "BPLO",
           fromStatus: initialStatus,
           toStatus: "ASSESSED",
-          remarks: "Assessment processing started after Department Head approval.",
+          remarks:
+            initialStatus === "APPROVED_FOR_PAYMENT"
+              ? "Assessment workflow reopened for applicant-requested reassessment."
+              : "Assessment processing started after Department Head approval.",
         },
       });
     }

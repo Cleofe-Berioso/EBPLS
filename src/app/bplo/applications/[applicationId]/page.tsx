@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Mail, Phone } from "lucide-react";
 import { getBploApplicationDetail } from "@/lib/bplo-applications";
+import { formatPersonName } from "@/lib/person-name";
+import { resolveApplicantProfileImageUrl } from "@/lib/profile-image-url";
 import { StatusBadge } from "@/components/applicant/status-badge";
 import { StatusTracker } from "@/components/applicant/status-tracker";
 import { BploReviewActions } from "@/components/bplo/bplo-review-actions";
@@ -10,10 +13,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { Timeline } from "@/components/ui/timeline";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { BploDocumentPreviewList } from "@/components/bplo/bplo-document-preview-list";
+import { UserAvatar } from "@/components/ui/user-avatar";
 
 interface PageProps {
   params: Promise<{ applicationId: string }>;
 }
+
+const PROFILE_IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 30;
 
 const formatDateTime = (value: string | Date) =>
   new Intl.DateTimeFormat("en-PH", {
@@ -136,15 +143,26 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
   }
 
   const formData = application.formData as Record<string, unknown>;
+  const profilePictureUrl = await resolveApplicantProfileImageUrl(application.applicant.profileImageStoragePath, {
+    expiresInSeconds: PROFILE_IMAGE_SIGNED_URL_TTL_SECONDS,
+  });
   const statusGuidance = getStatusGuidance(application.status);
   const latestRemarks = application.history.find(
     (item: any) => typeof item.remarks === "string" && item.remarks.trim().length > 0
   );
+  const applicantName = formatPersonName({
+    firstName: application.applicant.firstName,
+    middleName: application.applicant.middleName,
+    lastName: application.applicant.lastName,
+    suffix: application.applicant.suffix,
+    fallbackName: application.applicant.name,
+  });
+  const applicantContactNumber = readText(formData, ["phone"], application.businessPhone ?? "No contact number provided.");
   const ownerName = readText(formData, ["ownerName"]);
   const ownerFirstName = readText(formData, ["ownerFirstName"], "");
   const ownerMiddleName = readText(formData, ["ownerMiddleName"], "");
   const ownerSurname = readText(formData, ["ownerSurname"], "");
-  const closureReason = readText(formData, ["closureReason", "reasonForClosure", "closureRemarks"], "-");
+
   const latitude = typeof formData.businessLatitude === "number" ? formData.businessLatitude : null;
   const longitude = typeof formData.businessLongitude === "number" ? formData.businessLongitude : null;
 
@@ -161,40 +179,58 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
         }
       />
 
-      <SectionCard title="Application Summary" description={`${application.businessName} - ${application.applicationType}`}>
-        <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Application Number</p>
-            <p className="mt-1 font-medium text-slate-900">{application.applicationNumber}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Business Name</p>
-            <p className="mt-1 font-medium text-slate-900">{application.businessName}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Applicant</p>
-            <p className="mt-1 font-medium text-slate-900">{application.applicant.name}</p>
-            <p className="text-xs text-slate-500">{application.applicant.email}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Application Type</p>
-            <p className="mt-1 font-medium text-slate-900">{application.applicationType}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Date Submitted</p>
-            <p className="mt-1 font-medium text-slate-900">
-              {application.submittedAt ? formatDateTime(application.submittedAt) : "-"}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Current Status</p>
-            <div className="mt-1">
-              <StatusBadge status={application.status as ApplicationStatus} />
+      <SectionCard contentClassName="py-6 sm:py-7">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div className="flex shrink-0 justify-center sm:justify-start">
+              <UserAvatar
+                src={profilePictureUrl}
+                name={applicantName}
+                size="lg"
+                className="h-28 w-28 shadow-sm sm:h-32 sm:w-32"
+              />
+            </div>
+
+            <div className="min-w-0 space-y-3 text-center sm:text-left">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">Applicant</p>
+              <div className="space-y-1.5">
+                <h3 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-[2rem]">{applicantName}</h3>
+                <p className="text-sm text-slate-500">{application.businessName}</p>
+              </div>
+              <div className="space-y-2 text-sm text-slate-600">
+                <div className="flex items-center justify-center gap-2 sm:justify-start">
+                  <Mail className="h-4 w-4 text-slate-400" />
+                  <span className="break-all">{application.applicant.email}</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 sm:justify-start">
+                  <Phone className="h-4 w-4 text-slate-400" />
+                  <span>{applicantContactNumber}</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Last Updated</p>
-            <p className="mt-1 font-medium text-slate-900">{formatDateTime(application.updatedAt)}</p>
+
+          <div className="grid gap-3 text-sm sm:grid-cols-2 lg:w-[26rem] lg:grid-cols-2 lg:self-stretch">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Application Number</p>
+              <p className="mt-2 font-medium text-slate-900">{application.applicationNumber}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Application Type</p>
+              <p className="mt-2 font-medium text-slate-900">{application.applicationType}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date Submitted</p>
+              <p className="mt-2 font-medium text-slate-900">
+                {application.submittedAt ? formatDateTime(application.submittedAt) : "-"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Current Status</p>
+              <div className="mt-2">
+                <StatusBadge status={application.status as ApplicationStatus} />
+              </div>
+            </div>
           </div>
         </div>
       </SectionCard>
@@ -216,27 +252,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
       <BploReviewActions applicationId={application.id} currentStatus={application.status} />
 
       <SectionCard title="Documents" description="Requirements attached by the applicant for BPLO review.">
-        <ul className="space-y-2 text-sm text-slate-700">
-          {application.documents.map((doc: any) => (
-            <li key={doc.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-              <div>
-                <p><strong>{doc.documentName}</strong>: {doc.fileName}</p>
-                <p className="text-xs text-slate-500">Uploaded: {formatDateTime(doc.uploadedAt)}</p>
-              </div>
-              <a
-                href={`/api/bplo/applications/${application.id}/documents/${doc.id}/download`}
-                className={actionButtonStyles("secondary", "sm")}
-              >
-                View / Download
-              </a>
-            </li>
-          ))}
-          {application.documents.length === 0 ? (
-            <li>
-              <EmptyState title="No uploaded documents" description="No records available yet for this application." />
-            </li>
-          ) : null}
-        </ul>
+        <BploDocumentPreviewList applicationId={application.id} documents={application.documents} />
       </SectionCard>
 
       <SectionCard title="Remarks" description="Latest BPLO remarks and comment trail context.">
@@ -328,9 +344,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           <SectionCard title="Application-specific Notes" description="Renewal and closure-specific submitted details.">
             <div className="space-y-2 text-sm text-slate-700">
               <p><strong>Application Type:</strong> {application.applicationType}</p>
-              {application.applicationType === "CLOSURE" ? (
-                <p><strong>Closure Reason:</strong> {closureReason}</p>
-              ) : null}
+
               {application.applicationType === "RENEWAL" ? (
                 <p><strong>Renewal Payment Preference:</strong> {readText(formData, ["paymentFrequency"])}</p>
               ) : null}

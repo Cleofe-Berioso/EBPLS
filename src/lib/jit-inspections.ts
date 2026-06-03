@@ -24,6 +24,8 @@ interface CreateInspectionInput {
   complianceStatus: ComplianceStatus;
   comment?: string;
   evidence?: EvidencePayload;
+  recommendRevocation?: boolean;
+  revocationRemarks?: string;
 }
 
 export type JitMapMarkerStatus = "UNINSPECTED" | "PENDING_INSPECTION" | "COMPLIANT" | "REVOKED";
@@ -147,6 +149,8 @@ export async function createJitInspection(
 ) {
   const complianceStatus = input.complianceStatus;
   const trimmedComment = input.comment?.trim() ?? "";
+  const recommendRevocation = Boolean(input.recommendRevocation);
+  const revocationRemarks = input.revocationRemarks?.trim() ?? "";
 
   if (complianceStatus !== "COMPLIANT" && complianceStatus !== "NON_COMPLIANT") {
     throw new Error("complianceStatus must be COMPLIANT or NON_COMPLIANT");
@@ -155,8 +159,10 @@ export async function createJitInspection(
   if (!trimmedComment) {
     throw new Error("Comment is required for all inspections");
   }
-  if (!input.evidence) {
-    throw new Error("Photo evidence is required for all inspections");
+  // Evidence is required only when JIT recommends revocation
+  if (recommendRevocation) {
+    if (!revocationRemarks) throw new Error("Revocation remarks are required when recommending revocation");
+    if (!input.evidence) throw new Error("Photo evidence is required when recommending revocation");
   }
 
   const created = await prisma.$transaction(async (tx: any) => {
@@ -200,11 +206,12 @@ export async function createJitInspection(
         complianceStatus,
         status: "DH_VERIFICATION_PENDING",
         comment: trimmedComment || null,
-        evidenceFileName: input.evidence.fileName,
-        evidenceStoragePath: input.evidence.storagePath,
-        evidenceBucket: input.evidence.bucket ?? null,
-        evidenceMimeType: input.evidence.mimeType,
-        evidenceSizeBytes: input.evidence.sizeBytes,
+        evidenceFileName: input.evidence?.fileName ?? null,
+        evidenceStoragePath: input.evidence?.storagePath ?? null,
+        evidenceBucket: input.evidence?.bucket ?? null,
+        evidenceMimeType: input.evidence?.mimeType ?? null,
+        evidenceSizeBytes: input.evidence?.sizeBytes ?? null,
+        revocationRemarks: recommendRevocation ? revocationRemarks || null : null,
       },
       select: {
         id: true,

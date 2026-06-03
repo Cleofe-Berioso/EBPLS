@@ -8,10 +8,16 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { MapLegendCard } from "@/components/ui/map-legend-card";
 import { SectionCard } from "@/components/ui/section-card";
-import { MAP_CATEGORY_META, type MapBusinessCategory } from "@/lib/business-map-categories";
+import {
+  MAP_CATEGORY_META,
+  type MapBusinessCategory,
+} from "@/lib/business-map-categories";
 
 const LeafletBusinessMap = dynamic(
-  () => import("@/components/maps/leaflet-business-map").then((mod) => mod.LeafletBusinessMap),
+  () =>
+    import("@/components/maps/leaflet-business-map").then(
+      (mod) => mod.LeafletBusinessMap
+    ),
   {
     ssr: false,
     loading: () => (
@@ -55,20 +61,15 @@ const BPLO_MAP_LEGEND_GROUPS = [
   },
 ];
 
-function typeClass(type: BploBusinessLocationRow["applicationType"]): string {
-  if (type === "RENEWAL") return "border-violet-200 bg-violet-50 text-violet-700";
-  return "border-teal-200 bg-teal-50 text-teal-700";
-}
-
 export function BploBusinessMapClient() {
   const [rows, setRows] = useState<BploBusinessLocationRow[]>([]);
   const [typeFilter, setTypeFilter] = useState<ApplicationTypeFilter>("ALL");
-  const [categoryFilter, setCategoryFilter] = useState<"ALL" | MapBusinessCategory>("ALL");
+  const [categoryFilter, setCategoryFilter] = useState<
+    "ALL" | MapBusinessCategory
+  >("ALL");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [searchFilter, setSearchFilter] = useState("");
-  const [returnRemarksById, setReturnRemarksById] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapKey, setMapKey] = useState(0);
 
@@ -76,9 +77,14 @@ export function BploBusinessMapClient() {
     setIsLoading(true);
     setError(null);
 
-    const response = await fetch(`/api/bplo/business-map`, { cache: "no-store" });
+    const response = await fetch(`/api/bplo/business-map`, {
+      cache: "no-store",
+    });
 
-    const data = (await response.json()) as { rows?: BploBusinessLocationRow[]; error?: string };
+    const data = (await response.json()) as {
+      rows?: BploBusinessLocationRow[];
+      error?: string;
+    };
 
     if (!response.ok) {
       setError(data.error ?? "Unable to load business map records");
@@ -97,17 +103,31 @@ export function BploBusinessMapClient() {
   const visibleRows = useMemo(
     () =>
       rows.filter((row) => {
-        if (typeFilter !== "ALL" && row.applicationType !== typeFilter) return false;
-        if (categoryFilter !== "ALL" && row.businessCategory !== categoryFilter) return false;
+        if (typeFilter !== "ALL" && row.applicationType !== typeFilter) {
+          return false;
+        }
+
+        if (
+          categoryFilter !== "ALL" &&
+          row.businessCategory !== categoryFilter
+        ) {
+          return false;
+        }
 
         if (ownerFilter.trim()) {
           const owner = ownerFilter.trim().toLowerCase();
-          if (!row.ownerName.toLowerCase().includes(owner)) return false;
+
+          if (!row.ownerName.toLowerCase().includes(owner)) {
+            return false;
+          }
         }
 
         if (searchFilter.trim()) {
           const search = searchFilter.trim().toLowerCase();
-          if (!row.businessName.toLowerCase().includes(search)) return false;
+
+          if (!row.businessName.toLowerCase().includes(search)) {
+            return false;
+          }
         }
 
         return true;
@@ -122,7 +142,9 @@ export function BploBusinessMapClient() {
         latitude: row.latitude,
         longitude: row.longitude,
         title: row.businessName,
-        subtitle: `${row.applicationNumber} • ${row.permitOrCertificateNumber ?? "No document number"}`,
+        subtitle: `${row.applicationNumber} • ${
+          row.permitOrCertificateNumber ?? "No document number"
+        }`,
         applicationType: row.applicationType,
         permitOrCertificateNumber: row.permitOrCertificateNumber,
         address: row.address,
@@ -141,12 +163,25 @@ export function BploBusinessMapClient() {
       (accumulator, row) => {
         accumulator.total += 1;
 
-        if (row.status === "PENDING") accumulator.pending += 1;
-        if (row.status === "VERIFIED") accumulator.verified += 1;
-        if (row.status === "NEEDS_CORRECTION") accumulator.needsCorrection += 1;
+        if (row.status === "PENDING") {
+          accumulator.pending += 1;
+        }
 
-        if (row.applicationType === "NEW") accumulator.newCount += 1;
-        if (row.applicationType === "RENEWAL") accumulator.renewalCount += 1;
+        if (row.status === "VERIFIED") {
+          accumulator.verified += 1;
+        }
+
+        if (row.status === "NEEDS_CORRECTION") {
+          accumulator.needsCorrection += 1;
+        }
+
+        if (row.applicationType === "NEW") {
+          accumulator.newCount += 1;
+        }
+
+        if (row.applicationType === "RENEWAL") {
+          accumulator.renewalCount += 1;
+        }
 
         return accumulator;
       },
@@ -160,51 +195,6 @@ export function BploBusinessMapClient() {
       }
     );
   }, [visibleRows]);
-
-  async function verifyLocation(row: BploBusinessLocationRow) {
-    setIsSaving(true);
-    const response = await fetch(`/api/bplo/business-map/${row.locationId}/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-
-    const data = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(data.error ?? "Unable to verify location");
-      setIsSaving(false);
-      return;
-    }
-
-    setIsSaving(false);
-    await loadRows();
-  }
-
-  async function returnForCorrection(row: BploBusinessLocationRow) {
-    const remarks = (returnRemarksById[row.locationId] ?? "").trim();
-    if (!remarks) {
-      setError("Remarks are required when returning location for correction");
-      return;
-    }
-
-    setIsSaving(true);
-    const response = await fetch(`/api/bplo/business-map/${row.locationId}/return`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remarks }),
-    });
-
-    const data = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(data.error ?? "Unable to return location for correction");
-      setIsSaving(false);
-      return;
-    }
-
-    setReturnRemarksById((prev) => ({ ...prev, [row.locationId]: "" }));
-    setIsSaving(false);
-    await loadRows();
-  }
 
   return (
     <div className="space-y-5">
@@ -228,11 +218,15 @@ export function BploBusinessMapClient() {
               <div className="rounded-[30px] border border-slate-200 bg-white p-3 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">EB Magalona Review Map</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      EB Magalona Review Map
+                    </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      OpenStreetMap tiles and saved business coordinates remain unchanged.
+                      OpenStreetMap tiles and saved business coordinates remain
+                      unchanged.
                     </p>
                   </div>
+
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -241,6 +235,7 @@ export function BploBusinessMapClient() {
                     >
                       Re-center to EB Magalona
                     </button>
+
                     <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
                       BPLO Review View
                     </span>
@@ -248,20 +243,31 @@ export function BploBusinessMapClient() {
                 </div>
 
                 <div className="mt-3">
-                <LeafletBusinessMap
-                  key={mapKey}
-                  center={[EB_MAGALONA_CENTER.latitude, EB_MAGALONA_CENTER.longitude]}
-                  zoom={13}
-                  markers={markers}
-                  className="h-[380px] w-full overflow-hidden rounded-[26px] sm:h-[460px] xl:h-[580px]"
-                />
+                  <LeafletBusinessMap
+                    key={mapKey}
+                    center={[
+                      EB_MAGALONA_CENTER.latitude,
+                      EB_MAGALONA_CENTER.longitude,
+                    ]}
+                    zoom={13}
+                    markers={markers}
+                    className="h-[380px] w-full overflow-hidden rounded-[26px] sm:h-[460px] xl:h-[580px]"
+                  />
                 </div>
               </div>
             )}
 
             <p className="text-xs leading-5 text-slate-500">
-              Map focus remains within EB Magalona. Marker clicks open business details, and verify/return actions use the same behavior.
+              Map focus remains within EB Magalona. Marker clicks open business
+              details, and verify/return actions use the same behavior.
             </p>
+
+            <MapLegendCard
+              title="Map Legend"
+              subtitle="Legend and filter controls stay outside the map so they never cover pins or popups."
+              groups={BPLO_MAP_LEGEND_GROUPS}
+              footer="EB Magalona business map only."
+            />
 
             {!isLoading && rows.length === 0 ? (
               <EmptyState
@@ -279,10 +285,14 @@ export function BploBusinessMapClient() {
             contentClassName="grid gap-3"
           >
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-slate-700">Application Type</span>
+              <span className="font-medium text-slate-700">
+                Application Type
+              </span>
               <select
                 value={typeFilter}
-                onChange={(event) => setTypeFilter(event.target.value as ApplicationTypeFilter)}
+                onChange={(event) =>
+                  setTypeFilter(event.target.value as ApplicationTypeFilter)
+                }
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700"
               >
                 <option value="ALL">All</option>
@@ -292,10 +302,16 @@ export function BploBusinessMapClient() {
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-slate-700">Business Category</span>
+              <span className="font-medium text-slate-700">
+                Business Category
+              </span>
               <select
                 value={categoryFilter}
-                onChange={(event) => setCategoryFilter(event.target.value as "ALL" | MapBusinessCategory)}
+                onChange={(event) =>
+                  setCategoryFilter(
+                    event.target.value as "ALL" | MapBusinessCategory
+                  )
+                }
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700"
               >
                 <option value="ALL">All</option>
@@ -308,7 +324,9 @@ export function BploBusinessMapClient() {
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-slate-700">Owner / Operator</span>
+              <span className="font-medium text-slate-700">
+                Owner / Operator
+              </span>
               <input
                 value={ownerFilter}
                 onChange={(event) => setOwnerFilter(event.target.value)}
@@ -328,13 +346,18 @@ export function BploBusinessMapClient() {
             </label>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
-              <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">Active Filters</p>
+              <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Active Filters
+              </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700">
                   Type: {typeFilter === "ALL" ? "All" : typeFilter}
                 </span>
                 <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700">
-                  Category: {categoryFilter === "ALL" ? "All" : MAP_CATEGORY_META[categoryFilter].label}
+                  Category:{" "}
+                  {categoryFilter === "ALL"
+                    ? "All"
+                    : MAP_CATEGORY_META[categoryFilter].label}
                 </span>
               </div>
             </div>
@@ -342,19 +365,41 @@ export function BploBusinessMapClient() {
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Location Summary</p>
-              <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{summary.total}</p>
-              <p className="mt-1 text-sm text-slate-600">Records matched by the current BPLO filters.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Location Summary
+              </p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+                {summary.total}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                Records matched by the current BPLO filters.
+              </p>
             </div>
+
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Queue Split</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Queue Split
+              </p>
               <div className="mt-2 space-y-1.5 text-sm text-slate-600">
-                <p>New: <span className="font-semibold text-slate-900">{summary.newCount}</span></p>
-                <p>Renewal: <span className="font-semibold text-slate-900">{summary.renewalCount}</span></p>
+                <p>
+                  New:{" "}
+                  <span className="font-semibold text-slate-900">
+                    {summary.newCount}
+                  </span>
+                </p>
+                <p>
+                  Renewal:{" "}
+                  <span className="font-semibold text-slate-900">
+                    {summary.renewalCount}
+                  </span>
+                </p>
               </div>
             </div>
+
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2 xl:col-span-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Application Types</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Application Types
+              </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="inline-flex rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-700">
                   New {summary.newCount}
@@ -365,164 +410,10 @@ export function BploBusinessMapClient() {
               </div>
             </div>
           </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-            <p className="text-sm font-semibold text-slate-900">Review Focus</p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Use the map for quick geographic review, then confirm or return the submitted location from the queue below. Existing verify and return behavior remains unchanged.
-            </p>
-          </div>
-
-          <InfoBanner
-            title="Verification actions stay unchanged"
-            description="Use Verify Location to confirm a submitted pin, or Return for Correction with remarks to send it back to the applicant. Existing API routes and BPLO rules remain unchanged."
-            variant="info"
-          />
-
-          <MapLegendCard
-            title="Map Legend"
-            subtitle="Legend and filter controls stay outside the map so they never cover pins or popups."
-            groups={BPLO_MAP_LEGEND_GROUPS}
-            footer="EB Magalona business map only."
-          />
         </div>
       </div>
 
-      <SectionCard
-        title={`Location Submissions (${visibleRows.length})`}
-        description="Review submitted Business Location records, then verify or return for correction with remarks."
-      >
-        {visibleRows.length === 0 ? (
-          <EmptyState
-            title="No records available yet"
-            description="Location submissions that match your selected filters will appear here."
-          />
-        ) : (
-          <div className="space-y-4">
-            {visibleRows.map((row) => (
-              <div
-                key={row.locationId}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
-              >
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="min-w-0 space-y-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 space-y-1.5 text-sm text-slate-700">
-                        <p className="text-base font-semibold tracking-tight text-slate-900">{row.businessName}</p>
-                        <p className="text-xs text-slate-600">Owner: {row.ownerName}</p>
-                        <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-                          {row.applicationNumber}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${typeClass(row.applicationType)}`}>
-                            {row.applicationType}
-                          </span>
-                          <span
-                            className="inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-                            style={{ borderColor: row.businessCategoryColor, color: row.businessCategoryColor }}
-                          >
-                            {row.businessCategoryLabel}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-2xl border border-white/70 bg-white px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Business Application</p>
-                        <p className="mt-2 text-sm font-semibold text-slate-900">{row.applicationType}</p>
-                        <p className="mt-1 text-xs text-slate-500">Record lifecycle type for this application.</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/70 bg-white px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Business Category</p>
-                        <p className="mt-2 text-sm font-semibold" style={{ color: row.businessCategoryColor }}>
-                          {row.businessCategoryLabel}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">Derived from business classification, not application type.</p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-2xl border border-white/70 bg-white px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Coordinates</p>
-                        <p className="mt-2 font-mono text-sm font-semibold text-slate-900">
-                          {row.latitude.toFixed(6)}, {row.longitude.toFixed(6)}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">Current applicant-submitted location pin.</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/70 bg-white px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Permit / Certificate</p>
-                        <p className="mt-2 text-sm font-semibold text-slate-900">
-                          {row.permitOrCertificateNumber ?? "No number recorded"}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">Released-business reference for this map record.</p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-2xl border border-white/70 bg-white px-4 py-3 text-sm text-slate-600">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Address</p>
-                        <p className="mt-2 font-medium text-slate-900">{row.address ?? "No address provided"}</p>
-                        <p className="mt-1 text-xs text-slate-500">Barangay: {row.barangay ?? "Not specified"}</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/70 bg-white px-4 py-3 text-sm text-slate-600">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Latest BPLO Remarks</p>
-                        <p className="mt-2 font-medium text-slate-900">{row.remarks ?? "No remarks recorded"}</p>
-                        <p className="mt-1 text-xs text-slate-500">Updated at {new Date(row.updatedAt).toLocaleString("en-PH")}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                    <div className="space-y-3 rounded-2xl border border-white/80 bg-white px-4 py-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-slate-900">Action Panel</p>
-                        <p className="text-sm leading-6 text-slate-600">
-                          Apply the next BPLO review action using the existing verify and return endpoints.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <textarea
-                        placeholder="Remarks for correction"
-                        value={returnRemarksById[row.locationId] ?? ""}
-                        onChange={(event) =>
-                          setReturnRemarksById((prev) => ({
-                            ...prev,
-                            [row.locationId]: event.target.value,
-                          }))
-                        }
-                        rows={3}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
-                      />
-                      <p className="text-xs leading-5 text-slate-500">
-                        Remarks are required only when returning a location for correction.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={isSaving || row.status === "VERIFIED"}
-                          onClick={() => void verifyLocation(row)}
-                          className="rounded-xl bg-green-700 px-3.5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600"
-                        >
-                          Verify Location
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isSaving}
-                          onClick={() => void returnForCorrection(row)}
-                          className="rounded-xl bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600"
-                        >
-                          Return for Correction
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
     </div>
   );
 }

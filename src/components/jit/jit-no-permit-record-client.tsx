@@ -8,6 +8,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { EB_MAGALONA_CENTER } from "@/lib/eb-magalona";
+import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
 
 const LeafletBusinessMap = dynamic(
   () => import("@/components/maps/leaflet-business-map").then((mod) => mod.LeafletBusinessMap),
@@ -174,14 +175,19 @@ export function JitNoPermitRecordClient() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700">Line of Business *</label>
-              <input
-                type="text"
+              <select
                 required
                 value={formData.lineOfBusiness}
                 onChange={(e) => setFormData((prev) => ({ ...prev, lineOfBusiness: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="e.g., Sari-Sari Store, Bakery"
-              />
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+              >
+                <option value="">-- Select line of business --</option>
+                {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>

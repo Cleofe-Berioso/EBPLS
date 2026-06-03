@@ -404,10 +404,6 @@ function validateClosureSubmissionRules(input: SaveApplicationInput, closureElig
     }
   }
 
-  if (!fd.closureReason?.trim()) {
-    closureMissing.push("closureReason");
-  }
-
   if (closureMissing.length > 0) {
     throw new SubmitValidationError({ missingFields: closureMissing, missingDocuments: [] });
   }
@@ -695,7 +691,16 @@ function validateSubmitPayload(
     }
   }
 
+  // For CLOSURE applications, businessAddress, lineOfBusiness, and businessActivity
+  // are sourced from the existing business record and are not re-entered in the form.
+  const closureExcludedKeys = new Set<keyof BusinessInfo>(
+    input.applicationType === "CLOSURE"
+      ? ["businessAddress", "lineOfBusiness", "businessActivity"]
+      : []
+  );
+
   const missingFields = REQUIRED_FIELD_KEYS.filter((key) => {
+    if (closureExcludedKeys.has(key)) return false;
     const value = normalizedFormData[key];
     return typeof value !== "string" || value.trim().length === 0;
   }).map((key) => String(key));
@@ -730,31 +735,33 @@ function validateSubmitPayload(
     }
   }
 
-  const normalizedNationality = normalizedFormData.nationality.trim();
-  if (normalizedNationality.length === 0) {
-    missingFields.push("nationality");
-  }
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    const normalizedNationality = normalizedFormData.nationality.trim();
+    if (normalizedNationality.length === 0) {
+      missingFields.push("nationality");
+    }
 
-  if (!ALLOWED_PAYMENT_FREQUENCIES.includes(normalizedFormData.paymentFrequency)) {
-    missingFields.push("paymentFrequency (must be ANNUAL, BI_ANNUAL, or QUARTERLY)");
-  }
+    if (!ALLOWED_PAYMENT_FREQUENCIES.includes(normalizedFormData.paymentFrequency)) {
+      missingFields.push("paymentFrequency (must be ANNUAL, BI_ANNUAL, or QUARTERLY)");
+    }
 
-  const normalizedPhone = normalizedFormData.phone.replace(/[\s-]/g, "");
-  if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
-    missingFields.push("phone (must be a valid Philippine mobile number)");
-  }
+    const normalizedPhone = normalizedFormData.phone.replace(/[\s-]/g, "");
+    if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
+      missingFields.push("phone (must be a valid Philippine mobile number)");
+    }
 
-  const email = normalizedFormData.email.trim();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    missingFields.push("email (invalid format)");
-  }
+    const email = normalizedFormData.email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      missingFields.push("email (invalid format)");
+    }
 
-  const assetSizeRaw = normalizedFormData.assetSize.trim();
-  if (!assetSizeRaw) {
-    missingFields.push("assetSize");
-  } else if (parseNonNegativeAmount(assetSizeRaw) == null) {
-    missingFields.push("assetSize (must be a non-negative number)");
+    const assetSizeRaw = normalizedFormData.assetSize.trim();
+    if (!assetSizeRaw) {
+      missingFields.push("assetSize");
+    } else if (parseNonNegativeAmount(assetSizeRaw) == null) {
+      missingFields.push("assetSize (must be a non-negative number)");
+    }
   }
 
   if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
@@ -821,26 +828,30 @@ function validateSubmitPayload(
     }
   }
 
-  if (
-    isPhilippinesCountry(
-      normalizedFormData.mainOfficeCountry,
-      normalizedFormData.mainOfficeCountryCode
-    )
-  ) {
-    if (!normalizedFormData.mainOfficeBarangay?.trim()) {
-      missingFields.push("mainOfficeBarangay");
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    if (
+      isPhilippinesCountry(
+        normalizedFormData.mainOfficeCountry,
+        normalizedFormData.mainOfficeCountryCode
+      )
+    ) {
+      if (!normalizedFormData.mainOfficeBarangay?.trim()) {
+        missingFields.push("mainOfficeBarangay");
+      }
+    } else if (!normalizedFormData.mainOfficeStreetAddress?.trim()) {
+      missingFields.push("mainOfficeStreetAddress");
     }
-  } else if (!normalizedFormData.mainOfficeStreetAddress?.trim()) {
-    missingFields.push("mainOfficeStreetAddress");
   }
 
-  const totalEmployeesRaw = normalizedFormData.totalEmployees.trim();
-  if (!totalEmployeesRaw) {
-    missingFields.push("totalEmployees");
-  } else {
-    const employees = Number(totalEmployeesRaw.replace(/[,\s]/g, ""));
-    if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
-      missingFields.push("totalEmployees (must be a non-negative integer)");
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    const totalEmployeesRaw = normalizedFormData.totalEmployees.trim();
+    if (!totalEmployeesRaw) {
+      missingFields.push("totalEmployees");
+    } else {
+      const employees = Number(totalEmployeesRaw.replace(/[,\s]/g, ""));
+      if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
+        missingFields.push("totalEmployees (must be a non-negative integer)");
+      }
     }
   }
 
@@ -1718,7 +1729,30 @@ export async function getApplicantTopSummary(applicantId: string) {
         },
       },
       feeAssessment: {
-        include: {
+        select: {
+          id: true,
+          assessmentNumber: true,
+          status: true,
+          paymentFrequency: true,
+          annualAssessedAmount: true,
+          releasePaymentAmount: true,
+          amountPaid: true,
+          remainingBalance: true,
+          paymentStatus: true,
+          mayorsPermitFee: true,
+          regulatoryFees: true,
+          additionalCharges: true,
+          penalties: true,
+          surcharge: true,
+          interest: true,
+          closureCertificateFee: true,
+          arrears: true,
+          otherCharges: true,
+          closurePaymentDues: true,
+          totalAmount: true,
+          remarks: true,
+          generatedAt: true,
+          reassessmentRequestedAt: true,
           lineItems: {
             orderBy: { sortOrder: "asc" },
           },
@@ -1758,6 +1792,7 @@ export async function getApplicantTopSummary(applicantId: string) {
       totalAmount: any;
       remarks: string | null;
       generatedAt: Date | null;
+      reassessmentRequestedAt: Date | null;
       lineItems: Array<{
         id: string;
         description: string;
@@ -1794,6 +1829,7 @@ export async function getApplicantTopSummary(applicantId: string) {
       totalAmount: toMoneyNumber(fa?.totalAmount),
       remarks: fa?.remarks ?? null,
       generatedAt: fa?.generatedAt ? fa.generatedAt.toISOString() : null,
+      reassessmentRequestedAt: fa?.reassessmentRequestedAt ? fa.reassessmentRequestedAt.toISOString() : null,
       lineItems: (fa?.lineItems ?? []).map((item) => ({
         id: item.id,
         description: item.description,
@@ -1817,10 +1853,17 @@ export async function getApplicantTopSummary(applicantId: string) {
     };
   });
 
+  // Priority: APPROVED_FOR_PAYMENT with no payment ref > REJECTED ref > PENDING ref > any APPROVED_FOR_PAYMENT > first record
+  const approvedSummaries = summaries.filter((s: { rawStatus: string }) => s.rawStatus === "APPROVED_FOR_PAYMENT");
+  const bestActiveSummary =
+    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => !s.paymentReference) ??
+    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => s.paymentReference?.status === "REJECTED") ??
+    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => s.paymentReference?.status === "PENDING") ??
+    approvedSummaries[0] ??
+    summaries[0];
+
   return {
-    activeSummary: summaries.find(
-      (summary: { rawStatus: string }) => summary.rawStatus === "APPROVED_FOR_PAYMENT"
-    ) ?? summaries[0],
+    activeSummary: bestActiveSummary,
     records: summaries,
   };
 }

@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit-log";
+import { formatPersonName } from "@/lib/person-name";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { prisma } from "@/lib/prisma";
 
@@ -19,9 +20,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { name, email, password, confirmPassword } = body as Record<string, unknown>;
+  const {
+    name,
+    firstName,
+    middleName,
+    lastName,
+    suffix,
+    email,
+    password,
+    confirmPassword,
+  } = body as Record<string, unknown>;
 
-  if (!name || typeof name !== "string" || name.trim().length === 0) {
+  const normalizedFirstName = typeof firstName === "string" ? firstName.trim() : "";
+  const normalizedMiddleName = typeof middleName === "string" ? middleName.trim() : "";
+  const normalizedLastName = typeof lastName === "string" ? lastName.trim() : "";
+  const normalizedSuffix = typeof suffix === "string" ? suffix.trim() : "";
+
+  if (!normalizedFirstName) {
+    return NextResponse.json({ error: "First name is required." }, { status: 400 });
+  }
+
+  if (!normalizedLastName) {
+    return NextResponse.json({ error: "Last name is required." }, { status: 400 });
+  }
+
+  const computedName = formatPersonName({
+    firstName: normalizedFirstName,
+    middleName: normalizedMiddleName,
+    lastName: normalizedLastName,
+    suffix: normalizedSuffix,
+    fallbackName: typeof name === "string" ? name.trim() : "",
+  });
+
+  if (!computedName) {
     return NextResponse.json({ error: "Full name is required." }, { status: 400 });
   }
 
@@ -50,7 +81,11 @@ export async function POST(req: Request) {
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
     data: {
-      name: name.trim(),
+      name: computedName,
+      firstName: normalizedFirstName,
+      middleName: normalizedMiddleName || null,
+      lastName: normalizedLastName,
+      suffix: normalizedSuffix || null,
       email: normalizedEmail,
       passwordHash,
       role: "BPLO",

@@ -27,7 +27,6 @@ const BPLO_SIDEBAR_ITEMS: SidebarGroup[] = [
     ],
   },
   { label: "Business Map", href: "/bplo/business-map" },
-  { label: "Reports", href: "/bplo/reports" },
   { label: "Profile", href: "/bplo/profile" },
 ];
 

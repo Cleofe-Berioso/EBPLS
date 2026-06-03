@@ -286,7 +286,10 @@ function buildCleanPayload(params: {
     applicationId: params.applicationId,
     applicationType: "RENEWAL",
     businessRecordId: params.selectedBusinessId || undefined,
-    formData: normalizeBusinessInfo(params.info),
+    formData: {
+      ...normalizeBusinessInfo(params.info),
+      paymentFrequency: params.info.paymentFrequency ?? "ANNUAL",
+    },
     documents: sanitizeDocumentMetadata(params.documents),
     mode: params.mode,
   };
@@ -1325,8 +1328,14 @@ export function RenewalApplicationForm() {
                       value="ANNUAL"
                       checked={info.paymentFrequency === "ANNUAL"}
                       disabled={isReadOnly}
-                      onChange={() =>
-                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "ANNUAL" }))
+                      onChange={() => {
+                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "ANNUAL" }));
+                        setFieldErrors((curr) => {
+                          const next = { ...curr };
+                          delete next.paymentFrequency;
+                          return next;
+                        });
+                      }
                       }
                     />
                     Annual
@@ -1338,8 +1347,14 @@ export function RenewalApplicationForm() {
                       value="BI_ANNUAL"
                       checked={info.paymentFrequency === "BI_ANNUAL"}
                       disabled={isReadOnly}
-                      onChange={() =>
-                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "BI_ANNUAL" }))
+                      onChange={() => {
+                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "BI_ANNUAL" }));
+                        setFieldErrors((curr) => {
+                          const next = { ...curr };
+                          delete next.paymentFrequency;
+                          return next;
+                        });
+                      }
                       }
                     />
                     Bi-Annual
@@ -1351,8 +1366,14 @@ export function RenewalApplicationForm() {
                       value="QUARTERLY"
                       checked={info.paymentFrequency === "QUARTERLY"}
                       disabled={isReadOnly}
-                      onChange={() =>
-                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "QUARTERLY" }))
+                      onChange={() => {
+                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "QUARTERLY" }));
+                        setFieldErrors((curr) => {
+                          const next = { ...curr };
+                          delete next.paymentFrequency;
+                          return next;
+                        });
+                      }
                       }
                     />
                     Quarterly

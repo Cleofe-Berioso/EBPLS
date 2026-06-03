@@ -160,8 +160,7 @@ export function ClosureApplicationForm() {
   const [closureBusinessActivity, setClosureBusinessActivity] = useState("");
   const [closureBusinessActivityOther, setClosureBusinessActivityOther] = useState("");
   const [closureLastDateOfOperation, setClosureLastDateOfOperation] = useState("");
-  const [closureReason, setClosureReason] = useState("");
-  const [closureRemarks, setClosureRemarks] = useState("");
+
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [pendingDocumentPreviews, setPendingDocumentPreviews] = useState<Record<string, string>>({});
@@ -294,8 +293,6 @@ export function ClosureApplicationForm() {
         setClosureBusinessActivityOther("");
       }
       setClosureLastDateOfOperation(savedFormData.closureLastDateOfOperation ?? "");
-      setClosureReason(savedFormData.closureReason ?? "");
-      setClosureRemarks(savedFormData.closureRemarks ?? "");
       if (data.application.businessRecordId) {
         selectedBusinessIdRef.current = data.application.businessRecordId;
         setSelectedBusinessId(data.application.businessRecordId);
@@ -419,8 +416,6 @@ export function ClosureApplicationForm() {
       closureLineOfBusiness: closureLineOfBusiness.trim() || undefined,
       closureBusinessActivity: resolvedActivity || undefined,
       closureLastDateOfOperation: closureLastDateOfOperation.trim() || undefined,
-      closureReason: closureReason.trim() || undefined,
-      closureRemarks: closureRemarks.trim() || undefined,
     };
     const payload: SaveApplicationInput = {
       applicationId,
@@ -777,30 +772,7 @@ export function ClosureApplicationForm() {
                   />
                 </FormField>
 
-                <FormField
-                  label="Reason for Closure"
-                  hint="Briefly explain the primary reason for cessation of business operations."
-                  required
-                >
-                  <textarea
-                    className="min-h-[80px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
-                    value={closureReason}
-                    onChange={(event) => setClosureReason(event.target.value)}
-                    placeholder="e.g., Owner retired, business was sold, lease expired"
-                  />
-                </FormField>
 
-                <FormField
-                  label="Closure Remarks / Details"
-                  hint="Optional. Add any additional remarks or context."
-                >
-                  <textarea
-                    className="min-h-[72px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
-                    value={closureRemarks}
-                    onChange={(event) => setClosureRemarks(event.target.value)}
-                    placeholder="Additional details or notes"
-                  />
-                </FormField>
               </div>
 
               {selectedRecord ? (
@@ -943,18 +915,14 @@ export function ClosureApplicationForm() {
                 value={closureLastDateOfOperation || "-"}
                 helper="Final day of business operations"
               />
-              <ReviewStat
-                label="Reason for Closure"
-                value={closureReason.trim() ? (closureReason.length > 60 ? closureReason.slice(0, 60) + "…" : closureReason) : "-"}
-                helper="Primary reason for business cessation"
-              />
+
             </div>
 
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
               <p className="font-semibold text-slate-900">Before you submit</p>
               <ul className="mt-2 space-y-1">
                 <li>• Make sure the selected business record is the one being closed.</li>
-                <li>• Confirm the closure type matches the reason for closure.</li>
+                <li>• Confirm the closure type correctly reflects the nature of the business cessation.</li>
                 <li>• Confirm each closure requirement has a clear uploaded file.</li>
                 <li>• Fees will be assessed by BPLO after application review.</li>
               </ul>

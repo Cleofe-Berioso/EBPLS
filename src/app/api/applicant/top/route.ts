@@ -4,7 +4,22 @@ import { getApplicantApplicationDetail, getApplicantTopSummary, submitApplicantP
 import { requireApplicantSession } from "@/lib/applicant-api";
 import { storeApplicantDocument } from "@/lib/document-storage";
 import { removeApplicantDocument } from "@/lib/document-storage";
+import { validateDocumentFileUpload } from "@/lib/document-upload-rules";
 import { formatOwnerName } from "@/lib/person-name";
+
+const KNOWN_SUBMISSION_ERRORS = new Set([
+  "Application not found",
+  "OR number is required.",
+  "Payment proof is required.",
+  "applicationId is required.",
+  "Payment reference can only be submitted once the Tax Order of Payment has been generated",
+  "Generated TOP is required before submitting payment reference",
+  "Your assessment is under re-assessment request. Please wait for BPLO to review before submitting payment.",
+  "This OR number has already been submitted. Please check your payment details.",
+  "An OR submission is already pending verification",
+  "Payment has already been verified and is read-only",
+  "TOP amount is invalid for payment submission",
+]);
 
 export async function GET() {
   const session = await requireApplicantSession();
@@ -24,26 +39,24 @@ export async function POST(req: Request) {
 
   const body = await req.formData();
   const applicationId = body.get("applicationId");
-  const transactionNumber = body.get("transactionNumber");
+  const transactionNumber = body.get("orNumber") ?? body.get("transactionNumber") ?? body.get("officialReceiptNumber");
   const proofFile = body.get("paymentProof");
 
-  if (
-    typeof applicationId !== "string" ||
-    typeof transactionNumber !== "string" ||
-    !applicationId.trim() ||
-    !transactionNumber.trim()
-  ) {
-    return NextResponse.json(
-      { error: "applicationId, Official Receipt Number, and paymentProof are required" },
-      { status: 400 }
-    );
+  if (typeof applicationId !== "string" || !applicationId.trim()) {
+    return NextResponse.json({ error: "applicationId is required." }, { status: 400 });
   }
 
-  if (!(proofFile instanceof File)) {
-    return NextResponse.json(
-      { error: "applicationId, Official Receipt Number, and paymentProof are required" },
-      { status: 400 }
-    );
+  if (typeof transactionNumber !== "string" || !transactionNumber.trim()) {
+    return NextResponse.json({ error: "OR number is required." }, { status: 400 });
+  }
+
+  if (!(proofFile instanceof File) || proofFile.size === 0) {
+    return NextResponse.json({ error: "Payment proof is required." }, { status: 400 });
+  }
+
+  const fileError = validateDocumentFileUpload(proofFile);
+  if (fileError) {
+    return NextResponse.json({ error: fileError }, { status: 400 });
   }
 
   try {
@@ -88,6 +101,9 @@ export async function POST(req: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const status = message === "Application not found" ? 404 : 400;
-      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to submit OR details") }, { status });
+    if (KNOWN_SUBMISSION_ERRORS.has(message)) {
+      return NextResponse.json({ error: message }, { status });
+    }
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to submit OR details") }, { status });
   }
 }

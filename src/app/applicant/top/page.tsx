@@ -72,15 +72,45 @@ export default function TaxOrderOfPaymentPage() {
   const summary = topData.activeSummary;
   const paymentRef = summary?.paymentReference ?? null;
   const paymentRefStatus = paymentRef?.status ?? null;
+  const isReassessmentPending = Boolean(summary?.reassessmentRequestedAt);
   const isPaidStatus = summary?.status === "Paid";
+  const isPaymentVerified = paymentRefStatus === "VERIFIED";
+  const isPaymentPending = paymentRefStatus === "PENDING";
+  // Allow re-submission only when paymentRef is null or REJECTED.
+  // Block if: already paid, VERIFIED (already accepted), PENDING (awaiting review), or reassessment active.
   const canSubmitPaymentReference =
-    !!summary && !isPaidStatus && paymentRefStatus !== "PENDING";
+    !!summary &&
+    !isPaidStatus &&
+    !isPaymentVerified &&
+    !isPaymentPending &&
+    !isReassessmentPending &&
+    summary.rawStatus === "APPROVED_FOR_PAYMENT";
   const canRequestReassessment =
     !!summary &&
     summary.assessmentStatus === "GENERATED" &&
     !summary.reassessmentRequestedAt &&
     !summary.paymentReference &&
-    !["FOR_RELEASE", "RELEASED"].includes(summary.rawStatus ?? "");
+    !["FOR_RELEASE", "RELEASED", "PAID"].includes(summary.rawStatus ?? "");
+
+  // DEBUG — remove after confirming correct values in browser console
+  if (typeof window !== "undefined" && summary) {
+    console.log("[TOP DEBUG]", {
+      applicationId: summary.applicationId,
+      applicationNumber: summary.applicationNumber,
+      applicationType: summary.applicationType,
+      rawStatus: summary.rawStatus,
+      status: summary.status,
+      assessmentStatus: summary.assessmentStatus,
+      totalAmount: summary.totalAmount,
+      paymentReference: summary.paymentReference,
+      paymentRefStatus,
+      isPaymentPending,
+      isPaymentVerified,
+      isPaidStatus,
+      isReassessmentPending,
+      canSubmitPaymentReference,
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -102,16 +132,21 @@ export default function TaxOrderOfPaymentPage() {
   }, []);
 
   async function submitReference() {
-    if (!summary || !paymentProof) return;
+    if (!summary) return;
 
     if (!transactionNumber.trim()) {
-      setMessage("Official Receipt Number is required.");
+      setMessage("OR number is required.");
+      return;
+    }
+
+    if (!paymentProof) {
+      setMessage("Payment proof is required.");
       return;
     }
 
     const payload = new FormData();
     payload.append("applicationId", summary.applicationId);
-    payload.append("transactionNumber", transactionNumber.trim());
+    payload.append("orNumber", transactionNumber.trim());
     payload.append("paymentProof", paymentProof);
 
     const response = await fetch("/api/applicant/top", {
@@ -275,7 +310,10 @@ export default function TaxOrderOfPaymentPage() {
                       setMessage(data.error ?? "Unable to request reassessment");
                       return;
                     }
-                    setMessage(data.message ?? data.ok ? "Re-assessment requested. BPLO will review your TOP before payment." : "Re-assessment requested");
+                    setMessage(
+                      data.message ??
+                        "Re-assessment request submitted. Your application has been returned to BPLO Assessment & Fees for review."
+                    );
                     setTopData((curr) => ({
                       ...curr,
                       activeSummary: curr.activeSummary ? { ...curr.activeSummary, reassessmentRequestedAt: new Date().toISOString() } : curr.activeSummary,
@@ -383,70 +421,95 @@ export default function TaxOrderOfPaymentPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Submit Payment" description="Submit OR details for TOP payment to proceed to permit release.">
-              {paymentRef?.transactionNumber ? (
-                <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  <p className="text-slate-700">
-                    Application Number: <strong className="text-slate-900">{summary.applicationNumber}</strong>
-                  </p>
-                  <p className="mt-1 text-slate-700">
-                    OR Number: <strong className="text-slate-900">{paymentRef.transactionNumber}</strong>
-                  </p>
-                  <p className="mt-1 text-slate-700">
-                    Status:{" "}
-                    <strong className="text-slate-900">
-                      {paymentRefStatus === "VERIFIED"
-                        ? "Pass"
-                        : paymentRefStatus === "REJECTED"
-                          ? "Fail"
-                          : "Pending"}
-                    </strong>
-                  </p>
+          <SectionCard title="Submit Payment" description="Submit OR number and proof of payment after paying at the cashier.">
+              {isReassessmentPending ? (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  ⚠️ Payment is blocked while BPLO reviews the re-assessment request. Please wait for the updated TOP.
                 </div>
               ) : null}
 
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Official Receipt Number
-                    <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
-                    value={transactionNumber}
-                    onChange={(event) => setTransactionNumber(event.target.value)}
-                    placeholder="Enter official receipt number"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Official Receipt Upload / Payment Proof
-                    <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    type="file"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
-                    onChange={(event) => setPaymentProof(event.target.files?.[0] ?? null)}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void submitReference();
-                  }}
-                  disabled={!transactionNumber.trim() || !paymentProof || !canSubmitPaymentReference}
-                  className={actionButtonStyles("primary", "md", "w-full")}
-                >
-                  Submit Payment
-                </button>
-                {!canSubmitPaymentReference ? (
-                  <p className="text-xs text-slate-500">
-                    {isPaidStatus || paymentRefStatus === "VERIFIED"
-                      ? "Application is already paid. OR submission is locked."
-                      : "An OR submission is pending verification. Please wait for BPLO action."}
+              {/* Existing OR submission status */}
+              {paymentRef?.transactionNumber ? (
+                <div className={`mb-4 rounded-xl border p-4 text-sm ${
+                  paymentRefStatus === "VERIFIED"
+                    ? "border-green-200 bg-green-50 text-green-900"
+                    : paymentRefStatus === "REJECTED"
+                    ? "border-red-200 bg-red-50 text-red-900"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                }`}>
+                  <p className="font-semibold">
+                    {paymentRefStatus === "VERIFIED"
+                      ? "✅ Payment Verified"
+                      : paymentRefStatus === "REJECTED"
+                      ? "❌ Payment Rejected — please resubmit with a corrected OR"
+                      : "⏳ OR Submitted — Awaiting BPLO Verification"}
                   </p>
-                ) : null}
-              </div>
+                  <p className="mt-1">
+                    OR Number: <strong>{paymentRef.transactionNumber}</strong>
+                  </p>
+                  {paymentRef.reviewerRemarks ? (
+                    <p className="mt-1">BPLO Remarks: <strong>{paymentRef.reviewerRemarks}</strong></p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Show submit form only when submission is allowed */}
+              {canSubmitPaymentReference ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      OR Number / Payment Reference Number
+                      <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      id="top-or-number"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
+                      value={transactionNumber}
+                      onChange={(event) => setTransactionNumber(event.target.value)}
+                      placeholder="Enter OR number from the cashier receipt"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Official Receipt / Payment Proof
+                      <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      id="top-payment-proof"
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none"
+                      onChange={(event) => setPaymentProof(event.target.files?.[0] ?? null)}
+                    />
+                    <p className="mt-1 text-xs text-slate-400">Accepted: JPG, PNG, PDF (max 10 MB)</p>
+                  </div>
+                  <button
+                    id="top-submit-payment"
+                    type="button"
+                    onClick={() => {
+                      void submitReference();
+                    }}
+                    disabled={!transactionNumber.trim() || !paymentProof}
+                    className={actionButtonStyles("primary", "md", "w-full")}
+                  >
+                    Submit Payment
+                  </button>
+                </div>
+              ) : (
+                /* Blocked state — show clear reason */
+                !isReassessmentPending && !paymentRef ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    <p className="font-medium text-slate-700">Payment submission unavailable</p>
+                    <p className="mt-1">
+                      {isPaidStatus
+                        ? "This application has already been paid and verified."
+                        : isPaymentVerified
+                        ? "Payment has been verified. No further submission is needed."
+                        : `Application must be in 'Approved for Payment' status to submit. Current status: ${summary.status}`}
+                    </p>
+                  </div>
+                ) : null
+              )}
           </SectionCard>
 
           {message ? (

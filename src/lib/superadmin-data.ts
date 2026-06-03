@@ -353,6 +353,7 @@ export interface SuperAdminUserRow {
   status: "ACTIVE" | "DISABLED";
   createdAt: string;
   updatedAt: string;
+  profileImageStoragePath: string | null;
 }
 
 export interface SuperAdminUserSummary {
@@ -899,6 +900,7 @@ export async function listSuperAdminUsers(filters?: {
       isActive: true,
       createdAt: true,
       updatedAt: true,
+      profileImageStoragePath: true,
     },
     orderBy: [{ createdAt: "desc" }],
   });
@@ -911,6 +913,7 @@ export async function listSuperAdminUsers(filters?: {
     status: user.isActive ? "ACTIVE" : "DISABLED",
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
+    profileImageStoragePath: user.profileImageStoragePath,
   }));
 }
 

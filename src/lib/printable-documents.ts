@@ -66,6 +66,7 @@ export interface BusinessPermitPrintData {
   taxYear: string;
   dateIssued: string | null;
   validUntil: string | null;
+  plateNumber: string;
   businessName: string;
   tradeName: string;
   ownerOrPresident: string;
@@ -73,6 +74,7 @@ export interface BusinessPermitPrintData {
   registrationNumber: string;
   tin: string;
   businessAddress: string;
+  lineOfBusiness: string;
   natureOfBusiness: string;
   businessActivity: string;
   topNumber: string;
@@ -84,6 +86,8 @@ export interface BusinessPermitPrintData {
     municipalTreasurer: string;
     mayor: string;
   };
+  municipalityNameForBody: string;
+  municipalMayorName: string;
   legalNote: string;
 }
 
@@ -201,6 +205,9 @@ function toBusinessPermitPrintData(app: {
   applicationNumber: string;
   applicationType: ApplicationTypeForPrint;
   formData: unknown;
+  applicant: {
+    name: string;
+  };
   permitIssuance: {
     documentNumber: string;
     issuedAt: Date;
@@ -218,13 +225,18 @@ function toBusinessPermitPrintData(app: {
   const issuedAt = app.permitIssuance?.issuedAt ?? null;
   const formData = app.formData;
   const businessActivity = readText(formData, "businessActivity", readText(formData, "lineOfBusiness"));
+  const municipalityName = readText(formData, "cityMunicipality", "Municipality Name");
+  const ownerName = readText(formData, "ownerName", "");
+  const applicantName = app.applicant?.name?.trim() ?? "";
+  const ownerOrApplicantName = ownerName || applicantName || "-";
+  const mayorName = "Hon. Matthew Louis P. Malacon";
 
   return {
     heading: {
       republic: "Republic of the Philippines",
-      province: readText(formData, "province", "Province"),
-      municipality: readText(formData, "cityMunicipality", "Municipality"),
-      office: "Office of the Mayor",
+      province: readText(formData, "province", "Province Name"),
+      municipality: municipalityName,
+      office: "Office of the Municipal Mayor",
       title: "MAYOR'S BUSINESS PERMIT",
     },
     permitNumber: app.permitIssuance?.documentNumber ?? "-",
@@ -233,13 +245,15 @@ function toBusinessPermitPrintData(app: {
     taxYear: toYear(issuedAt),
     dateIssued: toIsoOrNull(issuedAt),
     validUntil: toPermitExpiry(issuedAt),
+    plateNumber: readText(formData, "plateNumber", "—"),
     businessName: readText(formData, "businessName"),
     tradeName: readText(formData, "tradeName"),
-    ownerOrPresident: readText(formData, "ownerName"),
+    ownerOrPresident: ownerOrApplicantName,
     businessType: readText(formData, "businessType"),
     registrationNumber: readText(formData, "registrationNumber"),
     tin: readText(formData, "tin"),
     businessAddress: readText(formData, "businessAddress"),
+    lineOfBusiness: readText(formData, "lineOfBusiness", readText(formData, "businessActivity")),
     natureOfBusiness: readText(formData, "lineOfBusiness", readText(formData, "businessActivity")),
     businessActivity,
     topNumber: app.feeAssessment?.assessmentNumber ?? "-",
@@ -251,6 +265,8 @@ function toBusinessPermitPrintData(app: {
       municipalTreasurer: "Municipal Treasurer",
       mayor: "Mayor",
     },
+    municipalityNameForBody: municipalityName,
+    municipalMayorName: mayorName,
     legalNote: "This permit must be displayed conspicuously at the place of business.",
   };
 }
@@ -267,6 +283,9 @@ function toClosureReason(formData: unknown): string {
 function toClosureCertificatePrintData(app: {
   applicationNumber: string;
   formData: unknown;
+  applicant: {
+    name: string;
+  };
   permitIssuance: {
     documentNumber: string;
     issuedAt: Date;
@@ -286,6 +305,9 @@ function toClosureCertificatePrintData(app: {
   }>;
 }): ClosureCertificatePrintData {
   const formData = app.formData;
+  const ownerName = readText(formData, "ownerName", "");
+  const applicantName = app.applicant?.name?.trim() ?? "";
+  const ownerOrApplicantName = ownerName || applicantName || "-";
 
   return {
     heading: {
@@ -301,7 +323,7 @@ function toClosureCertificatePrintData(app: {
     effectiveClosureDate: toIsoOrNull(app.businessRecord?.closedAt),
     businessName: readText(formData, "businessName"),
     tradeName: readText(formData, "tradeName"),
-    ownerOrPresident: readText(formData, "ownerName"),
+    ownerOrPresident: ownerOrApplicantName,
     businessType: readText(formData, "businessType"),
     registrationNumber: readText(formData, "registrationNumber"),
     tin: readText(formData, "tin"),
@@ -333,7 +355,10 @@ async function findApplicationForPrint(
   applicationType: ApplicationTypeForPrint;
   status: ApplicationStatusForPrint;
   formData: unknown;
-  feeAssessment: {
+   applicant: {
+     name: string;
+   };
+   feeAssessment: {
     assessmentNumber: string;
     annualAssessedAmount: any;
     releasePaymentAmount: any;
@@ -366,6 +391,11 @@ async function findApplicationForPrint(
       applicationType: true,
       status: true,
       formData: true,
+      applicant: {
+        select: {
+          name: true,
+        },
+      },
       feeAssessment: {
         select: {
           assessmentNumber: true,
@@ -407,6 +437,9 @@ async function findApplicationForPrint(
     applicationType: ApplicationTypeForPrint;
     status: ApplicationStatusForPrint;
     formData: unknown;
+    applicant: {
+      name: string;
+    };
     feeAssessment: {
       assessmentNumber: string;
       annualAssessedAmount: any;
