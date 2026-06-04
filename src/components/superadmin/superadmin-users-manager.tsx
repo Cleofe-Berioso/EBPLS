@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
+import { UserCircle2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -25,6 +26,8 @@ type UserRow = {
   status: UserStatus;
   createdAt: string;
   updatedAt: string;
+  profileImageStoragePath: string | null;
+  profilePictureUrl?: string | null;
 };
 
 type UserSummary = {
@@ -49,6 +52,13 @@ const EMPTY_SUMMARY: UserSummary = {
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleString("en-PH");
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
 function statusBadge(status: UserStatus) {
@@ -85,7 +95,10 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
   const [disableReason, setDisableReason] = useState("");
 
   const [createForm, setCreateForm] = useState({
-    name: "",
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    suffix: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -127,7 +140,23 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         return;
       }
 
-      setUsers(json.users ?? []);
+      const usersWithPics = await Promise.all(
+        (json.users ?? []).map(async (user: UserRow) => {
+          if (!user.profileImageStoragePath) return user;
+          try {
+            const picRes = await fetch("/api/superadmin/users/profile-picture/signing-service", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ storagePath: user.profileImageStoragePath }),
+            });
+            const picData = (await picRes.json()) as { signedUrl?: string };
+            return { ...user, profilePictureUrl: picData.signedUrl ?? null };
+          } catch {
+            return user;
+          }
+        })
+      );
+      setUsers(usersWithPics);
       setSummary(json.summary ?? EMPTY_SUMMARY);
     } catch {
       setFlash({ type: "danger", message: "Failed to load users." });
@@ -165,7 +194,15 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       }
 
       setShowCreateBplo(false);
-      setCreateForm({ name: "", email: "", password: "", confirmPassword: "" });
+      setCreateForm({
+        firstName: "",
+        middleName: "",
+        lastName: "",
+        suffix: "",
+        email: "",
+        password: "",
+        confirmPassword: "",
+      });
       setFlash({ type: "success", message: "BPLO account created successfully." });
       await loadUsers();
     } catch {
@@ -254,7 +291,6 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         {isLoading ? "Loading users." : "Users loaded."}
       </div>
       <PageHeader
-        eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
         title="User Management"
         description="Manage controlled system accounts and monitor registered applicants."
@@ -376,7 +412,24 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
 
                   return (
                     <tr key={user.id} className="align-top hover:bg-slate-50/70">
-                      <td className="px-4 py-3.5 font-medium text-slate-900">{user.name}</td>
+                      <td className="px-4 py-3.5 font-medium text-slate-900">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center overflow-hidden border border-slate-200 text-xs font-semibold"
+                            style={{
+                              backgroundColor: user.profilePictureUrl ? "transparent" : "#cbd5e1",
+                              color: user.profilePictureUrl ? "transparent" : "#475569",
+                            }}
+                          >
+                            {user.profilePictureUrl ? (
+                              <img src={user.profilePictureUrl} alt={user.name} className="h-full w-full object-cover" />
+                            ) : (
+                              getInitials(user.name)
+                            )}
+                          </div>
+                          <span>{user.name}</span>
+                        </div>
+                      </td>
                       <td className="max-w-[16rem] break-all px-4 py-3.5 text-slate-600">{user.email}</td>
                       <td className="px-4 py-3.5">
                         <RoleBadge role={user.role} />
@@ -452,8 +505,23 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
                 return (
                   <article key={user.id} className="app-surface p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div
+                            className="h-6 w-6 flex-shrink-0 rounded-full flex items-center justify-center overflow-hidden border border-slate-200 text-xs font-semibold"
+                            style={{
+                              backgroundColor: user.profilePictureUrl ? "transparent" : "#cbd5e1",
+                              color: user.profilePictureUrl ? "transparent" : "#475569",
+                            }}
+                          >
+                            {user.profilePictureUrl ? (
+                              <img src={user.profilePictureUrl} alt={user.name} className="h-full w-full object-cover" />
+                            ) : (
+                              getInitials(user.name)
+                            )}
+                          </div>
+                          <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                        </div>
                         <p className="break-all text-xs text-slate-600">{user.email}</p>
                       </div>
                       {statusBadge(user.status)}
@@ -538,14 +606,41 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         }
       >
         <form id={createBploFormId} className="space-y-3" onSubmit={submitCreateBplo}>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Full Name</label>
-            <input
-              value={createForm.name}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
-              required
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">First Name</label>
+              <input
+                value={createForm.firstName}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                required
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Last Name</label>
+              <input
+                value={createForm.lastName}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                required
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Middle Name (optional)</label>
+              <input
+                value={createForm.middleName}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, middleName: e.target.value }))}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Suffix (optional)</label>
+              <input
+                value={createForm.suffix}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, suffix: e.target.value }))}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+              />
+            </div>
           </div>
 
           <div>

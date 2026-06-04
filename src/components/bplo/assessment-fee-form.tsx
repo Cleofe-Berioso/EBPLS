@@ -84,6 +84,8 @@ export function AssessmentFeeForm({ detail }: Props) {
   const amountPaid = savedAssessment?.amountPaid ?? 0;
   const remainingBalance = Math.max(0, totalAmount - amountPaid);
   const isTopGenerated = savedAssessment?.status === "GENERATED";
+  const isReassessmentPending = Boolean(existing?.reassessmentRequestedAt);
+  const isEditable = !isTopGenerated || isReassessmentPending;
 
   function syncSavedAssessment(saved: SavedAssessment | null) {
     setSavedAssessment(saved);
@@ -172,11 +174,11 @@ export function AssessmentFeeForm({ detail }: Props) {
   }
 
   async function handleGenerateTop() {
-    if (
-      !confirm(
-        "Generate Tax Order of Payment?\n\nThis will lock the assessment, create the TOP number, and move the application to Approved for Payment."
-      )
-    ) {
+    const confirmMsg = isReassessmentPending
+      ? "Generate Revised Tax Order of Payment?\n\nThis will update the assessment with new fees and replace the previous TOP."
+      : "Generate Tax Order of Payment?\n\nThis will lock the assessment, create the TOP number, and move the application to Approved for Payment.";
+    
+    if (!confirm(confirmMsg)) {
       return;
     }
 
@@ -277,19 +279,27 @@ export function AssessmentFeeForm({ detail }: Props) {
         title="Fee Line Items"
         description="Add BPLO fee items, then review the system-generated items below."
         action={
-          !isTopGenerated ? (
+          isEditable ? (
             <button type="button" onClick={addLineItem} className={actionButtonStyles("secondary", "md")}>
               Add Item
             </button>
           ) : undefined
         }
       >
-        {isTopGenerated ? (
+        {isTopGenerated && !isReassessmentPending ? (
           <div className="mb-4">
             <InfoBanner
               title="TOP already generated"
               description="Fee items are locked because the Tax Order of Payment has already been generated."
               variant="success"
+            />
+          </div>
+        ) : isReassessmentPending ? (
+          <div className="mb-4">
+            <InfoBanner
+              title="Reassessment requested"
+              description="Applicant requested TOP revision. Update fees and generate a revised Tax Order of Payment below."
+              variant="warning"
             />
           </div>
         ) : null}
@@ -301,7 +311,7 @@ export function AssessmentFeeForm({ detail }: Props) {
               <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1fr_180px_auto]">
                 <input
                   value={item.description}
-                  disabled={isTopGenerated}
+                  disabled={!isEditable}
                   onChange={(event) => updateLineItem(actualIndex, { description: event.target.value })}
                   placeholder="Fee description"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
@@ -311,13 +321,13 @@ export function AssessmentFeeForm({ detail }: Props) {
                   min="0"
                   step="0.01"
                   value={item.amount}
-                  disabled={isTopGenerated}
+                  disabled={!isEditable}
                   onChange={(event) => updateLineItem(actualIndex, { amount: Number(event.target.value) || 0 })}
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-right text-sm focus:border-emerald-500 focus:outline-none"
                 />
                 <button
                   type="button"
-                  disabled={isTopGenerated}
+                  disabled={!isEditable}
                   onClick={() => removeLineItem(actualIndex)}
                   className={actionButtonStyles("ghost", "md")}
                 >
@@ -363,7 +373,7 @@ export function AssessmentFeeForm({ detail }: Props) {
               min="0"
               step="0.01"
               value={closurePaymentDues}
-              disabled={isTopGenerated}
+              disabled={!isEditable}
               onChange={(event) => setClosurePaymentDues(Number(event.target.value) || 0)}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-right text-sm focus:border-emerald-500 focus:outline-none"
             />
@@ -387,7 +397,7 @@ export function AssessmentFeeForm({ detail }: Props) {
             <textarea
               rows={4}
               value={remarks}
-              disabled={isTopGenerated}
+              disabled={!isEditable}
               onChange={(event) => setRemarks(event.target.value)}
               className="w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none"
             />
@@ -403,7 +413,7 @@ export function AssessmentFeeForm({ detail }: Props) {
             <Link href="/bplo/assessment-fees" className={actionButtonStyles("ghost", "md")}>
               Back to Queue
             </Link>
-            {!isTopGenerated ? (
+            {isEditable ? (
               <button
                 type="button"
                 disabled={isSaving || isGenerating}
@@ -417,13 +427,13 @@ export function AssessmentFeeForm({ detail }: Props) {
             ) : null}
             <button
               type="button"
-              disabled={isTopGenerated || isSaving || isGenerating}
+              disabled={!isEditable || isSaving || isGenerating}
               onClick={() => {
                 void handleGenerateTop();
               }}
               className={actionButtonStyles("primary", "md")}
             >
-              Generate TOP
+              {isReassessmentPending ? "Generate Revised TOP" : "Generate TOP"}
             </button>
           </div>
         }

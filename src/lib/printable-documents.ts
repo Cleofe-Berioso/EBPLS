@@ -62,9 +62,11 @@ export interface BusinessPermitPrintData {
   };
   permitNumber: string;
   applicationNumber: string;
+  classification: "NEW" | "RENEWAL";
   taxYear: string;
   dateIssued: string | null;
   validUntil: string | null;
+  plateNumber: string;
   businessName: string;
   tradeName: string;
   ownerOrPresident: string;
@@ -72,17 +74,20 @@ export interface BusinessPermitPrintData {
   registrationNumber: string;
   tin: string;
   businessAddress: string;
+  lineOfBusiness: string;
   natureOfBusiness: string;
+  businessActivity: string;
   topNumber: string;
   orNumber: string;
   datePaid: string | null;
-  annualAmountPaid: number;
+  amountPaid: number;
   signatories: {
     bploOfficer: string;
     municipalTreasurer: string;
     mayor: string;
   };
-  verificationPlaceholder: string;
+  municipalityNameForBody: string;
+  municipalMayorName: string;
   legalNote: string;
 }
 
@@ -118,6 +123,7 @@ export interface ClosureCertificatePrintData {
   totalPaid: number;
   certificationStatement: string;
   signatories: {
+    departmentHeadOfBplo: string;
     bploOfficer: string;
     municipalTreasurerOrAuthorizedOfficer: string;
   };
@@ -198,7 +204,11 @@ function toPrintableSnapshot(app: {
 
 function toBusinessPermitPrintData(app: {
   applicationNumber: string;
+  applicationType: ApplicationTypeForPrint;
   formData: unknown;
+  applicant: {
+    name: string;
+  };
   permitIssuance: {
     documentNumber: string;
     issuedAt: Date;
@@ -206,6 +216,7 @@ function toBusinessPermitPrintData(app: {
   feeAssessment: {
     assessmentNumber: string;
     annualAssessedAmount: any;
+    amountPaid: any;
   } | null;
   paymentReferences: Array<{
     transactionNumber: string;
@@ -214,38 +225,49 @@ function toBusinessPermitPrintData(app: {
 }): BusinessPermitPrintData {
   const issuedAt = app.permitIssuance?.issuedAt ?? null;
   const formData = app.formData;
+  const businessActivity = readText(formData, "businessActivity", readText(formData, "lineOfBusiness"));
+  const municipalityName = "ENRIQUE B. MAGALONA";
+  const ownerName = readText(formData, "ownerName", "");
+  const applicantName = app.applicant?.name?.trim() ?? "";
+  const ownerOrApplicantName = ownerName || applicantName || "-";
+  const mayorName = "Hon. Matthew Louis P. Malacon";
 
   return {
     heading: {
       republic: "Republic of the Philippines",
-      province: readText(formData, "province", "Province"),
-      municipality: readText(formData, "cityMunicipality", "Municipality"),
-      office: "Office of the Mayor",
-      title: "MAYOR'S / BUSINESS PERMIT",
+      province: "Negros Occidental",
+      municipality: municipalityName,
+      office: "OFFICE OF THE MUNICIPAL MAYOR",
+      title: "MAYOR'S BUSINESS PERMIT",
     },
     permitNumber: app.permitIssuance?.documentNumber ?? "-",
     applicationNumber: app.applicationNumber,
+    classification: app.applicationType === "RENEWAL" ? "RENEWAL" : "NEW",
     taxYear: toYear(issuedAt),
     dateIssued: toIsoOrNull(issuedAt),
     validUntil: toPermitExpiry(issuedAt),
+    plateNumber: readText(formData, "plateNumber", "—"),
     businessName: readText(formData, "businessName"),
     tradeName: readText(formData, "tradeName"),
-    ownerOrPresident: readText(formData, "ownerName"),
+    ownerOrPresident: ownerOrApplicantName,
     businessType: readText(formData, "businessType"),
     registrationNumber: readText(formData, "registrationNumber"),
     tin: readText(formData, "tin"),
     businessAddress: readText(formData, "businessAddress"),
+    lineOfBusiness: readText(formData, "lineOfBusiness", readText(formData, "businessActivity")),
     natureOfBusiness: readText(formData, "lineOfBusiness", readText(formData, "businessActivity")),
+    businessActivity,
     topNumber: app.feeAssessment?.assessmentNumber ?? "-",
     orNumber: app.paymentReferences[0]?.transactionNumber ?? "-",
     datePaid: toIsoOrNull(app.paymentReferences[0]?.paymentDate),
-    annualAmountPaid: toMoneyNumber(app.feeAssessment?.annualAssessedAmount),
+    amountPaid: toMoneyNumber(app.feeAssessment?.amountPaid),
     signatories: {
       bploOfficer: "BPLO Officer",
       municipalTreasurer: "Municipal Treasurer",
       mayor: "Mayor",
     },
-    verificationPlaceholder: "Verification QR placeholder",
+    municipalityNameForBody: municipalityName,
+    municipalMayorName: mayorName,
     legalNote: "This permit must be displayed conspicuously at the place of business.",
   };
 }
@@ -262,6 +284,9 @@ function toClosureReason(formData: unknown): string {
 function toClosureCertificatePrintData(app: {
   applicationNumber: string;
   formData: unknown;
+  applicant: {
+    name: string;
+  };
   permitIssuance: {
     documentNumber: string;
     issuedAt: Date;
@@ -281,12 +306,15 @@ function toClosureCertificatePrintData(app: {
   }>;
 }): ClosureCertificatePrintData {
   const formData = app.formData;
+  const ownerName = readText(formData, "ownerName", "");
+  const applicantName = app.applicant?.name?.trim() ?? "";
+  const ownerOrApplicantName = ownerName || applicantName || "-";
 
   return {
     heading: {
       republic: "Republic of the Philippines",
-      province: readText(formData, "province", "Province"),
-      municipality: readText(formData, "cityMunicipality", "Municipality"),
+      province: "Negros Occidental",
+      municipality: "ENRIQUE B. MAGALONA",
       office: "Business Permits and Licensing Office",
       title: "BUSINESS CLOSURE CERTIFICATE",
     },
@@ -296,7 +324,7 @@ function toClosureCertificatePrintData(app: {
     effectiveClosureDate: toIsoOrNull(app.businessRecord?.closedAt),
     businessName: readText(formData, "businessName"),
     tradeName: readText(formData, "tradeName"),
-    ownerOrPresident: readText(formData, "ownerName"),
+    ownerOrPresident: ownerOrApplicantName,
     businessType: readText(formData, "businessType"),
     registrationNumber: readText(formData, "registrationNumber"),
     tin: readText(formData, "tin"),
@@ -311,6 +339,7 @@ function toClosureCertificatePrintData(app: {
     certificationStatement:
       "This certifies that the business has completed the required closure processing and has been officially recorded as closed/ceased operation.",
     signatories: {
+      departmentHeadOfBplo: "",
       bploOfficer: "BPLO Officer",
       municipalTreasurerOrAuthorizedOfficer: "Municipal Treasurer / Authorized Officer",
     },
@@ -328,7 +357,10 @@ async function findApplicationForPrint(
   applicationType: ApplicationTypeForPrint;
   status: ApplicationStatusForPrint;
   formData: unknown;
-  feeAssessment: {
+   applicant: {
+     name: string;
+   };
+   feeAssessment: {
     assessmentNumber: string;
     annualAssessedAmount: any;
     releasePaymentAmount: any;
@@ -361,6 +393,11 @@ async function findApplicationForPrint(
       applicationType: true,
       status: true,
       formData: true,
+      applicant: {
+        select: {
+          name: true,
+        },
+      },
       feeAssessment: {
         select: {
           assessmentNumber: true,
@@ -402,6 +439,9 @@ async function findApplicationForPrint(
     applicationType: ApplicationTypeForPrint;
     status: ApplicationStatusForPrint;
     formData: unknown;
+    applicant: {
+      name: string;
+    };
     feeAssessment: {
       assessmentNumber: string;
       annualAssessedAmount: any;
@@ -441,16 +481,20 @@ export function canBploPrintDocument(
   const reasons: string[] = [];
   const documentType = getPrintableDocumentType(application.applicationType);
 
-  if (application.status !== "FOR_RELEASE" && application.status !== "RELEASED") {
-    reasons.push("Application must be FOR_RELEASE or RELEASED.");
+  if (application.status !== "RELEASED") {
+    reasons.push("Application must be RELEASED before document printing.");
   }
 
   if (!application.payment?.hasVerifiedPaymentReference) {
     reasons.push("Verified payment is required before document printing.");
   }
 
-  if (!hasIssuanceRecord(application) && !isDocumentReleaseReady(application)) {
-    reasons.push("Permit issuance record must exist or be release-ready.");
+  if (!hasIssuanceRecord(application)) {
+    reasons.push("Released permit issuance record is required before document printing.");
+  }
+
+  if (application.permitIssuance?.status !== "RELEASED") {
+    reasons.push("Permit issuance must be RELEASED before document printing.");
   }
 
   return {
@@ -477,6 +521,10 @@ export function canApplicantPrintDocument(
 
   if (!hasIssuanceRecord(application)) {
     reasons.push("Permit issuance record is required for applicant printing.");
+  }
+
+  if (application.permitIssuance?.status !== "RELEASED") {
+    reasons.push("Permit issuance must be RELEASED for applicant printing.");
   }
 
   if (!application.payment?.hasVerifiedPaymentReference) {

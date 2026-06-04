@@ -17,7 +17,7 @@ export function SectionCard({
 }) {
   return (
     <section
-      className={`ui-section-card app-surface relative overflow-hidden ${className}`}
+      className={`ui-section-card app-surface relative overflow-hidden rounded-2xl ${className}`}
     >
       {title || description || action ? (
         <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:px-6 lg:px-8 lg:py-6 lg:gap-4">

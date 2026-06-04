@@ -21,7 +21,6 @@ export default async function SuperAdminReportsPage() {
   return (
     <section className="space-y-6">
       <PageHeader
-        eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
         title="Reports"
         description="View-only reporting cards, grouped summaries, and Business Location monitoring sourced from existing live records."

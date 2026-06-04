@@ -65,10 +65,10 @@ export function SuperAdminSidebar({
       <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700">Municipality eBPLS</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700">Business Permit Online System</p>
             <div className={`mt-2 flex items-center gap-2 ${collapsed ? "lg:justify-center" : ""}`}>
               <ShieldCheck className="h-5 w-5 shrink-0 text-slate-600" />
-              <h2 className={`text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Super Admin Portal</h2>
+              <h2 className={`text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>IT ADMINISTRATOR</h2>
             </div>
             <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Oversight and audit visibility across all modules.</p>
           </div>
@@ -133,14 +133,6 @@ export function SuperAdminSidebar({
         })}
       </nav>
 
-      <div className={`border-t border-slate-200 px-4 py-4 ${collapsed ? "lg:hidden" : ""}`}>
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-xs text-slate-700 shadow-sm">
-          <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">Workflow Guide</p>
-          <p className="mt-2 leading-6">
-          Draft → Submitted → Under Review → Assessed → Approved for Payment → Paid → For Release → Released
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }

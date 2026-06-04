@@ -13,6 +13,7 @@ import {
   DOCUMENT_UPLOAD_ERROR_UNSUPPORTED_TYPE,
   MAX_DOCUMENT_FILE_SIZE_BYTES,
 } from "@/lib/document-upload-rules";
+import { validateDocumentFileContent } from "@/lib/file-content-validation";
 
 const ALLOWED_MIME_TYPES = new Set<string>(ALLOWED_DOCUMENT_MIME_TYPES);
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -175,6 +176,12 @@ export async function uploadDocumentFile(params: {
 
   if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
     throw new Error(DOCUMENT_UPLOAD_ERROR_MAX_SIZE);
+  }
+
+  const fileBytes = new Uint8Array(await file.arrayBuffer());
+  const contentError = validateDocumentFileContent(fileBytes, file.type);
+  if (contentError) {
+    throw new Error(contentError);
   }
 
   const bucket = resolveBucketByMimeType(file.type);

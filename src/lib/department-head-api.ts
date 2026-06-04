@@ -293,6 +293,7 @@ export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHea
     where: {
       status: "VERIFIED_NON_COMPLIANT",
       complianceStatus: "NON_COMPLIANT",
+      revocationDecision: null,
       application: {
         status: "REVOCATION_REVIEW",
       },
@@ -904,7 +905,7 @@ export async function applyDepartmentHeadRevocationDecision(
   const normalizedRemarks = remarks?.trim();
 
   if (!normalizedRemarks) {
-    throw new Error("Remarks are required for revocation decisions");
+    throw new Error("Department Head remarks are required.");
   }
 
   return prisma.$transaction(async (tx: any) => {
@@ -927,36 +928,40 @@ export async function applyDepartmentHeadRevocationDecision(
     });
 
     if (!inspection) {
-      throw new Error("Inspection not found");
+      throw new Error("Inspection record not found.");
     }
 
-    const allowedRevocationStatuses = new Set(["VERIFIED_NON_COMPLIANT", "REVOCATION_REVIEW"]);
-    if (!allowedRevocationStatuses.has(inspection.status)) {
-      throw new Error("Inspection is not in revocation review stage");
+    if (inspection.status !== "VERIFIED_NON_COMPLIANT") {
+      throw new Error(
+        `Inspection status is '${inspection.status}', expected VERIFIED_NON_COMPLIANT. Cannot proceed with revocation decision.`
+      );
     }
 
-    if (inspection.status === "REVOCATION_REVIEW" && !inspection.decidedById) {
-      throw new Error("Only Department Head verified non-compliant inspections can be decided");
+    if (inspection.complianceStatus !== "NON_COMPLIANT") {
+      throw new Error(
+        `Inspection compliance status is '${inspection.complianceStatus}', expected NON_COMPLIANT. Cannot proceed.`
+      );
     }
 
-    if (inspection.revocationDecision || inspection.decidedAt) {
-      throw new Error("Revocation decision was already finalized");
+    if (inspection.revocationDecision !== null) {
+      throw new Error(
+        `A revocation decision has already been recorded: ${inspection.revocationDecision}. Decision cannot be changed.`
+      );
     }
 
-    if (!inspection.application || inspection.application.status !== "REVOCATION_REVIEW") {
-      throw new Error("Application is not in REVOCATION_REVIEW status");
+    if (!inspection.application) {
+      throw new Error("No linked application found for this inspection.");
     }
 
-    await tx.applicationHistory.create({
-      data: {
-        applicationId: inspection.application.id,
-        actorId: departmentHeadUserId,
-        actorRole: "DEPARTMENT_HEAD",
-        fromStatus: "REVOCATION_REVIEW",
-        toStatus: "REVOCATION_REVIEW",
-        remarks: "Department Head reviewed flagged case.",
-      },
-    });
+    if (inspection.application.status === "REVOKED") {
+      throw new Error("The permit/application is already marked as REVOKED.");
+    }
+
+    if (inspection.application.status !== "REVOCATION_REVIEW") {
+      throw new Error(
+        `Application status is '${inspection.application.status}', expected REVOCATION_REVIEW. Revocation decision cannot be applied in this state.`
+      );
+    }
 
     if (action === "APPROVE") {
       assertStatusTransition(inspection.application.status, "REVOKED");
@@ -1034,6 +1039,7 @@ export async function applyDepartmentHeadRevocationDecision(
       applicationNumber: inspection.application.applicationNumber,
       inspectionStatus: toRevocationInspectionStatus(action),
       applicationStatus: action === "APPROVE" ? mapDbStatusToUi("REVOKED") : mapDbStatusToUi("RELEASED"),
+      businessStatus: action === "APPROVE" ? "INACTIVE" : "ACTIVE",
     };
   });
 }
@@ -1042,6 +1048,18 @@ export async function requireDepartmentHeadSession() {
   const session = await auth();
 
   if (!session?.user?.id || session.user.role !== "DEPARTMENT_HEAD") {
+    return null;
+  }
+
+  // Re-verify against DB so disabled or role-changed accounts lose access
+  // immediately — not after JWT expiry. Mirrors requireBploSession and
+  // requireSuperAdminSession which were hardened in security pass 1.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, role: true, isActive: true },
+  });
+
+  if (!dbUser || dbUser.role !== "DEPARTMENT_HEAD" || !dbUser.isActive) {
     return null;
   }
 

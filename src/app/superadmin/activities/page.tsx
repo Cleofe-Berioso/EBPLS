@@ -197,7 +197,6 @@ export default async function SuperAdminActivitiesPage({ searchParams }: PagePro
   return (
     <section className="space-y-4">
       <PageHeader
-        eyebrow="Super Admin"
         eyebrowClassName="text-slate-600"
         title="Audit Trail"
         description="Read-only system-wide audit log for monitoring actions across application, payment, permit, inspection, settings, user management, document, revocation, and SMS modules."

@@ -2,8 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { formatPersonName } from "@/lib/person-name";
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  REGISTER_RATE_LIMIT,
+} from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-client-ip";
 
 export async function POST(req: NextRequest) {
+  const ipLimit = checkRateLimit(`register:ip:${getClientIp(req)}`, REGISTER_RATE_LIMIT);
+  if (!ipLimit.ok) {
+    return rateLimitResponse(ipLimit.resetAt);
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -57,15 +68,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Passwords do not match." }, { status: 400 });
   }
 
-  // ── Uniqueness check ───────────────────────────────────────────────────────
   const normalizedEmail = email.trim().toLowerCase();
+
+  // ── Uniqueness check ───────────────────────────────────────────────────────
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
     return NextResponse.json(
-      { error: "An account with this email address already exists." },
+      { error: "Unable to create account. If you already have an account, try signing in." },
       { status: 409 }
     );
   }
+
+  // ── OTP verification gate ──────────────────────────────────────────────────
+  // Require that the email was verified within the last 15 minutes
+  // by checking for a recently-verified, unused OTP in the PasswordResetOtp table.
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+  const verifiedOtp = await prisma.passwordResetOtp.findFirst({
+    where: {
+      email: normalizedEmail,
+      verifiedAt: { not: null, gte: fifteenMinutesAgo },
+      usedAt: null,
+    },
+    orderBy: { verifiedAt: "desc" },
+  });
+
+  if (!verifiedOtp) {
+    return NextResponse.json(
+      { error: "Email verification required. Please verify your email with the OTP before registering." },
+      { status: 403 }
+    );
+  }
+
+  // Mark the OTP as used so it cannot be replayed
+  await prisma.passwordResetOtp.update({
+    where: { id: verifiedOtp.id },
+    data: { usedAt: new Date() },
+  });
 
   // ── Create user ────────────────────────────────────────────────────────────
   const passwordHash = await bcrypt.hash(password, 12);
@@ -97,8 +135,8 @@ export async function POST(req: NextRequest) {
       id: true,
       email: true,
       name: true,
-      role: true,
-      createdAt: true,
+      // role and createdAt intentionally omitted: not needed client-side
+      // and would expose information useful for account enumeration.
     },
   });
 

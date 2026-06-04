@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { getApplicantApplicationDetail, saveApplicantApplication } from "@/lib/applications";
 import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import type { SaveApplicationInput } from "@/lib/applicant-types";
@@ -62,8 +63,8 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     return NextResponse.json({ application: saved });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to save application";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Application not found" ? 404 : message.includes("locked for review") ? 403 : 400;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to save application") }, { status });
   }
 }

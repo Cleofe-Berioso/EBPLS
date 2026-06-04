@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { Mail, UserCircle2 } from "lucide-react";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
-import { auth } from "@/lib/auth";
+import { ProfilePictureCard } from "@/components/applicant/profile-picture-card";
+import { requireApplicantSession } from "@/lib/applicant-api";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 
@@ -10,9 +11,9 @@ function formatValue(value?: string | null) {
 }
 
 export default async function ApplicantProfilePage() {
-  const session = await auth();
+  const session = await requireApplicantSession();
 
-  if (!session?.user?.id) {
+  if (!session) {
     notFound();
   }
 
@@ -23,6 +24,10 @@ export default async function ApplicantProfilePage() {
         title="Profile"
         description={`Signed in as ${formatValue(session.user.name)}. This page summarizes your account information.`}
       />
+
+      <SectionCard title="Profile Picture">
+        <ProfilePictureCard userName={formatValue(session.user.name)} />
+      </SectionCard>
 
       <div className="grid gap-4 md:grid-cols-2">
         <DashboardSummaryCard title="Account Name" value={formatValue(session.user.name)} subtitle="Authenticated applicant account" icon={<UserCircle2 className="h-5 w-5" />} tone="green" />

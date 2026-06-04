@@ -10,7 +10,7 @@ export default function ApplicantApplicationPage() {
         description="Select the filing type: New Application, Renewal Application, or Closure Application."
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 items-stretch">
         <ApplicationOptionCard
           title="New Application"
           description="Register a new business and submit initial permit requirements."

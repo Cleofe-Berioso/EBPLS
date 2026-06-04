@@ -80,6 +80,8 @@ export function JitInspectBusinessClient() {
   const [complianceStatus, setComplianceStatus] = useState<ComplianceStatus>("COMPLIANT");
   const [comment, setComment] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [recommendRevocation, setRecommendRevocation] = useState(false);
+  const [revocationRemarks, setRevocationRemarks] = useState("");
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -176,8 +178,10 @@ export function JitInspectBusinessClient() {
     if (!comment.trim()) {
       return "Comment is required for all inspections.";
     }
-    if (!evidenceFile) {
-      return "Photo evidence is required for all inspections.";
+    // Evidence is required only when JIT recommends revocation
+    if (recommendRevocation) {
+      if (!revocationRemarks.trim()) return "Revocation remarks are required when recommending revocation.";
+      if (!evidenceFile) return "Photo evidence is required when recommending revocation.";
     }
 
     return null;
@@ -199,6 +203,10 @@ export function JitInspectBusinessClient() {
     const payload = new FormData();
     payload.set("complianceStatus", complianceStatus);
     payload.set("comment", comment);
+    if (recommendRevocation) {
+      payload.set("recommendRevocation", "1");
+      payload.set("revocationRemarks", revocationRemarks);
+    }
     if (evidenceFile) {
       payload.set("evidencePhoto", evidenceFile);
     }
@@ -222,6 +230,8 @@ export function JitInspectBusinessClient() {
     setComplianceStatus("COMPLIANT");
     setComment("");
     setEvidenceFile(null);
+    setRecommendRevocation(false);
+    setRevocationRemarks("");
     setStatusMessage({
       kind: "success",
       text: "Inspection submitted for Department Head verification.",
@@ -432,6 +442,33 @@ export function JitInspectBusinessClient() {
                   <option value="NON_COMPLIANT">NON_COMPLIANT</option>
                 </select>
               </FormField>
+
+                {complianceStatus === "NON_COMPLIANT" ? (
+                  <div className="space-y-2">
+                    <label className="inline-flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={recommendRevocation}
+                        onChange={(e) => setRecommendRevocation(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-rose-600"
+                      />
+                      <span className="text-sm font-medium text-slate-700">Recommend revocation to Department Head</span>
+                    </label>
+
+                    {recommendRevocation ? (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Revocation remarks (required)</label>
+                        <textarea
+                          rows={3}
+                          value={revocationRemarks}
+                          onChange={(e) => setRevocationRemarks(e.target.value)}
+                          className="mt-1 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none"
+                          placeholder="Explain why revocation is being recommended"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
               <FormField
                 label="Comment / Remarks"

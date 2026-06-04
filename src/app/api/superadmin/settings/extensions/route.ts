@@ -86,7 +86,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, extension }, { status: 201 });
   } catch (error) {
     if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      // In production, do not surface raw Prisma error messages — they can
+      // contain constraint names, table/column details, or index identifiers.
+      const safeMessage =
+        process.env.NODE_ENV !== "production"
+          ? error.message
+          : "Failed to create renewal extension. Please check your input and try again.";
+      return NextResponse.json({ error: safeMessage }, { status: 400 });
     }
     return NextResponse.json({ error: "Failed to create renewal extension." }, { status: 500 });
   }

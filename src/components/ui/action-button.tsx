@@ -15,17 +15,17 @@ export function actionButtonStyles(
 
   const variants: Record<ActionButtonVariant, string> = {
     primary:
-      "border-emerald-700 bg-emerald-700 text-white hover:border-emerald-800 hover:bg-emerald-800 focus-visible:ring-emerald-700 shadow-sm",
+      "border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-700/95 focus-visible:ring-emerald-400 shadow-sm",
     secondary:
-      "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:ring-emerald-600 shadow-sm",
+      "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:ring-emerald-300 shadow-sm",
     ghost:
       "border-transparent bg-transparent text-slate-700 hover:bg-slate-100 focus-visible:ring-slate-500",
     danger:
-      "border-rose-700 bg-rose-700 text-white hover:border-rose-800 hover:bg-rose-800 focus-visible:ring-rose-700 shadow-sm",
+      "border-rose-700 bg-rose-700 text-white hover:bg-rose-700/95 focus-visible:ring-rose-400 shadow-sm",
     warning:
-      "border-amber-600 bg-amber-600 text-white hover:border-amber-700 hover:bg-amber-700 focus-visible:ring-amber-600 shadow-sm",
+      "border-amber-600 bg-amber-600 text-white hover:bg-amber-600/95 focus-visible:ring-amber-400 shadow-sm",
     readOnly:
-      "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200 focus-visible:ring-slate-500 shadow-sm",
+      "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200 focus-visible:ring-slate-300 shadow-sm",
   };
 
   const sizes: Record<ActionButtonSize, string> = {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { listApplicantDocuments } from "@/lib/applications";
 import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 
@@ -17,9 +18,9 @@ export async function GET(_req: Request, context: RouteContext) {
     const documents = await listApplicantDocuments(authContext.applicantId, applicationId);
     return NextResponse.json({ documents });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load documents";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Application not found" ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to load documents") }, { status });
   }
 }
 

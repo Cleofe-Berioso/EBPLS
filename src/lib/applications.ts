@@ -404,10 +404,6 @@ function validateClosureSubmissionRules(input: SaveApplicationInput, closureElig
     }
   }
 
-  if (!fd.closureReason?.trim()) {
-    closureMissing.push("closureReason");
-  }
-
   if (closureMissing.length > 0) {
     throw new SubmitValidationError({ missingFields: closureMissing, missingDocuments: [] });
   }
@@ -695,7 +691,16 @@ function validateSubmitPayload(
     }
   }
 
+  // For CLOSURE applications, businessAddress, lineOfBusiness, and businessActivity
+  // are sourced from the existing business record and are not re-entered in the form.
+  const closureExcludedKeys = new Set<keyof BusinessInfo>(
+    input.applicationType === "CLOSURE"
+      ? ["businessAddress", "lineOfBusiness", "businessActivity"]
+      : []
+  );
+
   const missingFields = REQUIRED_FIELD_KEYS.filter((key) => {
+    if (closureExcludedKeys.has(key)) return false;
     const value = normalizedFormData[key];
     return typeof value !== "string" || value.trim().length === 0;
   }).map((key) => String(key));
@@ -730,31 +735,33 @@ function validateSubmitPayload(
     }
   }
 
-  const normalizedNationality = normalizedFormData.nationality.trim();
-  if (normalizedNationality.length === 0) {
-    missingFields.push("nationality");
-  }
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    const normalizedNationality = normalizedFormData.nationality.trim();
+    if (normalizedNationality.length === 0) {
+      missingFields.push("nationality");
+    }
 
-  if (!ALLOWED_PAYMENT_FREQUENCIES.includes(normalizedFormData.paymentFrequency)) {
-    missingFields.push("paymentFrequency (must be ANNUAL, BI_ANNUAL, or QUARTERLY)");
-  }
+    if (!ALLOWED_PAYMENT_FREQUENCIES.includes(normalizedFormData.paymentFrequency)) {
+      missingFields.push("paymentFrequency (must be ANNUAL, BI_ANNUAL, or QUARTERLY)");
+    }
 
-  const normalizedPhone = normalizedFormData.phone.replace(/[\s-]/g, "");
-  if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
-    missingFields.push("phone (must be a valid Philippine mobile number)");
-  }
+    const normalizedPhone = normalizedFormData.phone.replace(/[\s-]/g, "");
+    if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
+      missingFields.push("phone (must be a valid Philippine mobile number)");
+    }
 
-  const email = normalizedFormData.email.trim();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    missingFields.push("email (invalid format)");
-  }
+    const email = normalizedFormData.email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      missingFields.push("email (invalid format)");
+    }
 
-  const assetSizeRaw = normalizedFormData.assetSize.trim();
-  if (!assetSizeRaw) {
-    missingFields.push("assetSize");
-  } else if (parseNonNegativeAmount(assetSizeRaw) == null) {
-    missingFields.push("assetSize (must be a non-negative number)");
+    const assetSizeRaw = normalizedFormData.assetSize.trim();
+    if (!assetSizeRaw) {
+      missingFields.push("assetSize");
+    } else if (parseNonNegativeAmount(assetSizeRaw) == null) {
+      missingFields.push("assetSize (must be a non-negative number)");
+    }
   }
 
   if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
@@ -821,26 +828,30 @@ function validateSubmitPayload(
     }
   }
 
-  if (
-    isPhilippinesCountry(
-      normalizedFormData.mainOfficeCountry,
-      normalizedFormData.mainOfficeCountryCode
-    )
-  ) {
-    if (!normalizedFormData.mainOfficeBarangay?.trim()) {
-      missingFields.push("mainOfficeBarangay");
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    if (
+      isPhilippinesCountry(
+        normalizedFormData.mainOfficeCountry,
+        normalizedFormData.mainOfficeCountryCode
+      )
+    ) {
+      if (!normalizedFormData.mainOfficeBarangay?.trim()) {
+        missingFields.push("mainOfficeBarangay");
+      }
+    } else if (!normalizedFormData.mainOfficeStreetAddress?.trim()) {
+      missingFields.push("mainOfficeStreetAddress");
     }
-  } else if (!normalizedFormData.mainOfficeStreetAddress?.trim()) {
-    missingFields.push("mainOfficeStreetAddress");
   }
 
-  const totalEmployeesRaw = normalizedFormData.totalEmployees.trim();
-  if (!totalEmployeesRaw) {
-    missingFields.push("totalEmployees");
-  } else {
-    const employees = Number(totalEmployeesRaw.replace(/[,\s]/g, ""));
-    if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
-      missingFields.push("totalEmployees (must be a non-negative integer)");
+  if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
+    const totalEmployeesRaw = normalizedFormData.totalEmployees.trim();
+    if (!totalEmployeesRaw) {
+      missingFields.push("totalEmployees");
+    } else {
+      const employees = Number(totalEmployeesRaw.replace(/[,\s]/g, ""));
+      if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
+        missingFields.push("totalEmployees (must be a non-negative integer)");
+      }
     }
   }
 
@@ -1554,6 +1565,106 @@ export async function deleteApplicantDocument(applicantId: string, applicationId
   return doc;
 }
 
+// Map a DB application status to a NotificationType for the notification dropdown.
+function dbStatusToNotificationType(
+  dbStatus: string
+): "APPLICATION_SUBMITTED" | "RETURNED_FOR_CORRECTION" | "APPROVED_FOR_PAYMENT" | "REJECTED" | "ASSESSMENT_GENERATED" | "PAYMENT_VERIFIED" | "PERMIT_RELEASED" | "CLOSURE_APPROVED" | "INSPECTION_RELATED" {
+  switch (dbStatus) {
+    case "SUBMITTED":
+      return "APPLICATION_SUBMITTED";
+    case "RETURNED_FOR_CORRECTION":
+      return "RETURNED_FOR_CORRECTION";
+    case "ASSESSED":
+    case "APPROVED_FOR_PAYMENT":
+      return "APPROVED_FOR_PAYMENT";
+    case "REJECTED":
+    case "REVOKED":
+      return "REJECTED";
+    case "PAID":
+    case "FOR_RELEASE":
+      return "PAYMENT_VERIFIED";
+    case "RELEASED":
+      return "PERMIT_RELEASED";
+    default:
+      return "APPLICATION_SUBMITTED";
+  }
+}
+
+// Build a human-readable title and message for a history event.
+function buildNotificationContent(
+  dbStatus: string,
+  applicationNumber: string,
+  remarks: string | null
+): { title: string; message: string } {
+  const appNum = applicationNumber ?? "your application";
+  switch (dbStatus) {
+    case "SUBMITTED":
+      return {
+        title: "Application Submitted",
+        message: `Your application ${appNum} has been successfully submitted for review.`,
+      };
+    case "RETURNED_FOR_CORRECTION":
+      return {
+        title: "Returned for Correction",
+        message: remarks
+          ? `Application ${appNum} was returned: ${remarks}`
+          : `Application ${appNum} has been returned. Please review the remarks and resubmit.`,
+      };
+    case "ASSESSED":
+      return {
+        title: "Assessment Generated",
+        message: `Fee assessment for application ${appNum} is now available for review.`,
+      };
+    case "APPROVED_FOR_PAYMENT":
+      return {
+        title: "Approved for Payment",
+        message: `Application ${appNum} has been assessed. Please proceed to payment.`,
+      };
+    case "PAID":
+      return {
+        title: "Payment Verified",
+        message: `Payment for application ${appNum} has been verified successfully.`,
+      };
+    case "FOR_RELEASE":
+      return {
+        title: "Ready for Release",
+        message: `Your permit for application ${appNum} is being prepared for release.`,
+      };
+    case "RELEASED":
+      return {
+        title: "Permit Released",
+        message: `Your business permit for application ${appNum} is now available for pickup.`,
+      };
+    case "REJECTED":
+      return {
+        title: "Application Rejected",
+        message: remarks
+          ? `Application ${appNum} was rejected: ${remarks}`
+          : `Application ${appNum} has been rejected. Please contact BPLO for details.`,
+      };
+    case "REVOKED":
+      return {
+        title: "Permit Revoked",
+        message: remarks
+          ? `Permit for application ${appNum} was revoked: ${remarks}`
+          : `Your business permit for application ${appNum} has been revoked.`,
+      };
+    case "UNDER_REVIEW":
+    case "DEPARTMENT_HEAD_REVIEW":
+    case "DEPARTMENT_HEAD_APPROVED":
+    case "REVOCATION_REVIEW":
+      return {
+        title: "Application Under Review",
+        message: `Application ${appNum} is currently being reviewed by the BPLO.`,
+      };
+    default:
+      return {
+        title: "Application Updated",
+        message: `There has been an update to your application ${appNum}.`,
+      };
+  }
+}
+
 // Cached query for applicant notifications - deduplicates per-request
 const getCachedApplicantNotifications = cache(async (applicantId: string) => {
   const apps = await prisma.businessApplication.findMany({
@@ -1572,19 +1683,28 @@ const getCachedApplicantNotifications = cache(async (applicantId: string) => {
   });
 
   const notifications = apps.flatMap((app: any) =>
-    app.history.map((item: any) => ({
-      id: item.id,
-      applicationId: app.id,
-      applicationNumber: app.applicationNumber,
-      applicationType: app.applicationType,
-      toStatus: mapDbStatusToUi(item.toStatus),
-      remarks: item.remarks,
-      createdAt: item.createdAt.toISOString(),
-    }))
+    app.history.map((item: any) => {
+      const { title, message } = buildNotificationContent(
+        item.toStatus,
+        app.applicationNumber,
+        item.remarks ?? null
+      );
+      return {
+        id: item.id,
+        applicationId: app.id,
+        applicationNumber: app.applicationNumber,
+        type: dbStatusToNotificationType(item.toStatus),
+        title,
+        message,
+        timestamp: item.createdAt.toISOString(),
+        isRead: false,
+      };
+    })
   );
 
-  return notifications.sort((a: { createdAt: string }, b: { createdAt: string }) =>
-    b.createdAt.localeCompare(a.createdAt)
+  return notifications.sort(
+    (a: { timestamp: string }, b: { timestamp: string }) =>
+      b.timestamp.localeCompare(a.timestamp)
   );
 });
 
@@ -1593,6 +1713,10 @@ export async function listApplicantNotifications(applicantId: string) {
 }
 
 export async function getApplicantTopSummary(applicantId: string) {
+  // Fetch ALL applications for this applicant that have a GENERATED TOP (feeAssessment.status === "GENERATED").
+  // This covers NEW, RENEWAL, and CLOSURE application types.
+  // We do NOT filter on application status here so that the applicant can still see their TOP
+  // after payment is verified and application moves to PAID / FOR_RELEASE / RELEASED.
   const applications = await prisma.businessApplication.findMany({
     where: {
       applicantId,
@@ -1609,7 +1733,30 @@ export async function getApplicantTopSummary(applicantId: string) {
         },
       },
       feeAssessment: {
-        include: {
+        select: {
+          id: true,
+          assessmentNumber: true,
+          status: true,
+          paymentFrequency: true,
+          annualAssessedAmount: true,
+          releasePaymentAmount: true,
+          amountPaid: true,
+          remainingBalance: true,
+          paymentStatus: true,
+          mayorsPermitFee: true,
+          regulatoryFees: true,
+          additionalCharges: true,
+          penalties: true,
+          surcharge: true,
+          interest: true,
+          closureCertificateFee: true,
+          arrears: true,
+          otherCharges: true,
+          closurePaymentDues: true,
+          totalAmount: true,
+          remarks: true,
+          generatedAt: true,
+          reassessmentRequestedAt: true,
           lineItems: {
             orderBy: { sortOrder: "asc" },
           },
@@ -1649,6 +1796,7 @@ export async function getApplicantTopSummary(applicantId: string) {
       totalAmount: any;
       remarks: string | null;
       generatedAt: Date | null;
+      reassessmentRequestedAt: Date | null;
       lineItems: Array<{
         id: string;
         description: string;
@@ -1685,6 +1833,7 @@ export async function getApplicantTopSummary(applicantId: string) {
       totalAmount: toMoneyNumber(fa?.totalAmount),
       remarks: fa?.remarks ?? null,
       generatedAt: fa?.generatedAt ? fa.generatedAt.toISOString() : null,
+      reassessmentRequestedAt: fa?.reassessmentRequestedAt ? fa.reassessmentRequestedAt.toISOString() : null,
       lineItems: (fa?.lineItems ?? []).map((item) => ({
         id: item.id,
         description: item.description,
@@ -1708,10 +1857,26 @@ export async function getApplicantTopSummary(applicantId: string) {
     };
   });
 
+  // Priority for bestActiveSummary:
+  // 1. APPROVED_FOR_PAYMENT app with no payment ref yet (applicant hasn't submitted OR)
+  // 2. APPROVED_FOR_PAYMENT app with a REJECTED payment ref (needs resubmission)
+  // 3. APPROVED_FOR_PAYMENT app with a PENDING payment ref (awaiting BPLO review)
+  // 4. Any APPROVED_FOR_PAYMENT app (fallback)
+  // 5. Any summary with the most recent activity (for post-payment visibility)
+  //
+  // This logic applies to ALL application types (NEW, RENEWAL, CLOSURE) equally.
+  // CLOSURE apps that have a GENERATED TOP and are in APPROVED_FOR_PAYMENT will
+  // match the same priority buckets as NEW/RENEWAL apps.
+  const approvedSummaries = summaries.filter((s: { rawStatus: string }) => s.rawStatus === "APPROVED_FOR_PAYMENT");
+  const bestActiveSummary =
+    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => !s.paymentReference) ??
+    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => s.paymentReference?.status === "REJECTED") ??
+    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => s.paymentReference?.status === "PENDING") ??
+    approvedSummaries[0] ??
+    summaries[0];
+
   return {
-    activeSummary: summaries.find(
-      (summary: { rawStatus: string }) => summary.rawStatus === "APPROVED_FOR_PAYMENT"
-    ) ?? summaries[0],
+    activeSummary: bestActiveSummary,
     records: summaries,
   };
 }

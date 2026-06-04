@@ -2,8 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { requestPasswordResetOtp } from "@/lib/password-reset";
 import { sendEmail, generatePasswordResetEmailHtml } from "@/lib/mail";
 import { prisma } from "@/lib/prisma";
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  OTP_REQUEST_IP_RATE_LIMIT,
+} from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-client-ip";
 
 export async function POST(request: NextRequest) {
+  const ipLimit = checkRateLimit(
+    `otp-request:ip:${getClientIp(request)}`,
+    OTP_REQUEST_IP_RATE_LIMIT
+  );
+  if (!ipLimit.ok) {
+    return rateLimitResponse(ipLimit.resetAt);
+  }
+
   try {
     const body = await request.json();
     const email = body.email?.trim().toLowerCase();
@@ -29,18 +43,20 @@ export async function POST(request: NextRequest) {
           process.env.PASSWORD_RESET_OTP_EXPIRES_MINUTES || "10"
         );
 
-        const emailHtml = generatePasswordResetEmailHtml(plainOtp, expirationMinutes);
-
-        await sendEmail({
-          to: email,
-          subject: "EBPLS Password Reset OTP",
-          html: emailHtml,
-        });
-
-        console.log(`Password reset OTP sent to: ${email}`);
+        // plainOtp is empty when the 60-second cooldown is still active.
+        // Skip sending another email to prevent inbox flooding.
+        if (plainOtp) {
+          const emailHtml = generatePasswordResetEmailHtml(plainOtp, expirationMinutes);
+          await sendEmail({
+            to: email,
+            subject: "Business Permit Online System — Password Reset OTP",
+            html: emailHtml,
+          });
+        }
       } catch (emailError) {
-        console.error("Error sending password reset email:", emailError);
-        // Don't expose email errors to client; return generic message
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Error sending password reset email:", emailError);
+        }
       }
     }
 
@@ -48,12 +64,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         message:
-          "If this email is registered with EBPLS, an OTP has been sent. Please check your inbox and spam folder.",
+          "If this email is registered with the Business Permit Online System, an OTP has been sent. Please check your inbox and spam folder.",
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error in password reset request:", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Error in password reset request:", error);
+    }
     return NextResponse.json(
       { error: "An error occurred. Please try again later." },
       { status: 500 }

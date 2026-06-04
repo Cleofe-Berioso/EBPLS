@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { applyDepartmentHeadAction, requireDepartmentHeadSession } from "@/lib/department-head-api";
 import { logApplicationAction } from "@/lib/audit-log";
 
@@ -42,13 +43,13 @@ export async function POST(_req: Request, context: RouteContext) {
 
     return NextResponse.json({ application });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to approve application";
+    const message = error instanceof Error ? error.message : "";
     const status =
       message === "Application not found"
         ? 404
         : message === "Application is not in Department Head review stage"
           ? 409
           : 400;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to approve application") }, { status });
   }
 }

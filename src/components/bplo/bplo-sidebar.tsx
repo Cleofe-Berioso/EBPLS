@@ -27,7 +27,6 @@ const BPLO_SIDEBAR_ITEMS: SidebarGroup[] = [
     ],
   },
   { label: "Business Map", href: "/bplo/business-map" },
-  { label: "Reports", href: "/bplo/reports" },
   { label: "Profile", href: "/bplo/profile" },
 ];
 
@@ -62,7 +61,7 @@ export function BploSidebar({
       <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-700">Municipality eBPLS</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-700">Business Permit Online System</p>
             <h2 className={`mt-2 text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>BPLO Portal</h2>
             <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Manage application review, payment, and issuance queues.</p>
           </div>
@@ -127,14 +126,6 @@ export function BploSidebar({
         })}
       </nav>
 
-      <div className={`border-t border-slate-200 px-4 py-4 ${collapsed ? "lg:hidden" : ""}`}>
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm">
-          <p className="font-semibold uppercase tracking-[0.15em] text-slate-500">Workflow Pipeline</p>
-          <p className="mt-2 leading-relaxed">
-            Draft → Submitted → Under Review → Assessed → Approved for Payment → Paid → For Release → Released
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }

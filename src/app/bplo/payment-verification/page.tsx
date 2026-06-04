@@ -8,6 +8,7 @@ import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { RoleBadge } from "@/components/ui/role-badge";
+import { Modal } from "@/components/ui/modal";
 import { SectionCard } from "@/components/ui/section-card";
 
 type PaymentStatus = "PENDING" | "VERIFIED" | "REJECTED";
@@ -59,12 +60,27 @@ interface PaymentVerificationDetail {
     penalties: number;
     surcharge: number;
     interest: number;
+    closurePaymentDues: number;
     closureCertificateFee: number;
     arrears: number;
     otherCharges: number;
     totalAmount: number;
     remarks: string | null;
   };
+}
+
+type ProofPreviewKind = "image" | "pdf" | "unknown";
+
+interface ProofModalState {
+  open: boolean;
+  paymentReferenceId: string | null;
+  title: string;
+  proofFileName: string;
+  proofMimeType: string | null;
+  orNumber: string;
+  previewKind: ProofPreviewKind;
+  previewUrl: string | null;
+  error: string | null;
 }
 
 interface VerificationLists {
@@ -131,6 +147,96 @@ export default function BploPaymentVerificationPage() {
   const [remarks, setRemarks] = useState("");
   const [statusMessage, setStatusMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [proofModal, setProofModal] = useState<ProofModalState>({
+    open: false,
+    paymentReferenceId: null,
+    title: "Payment Proof",
+    proofFileName: "",
+    proofMimeType: null,
+    orNumber: "",
+    previewKind: "unknown",
+    previewUrl: null,
+    error: null,
+  });
+
+  useEffect(() => {
+    return () => {
+      if (proofModal.previewUrl) {
+        URL.revokeObjectURL(proofModal.previewUrl);
+      }
+    };
+  }, [proofModal.previewUrl]);
+
+  function closeProofModal() {
+    setProofModal((current) => ({
+      ...current,
+      open: false,
+      previewUrl: null,
+      error: null,
+    }));
+  }
+
+  async function openProofModal(row: PaymentVerificationRow) {
+    if (proofModal.previewUrl) {
+      URL.revokeObjectURL(proofModal.previewUrl);
+    }
+
+    setProofModal({
+      open: true,
+      paymentReferenceId: row.paymentReferenceId,
+      title: "Payment Proof",
+      proofFileName: row.proofFileName,
+      proofMimeType: null,
+      orNumber: row.transactionNumber,
+      previewKind: "unknown",
+      previewUrl: null,
+      error: null,
+    });
+
+    try {
+      const response = await fetch(`/api/bplo/payment-verification/${row.paymentReferenceId}/proof`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setProofModal((current) => ({
+          ...current,
+          error: data.error ?? "Unable to preview this file. Please download it instead.",
+        }));
+        return;
+      }
+
+      const mimeType = response.headers.get("content-type") ?? row.proofFileName.split(".").pop()?.toLowerCase() ?? "";
+      const previewKind: ProofPreviewKind =
+        mimeType.includes("pdf") || row.proofFileName.toLowerCase().endsWith(".pdf")
+          ? "pdf"
+          : mimeType.startsWith("image/")
+            ? "image"
+            : "unknown";
+
+      const blob = await response.blob();
+      const previewUrl = URL.createObjectURL(blob);
+
+      setProofModal((current) => ({
+        ...current,
+        proofMimeType: mimeType,
+        previewKind,
+        previewUrl,
+        error: previewKind === "unknown" ? "Unable to preview this file. Please download it instead." : null,
+      }));
+    } catch {
+      setProofModal((current) => ({
+        ...current,
+        error: "Unable to preview this file. Please download it instead.",
+      }));
+    }
+  }
+
+  function proofDownloadHref() {
+    if (!proofModal.paymentReferenceId) return "#";
+    return `/api/bplo/payment-verification/${proofModal.paymentReferenceId}/proof`;
+  }
 
   async function loadLists() {
     setLoading(true);
@@ -508,20 +614,40 @@ export default function BploPaymentVerificationPage() {
                 />
               </div>
 
+              {/* CLOSURE-specific fee breakdown */}
+              {detail.row.applicationType === "CLOSURE" ? (
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                  <p className="mb-3 text-sm font-semibold text-blue-900">Closure Application Fees</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SummaryTile
+                      label="Closure Certificate Fee"
+                      value={money(detail.top.closureCertificateFee ?? 0)}
+                      helper="Fixed fee for closure certificate issuance"
+                    />
+                    <SummaryTile
+                      label="Closure Payment Dues / Settlement Amount"
+                      value={money(detail.top.closurePaymentDues ?? 0)}
+                      helper="Outstanding dues before closure is approved"
+                    />
+                  </div>
+                </div>
+              ) : null}
+
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">Payment Proof</p>
                 <p className="mt-1 text-sm text-slate-600">
                   Submitted file: <span className="font-medium text-slate-900">{detail.row.proofFileName}</span>
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <a
-                    href={`/api/bplo/payment-verification/${detail.row.paymentReferenceId}/proof`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void openProofModal(detail.row);
+                    }}
                     className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                   >
                     Open Payment Proof
-                  </a>
+                  </button>
                   <a
                     href={`/api/bplo/payment-verification/${detail.row.paymentReferenceId}/proof`}
                     download
@@ -592,6 +718,55 @@ export default function BploPaymentVerificationPage() {
           variant={statusMessage.kind === "error" ? "danger" : "success"}
         />
       ) : null}
+
+      <Modal
+        open={proofModal.open}
+        title={proofModal.title}
+        description={proofModal.paymentReferenceId ? `OR Number: ${proofModal.orNumber}` : undefined}
+        onClose={() => {
+          if (proofModal.previewUrl) {
+            URL.revokeObjectURL(proofModal.previewUrl);
+          }
+          closeProofModal();
+        }}
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-900">Submitted file</p>
+            <p className="mt-1 text-sm text-slate-700">{proofModal.proofFileName || "Not available"}</p>
+          </div>
+
+          {proofModal.error ? (
+            <InfoBanner title="Preview unavailable" description={proofModal.error} variant="warning" />
+          ) : null}
+
+          {proofModal.previewUrl && proofModal.previewKind === "image" ? (
+            <img src={proofModal.previewUrl} alt="Payment proof preview" className="max-h-[60vh] w-full rounded-2xl border border-slate-200 object-contain" />
+          ) : null}
+
+          {proofModal.previewUrl && proofModal.previewKind === "pdf" ? (
+            <iframe src={proofModal.previewUrl} title="Payment proof PDF preview" className="h-[60vh] w-full rounded-2xl border border-slate-200" />
+          ) : null}
+
+          {!proofModal.previewUrl && !proofModal.error ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-600">
+              Loading payment proof preview...
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={proofDownloadHref()}
+              download
+              className={actionButtonStyles("secondary", "sm")}
+            >
+              Download Payment Proof
+            </a>
+            <button type="button" onClick={closeProofModal} className={actionButtonStyles("secondary", "sm")}>Close</button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

@@ -33,7 +33,7 @@ export const proxy = auth((req) => {
   }
 
   // Auth callbacks should bypass dashboard role redirects.
-  if (pathname.startsWith("/api/auth/")) {
+  if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
 

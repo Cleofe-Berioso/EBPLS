@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
 import { requireJitSession } from "@/lib/jit-api";
 import { createJitInspection } from "@/lib/jit-inspections";
@@ -19,9 +20,13 @@ export async function POST(
   const complianceStatusRaw = formData.get("complianceStatus");
   const commentRaw = formData.get("comment");
   const evidence = formData.get("evidencePhoto");
+  const recommendRevocationRaw = formData.get("recommendRevocation");
+  const revocationRemarksRaw = formData.get("revocationRemarks");
 
   const complianceStatus = typeof complianceStatusRaw === "string" ? complianceStatusRaw.trim() : "";
   const comment = typeof commentRaw === "string" ? commentRaw : undefined;
+  const recommendRevocation = typeof recommendRevocationRaw === "string" && recommendRevocationRaw === "1";
+  const revocationRemarks = typeof revocationRemarksRaw === "string" ? revocationRemarksRaw : undefined;
 
   if (complianceStatus !== "COMPLIANT" && complianceStatus !== "NON_COMPLIANT") {
     return NextResponse.json({ error: "complianceStatus must be COMPLIANT or NON_COMPLIANT" }, { status: 422 });
@@ -53,6 +58,8 @@ export async function POST(
     const inspection = await createJitInspection(businessRecordId, session.user.id, {
       complianceStatus,
       comment,
+      recommendRevocation,
+      revocationRemarks,
       evidence: storedEvidence
         ? {
             fileName: storedEvidence.fileName,
@@ -108,14 +115,13 @@ export async function POST(
       await removeApplicantDocument(storedEvidencePath, storedEvidenceMimeType ?? undefined);
     }
 
-    const message = error instanceof Error ? error.message : "Unable to create inspection";
+    const message = error instanceof Error ? error.message : "";
     const status =
       message === "Only active released businesses can be inspected"
         ? 404
         : message.includes("required") || message.includes("must be")
           ? 422
           : 400;
-
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to create inspection") }, { status });
   }
 }

@@ -45,7 +45,9 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error resetting password:", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Error resetting password:", error);
+    }
     return NextResponse.json(
       { error: "Failed to reset password. Please try again later." },
       { status: 500 }

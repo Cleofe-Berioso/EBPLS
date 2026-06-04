@@ -160,7 +160,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
   const ownerFirstName = readText(formData, ["ownerFirstName"], "");
   const ownerMiddleName = readText(formData, ["ownerMiddleName"], "");
   const ownerSurname = readText(formData, ["ownerSurname"], "");
-  const closureReason = readText(formData, ["closureReason", "reasonForClosure", "closureRemarks"], "-");
+
   const latitude = typeof formData.businessLatitude === "number" ? formData.businessLatitude : null;
   const longitude = typeof formData.businessLongitude === "number" ? formData.businessLongitude : null;
   const locationStatus = latitude != null && longitude != null ? "Location pinned" : "Location not pinned";
@@ -500,9 +500,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           <SectionCard title="Application-specific Notes" description="Closure/renewal specific submitted details.">
             <div className="space-y-2 text-sm text-slate-700">
               <p><strong>Application Type:</strong> {application.applicationType}</p>
-              {application.applicationType === "CLOSURE" ? (
-                <p><strong>Closure Reason:</strong> {closureReason}</p>
-              ) : null}
+
               {application.applicationType === "RENEWAL" ? (
                 <p><strong>Renewal Payment Preference:</strong> {readText(formData, ["paymentFrequency"])}</p>
               ) : null}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireBploSession } from "@/lib/bplo-api";
 import { verifyBusinessLocation } from "@/lib/business-location";
 
@@ -24,8 +25,8 @@ export async function POST(
     const row = await verifyBusinessLocation(businessLocationId, session.user.id, payload.remarks);
     return NextResponse.json({ row });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to verify business location";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Business location not found" ? 404 : 422;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to verify business location") }, { status });
   }
 }

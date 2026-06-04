@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApplicantSession } from "@/lib/applicant-api";
 import { createAuditLog } from "@/lib/audit-log";
+import { assertStatusTransition } from "@/lib/application-status";
 
 export async function POST(_req: Request, context: { params: Promise<{ applicationId: string }> }) {
   const session = await requireApplicantSession();
@@ -22,6 +23,13 @@ export async function POST(_req: Request, context: { params: Promise<{ applicati
     return NextResponse.json({ error: "Tax Order of Payment is required before requesting reassessment" }, { status: 400 });
   }
 
+  if (app.status !== "APPROVED_FOR_PAYMENT" && app.status !== "ASSESSED") {
+    return NextResponse.json(
+      { error: "Re-assessment can only be requested while waiting for payment review." },
+      { status: 400 }
+    );
+  }
+
   // Do not allow if any payment submitted or verified
   const anySubmitted = (app.paymentReferences ?? []).length > 0;
   if (anySubmitted) {
@@ -33,23 +41,33 @@ export async function POST(_req: Request, context: { params: Promise<{ applicati
   }
 
   const now = new Date();
-  await prisma.feeAssessment.update({
-    where: { applicationId: app.id },
-    data: {
-      reassessmentRequestedAt: now,
-      reassessmentRequestedById: session.user.id,
-    },
-  });
+  await prisma.$transaction(async (tx: any) => {
+    await tx.feeAssessment.update({
+      where: { applicationId: app.id },
+      data: {
+        reassessmentRequestedAt: now,
+        reassessmentRequestedById: session.user.id,
+      },
+    });
 
-  await prisma.applicationHistory.create({
-    data: {
-      applicationId: app.id,
-      actorId: session.user.id,
-      actorRole: "APPLICANT",
-      fromStatus: app.status,
-      toStatus: app.status,
-      remarks: "Applicant requested reassessment for the generated TOP.",
-    },
+    if (app.status === "APPROVED_FOR_PAYMENT") {
+      assertStatusTransition(app.status, "ASSESSED");
+      await tx.businessApplication.update({
+        where: { id: app.id },
+        data: { status: "ASSESSED" },
+      });
+    }
+
+    await tx.applicationHistory.create({
+      data: {
+        applicationId: app.id,
+        actorId: session.user.id,
+        actorRole: "APPLICANT",
+        fromStatus: app.status,
+        toStatus: app.status === "APPROVED_FOR_PAYMENT" ? "ASSESSED" : app.status,
+        remarks: "Applicant requested reassessment for the generated TOP.",
+      },
+    });
   });
 
   // Non-blocking audit log
@@ -65,5 +83,8 @@ export async function POST(_req: Request, context: { params: Promise<{ applicati
     description: "Applicant requested reassessment of TOP",
   });
 
-  return NextResponse.json({ ok: true, message: "Re-assessment requested. BPLO will review your TOP before payment." });
+  return NextResponse.json({
+    ok: true,
+    message: "Re-assessment request submitted. Your TOP is now pending BPLO revision.",
+  });
 }

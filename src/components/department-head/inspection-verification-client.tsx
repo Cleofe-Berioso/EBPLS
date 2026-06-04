@@ -59,6 +59,7 @@ export function DepartmentHeadInspectionVerificationClient() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [remarks, setRemarks] = useState("");
   const [nonComplianceType, setNonComplianceType] = useState("");
   const [violationSeverity, setViolationSeverity] = useState("");
@@ -103,7 +104,13 @@ export function DepartmentHeadInspectionVerificationClient() {
     setViolationSeverity("");
     setRemarks("");
     setMessage(null);
+    setEvidenceOpen(false);
   }, [selectedId]);
+
+  const selectedEvidenceUrl = selected ? `/api/department-head/inspection-verification/${selected.inspectionId}/evidence` : "";
+  const selectedEvidenceFileName = selected?.evidenceFileName ?? "";
+  const selectedEvidenceIsImage = Boolean(selected?.evidenceMimeType?.startsWith("image/") || /\.(jpg|jpeg|png|webp)$/i.test(selectedEvidenceFileName));
+  const selectedEvidenceIsPdf = Boolean(selected?.evidenceMimeType === "application/pdf" || /\.pdf$/i.test(selectedEvidenceFileName));
 
   async function handleVerify() {
     if (!selected) return;
@@ -251,28 +258,69 @@ export function DepartmentHeadInspectionVerificationClient() {
 
             <SectionCard title="Uploaded Evidence / Photo" description="Evidence attached to the JIT inspection.">
               {!selected.hasEvidence ? (
-                <div className="text-sm text-slate-600">No evidence file attached.</div>
+                <div className="text-sm text-slate-600">No evidence uploaded.</div>
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-slate-700">{selected.evidenceFileName ?? "Evidence file"}</p>
-                  {selected.evidenceMimeType?.startsWith("image/") ? (
-                    <img
-                      src={`/api/department-head/inspection-verification/${selected.inspectionId}/evidence`}
-                      alt="Inspection evidence"
-                      className="max-h-72 w-full rounded-xl border border-slate-200 object-contain"
-                    />
-                  ) : null}
-                  <a
-                    href={`/api/department-head/inspection-verification/${selected.inspectionId}/evidence`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={actionButtonStyles("secondary", "sm")}
-                  >
-                    Open Evidence File
-                  </a>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEvidenceOpen(true)}
+                      className={actionButtonStyles("secondary", "sm")}
+                    >
+                      View Evidence
+                    </button>
+                    <a
+                      href={selectedEvidenceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={actionButtonStyles("secondary", "sm")}
+                    >
+                      Open in New Tab
+                    </a>
+                  </div>
                 </div>
               )}
             </SectionCard>
+
+            {selected?.hasEvidence && evidenceOpen ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+                <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Evidence Preview</p>
+                      <p className="text-xs text-slate-600">{selected.evidenceFileName ?? "Uploaded evidence"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEvidenceOpen(false)}
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="max-h-[calc(90vh-72px)] overflow-auto bg-slate-100 p-4">
+                    {selectedEvidenceIsImage ? (
+                      <img
+                        src={selectedEvidenceUrl}
+                        alt="Inspection evidence"
+                        className="mx-auto max-h-[75vh] w-full max-w-full rounded-2xl border border-slate-200 object-contain bg-white"
+                      />
+                    ) : selectedEvidenceIsPdf ? (
+                      <iframe
+                        src={selectedEvidenceUrl}
+                        title="Inspection evidence preview"
+                        className="h-[75vh] w-full rounded-2xl border border-slate-200 bg-white"
+                      />
+                    ) : (
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                        Preview unavailable for this file type.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-700" htmlFor="verification-remarks">

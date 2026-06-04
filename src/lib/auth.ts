@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { getUserByEmail } from "@/lib/db";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@/lib/db";
+import { checkRateLimit, LOGIN_EMAIL_RATE_LIMIT } from "@/lib/rate-limit";
 
 type AuthUser = {
   id: string;
@@ -20,6 +21,14 @@ const configuredSecret =
 const authSecret =
   configuredSecret ||
   (process.env.NODE_ENV === "development" ? "dev-only-auth-secret-change-me" : undefined);
+
+// Emit a loud warning at startup so misconfigured deployments are immediately visible.
+if (!configuredSecret && process.env.NODE_ENV === "production") {
+  console.error(
+    "[auth] CRITICAL: Neither AUTH_SECRET nor NEXTAUTH_SECRET is set in production. " +
+    "Sessions are signed with an insecure fallback. Set AUTH_SECRET in your environment variables immediately."
+  );
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
@@ -38,6 +47,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         try {
           const normalizedEmail = email.trim().toLowerCase();
+          const emailLimit = checkRateLimit(
+            `login:email:${normalizedEmail}`,
+            LOGIN_EMAIL_RATE_LIMIT
+          );
+          if (!emailLimit.ok) return null;
+
           const user = await getUserByEmail(normalizedEmail);
 
           if (!user || !user.isActive) return null;
@@ -52,8 +67,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             role: user.role,
           };
         } catch (error) {
-          // Keep auth failures opaque to clients; only log unexpected server-side errors.
-          console.error("Credentials authorize failed unexpectedly", error);
+          if (process.env.NODE_ENV !== "production") {
+            console.error("Credentials authorize failed unexpectedly", error);
+          }
           return null;
         }
       },
@@ -116,12 +132,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if ((!token.id || !token.role) && typeof token.email === "string") {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email.toLowerCase() },
-          select: { id: true, role: true },
+          select: { id: true, role: true, isActive: true },
         });
 
         if (dbUser) {
           token.id = dbUser.id;
           token.role = dbUser.role as Role;
+          token.isActive = dbUser.isActive;
+        }
+      }
+
+      if (typeof token.id === "string" && token.id.length > 0) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { id: true, role: true, isActive: true },
+        });
+
+        if (!dbUser || !dbUser.isActive) {
+          token.isActive = false;
+        } else {
+          token.id = dbUser.id;
+          token.role = dbUser.role as Role;
+          token.isActive = true;
         }
       }
 
@@ -129,6 +161,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     session({ session, token }) {
       if (session.user) {
+        if (token.isActive === false) {
+          session.user.id = "";
+          session.user.role = "APPLICANT";
+          return session;
+        }
+
         session.user.id = (token.id as string) ?? "";
         session.user.role = token.role as Role;
       }
@@ -140,5 +178,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
+    maxAge: 8 * 60 * 60, // 8 hours — reduces stale-token window
   },
 });

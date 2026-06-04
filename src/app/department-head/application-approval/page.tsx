@@ -228,7 +228,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 const ownerName = readText(formData, ["ownerName"], selected.ownerName);
                 const latitude = typeof formData.businessLatitude === "number" ? formData.businessLatitude : null;
                 const longitude = typeof formData.businessLongitude === "number" ? formData.businessLongitude : null;
-                const closureReason = readText(formData, ["closureReason", "reasonForClosure", "closureRemarks"], "-");
+
 
                 return (
                   <>
@@ -351,9 +351,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 <SectionCard title="Application-specific Notes" description="Renewal and closure-specific declarations.">
                   <div className="space-y-2 text-sm text-slate-700">
                     <p><strong>Application Type:</strong> {selected.applicationType}</p>
-                    {selected.applicationType === "CLOSURE" ? (
-                      <p><strong>Closure Reason:</strong> {closureReason}</p>
-                    ) : null}
+
                     {selected.applicationType === "RENEWAL" ? (
                       <p><strong>Renewal Payment Preference:</strong> {readText(formData, ["paymentFrequency"])}</p>
                     ) : null}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { deleteApplicantDocument } from "@/lib/applications";
 import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import { removeApplicantDocument } from "@/lib/document-storage";
@@ -19,13 +20,13 @@ export async function DELETE(_req: Request, context: RouteContext) {
     await removeApplicantDocument(removed.storagePath, removed.mimeType);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to delete document";
+    const message = error instanceof Error ? error.message : "";
     const status =
       message === "Application not found" || message === "Document not found"
         ? 404
         : message === "This application has already been submitted and is now locked for review."
           ? 403
           : 400;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to delete document") }, { status });
   }
 }

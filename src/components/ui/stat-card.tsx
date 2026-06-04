@@ -2,29 +2,29 @@ import type { ReactNode } from "react";
 
 type StatTone = "green" | "blue" | "amber" | "red" | "slate";
 
-const TONE_STYLES: Record<StatTone, { accent: string; icon: string; value: string }> = {
+const TONE_STYLES: Record<StatTone, { container: string; icon: string; value: string }> = {
   green: {
-    accent: "before:bg-emerald-600",
+    container: "border-emerald-100",
     icon: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100",
-    value: "text-emerald-800",
+    value: "text-slate-900",
   },
   blue: {
-    accent: "before:bg-blue-600",
-    icon: "bg-blue-50 text-blue-700 ring-1 ring-blue-100",
-    value: "text-blue-800",
+    container: "border-sky-100",
+    icon: "bg-sky-50 text-sky-700 ring-1 ring-sky-100",
+    value: "text-slate-900",
   },
   amber: {
-    accent: "before:bg-amber-500",
+    container: "border-amber-100",
     icon: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
-    value: "text-amber-800",
+    value: "text-slate-900",
   },
   red: {
-    accent: "before:bg-rose-600",
+    container: "border-rose-100",
     icon: "bg-rose-50 text-rose-700 ring-1 ring-rose-100",
-    value: "text-rose-800",
+    value: "text-slate-900",
   },
   slate: {
-    accent: "before:bg-slate-500",
+    container: "border-slate-200",
     icon: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
     value: "text-slate-800",
   },
@@ -47,13 +47,13 @@ export function StatCard({
 
   return (
     <div
-      className={`ui-stat-card app-surface relative overflow-hidden p-4 before:absolute before:inset-x-0 before:top-0 before:h-1 ${palette.accent} sm:p-5 lg:p-6`}
+      className={`ui-stat-card app-surface relative p-4 sm:p-5 lg:p-6 ${palette.container} h-full`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="ui-muted-text text-xs sm:text-sm font-medium text-slate-600">{title}</p>
-          <p className={`mt-2 text-2xl sm:text-3xl font-semibold tracking-tight lg:text-4xl ${palette.value}`}>{value}</p>
-          {subtitle ? <p className="ui-muted-text mt-1.5 text-xs leading-5 text-slate-500">{subtitle}</p> : null}
+          <p className="ui-muted-text text-sm font-medium text-slate-600">{title}</p>
+          <p className={`mt-2 text-3xl font-semibold tracking-tight lg:text-4xl ${palette.value}`}>{value}</p>
+          {subtitle ? <p className="ui-muted-text mt-2 text-sm leading-6 text-slate-500">{subtitle}</p> : null}
         </div>
         {icon ? (
           <div className={`rounded-xl p-2.5 sm:p-3 flex-shrink-0 ${palette.icon}`}>{icon}</div>

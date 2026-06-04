@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { getSuperAdminApplicationDocument } from "@/lib/superadmin-data";
 import { createStorageSignedUrl } from "@/lib/document-storage";
@@ -24,8 +25,8 @@ export async function GET(_req: Request, context: RouteContext) {
 
     return NextResponse.redirect(signed.signedUrl, { status: 302 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to preview document";
+    const message = error instanceof Error ? error.message : "";
     const status = message === "Application not found" || message === "Document not found" ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+      return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to preview document") }, { status });
   }
 }

@@ -61,14 +61,21 @@ export async function POST(
 
     return NextResponse.json({ result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to approve revocation";
-    const status =
-      message === "Inspection not found"
-        ? 404
-        : message.includes("required") || message.includes("review") || message.includes("finalized") || message.includes("verified")
-          ? 422
-          : 400;
+    const message = error instanceof Error ? error.message : "";
 
-    return NextResponse.json({ error: message }, { status });
+    // Determine HTTP status from the error message content
+    const status =
+      message.includes("not found") ? 404
+        : message.includes("already been recorded") || message.includes("already marked as REVOKED")
+          ? 409
+          : message.includes("remarks are required") || message.includes("expected VERIFIED_NON_COMPLIANT")
+            || message.includes("expected NON_COMPLIANT") || message.includes("expected REVOCATION_REVIEW")
+            ? 422
+            : message.includes("Unauthorized") ? 403
+              : 500;
+
+    // Always return the real error message so the Department Head knows exactly what failed
+    const responseMessage = message || "Unable to approve revocation. Please contact the system administrator.";
+    return NextResponse.json({ error: responseMessage }, { status });
   }
 }

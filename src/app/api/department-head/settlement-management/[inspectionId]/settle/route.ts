@@ -15,7 +15,11 @@ export async function POST(
   try {
     const result = await applyDepartmentHeadSettlement(inspectionId, session.user.id, settlementRemarks);
     return NextResponse.json({ result });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? "Unable to settle case" }, { status: 400 });
+  } catch (err: unknown) {
+    const safeMessage =
+      process.env.NODE_ENV !== "production"
+        ? (err instanceof Error ? err.message : "Unable to settle case")
+        : "Unable to settle case";
+    return NextResponse.json({ error: safeMessage }, { status: 400 });
   }
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { assertStatusTransition } from "@/lib/application-status";
 import type { BusinessInfo } from "@/lib/applicant-types";
+import { formatPersonName } from "@/lib/person-name";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -50,6 +51,7 @@ export interface BploQueueRow {
   applicationType: "NEW" | "RENEWAL" | "CLOSURE";
   status: string;
   dateSubmitted: string;
+  applicantProfilePicturePath: string | null;
 }
 
 interface BploQueueFilters {
@@ -168,6 +170,11 @@ export async function listBploApplications(filters: BploQueueFilters = {}, limit
         select: {
           name: true,
           email: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          suffix: true,
+          profileImageStoragePath: true,
         },
       },
       businessRecord: {
@@ -184,11 +191,18 @@ export async function listBploApplications(filters: BploQueueFilters = {}, limit
     id: row.id,
     applicationNumber: row.applicationNumber,
     businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
-    applicantName: row.applicant.name,
+    applicantName: formatPersonName({
+      firstName: row.applicant.firstName,
+      middleName: row.applicant.middleName,
+      lastName: row.applicant.lastName,
+      suffix: row.applicant.suffix,
+      fallbackName: row.applicant.name,
+    }),
     applicantEmail: row.applicant.email,
     applicationType: row.applicationType,
     status: mapDbStatusToUi(row.status),
     dateSubmitted: toDateOnly(row.submittedAt),
+    applicantProfilePicturePath: row.applicant.profileImageStoragePath ?? null,
   }));
 
   if (!normalizedSearch) return mapped;
@@ -212,6 +226,11 @@ export async function getBploApplicationDetail(applicationId: string) {
           id: true,
           name: true,
           email: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          suffix: true,
+          profileImageStoragePath: true,
         },
       },
       businessRecord: true,
@@ -244,6 +263,7 @@ export async function getBploApplicationDetail(applicationId: string) {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
+    businessPhone: row.businessRecord?.phone ?? null,
     formData: row.formData,
     documents: row.documents.map((doc: any) => ({
       id: doc.id,

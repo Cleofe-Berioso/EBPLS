@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { prisma } from "@/lib/prisma";
+import { createAuditLog } from "@/lib/audit-log";
 
 export async function POST(
   req: Request,
@@ -56,6 +57,23 @@ export async function POST(
   await prisma.user.update({
     where: { id: userId },
     data: { passwordHash },
+  });
+
+  // Audit log — record the action but never the password itself.
+  void createAuditLog({
+    actorId: session.user.id,
+    actorName: session.user.name ?? session.user.email ?? null,
+    actorRole: "SUPER_ADMIN",
+    action: "PASSWORD_RESET",
+    module: "USER_MANAGEMENT",
+    entityType: "USER",
+    entityId: target.id,
+    description: `Super Admin reset password for ${target.role} account`,
+    metadata: {
+      targetUserId: target.id,
+      targetRole: target.role,
+      // The actual password is intentionally NOT logged.
+    },
   });
 
   return NextResponse.json({ success: true });

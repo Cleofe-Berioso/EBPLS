@@ -25,7 +25,7 @@ export default async function ApplicantDashboard() {
   const latestApplication = metrics.latestApplication;
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-5 pb-2 lg:space-y-6">
       <PageHeader
         eyebrow="Applicant"
         title="My Dashboard"
@@ -121,7 +121,7 @@ export default async function ApplicantDashboard() {
         <SectionCard title="Latest Application Status" description="Current application, payment, and release state.">
           {latestApplication ? (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="min-w-0">
                   <p className="font-mono text-xs text-slate-500">{latestApplication.applicationNumber}</p>
                   <p className="mt-1 text-lg font-semibold text-slate-900">{latestApplication.businessName}</p>
@@ -216,7 +216,7 @@ export default async function ApplicantDashboard() {
             ) : (
               <div className="space-y-3 p-4">
                 {metrics.recentApplications.map((row) => (
-                  <article key={row.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
@@ -240,15 +240,17 @@ export default async function ApplicantDashboard() {
       </SectionCard>
 
       <SectionCard title="Primary Actions" description="Choose your next primary action.">
-        <div className="grid gap-3 md:grid-cols-2">
-          <Link href="/applicant/application" className={actionButtonStyles("primary", "md", "w-full")}>
-            File New Application
-          </Link>
-          <Link href="/applicant/my-applications" className={actionButtonStyles("secondary", "md", "w-full")}>
-            View All Applications
-          </Link>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Link href="/applicant/application" className={actionButtonStyles("primary", "md", "w-full") + " shadow-sm"}>
+              File New Application
+            </Link>
+            <Link href="/applicant/my-applications" className={actionButtonStyles("secondary", "md", "w-full") + " bg-white"}>
+              View All Applications
+            </Link>
+          </div>
+          <p className="mt-3 text-sm text-slate-600">Renewal and Closure require an eligible released business record.</p>
         </div>
-        <p className="mt-3 text-sm text-slate-600">Renewal and Closure require an eligible released business record.</p>
       </SectionCard>
     </section>
   );
