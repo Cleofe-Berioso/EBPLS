@@ -123,7 +123,7 @@ export function ForgotPasswordForm() {
               />
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality eBPLS</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality of Enrique B. Magalona</p>
           <h1 className="mt-2 text-2xl font-bold text-white">Reset Password</h1>
           <p className="mt-2 text-sm text-[#d1fae5]">Secure password recovery with OTP verification</p>
         </div>

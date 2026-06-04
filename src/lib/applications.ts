@@ -1713,6 +1713,10 @@ export async function listApplicantNotifications(applicantId: string) {
 }
 
 export async function getApplicantTopSummary(applicantId: string) {
+  // Fetch ALL applications for this applicant that have a GENERATED TOP (feeAssessment.status === "GENERATED").
+  // This covers NEW, RENEWAL, and CLOSURE application types.
+  // We do NOT filter on application status here so that the applicant can still see their TOP
+  // after payment is verified and application moves to PAID / FOR_RELEASE / RELEASED.
   const applications = await prisma.businessApplication.findMany({
     where: {
       applicantId,
@@ -1853,7 +1857,16 @@ export async function getApplicantTopSummary(applicantId: string) {
     };
   });
 
-  // Priority: APPROVED_FOR_PAYMENT with no payment ref > REJECTED ref > PENDING ref > any APPROVED_FOR_PAYMENT > first record
+  // Priority for bestActiveSummary:
+  // 1. APPROVED_FOR_PAYMENT app with no payment ref yet (applicant hasn't submitted OR)
+  // 2. APPROVED_FOR_PAYMENT app with a REJECTED payment ref (needs resubmission)
+  // 3. APPROVED_FOR_PAYMENT app with a PENDING payment ref (awaiting BPLO review)
+  // 4. Any APPROVED_FOR_PAYMENT app (fallback)
+  // 5. Any summary with the most recent activity (for post-payment visibility)
+  //
+  // This logic applies to ALL application types (NEW, RENEWAL, CLOSURE) equally.
+  // CLOSURE apps that have a GENERATED TOP and are in APPROVED_FOR_PAYMENT will
+  // match the same priority buckets as NEW/RENEWAL apps.
   const approvedSummaries = summaries.filter((s: { rawStatus: string }) => s.rawStatus === "APPROVED_FOR_PAYMENT");
   const bestActiveSummary =
     approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => !s.paymentReference) ??

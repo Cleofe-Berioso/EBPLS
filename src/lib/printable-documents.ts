@@ -123,6 +123,7 @@ export interface ClosureCertificatePrintData {
   totalPaid: number;
   certificationStatement: string;
   signatories: {
+    departmentHeadOfBplo: string;
     bploOfficer: string;
     municipalTreasurerOrAuthorizedOfficer: string;
   };
@@ -225,7 +226,7 @@ function toBusinessPermitPrintData(app: {
   const issuedAt = app.permitIssuance?.issuedAt ?? null;
   const formData = app.formData;
   const businessActivity = readText(formData, "businessActivity", readText(formData, "lineOfBusiness"));
-  const municipalityName = readText(formData, "cityMunicipality", "Municipality Name");
+  const municipalityName = "ENRIQUE B. MAGALONA";
   const ownerName = readText(formData, "ownerName", "");
   const applicantName = app.applicant?.name?.trim() ?? "";
   const ownerOrApplicantName = ownerName || applicantName || "-";
@@ -234,9 +235,9 @@ function toBusinessPermitPrintData(app: {
   return {
     heading: {
       republic: "Republic of the Philippines",
-      province: readText(formData, "province", "Province Name"),
+      province: "Negros Occidental",
       municipality: municipalityName,
-      office: "Office of the Municipal Mayor",
+      office: "OFFICE OF THE MUNICIPAL MAYOR",
       title: "MAYOR'S BUSINESS PERMIT",
     },
     permitNumber: app.permitIssuance?.documentNumber ?? "-",
@@ -312,8 +313,8 @@ function toClosureCertificatePrintData(app: {
   return {
     heading: {
       republic: "Republic of the Philippines",
-      province: readText(formData, "province", "Province"),
-      municipality: readText(formData, "cityMunicipality", "Municipality"),
+      province: "Negros Occidental",
+      municipality: "ENRIQUE B. MAGALONA",
       office: "Business Permits and Licensing Office",
       title: "BUSINESS CLOSURE CERTIFICATE",
     },
@@ -338,6 +339,7 @@ function toClosureCertificatePrintData(app: {
     certificationStatement:
       "This certifies that the business has completed the required closure processing and has been officially recorded as closed/ceased operation.",
     signatories: {
+      departmentHeadOfBplo: "",
       bploOfficer: "BPLO Officer",
       municipalTreasurerOrAuthorizedOfficer: "Municipal Treasurer / Authorized Officer",
     },

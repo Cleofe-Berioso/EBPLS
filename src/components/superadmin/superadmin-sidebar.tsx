@@ -65,7 +65,7 @@ export function SuperAdminSidebar({
       <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700">Municipality eBPLS</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700">Business Permit Online System</p>
             <div className={`mt-2 flex items-center gap-2 ${collapsed ? "lg:justify-center" : ""}`}>
               <ShieldCheck className="h-5 w-5 shrink-0 text-slate-600" />
               <h2 className={`text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>IT ADMINISTRATOR</h2>

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 
 export const metadata: Metadata = {
-  title: "Reset Password — eBPLS | Municipality of Enrique B. Magalona",
+  title: "Reset Password — Business Permit Online System | Municipality of Enrique B. Magalona",
   description:
-    "Reset your eBPLS account password securely using one-time password verification.",
+    "Reset your Business Permit Online System account password securely using one-time password verification.",
 };
 
 export default function ForgotPasswordPage() {

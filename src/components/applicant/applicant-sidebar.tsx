@@ -79,7 +79,7 @@ export function ApplicantSidebar({
       <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Municipality eBPLS</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Business Permit Online System</p>
             <h2 className={`mt-2 text-xl font-semibold tracking-tight text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Applicant Portal</h2>
             <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Submit, track, and monitor applications.</p>
           </div>

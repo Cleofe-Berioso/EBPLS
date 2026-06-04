@@ -60,6 +60,7 @@ interface PaymentVerificationDetail {
     penalties: number;
     surcharge: number;
     interest: number;
+    closurePaymentDues: number;
     closureCertificateFee: number;
     arrears: number;
     otherCharges: number;
@@ -612,6 +613,25 @@ export default function BploPaymentVerificationPage() {
                   helper="Available for review and download"
                 />
               </div>
+
+              {/* CLOSURE-specific fee breakdown */}
+              {detail.row.applicationType === "CLOSURE" ? (
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                  <p className="mb-3 text-sm font-semibold text-blue-900">Closure Application Fees</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SummaryTile
+                      label="Closure Certificate Fee"
+                      value={money(detail.top.closureCertificateFee ?? 0)}
+                      helper="Fixed fee for closure certificate issuance"
+                    />
+                    <SummaryTile
+                      label="Closure Payment Dues / Settlement Amount"
+                      value={money(detail.top.closurePaymentDues ?? 0)}
+                      helper="Outstanding dues before closure is approved"
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">Payment Proof</p>

@@ -7,20 +7,34 @@ type DbApplicationStatus =
   | "DRAFT"
   | "SUBMITTED"
   | "UNDER_REVIEW"
+  | "DEPARTMENT_HEAD_REVIEW"
+  | "DEPARTMENT_HEAD_APPROVED"
   | "ASSESSED"
   | "APPROVED_FOR_PAYMENT"
   | "PAID"
   | "FOR_RELEASE"
   | "RELEASED"
+  | "REVOCATION_REVIEW"
+  | "REVOKED"
   | "RETURNED_FOR_CORRECTION"
   | "REJECTED";
 
+/**
+ * Statuses where a payment reference may appear in the BPLO verification queue.
+ * Includes RELEASED so historical payment refs for closed-out applications remain visible.
+ */
 const BPLO_PAYMENT_VISIBLE_STATUSES: DbApplicationStatus[] = [
   "APPROVED_FOR_PAYMENT",
   "PAID",
   "FOR_RELEASE",
   "RELEASED",
 ];
+
+/**
+ * Statuses where the application is still pending payment verification (BPLO hasn't verified yet).
+ * Only APPROVED_FOR_PAYMENT allows approve/reject actions.
+ */
+const BPLO_PAYMENT_ACTIONABLE_STATUS: DbApplicationStatus = "APPROVED_FOR_PAYMENT";
 
 export interface PaymentVerificationRow {
   paymentReferenceId: string;
@@ -163,8 +177,16 @@ function toRow(params: {
 async function fetchCandidateApplications() {
   return (prisma as any).businessApplication.findMany({
     where: {
+      // Include all application types: NEW, RENEWAL, and CLOSURE.
+      // Do NOT filter by applicationType — all types go through the same
+      // APPROVED_FOR_PAYMENT status when BPLO generates the TOP, and all
+      // types use the same PaymentReference model for OR submission.
+      applicationType: { in: ["NEW", "RENEWAL", "CLOSURE"] },
+      // Include all statuses where payment references may be visible to BPLO.
+      // RELEASED is included so CLOSURE and permit applications that completed
+      // their payment flow still appear with their historical payment references.
       status: {
-        in: ["APPROVED_FOR_PAYMENT", "PAID", "FOR_RELEASE"],
+        in: BPLO_PAYMENT_VISIBLE_STATUSES,
       },
       feeAssessment: {
         isNot: null,
@@ -349,12 +371,17 @@ export async function approvePaymentReference(
     throw new Error("Only pending payment references can be verified");
   }
 
-  if (app.status !== "APPROVED_FOR_PAYMENT") {
-    throw new Error("Application is not eligible for payment verification");
+  // All application types (NEW, RENEWAL, CLOSURE) must be in APPROVED_FOR_PAYMENT
+  // before BPLO can verify the payment. generateTop() moves all types to this status.
+  if (app.status !== BPLO_PAYMENT_ACTIONABLE_STATUS) {
+    throw new Error(
+      `Application is not eligible for payment verification. Expected status: ${BPLO_PAYMENT_ACTIONABLE_STATUS}, current: ${app.status}`
+    );
   }
 
-  const requiredForRelease = toMoneyNumber(assessment.totalAmount);
-  const submittedAmount = toMoneyNumber(found.amountPaid);
+  const requiredForRelease = Math.round(toMoneyNumber(assessment.totalAmount) * 100) / 100;
+  const submittedAmount = Math.round(toMoneyNumber(found.amountPaid) * 100) / 100;
+  // Use rounded comparison to avoid floating-point precision issues with Decimal
   if (submittedAmount < requiredForRelease) {
     throw new Error(
       `Amount paid is below required TOP total amount (₱${requiredForRelease.toLocaleString("en-PH", {
@@ -442,8 +469,12 @@ export async function rejectPaymentReference(
     throw new Error("Only pending payment references can be rejected");
   }
 
-  if (app.status !== "APPROVED_FOR_PAYMENT") {
-    throw new Error("Application is not eligible for payment rejection");
+  // All application types (NEW, RENEWAL, CLOSURE) must be in APPROVED_FOR_PAYMENT
+  // before BPLO can reject the payment reference.
+  if (app.status !== BPLO_PAYMENT_ACTIONABLE_STATUS) {
+    throw new Error(
+      `Application is not eligible for payment rejection. Expected status: ${BPLO_PAYMENT_ACTIONABLE_STATUS}, current: ${app.status}`
+    );
   }
 
   const now = new Date();

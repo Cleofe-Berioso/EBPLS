@@ -61,7 +61,7 @@ export function BploSidebar({
       <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-700">Municipality eBPLS</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-700">Business Permit Online System</p>
             <h2 className={`mt-2 text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>BPLO Portal</h2>
             <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Manage application review, payment, and issuance queues.</p>
           </div>

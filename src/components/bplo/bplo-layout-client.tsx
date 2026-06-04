@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, PanelLeftClose, PanelLeftOpen, UserCircle2, X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, UserCircle2, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { BploSidebar } from "@/components/bplo/bplo-sidebar";
 import { actionButtonStyles } from "@/components/ui/action-button";
@@ -138,9 +138,6 @@ export function BploLayoutClient({
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600">
-                <Bell className="h-4 w-4" />
-              </span>
               <div className="hidden min-w-0 text-right sm:block">
                 <p className="truncate text-sm font-semibold text-slate-900">{displayName}</p>
                 <p className="truncate text-xs text-slate-500">BPLO Portal</p>

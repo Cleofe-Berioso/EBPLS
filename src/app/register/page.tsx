@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { RegisterForm } from "@/components/auth/register-form";
 
 export const metadata: Metadata = {
-  title: "Register — eBPLS | Municipality of Enrique B. Magalona",
+  title: "Register — Business Permit Online System | Municipality of Enrique B. Magalona",
   description:
-    "Create an applicant account in the Electronic Business Permits and Licensing System (eBPLS).",
+    "Create an applicant account in the Business Permit Online System.",
 };
 
 export default function RegisterPage() {

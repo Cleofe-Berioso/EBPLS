@@ -31,9 +31,9 @@ export function LoginForm({
               />
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality eBPLS</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality of Enrique B. Magalona</p>
           <h1 className="mt-2 text-2xl font-bold text-white">Sign In</h1>
-          <p className="mt-2 text-sm text-[#d1fae5]">Electronic Business Permits and Licensing System</p>
+          <p className="mt-2 text-sm text-[#d1fae5]">Business Permit Online System</p>
         </div>
 
         <div className="p-8">

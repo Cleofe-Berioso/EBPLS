@@ -1,114 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Eye, EyeOff, Lock, Mail, Phone, User } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, Phone, User, ShieldCheck, RotateCcw } from "lucide-react";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 
-type FormState =
+// ── Step types ────────────────────────────────────────────────────────────────
+type Step =
+  | "form"        // Step 1: fill registration details
+  | "otp"         // Step 2: enter OTP
+  | "success";    // Step 3: done
+
+type AsyncState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "success" }
   | { status: "error"; message: string };
 
-export function RegisterForm() {
-  const [state, setState] = useState<FormState>({ status: "idle" });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+interface FormData {
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  suffix: string;
+  email: string;
+  contactNumber: string;
+  password: string;
+  confirmPassword: string;
+}
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setState({ status: "loading" });
-
-    const form = e.currentTarget;
-    const data = {
-      firstName: (form.elements.namedItem("firstName") as HTMLInputElement).value,
-      middleName: (form.elements.namedItem("middleName") as HTMLInputElement).value,
-      lastName: (form.elements.namedItem("lastName") as HTMLInputElement).value,
-      suffix: (form.elements.namedItem("suffix") as HTMLInputElement).value,
-      email: (form.elements.namedItem("email") as HTMLInputElement).value,
-      contactNumber: (form.elements.namedItem("contactNumber") as HTMLInputElement).value,
-      password: (form.elements.namedItem("password") as HTMLInputElement).value,
-      confirmPassword: (form.elements.namedItem("confirmPassword") as HTMLInputElement)
-        .value,
-    };
-
-    // Client-side confirm check before sending
-    if (data.password !== data.confirmPassword) {
-      setState({ status: "error", message: "Passwords do not match." });
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        setState({ status: "error", message: json.error ?? "Registration failed." });
-        return;
-      }
-
-      setState({ status: "success" });
-    } catch {
-      setState({ status: "error", message: "A network error occurred. Please try again." });
-    }
-  }
-
-  if (state.status === "success") {
-    return (
-      <div className="relative z-10 w-full max-w-md">
-        <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
-          <div className="bg-[#0b8754] px-8 py-8 text-center text-white">
-            <div className="mb-4 flex justify-center">
-              <div className="rounded-full bg-white p-2 shadow-sm">
-                <Image
-                  src="/images/logo.png"
-                  alt="Municipality of Enrique B. Magalona Logo"
-                  width={64}
-                  height={64}
-                  className="h-16 w-16 object-contain"
-                />
-              </div>
-            </div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality eBPLS</p>
-            <h1 className="mt-2 text-2xl font-bold text-white">Registration Successful</h1>
-            <p className="mt-2 text-sm text-[#d1fae5]">Your applicant account is ready for sign in.</p>
-          </div>
-
-          <div className="p-8">
-            <InfoBanner
-              title="Your account is ready"
-              description="Your applicant account has been created. You can now sign in."
-              variant="success"
-            />
-            <div className="mt-6 text-center">
-              <Link
-                href="/login"
-                className="inline-flex w-full items-center justify-center rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] shadow-sm"
-              >
-                Go to Login
-              </Link>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 px-8 py-4">
-            <p className="text-[10px] sm:text-xs text-center text-slate-500">
-              © 2026 Municipality of Enrique B. Magalona - BPLO. All rights
-              reserved.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+// ── Shared card wrapper ───────────────────────────────────────────────────────
+function CardShell({ subtitle, title, children }: { subtitle: string; title: string; children: React.ReactNode }) {
   return (
     <div className="relative z-10 w-full max-w-md">
       <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
@@ -124,250 +46,17 @@ export function RegisterForm() {
               />
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality eBPLS</p>
-          <h1 className="mt-2 text-2xl font-bold text-white">Create Account</h1>
-          <p className="mt-2 text-sm text-[#d1fae5]">Register as an applicant to start filing and tracking permits.</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality of Enrique B. Magalona</p>
+          <h1 className="mt-2 text-2xl font-bold text-white">{title}</h1>
+          <p className="mt-2 text-sm text-[#d1fae5]">{subtitle}</p>
         </div>
-
-        <div className="p-8">
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {state.status === "error" && (
-              <InfoBanner title="Registration issue" description={state.message} variant="danger" />
-            )}
-
-            {/* Split Legal Name */}
-            <FormField
-              label="First Name"
-              htmlFor="firstName"
-              hint="Use your legal name as it appears on government records."
-              required
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  autoComplete="given-name"
-                  required
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
-                  placeholder="Juan"
-                />
-              </div>
-            </FormField>
-
-            <FormField
-              label="Middle Name"
-              htmlFor="middleName"
-              hint="Optional. Leave blank if not applicable."
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="middleName"
-                  name="middleName"
-                  type="text"
-                  autoComplete="additional-name"
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
-                  placeholder="Santos"
-                />
-              </div>
-            </FormField>
-
-            <FormField
-              label="Last Name"
-              htmlFor="lastName"
-              required
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  autoComplete="family-name"
-                  required
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
-                  placeholder="Dela Cruz"
-                />
-              </div>
-            </FormField>
-
-            <FormField
-              label="Suffix"
-              htmlFor="suffix"
-              hint="Optional (e.g., Jr., Sr., III)."
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="suffix"
-                  name="suffix"
-                  type="text"
-                  autoComplete="honorific-suffix"
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
-                  placeholder="Jr."
-                />
-              </div>
-            </FormField>
-
-            {/* Email */}
-            <FormField
-              label="Email Address"
-              htmlFor="email"
-              hint="Use this email for sign in and application notifications."
-              required
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
-                  placeholder="your.email@example.com"
-                />
-              </div>
-            </FormField>
-
-            {/* Contact Number */}
-            <FormField
-              label="Contact Number"
-              htmlFor="contactNumber"
-              hint="Enter an active mobile number for verification follow-ups and notices."
-              required
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Phone className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="contactNumber"
-                  name="contactNumber"
-                  type="tel"
-                  autoComplete="tel"
-                  required
-                  pattern="^(\\+63|0)9\\d{9}$"
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
-                  placeholder="09XX-XXX-XXXX"
-                />
-              </div>
-            </FormField>
-
-            {/* Password */}
-            <FormField
-              label="Password"
-              htmlFor="password"
-              hint="Minimum of 8 characters."
-              required
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
-                  placeholder="At least 8 characters"
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
-                  )}
-                </button>
-              </div>
-            </FormField>
-
-            {/* Confirm Password */}
-            <FormField
-              label="Confirm Password"
-              htmlFor="confirmPassword"
-              hint="Re-enter the same password to confirm."
-              required
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type={showConfirm ? "text" : "password"}
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
-                  placeholder="Re-enter your password"
-                />
-                <button
-                  type="button"
-                  aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}
-                  onClick={() => setShowConfirm((v) => !v)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  {showConfirm ? (
-                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
-                  )}
-                </button>
-              </div>
-            </FormField>
-
-            <button
-              type="submit"
-              disabled={state.status === "loading"}
-              className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm"
-            >
-              {state.status === "loading" ? "Creating account…" : "Create Account"}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-700">
-              Already have an account?{" "}
-              <Link
-                href="/login"
-                className="font-semibold text-[#0b8754] hover:text-[#096a42]"
-              >
-                Sign in
-              </Link>
-            </p>
-          </div>
-        </div>
-
+        {children}
         <div className="bg-slate-50 px-8 py-4">
           <p className="text-[10px] sm:text-xs text-center text-slate-500">
-            © 2026 Municipality of Enrique B. Magalona - BPLO. All rights
-            reserved.
+            © 2026 Municipality of Enrique B. Magalona - BPLO. All rights reserved.
           </p>
         </div>
       </div>
-
       <div className="mt-4 rounded-xl border border-white/40 bg-white/90 px-4 py-3 text-center shadow-lg backdrop-blur-md">
         <p className="text-sm font-medium text-slate-700">
           Need account assistance? Contact BPLO at{" "}
@@ -380,5 +69,595 @@ export function RegisterForm() {
         </p>
       </div>
     </div>
+  );
+}
+
+// ── Step indicator ────────────────────────────────────────────────────────────
+function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
+  const steps = [
+    { n: 1, label: "Details" },
+    { n: 2, label: "Verify Email" },
+    { n: 3, label: "Done" },
+  ] as const;
+
+  return (
+    <div className="flex items-center justify-center gap-2 mb-6">
+      {steps.map(({ n, label }, i) => (
+        <div key={n} className="flex items-center gap-2">
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                current === n
+                  ? "bg-[#0b8754] text-white"
+                  : current > n
+                  ? "bg-[#bbf7d0] text-[#0b8754]"
+                  : "bg-slate-200 text-slate-500"
+              }`}
+            >
+              {current > n ? "✓" : n}
+            </div>
+            <span className={`text-[10px] font-medium ${current === n ? "text-[#0b8754]" : "text-slate-400"}`}>
+              {label}
+            </span>
+          </div>
+          {i < steps.length - 1 && (
+            <div
+              className={`h-0.5 w-10 mb-3 rounded-full transition-colors ${
+                current > n ? "bg-[#0b8754]" : "bg-slate-200"
+              }`}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export function RegisterForm() {
+  const [step, setStep] = useState<Step>("form");
+  const [formState, setFormState] = useState<AsyncState>({ status: "idle" });
+  const [otpState, setOtpState] = useState<AsyncState>({ status: "idle" });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [canResend, setCanResend] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(60);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Saved form data carried across steps
+  const savedData = useRef<FormData | null>(null);
+
+  // ── Start resend countdown ─────────────────────────────────────────────────
+  function startCountdown() {
+    setCanResend(false);
+    setResendCountdown(60);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = setInterval(() => {
+      setResendCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current!);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  // ── OTP digit refs for auto-focus ─────────────────────────────────────────
+  const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  function handleDigitChange(index: number, value: string) {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const next = [...otp];
+    next[index] = digit;
+    setOtp(next);
+    if (digit && index < 5) {
+      digitRefs.current[index + 1]?.focus();
+    }
+  }
+
+  function handleDigitKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      digitRefs.current[index - 1]?.focus();
+    }
+  }
+
+  function handleDigitPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const next = [...otp];
+    for (let i = 0; i < pasted.length; i++) {
+      next[i] = pasted[i];
+    }
+    setOtp(next);
+    digitRefs.current[Math.min(pasted.length, 5)]?.focus();
+  }
+
+  const otpValue = otp.join("");
+
+  // ── Step 1: send OTP then move to step 2 ──────────────────────────────────
+  async function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFormState({ status: "loading" });
+
+    const form = e.currentTarget;
+    const data: FormData = {
+      firstName: (form.elements.namedItem("firstName") as HTMLInputElement).value,
+      middleName: (form.elements.namedItem("middleName") as HTMLInputElement).value,
+      lastName: (form.elements.namedItem("lastName") as HTMLInputElement).value,
+      suffix: (form.elements.namedItem("suffix") as HTMLInputElement).value,
+      email: (form.elements.namedItem("email") as HTMLInputElement).value,
+      contactNumber: (form.elements.namedItem("contactNumber") as HTMLInputElement).value,
+      password: (form.elements.namedItem("password") as HTMLInputElement).value,
+      confirmPassword: (form.elements.namedItem("confirmPassword") as HTMLInputElement).value,
+    };
+
+    // Client-side confirm check before sending
+    if (data.password !== data.confirmPassword) {
+      setFormState({ status: "error", message: "Passwords do not match." });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/auth/register/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setFormState({ status: "error", message: json.error ?? "Failed to send OTP. Please try again." });
+        return;
+      }
+
+      // OTP sent — save form data and proceed to OTP step
+      savedData.current = data;
+      setOtp(["", "", "", "", "", ""]);
+      setOtpState({ status: "idle" });
+      setFormState({ status: "idle" });
+      startCountdown();
+      setStep("otp");
+    } catch {
+      setFormState({ status: "error", message: "A network error occurred. Please try again." });
+    }
+  }
+
+  // ── Step 2a: verify OTP, then create account ───────────────────────────────
+  async function handleOtpSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (otpValue.length !== 6) {
+      setOtpState({ status: "error", message: "Please enter all 6 digits of your OTP." });
+      return;
+    }
+
+    setOtpState({ status: "loading" });
+
+    const email = savedData.current!.email;
+
+    try {
+      // 1. Verify OTP
+      const verifyRes = await fetch("/api/auth/register/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp: otpValue }),
+      });
+
+      const verifyJson = await verifyRes.json();
+
+      if (!verifyRes.ok) {
+        setOtpState({ status: "error", message: verifyJson.error ?? "OTP verification failed." });
+        return;
+      }
+
+      // 2. Create account (OTP is now verified server-side)
+      const registerRes = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(savedData.current),
+      });
+
+      const registerJson = await registerRes.json();
+
+      if (!registerRes.ok) {
+        setOtpState({ status: "error", message: registerJson.error ?? "Registration failed. Please try again." });
+        return;
+      }
+
+      setOtpState({ status: "idle" });
+      setStep("success");
+    } catch {
+      setOtpState({ status: "error", message: "A network error occurred. Please try again." });
+    }
+  }
+
+  // ── Step 2b: resend OTP ────────────────────────────────────────────────────
+  async function handleResend() {
+    if (!canResend) return;
+    setOtpState({ status: "loading" });
+
+    try {
+      const res = await fetch("/api/auth/register/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: savedData.current!.email }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setOtpState({ status: "error", message: json.error ?? "Failed to resend OTP." });
+        return;
+      }
+
+      setOtp(["", "", "", "", "", ""]);
+      setOtpState({ status: "idle" });
+      startCountdown();
+      digitRefs.current[0]?.focus();
+    } catch {
+      setOtpState({ status: "error", message: "A network error occurred. Please try again." });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER — Step 3: Success
+  // ══════════════════════════════════════════════════════════════════════════
+  if (step === "success") {
+    return (
+      <CardShell title="Registration Successful" subtitle="Your applicant account is ready for sign in.">
+        <div className="p-8">
+          <InfoBanner
+            title="Your account is ready"
+            description="Your applicant account has been created. You can now sign in."
+            variant="success"
+          />
+          <div className="mt-6 text-center">
+            <Link
+              href="/login"
+              className="inline-flex w-full items-center justify-center rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] shadow-sm"
+            >
+              Go to Login
+            </Link>
+          </div>
+        </div>
+      </CardShell>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER — Step 2: OTP Entry
+  // ══════════════════════════════════════════════════════════════════════════
+  if (step === "otp") {
+    const isLoading = otpState.status === "loading";
+
+    return (
+      <CardShell title="Verify Your Email" subtitle="Enter the 6-digit OTP sent to your email.">
+        <div className="p-8">
+          <StepIndicator current={2} />
+
+          {otpState.status === "error" && (
+            <InfoBanner title="Verification issue" description={otpState.message} variant="danger" />
+          )}
+
+          <div className="mb-5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <ShieldCheck className="mb-1 inline-block h-4 w-4 text-[#0b8754]" />{" "}
+            We sent a 6-digit OTP to{" "}
+            <span className="font-semibold text-slate-800">{savedData.current?.email}</span>.
+            Check your inbox and spam folder.
+          </div>
+
+          <form onSubmit={handleOtpSubmit} className="space-y-6">
+            {/* OTP digit boxes */}
+            <div className="flex justify-center gap-2" onPaste={handleDigitPaste}>
+              {otp.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { digitRefs.current[i] = el; }}
+                  id={`otp-digit-${i}`}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  disabled={isLoading}
+                  onChange={(e) => handleDigitChange(i, e.target.value)}
+                  onKeyDown={(e) => handleDigitKeyDown(i, e)}
+                  className="h-14 w-11 rounded-xl border border-slate-200 bg-slate-50 text-center text-2xl font-bold text-slate-900 outline-none transition-all focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 disabled:opacity-50"
+                  aria-label={`OTP digit ${i + 1}`}
+                />
+              ))}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || otpValue.length !== 6}
+              className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm"
+            >
+              {isLoading ? "Verifying…" : "Verify & Create Account"}
+            </button>
+          </form>
+
+          {/* Resend */}
+          <div className="mt-5 text-center text-sm text-slate-600">
+            {canResend ? (
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={isLoading}
+                className="inline-flex items-center gap-1 font-semibold text-[#0b8754] hover:text-[#096a42] disabled:opacity-50"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Resend OTP
+              </button>
+            ) : (
+              <span className="text-slate-400">
+                Resend OTP in <span className="font-semibold text-slate-600">{resendCountdown}s</span>
+              </span>
+            )}
+          </div>
+
+          {/* Back link */}
+          <div className="mt-3 text-center text-sm">
+            <button
+              type="button"
+              onClick={() => { setStep("form"); setFormState({ status: "idle" }); }}
+              className="text-slate-500 hover:text-[#0b8754]"
+            >
+              ← Back to registration form
+            </button>
+          </div>
+        </div>
+      </CardShell>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER — Step 1: Registration Form
+  // ══════════════════════════════════════════════════════════════════════════
+  const isLoading = formState.status === "loading";
+
+  return (
+    <CardShell title="Create Account" subtitle="Register as an applicant to start filing and tracking permits.">
+      <div className="p-8">
+        <StepIndicator current={1} />
+
+        <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
+          {formState.status === "error" && (
+            <InfoBanner title="Registration issue" description={formState.message} variant="danger" />
+          )}
+
+          {/* Split Legal Name */}
+          <FormField
+            label="First Name"
+            htmlFor="firstName"
+            hint="Use your legal name as it appears on government records."
+            required
+          >
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                id="firstName"
+                name="firstName"
+                type="text"
+                autoComplete="given-name"
+                required
+                defaultValue={savedData.current?.firstName ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                placeholder="Juan"
+              />
+            </div>
+          </FormField>
+
+          <FormField
+            label="Middle Name"
+            htmlFor="middleName"
+            hint="Optional. Leave blank if not applicable."
+          >
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                id="middleName"
+                name="middleName"
+                type="text"
+                autoComplete="additional-name"
+                defaultValue={savedData.current?.middleName ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                placeholder="Santos"
+              />
+            </div>
+          </FormField>
+
+          <FormField
+            label="Last Name"
+            htmlFor="lastName"
+            required
+          >
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                id="lastName"
+                name="lastName"
+                type="text"
+                autoComplete="family-name"
+                required
+                defaultValue={savedData.current?.lastName ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                placeholder="Dela Cruz"
+              />
+            </div>
+          </FormField>
+
+          <FormField
+            label="Suffix"
+            htmlFor="suffix"
+            hint="Optional (e.g., Jr., Sr., III)."
+          >
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                id="suffix"
+                name="suffix"
+                type="text"
+                autoComplete="honorific-suffix"
+                defaultValue={savedData.current?.suffix ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                placeholder="Jr."
+              />
+            </div>
+          </FormField>
+
+          {/* Email */}
+          <FormField
+            label="Email Address"
+            htmlFor="email"
+            hint="Use this email for sign in and application notifications. An OTP will be sent here."
+            required
+          >
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Mail className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                defaultValue={savedData.current?.email ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                placeholder="your.email@example.com"
+              />
+            </div>
+          </FormField>
+
+          {/* Contact Number */}
+          <FormField
+            label="Contact Number"
+            htmlFor="contactNumber"
+            hint="Enter an active mobile number for verification follow-ups and notices."
+            required
+          >
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Phone className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                id="contactNumber"
+                name="contactNumber"
+                type="tel"
+                autoComplete="tel"
+                required
+                pattern="^(\+63|0)9\d{9}$"
+                defaultValue={savedData.current?.contactNumber ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                placeholder="09XX-XXX-XXXX"
+              />
+            </div>
+          </FormField>
+
+          {/* Password */}
+          <FormField
+            label="Password"
+            htmlFor="password"
+            hint="Minimum of 8 characters."
+            required
+          >
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                placeholder="At least 8 characters"
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
+                ) : (
+                  <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
+                )}
+              </button>
+            </div>
+          </FormField>
+
+          {/* Confirm Password */}
+          <FormField
+            label="Confirm Password"
+            htmlFor="confirmPassword"
+            hint="Re-enter the same password to confirm."
+            required
+          >
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type={showConfirm ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                placeholder="Re-enter your password"
+              />
+              <button
+                type="button"
+                aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}
+                onClick={() => setShowConfirm((v) => !v)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+              >
+                {showConfirm ? (
+                  <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
+                ) : (
+                  <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
+                )}
+              </button>
+            </div>
+          </FormField>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm"
+          >
+            {isLoading ? "Sending OTP…" : "Send Verification OTP"}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-slate-700">
+            Already have an account?{" "}
+            <Link
+              href="/login"
+              className="font-semibold text-[#0b8754] hover:text-[#096a42]"
+            >
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </div>
+    </CardShell>
   );
 }

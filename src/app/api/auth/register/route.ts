@@ -68,8 +68,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Passwords do not match." }, { status: 400 });
   }
 
-  // ── Uniqueness check ───────────────────────────────────────────────────────
   const normalizedEmail = email.trim().toLowerCase();
+
+  // ── Uniqueness check ───────────────────────────────────────────────────────
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
     return NextResponse.json(
@@ -77,6 +78,32 @@ export async function POST(req: NextRequest) {
       { status: 409 }
     );
   }
+
+  // ── OTP verification gate ──────────────────────────────────────────────────
+  // Require that the email was verified within the last 15 minutes
+  // by checking for a recently-verified, unused OTP in the PasswordResetOtp table.
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+  const verifiedOtp = await prisma.passwordResetOtp.findFirst({
+    where: {
+      email: normalizedEmail,
+      verifiedAt: { not: null, gte: fifteenMinutesAgo },
+      usedAt: null,
+    },
+    orderBy: { verifiedAt: "desc" },
+  });
+
+  if (!verifiedOtp) {
+    return NextResponse.json(
+      { error: "Email verification required. Please verify your email with the OTP before registering." },
+      { status: 403 }
+    );
+  }
+
+  // Mark the OTP as used so it cannot be replayed
+  await prisma.passwordResetOtp.update({
+    where: { id: verifiedOtp.id },
+    data: { usedAt: new Date() },
+  });
 
   // ── Create user ────────────────────────────────────────────────────────────
   const passwordHash = await bcrypt.hash(password, 12);

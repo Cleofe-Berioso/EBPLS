@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
           const emailHtml = generatePasswordResetEmailHtml(plainOtp, expirationMinutes);
           await sendEmail({
             to: email,
-            subject: "EBPLS Password Reset OTP",
+            subject: "Business Permit Online System — Password Reset OTP",
             html: emailHtml,
           });
         }
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         message:
-          "If this email is registered with EBPLS, an OTP has been sent. Please check your inbox and spam folder.",
+          "If this email is registered with the Business Permit Online System, an OTP has been sent. Please check your inbox and spam folder.",
       },
       { status: 200 }
     );

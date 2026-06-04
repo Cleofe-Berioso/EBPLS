@@ -3,12 +3,12 @@
  * Used only by /superadmin report pages — not for business permit or closure certificate print.
  */
 
-// ── EBPLS municipality constants ─────────────────────────────────────────────
+// ── Business Permit Online System municipality constants ──────────────────────
 
 export const EBPLS_REPORT_HEADING = {
   republic: "Republic of the Philippines",
-  province: "Province of Laguna",
-  municipality: "Municipality of Bay",
+  province: "Province of Negros Occidental",
+  municipality: "Municipality of Enrique B. Magalona",
   office: "Business Permits and Licensing Office (BPLO)",
 } as const;
 

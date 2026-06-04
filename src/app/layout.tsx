@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 
 
 export const metadata: Metadata = {
-  title: "eBPPS | Electronic Business Permits and Licensing System",
+  title: "Business Permit Online System | Municipality of Enrique B. Magalona",
   description:
-    "Electronic Business Permits and Licensing System for online business permit applications, assessment, payment tracking, and permit release.",
+    "Business Permit Online System — apply for business permits online, track assessment, submit payments, and receive your permit digitally.",
 };
 
 export default function RootLayout({

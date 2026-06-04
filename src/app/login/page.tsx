@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 
 export const metadata: Metadata = {
-  title: "Sign In — eBPPS | Municipality of Enrique B. Magalona",
+  title: "Sign In — Business Permit Online System | Municipality of Enrique B. Magalona",
   description:
-    "Sign in to the Electronic Business Permits and Licensing System (eBPPS).",
+    "Sign in to the Business Permit Online System to manage your business permit applications.",
 };
 
 type LoginPageProps = {
