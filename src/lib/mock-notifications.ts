@@ -65,6 +65,21 @@ const NOTIFICATION_TEMPLATES: Record<
     messageTemplate: (appNumber: string) =>
       `An inspection has been scheduled for your business under application ${appNumber}.`,
   },
+  REVOCATION_REVIEW: {
+    title: "Permit Revocation Under Review",
+    messageTemplate: (appNumber: string) =>
+      `Application ${appNumber} is under permit revocation review. Review the basis and contact BPLO immediately.`,
+  },
+  REVOCATION_APPROVED: {
+    title: "Business Permit Revoked",
+    messageTemplate: (appNumber: string) =>
+      `Your business permit for application ${appNumber} has been revoked. Contact BPLO for guidance.`,
+  },
+  REVOCATION_DENIED: {
+    title: "Revocation Request Denied",
+    messageTemplate: (appNumber: string) =>
+      `The revocation request for application ${appNumber} was denied and your released permit status was restored.`,
+  },
 };
 
 /**
@@ -83,6 +98,9 @@ export function generateMockNotifications(count: number = 8): Notification[] {
     "ASSESSMENT_GENERATED",
     "REJECTED",
     "INSPECTION_RELATED",
+    "REVOCATION_REVIEW",
+    "REVOCATION_APPROVED",
+    "REVOCATION_DENIED",
   ];
 
   const appNumbers = [
@@ -205,9 +223,13 @@ export function getNotificationIcon(
       return "check";
     case "RETURNED_FOR_CORRECTION":
     case "INSPECTION_RELATED":
+    case "REVOCATION_REVIEW":
       return "alert";
     case "REJECTED":
+    case "REVOCATION_APPROVED":
       return "error";
+    case "REVOCATION_DENIED":
+      return "check";
     default:
       return "info";
   }

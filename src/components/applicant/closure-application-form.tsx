@@ -5,6 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
+import {
+  applicantErrorPanelClass,
+  applicantFormControlClass,
+  applicantHighlightPanelClass,
+  applicantPanelClass,
+  applicantSummaryLabelClass,
+  applicantSummaryTileClass,
+  applicantSummaryValueClass,
+} from "@/components/applicant/applicant-ui-styles";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
 import {
   buildDocumentMaxSizeError,
@@ -20,10 +29,17 @@ import type {
   SubmitValidationErrorDetail,
 } from "@/lib/applicant-types";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { LoadingState } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
+import {
+  getApplicationSubmitButtonLabel,
+  getApplicationSubmitSuccessMessage,
+  getResubmissionConfirmMessage,
+  isReturnedCorrectionResubmission,
+} from "@/lib/resubmission-copy";
 import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
 import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
 
@@ -54,21 +70,21 @@ function ReviewStat({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    <div className={applicantSummaryTileClass}>
+      <p className={applicantSummaryLabelClass}>{label}</p>
+      <p className={applicantSummaryValueClass}>{value}</p>
+      {helper ? <p className="mt-1 ui-caption">{helper}</p> : null}
     </div>
   );
 }
 
 function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
   return (
-    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+    <div className={applicantErrorPanelClass}>
       <p className="font-semibold">Submission requirements still missing</p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+          <p className="ui-caption font-semibold uppercase tracking-wide">
             Missing Fields
           </p>
           <ul className="mt-2 space-y-1">
@@ -80,7 +96,7 @@ function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
           </ul>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+          <p className="ui-caption font-semibold uppercase tracking-wide">
             Missing Documents
           </p>
           <ul className="mt-2 space-y-1">
@@ -170,6 +186,15 @@ export function ClosureApplicationForm() {
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
+  const [existingApplicationAccess, setExistingApplicationAccess] = useState<{
+    canEdit: boolean;
+    status: string;
+  } | null>(null);
+
+  const isResubmission = isReturnedCorrectionResubmission({
+    editId,
+    applicationStatus: existingApplicationAccess?.status,
+  });
 
   const requiredDocs = useMemo(
     () =>
@@ -259,6 +284,8 @@ export function ClosureApplicationForm() {
       const data = (await parseApiResponseSafely(response)) as {
         application?: {
           id: string;
+          status: string;
+          canEdit: boolean;
           businessRecordId?: string;
           formData: BusinessInfo;
           closureType?: ClosureTypeValue;
@@ -273,6 +300,10 @@ export function ClosureApplicationForm() {
       }
 
       setApplicationId(data.application.id);
+      setExistingApplicationAccess({
+        canEdit: Boolean(data.application.canEdit),
+        status: data.application.status,
+      });
       setSelectedBusinessInfo({
         ...defaultBusinessInfo,
         ...data.application.formData,
@@ -317,10 +348,7 @@ export function ClosureApplicationForm() {
   if (editId && draftLoading) {
     return (
       <SectionCard title="Loading saved draft" description="Restoring your closure draft values.">
-        <EmptyState
-          title="Loading draft"
-          description="Please wait while the saved closure application is loaded into the form."
-        />
+        <LoadingState message="Loading draft…" compact />
       </SectionCard>
     );
   }
@@ -362,6 +390,13 @@ export function ClosureApplicationForm() {
 
   function back() {
     setStep((current) => Math.max(current - 1, 0));
+  }
+
+  function handleFinalSubmit() {
+    if (isResubmission && !window.confirm(getResubmissionConfirmMessage("CLOSURE"))) {
+      return;
+    }
+    void persist("SUBMIT");
   }
 
   async function persist(mode: PersistMode) {
@@ -487,7 +522,7 @@ export function ClosureApplicationForm() {
 
       setStatusMessage({
         kind: "success",
-        text: `Closure ${data.application.applicationNumber} submitted successfully.`,
+        text: getApplicationSubmitSuccessMessage("CLOSURE", isResubmission, data.application.applicationNumber),
       });
       return data.application.id;
     }
@@ -593,7 +628,7 @@ export function ClosureApplicationForm() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page-stack">
       <FormStepper steps={steps} currentStep={step} />
 
       {statusMessage ? (
@@ -622,7 +657,7 @@ export function ClosureApplicationForm() {
                 required
               >
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={selectedBusinessId}
                   disabled={records.length === 0}
                   onChange={(event) => {
@@ -665,7 +700,7 @@ export function ClosureApplicationForm() {
                 required
               >
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={closureType}
                   disabled={isComplianceForcedClosure}
                   onChange={(event) => setClosureType(event.target.value as ClosureTypeValue)}
@@ -678,7 +713,7 @@ export function ClosureApplicationForm() {
                   ))}
                 </select>
                 {isComplianceForcedClosure ? (
-                  <p className="mt-2 text-xs font-medium text-amber-700">
+                  <p className="mt-2 text-xs font-medium text-[var(--warning)]">
                     This business requires closure processing because of a compliance-related restriction.
                   </p>
                 ) : null}
@@ -691,7 +726,8 @@ export function ClosureApplicationForm() {
                   required
                 >
                   <textarea
-                    className="min-h-[96px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    aria-label="Please specify"
+                    className={`min-h-[96px] ${applicantFormControlClass}`}
                     value={closureTypeOtherReason}
                     onChange={(event) => setClosureTypeOtherReason(event.target.value)}
                     placeholder="Describe the closure reason"
@@ -700,8 +736,8 @@ export function ClosureApplicationForm() {
                 </FormField>
               ) : null}
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
-                <p className="text-sm font-semibold text-slate-900">Business Operations</p>
+              <div className={`${applicantHighlightPanelClass} space-y-4`}>
+                <p className="text-sm font-semibold text-[var(--foreground)]">Business Operations</p>
 
                 <FormField
                   label="Line of Business"
@@ -709,7 +745,7 @@ export function ClosureApplicationForm() {
                   required
                 >
                   <select
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    className={applicantFormControlClass}
                     value={closureLineOfBusiness}
                     onChange={(event) => setClosureLineOfBusiness(event.target.value)}
                   >
@@ -726,7 +762,7 @@ export function ClosureApplicationForm() {
                   required
                 >
                   <select
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    className={applicantFormControlClass}
                     value={closureBusinessActivity}
                     onChange={(event) => {
                       setClosureBusinessActivity(event.target.value);
@@ -750,7 +786,8 @@ export function ClosureApplicationForm() {
                   >
                     <input
                       type="text"
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                      aria-label="Please specify business activity"
+                      className={applicantFormControlClass}
                       value={closureBusinessActivityOther}
                       onChange={(event) => setClosureBusinessActivityOther(event.target.value)}
                       placeholder="Enter business activity"
@@ -765,7 +802,8 @@ export function ClosureApplicationForm() {
                 >
                   <input
                     type="date"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    aria-label="Last Date of Operation"
+                    className={applicantFormControlClass}
                     value={closureLastDateOfOperation}
                     max={new Date().toISOString().split("T")[0]}
                     onChange={(event) => setClosureLastDateOfOperation(event.target.value)}
@@ -776,12 +814,12 @@ export function ClosureApplicationForm() {
               </div>
 
               {selectedRecord ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">{selectedRecord.businessName}</p>
+                <div className={applicantPanelClass}>
+                  <p className="font-semibold text-[var(--foreground)]">{selectedRecord.businessName}</p>
                   <p className="mt-1">Registration: {selectedRecord.registrationNumber}</p>
                   <p className="mt-1">Business Type: {selectedRecord.businessInfo.businessType}</p>
                   {humanizeClosureEligibilityReason(selectedRecord) ? (
-                    <p className="mt-1 text-xs text-amber-700">{humanizeClosureEligibilityReason(selectedRecord)}</p>
+                    <p className="mt-1 text-xs text-[var(--warning)]">{humanizeClosureEligibilityReason(selectedRecord)}</p>
                   ) : null}
                 </div>
               ) : null}
@@ -851,12 +889,10 @@ export function ClosureApplicationForm() {
                 <button
                   type="button"
                   disabled={submitting || records.length === 0}
-                  onClick={() => {
-                    void persist("SUBMIT");
-                  }}
+                  onClick={handleFinalSubmit}
                   className={actionButtonStyles("primary", "md")}
                 >
-                  Submit Closure
+                  {getApplicationSubmitButtonLabel("CLOSURE", isResubmission)}
                 </button>
               </div>
             }
@@ -918,8 +954,8 @@ export function ClosureApplicationForm() {
 
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Before you submit</p>
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Before you submit</p>
               <ul className="mt-2 space-y-1">
                 <li>• Make sure the selected business record is the one being closed.</li>
                 <li>• Confirm the closure type correctly reflects the nature of the business cessation.</li>

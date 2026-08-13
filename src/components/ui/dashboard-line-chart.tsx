@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { DashboardChartCard } from "@/components/ui/dashboard-chart-card";
+import { DashboardChartCard, DASHBOARD_CHART_COLORS } from "@/components/ui/dashboard-chart-card";
 
 export interface DashboardLineDatum {
   label: string;
@@ -65,10 +65,10 @@ export function DashboardLineChart({
       emptyTitle={emptyTitle ?? "No processed applications yet."}
       emptyDescription={emptyDescription}
     >
-      <div className="w-full min-w-0">
-        <ResponsiveContainer width="100%" height={280}>
+      <div className="h-full w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 12, right: 20, left: 4, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
             <XAxis dataKey="label" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
             <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
             <Tooltip formatter={(value: number) => value.toLocaleString("en-PH")} />
@@ -80,7 +80,7 @@ export function DashboardLineChart({
                   type="monotone"
                   dataKey={item.key}
                   name={item.label}
-                  stroke={item.color ?? ["#2563eb", "#0f766e", "#ea580c", "#dc2626"][index % 4]}
+                  stroke={item.color ?? DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]}
                   strokeWidth={2.5}
                   dot={{ r: 2.5 }}
                   activeDot={{ r: 4 }}
@@ -91,7 +91,7 @@ export function DashboardLineChart({
                 type="monotone"
                 dataKey="value"
                 name={lineLabel}
-                stroke="#2563eb"
+                stroke={DASHBOARD_CHART_COLORS[0]}
                 strokeWidth={2.5}
                 dot={{ r: 3 }}
                 activeDot={{ r: 5 }}

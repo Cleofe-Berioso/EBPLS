@@ -9,12 +9,12 @@ export default async function JitNoPermitRecordPage() {
   if (!session) notFound();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="JIT"
         title="No Permit Record"
         description="Record businesses found during inspections that do not have an existing business permit record."
-        badge={<RoleBadge role="VIEW_ONLY" label="JIT" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="JIT" />}
       />
 
       <JitNoPermitRecordClient />

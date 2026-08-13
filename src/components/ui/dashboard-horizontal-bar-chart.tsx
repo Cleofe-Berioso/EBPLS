@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { DashboardChartCard } from "@/components/ui/dashboard-chart-card";
+import { DashboardChartCard, DASHBOARD_CHART_COLORS } from "@/components/ui/dashboard-chart-card";
 
 export interface DashboardHorizontalBarDatum {
   label: string;
@@ -50,11 +50,11 @@ export function DashboardHorizontalBarChart({
       <div className="w-full min-w-0">
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data} layout="vertical" margin={{ top: 8, right: 20, left: 30, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
             <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
             <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={110} />
             <Tooltip formatter={(value: number) => value.toLocaleString("en-PH")} />
-            <Bar dataKey="value" name={barLabel} fill="#1d4ed8" radius={[0, 6, 6, 0]} />
+            <Bar dataKey="value" name={barLabel} fill={DASHBOARD_CHART_COLORS[0]} radius={[0, 6, 6, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

@@ -15,7 +15,7 @@ export default async function DepartmentHeadCompliantListPage() {
         eyebrow="Department Head"
         title="Compliant List"
         description="Read-only list of JIT inspections verified as compliant by Department Head."
-        badge={<RoleBadge role="VIEW_ONLY" label="Department Head" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Department Head" />}
       />
 
       <InfoBanner

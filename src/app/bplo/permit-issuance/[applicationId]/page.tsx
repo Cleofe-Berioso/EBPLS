@@ -7,6 +7,13 @@ import {
   releasePermitIssuance,
 } from "@/lib/bplo-permit-issuance";
 import { canBploPrintDocument, getPrintableDocumentType } from "@/lib/printable-documents";
+import {
+  bploHighlightPanelClass,
+  bploPanelClass,
+  bploSummaryLabelClass,
+  bploSummaryTileClass,
+  bploSummaryValueClass,
+} from "@/components/bplo/bplo-ui-styles";
 import { DetailHeader } from "@/components/ui/detail-header";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
@@ -37,10 +44,10 @@ function SummaryTile({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    <div className={bploSummaryTileClass}>
+      <p className={bploSummaryLabelClass}>{label}</p>
+      <p className={bploSummaryValueClass}>{value}</p>
+      {helper ? <p className="mt-1 ui-caption">{helper}</p> : null}
     </div>
   );
 }
@@ -93,11 +100,11 @@ export default async function PermitIssuanceDetailPage({
   const isClosureCertificate = printableType === "BUSINESS_CLOSURE_CERTIFICATE";
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <DetailHeader
         title="Permit Issuance Detail"
         subtitle={detail.application.applicationNumber}
-        badge={<RoleBadge role="BPLO" />}
+        badge={<RoleBadge roleType="BPLO" />}
         actions={
           <Link href="/bplo/permit-issuance" className={actionButtonStyles("secondary", "sm")}>
             Back to Permit Issuance
@@ -112,7 +119,7 @@ export default async function PermitIssuanceDetailPage({
       />
 
       <SectionCard title="Application Summary" description={`${detail.application.businessName} • ${detail.application.applicationType}`}>
-        <div className="grid gap-2 text-sm md:grid-cols-2">
+        <div className="grid gap-2 text-sm text-[var(--ink-muted)] md:grid-cols-2">
           <p>Application Number: <strong>{detail.application.applicationNumber}</strong></p>
           <p>Application Type: <strong>{detail.application.applicationType}</strong></p>
           <p>Current Status: <strong>{detail.application.status}</strong></p>
@@ -123,7 +130,7 @@ export default async function PermitIssuanceDetailPage({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="Business Information">
-          <div className="grid gap-2 text-sm md:grid-cols-2">
+          <div className="grid gap-2 text-sm text-[var(--ink-muted)] md:grid-cols-2">
             <p>Business Type: <strong>{detail.businessInfo.businessType}</strong></p>
             <p>Registration Number: <strong>{detail.businessInfo.registrationNumber}</strong></p>
             <p>TIN: <strong>{detail.businessInfo.tin}</strong></p>
@@ -135,7 +142,7 @@ export default async function PermitIssuanceDetailPage({
         </SectionCard>
 
         <SectionCard title="Payment Summary">
-          <div className="grid gap-2 text-sm md:grid-cols-2">
+          <div className="grid gap-2 text-sm text-[var(--ink-muted)] md:grid-cols-2">
             <p>TOP Number: <strong>{detail.paymentSummary.topNumber ?? "-"}</strong></p>
             <p>Total Amount Paid: <strong>{money(detail.paymentSummary.totalAmountPaid)}</strong></p>
             <p>Payment Ref / OR: <strong>{detail.paymentSummary.paymentReferenceNumber ?? "-"}</strong></p>
@@ -145,9 +152,9 @@ export default async function PermitIssuanceDetailPage({
       </div>
 
       <SectionCard title="Generated Document Preview" description={detail.preview.subtitle}>
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-          <p className="text-base font-semibold text-blue-900">{detail.preview.title}</p>
-          <p className="mt-1 text-sm text-blue-800">
+        <div className={`${bploHighlightPanelClass} border-[var(--info)] bg-[var(--info-soft)]`}>
+          <p className="text-base font-semibold text-[var(--foreground)]">{detail.preview.title}</p>
+          <p className="mt-1 text-sm text-[var(--ink-muted)]">
             This preview reflects the current document output view and does not alter permit issuance logic.
           </p>
           {isBusinessPermit && printEligibility.canPrint ? (
@@ -171,17 +178,17 @@ export default async function PermitIssuanceDetailPage({
             </div>
           ) : null}
           {!isBusinessPermit ? (
-            <p className="mt-3 text-sm font-medium text-blue-900">
+            <p className="mt-3 text-sm font-medium text-[var(--foreground)]">
               Business Permit printing is disabled for closure applications.
             </p>
           ) : null}
           {isBusinessPermit && !printEligibility.canPrint ? (
-            <p className="mt-3 text-sm font-medium text-blue-900">
+            <p className="mt-3 text-sm font-medium text-[var(--foreground)]">
               Print preview unavailable until issuance is eligible for permit printing.
             </p>
           ) : null}
           {isClosureCertificate && !printEligibility.canPrint ? (
-            <p className="mt-3 text-sm font-medium text-blue-900">
+            <p className="mt-3 text-sm font-medium text-[var(--foreground)]">
               Print preview unavailable until issuance is eligible for closure certificate printing.
             </p>
           ) : null}
@@ -198,9 +205,9 @@ export default async function PermitIssuanceDetailPage({
           <SummaryTile label="Released Date" value={dateOnly(detail.issuance.releasedDate)} />
           <SummaryTile label="Released By" value={detail.issuance.releasedBy ?? "-"} />
           <SummaryTile label="Issuance Status" value={detail.issuance.status ?? "-"} />
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 xl:col-span-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Remarks</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{detail.issuance.remarks ?? "-"}</p>
+          <div className={`${bploPanelClass} md:col-span-2 xl:col-span-4`}>
+            <p className={bploSummaryLabelClass}>Remarks</p>
+            <p className={bploSummaryValueClass}>{detail.issuance.remarks ?? "-"}</p>
           </div>
         </div>
       </SectionCard>

@@ -44,8 +44,8 @@ export function DashboardPieChart({
       emptyTitle={emptyTitle ?? "No application data available yet."}
       emptyDescription={emptyDescription}
     >
-      <div className="w-full min-w-0">
-        <ResponsiveContainer width="100%" height={280}>
+      <div className="h-full w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={data}
@@ -53,9 +53,8 @@ export function DashboardPieChart({
               nameKey="name"
               cx="50%"
               cy="48%"
-              outerRadius={100}
+              outerRadius="78%"
               labelLine={false}
-              label={(entry) => `${entry.name}: ${entry.value}`}
             >
               {data.map((entry, index) => (
                 <Cell key={`${entry.name}-${index}`} fill={DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]} />

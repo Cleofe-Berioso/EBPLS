@@ -62,6 +62,9 @@ export default async function InspectionComplianceReportPage({ searchParams }: P
   const totalNonCompliant = rows.filter((r) =>
     r.complianceStatus === "Non-Compliant"
   ).length;
+  const totalPendingReview = rows.filter((r) =>
+    r.complianceStatus === "Pending Review"
+  ).length;
   const pendingVerification = rows.filter((r) =>
     r.inspectionStatus === "Pending Verification"
   ).length;
@@ -159,6 +162,7 @@ export default async function InspectionComplianceReportPage({ searchParams }: P
           { label: "Total Inspections", value: totalInspections },
           { label: "Compliant", value: totalCompliant },
           { label: "Non-Compliant", value: totalNonCompliant },
+          { label: "Pending BPLO Review", value: totalPendingReview },
           { label: "Pending Verification", value: pendingVerification },
         ]}
       />

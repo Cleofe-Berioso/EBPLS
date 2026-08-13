@@ -242,6 +242,7 @@ export function splitOwnerName(ownerName: string): {
 
 const REGISTRATION_NUMBER_REGEX_BY_BUSINESS_TYPE: Record<BusinessType, RegExp> = {
   "Sole Proprietorship": /^DTI-\d{4}-\d{6}$/,
+  "One Person Corporation": /^CS\d{4}-\d{5}$/,
   Partnership: /^CS\d{4}-\d{5}$/,
   Corporation: /^CS\d{4}-\d{5}$/,
   Cooperative: /^CDA-\d{4}-\d{6}$/,
@@ -268,6 +269,11 @@ export const REGISTRATION_METADATA: Record<
     helperText: "Use CSYYYY-NNNNN format (example: CS2026-12345).",
   },
   Corporation: {
+    label: "SEC Registration Number",
+    agency: "Securities and Exchange Commission",
+    helperText: "Use CSYYYY-NNNNN format (example: CS2026-12345).",
+  },
+  "One Person Corporation": {
     label: "SEC Registration Number",
     agency: "Securities and Exchange Commission",
     helperText: "Use CSYYYY-NNNNN format (example: CS2026-12345).",
@@ -323,7 +329,51 @@ export function validateBusinessIdentityFormats(input: Pick<BusinessInfo, "busin
 }
 
 export function isCorporation(businessType: BusinessType): boolean {
-  return businessType === "Corporation";
+  return businessType === "Corporation" || businessType === "One Person Corporation";
+}
+
+export const CORPORATION_NATIONALITY_OPTIONS = ["Filipino", "Foreign"] as const;
+
+export function requiresCorporationNationality(businessType: BusinessType): boolean {
+  return isCorporation(businessType);
+}
+
+export function getOwnerRoleLabel(businessType: BusinessType): "Owner" | "President / Officer-in-Charge" {
+  return businessType === "Sole Proprietorship" ? "Owner" : "President / Officer-in-Charge";
+}
+
+export function isValidCorporationNationality(value: string): boolean {
+  return (CORPORATION_NATIONALITY_OPTIONS as readonly string[]).includes(value);
+}
+
+function normalizeDeliveryVehicleFields(
+  input: Pick<BusinessInfo, "deliveryVehicles" | "deliveryVanTruck" | "deliveryMotorcycle">
+): Pick<BusinessInfo, "deliveryVehicles" | "deliveryVanTruck" | "deliveryMotorcycle"> {
+  let vanTruck = input.deliveryVanTruck?.trim() ?? "";
+  let motorcycle = input.deliveryMotorcycle?.trim() ?? "";
+  const legacy = input.deliveryVehicles?.trim() ?? "";
+
+  if (!vanTruck && !motorcycle && legacy) {
+    const vanMatch = /van\s*\/?\s*truck\s*:\s*([^;]+)/i.exec(legacy);
+    const motoMatch = /motorcycle\s*:\s*([^;]+)/i.exec(legacy);
+    if (vanMatch || motoMatch) {
+      vanTruck = (vanMatch?.[1] ?? "").trim();
+      motorcycle = (motoMatch?.[1] ?? "").trim();
+    } else {
+      vanTruck = legacy;
+    }
+  }
+
+  const parts: string[] = [];
+  if (vanTruck) parts.push(`Van/Truck: ${vanTruck}`);
+  if (motorcycle) parts.push(`Motorcycle: ${motorcycle}`);
+  const combined = parts.length > 0 ? parts.join("; ") : legacy;
+
+  return {
+    deliveryVanTruck: vanTruck,
+    deliveryMotorcycle: motorcycle,
+    deliveryVehicles: combined,
+  };
 }
 
 export const CORPORATION_OWNERSHIP_CLASSIFICATIONS = [
@@ -436,6 +486,11 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     }
   }
 
+  const deliveryFields = normalizeDeliveryVehicleFields(input);
+  const corporationNationality = requiresCorporationNationality(input.businessType)
+    ? (input.corporationNationality?.trim() as BusinessInfo["corporationNationality"]) ?? undefined
+    : undefined;
+
   return {
     ...input,
     registrationNumber: input.registrationNumber.trim(),
@@ -452,7 +507,9 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     sex: input.sex?.trim(),
     nationality: normalizeNationality(input.businessType, input.nationality),
     email: input.email.trim(),
+    telephone: input.telephone?.trim() ?? "",
     phone: input.phone.trim(),
+    corporationNationality,
     country,
     countryCode,
     province,
@@ -493,7 +550,7 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     maleEmployees: input.maleEmployees.trim(),
     femaleEmployees: input.femaleEmployees.trim(),
     employeesWithinMunicipality: input.employeesWithinMunicipality.trim(),
-    deliveryVehicles: input.deliveryVehicles.trim(),
+    ...deliveryFields,
     isMarket: Boolean(input.isMarket),
     isAgriculture: Boolean(input.isAgriculture),
     isLiquorOrTobacco: Boolean(input.isLiquorOrTobacco),

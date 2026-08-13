@@ -8,6 +8,7 @@ import {
   Activity,
   ArrowRight,
   MapPinned,
+  ClipboardList,
 } from "lucide-react";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,9 +18,12 @@ import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { DashboardQueueCard } from "@/components/ui/dashboard-queue-card";
 import { DashboardPieChart } from "@/components/ui/dashboard-pie-chart";
 import { DashboardLineChart } from "@/components/ui/dashboard-line-chart";
 import { DashboardStackedBarChart } from "@/components/ui/dashboard-stacked-bar-chart";
+import { DASHBOARD_CHART_COLORS } from "@/components/ui/dashboard-chart-card";
+import { bploListCardClass, bploPanelClass } from "@/components/bplo/bplo-ui-styles";
 import { requireJitSession } from "@/lib/jit-api";
 import { getJitDashboardMetrics, getJitDashboardSummary } from "@/lib/jit-dashboard";
 
@@ -30,12 +34,13 @@ export default async function JitDashboardPage() {
   const [summary, metrics] = await Promise.all([getJitDashboardSummary(), getJitDashboardMetrics()]);
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <PageHeader
         eyebrow="JIT"
         title="JIT Dashboard"
         description="Inspection summary and compliance indicators for active released businesses."
-        badge={<RoleBadge role="VIEW_ONLY" label="JIT" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="JIT" />}
+        showHeroWatermark
         actions={
           <>
             <Link href="/jit/inspect-a-business" className={actionButtonStyles("primary", "sm")}>
@@ -53,21 +58,58 @@ export default async function JitDashboardPage() {
         description="Metrics below are derived from active released businesses and JIT inspection records only. No dashboard actions mutate data."
         variant="readOnly"
         action={
-          <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--foreground)]">
             <Activity className="h-3.5 w-3.5" />
             {summary.visibleBusinessCount} visible businesses
           </span>
         }
       />
 
-      <SectionCard title="Summary Cards" description="Live counts from released-business and inspection data.">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <SectionCard title="Action Required Now" description="Inspection queues and high-priority compliance indicators.">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardQueueCard
+            title="Inspection Queue"
+            description="Released businesses available for inspection."
+            count={summary.visibleBusinessCount}
+            href="/jit/inspect-a-business"
+            tone="info"
+            icon={<ClipboardList className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="High-Risk Businesses"
+            description="Latest inspection is non-compliant or under revocation review."
+            count={summary.highRiskCount}
+            href="/jit/inspect-a-business"
+            tone="danger"
+            icon={<TriangleAlert className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Flagged Businesses"
+            description="Businesses with flagged or revoked inspection status."
+            count={summary.flaggedBusinessesCount}
+            href="/jit/inspect-a-business"
+            tone="warning"
+            icon={<FlagTriangleRight className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Non-Compliant Records"
+            description="Inspection records marked non-compliant or under review."
+            count={summary.nonCompliantCount}
+            href="/jit/inspect-a-business"
+            tone="success"
+            icon={<ShieldCheck className="h-4 w-4" />}
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Key Metrics" description="Live counts from released-business and inspection data.">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <DashboardSummaryCard
             title="Inspection Summary"
             value={summary.inspectionSummary.toLocaleString("en-PH")}
             subtitle="Total inspections submitted by JIT"
             icon={<BarChart3 className="h-4 w-4" />}
-            tone="slate"
+            tone="blue"
           />
           <DashboardSummaryCard
             title="High-Risk Count"
@@ -120,8 +162,8 @@ export default async function JitDashboardPage() {
           data={metrics.violationsByBusinessType}
           categoryKey="label"
           series={[
-            { key: "nonCompliant", label: "Non-compliant", color: "#dc2626" },
-            { key: "verifiedNonCompliant", label: "Verified non-compliant", color: "#ea580c" },
+            { key: "nonCompliant", label: "Non-compliant", color: DASHBOARD_CHART_COLORS[4] },
+            { key: "verifiedNonCompliant", label: "Verified non-compliant", color: DASHBOARD_CHART_COLORS[3] },
           ]}
           emptyTitle="No violation records available yet."
         />
@@ -157,13 +199,13 @@ export default async function JitDashboardPage() {
                   tone="green"
                 />
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">Top Barangay Groups</p>
+              <div className={bploPanelClass}>
+                <p className="text-sm font-semibold text-[var(--foreground)]">Top Barangay Groups</p>
                 <div className="mt-3 space-y-2">
                   {metrics.locationSummary.barangayCounts.slice(0, 6).map((row) => (
-                    <div key={row.label} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                      <span className="text-sm text-slate-700">{row.label}</span>
-                      <span className="text-sm font-semibold text-slate-900">{row.value.toLocaleString("en-PH")}</span>
+                    <div key={row.label} className={`flex items-center justify-between gap-3 ${bploListCardClass}`}>
+                      <span className="text-sm text-[var(--ink-muted)]">{row.label}</span>
+                      <span className="text-sm font-semibold text-[var(--foreground)]">{row.value.toLocaleString("en-PH")}</span>
                     </div>
                   ))}
                 </div>

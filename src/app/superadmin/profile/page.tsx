@@ -7,8 +7,8 @@ import { requireSuperAdminSession } from "@/lib/superadmin-api";
 function labelValue(label: string, value: string) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm text-slate-900">{value}</p>
+      <p className="ui-caption font-semibold uppercase tracking-wide text-[var(--ink-muted)]">{label}</p>
+      <p className="mt-1 text-sm text-[var(--foreground)]">{value}</p>
     </div>
   );
 }
@@ -19,10 +19,10 @@ export default async function SuperAdminProfilePage() {
   return (
     <section className="space-y-4">
       <PageHeader
-        eyebrowClassName="text-slate-600"
+        eyebrow="Super Admin"
         title="Profile"
         description="Account overview for the read-only oversight role."
-        badge={<RoleBadge role="SUPER_ADMIN" />}
+        badge={<RoleBadge roleType="SUPER_ADMIN" />}
       />
 
       <InfoBanner

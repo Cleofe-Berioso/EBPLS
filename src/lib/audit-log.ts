@@ -241,7 +241,7 @@ export async function logInspectionAction(
   action: "SUBMITTED" | "VERIFIED" | "ESCALATED" | "REVIEWED" | "COMPLETED",
   beforeStatus: string | null,
   afterStatus: string,
-  complianceStatus?: "COMPLIANT" | "NON_COMPLIANT",
+  complianceStatus?: "PENDING_REVIEW" | "COMPLIANT" | "NON_COMPLIANT",
   description?: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
@@ -464,9 +464,9 @@ function buildAuditLogWhere(filters: AuditLogQueryFilters) {
     andClauses.push({ action });
   }
 
-  const module = sanitizeQueryText(filters.module, 80);
-  if (module) {
-    andClauses.push({ module });
+  const auditModule = sanitizeQueryText(filters.module, 80);
+  if (auditModule) {
+    andClauses.push({ module: auditModule });
   }
 
   const entityType = sanitizeQueryText(filters.entityType, 80);

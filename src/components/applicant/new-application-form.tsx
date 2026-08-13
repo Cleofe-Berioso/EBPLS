@@ -27,6 +27,7 @@ import type {
 } from "@/lib/applicant-types";
 import {
   getMissingRequiredDocuments,
+  getDocumentRequirementDescription,
   normalizeDocumentName,
   resolveRequiredDocuments,
 } from "@/lib/required-documents";
@@ -40,12 +41,28 @@ import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
 import { resolveBusinessBarangayFromFormState } from "@/lib/business-rules";
 import { BusinessInformationFields } from "./business-information-fields";
 import { FormStepper } from "@/components/applicant/form-stepper";
-import { UploadSlot } from "@/components/applicant/upload-slot";
+import { RequirementsUploadTable } from "@/components/applicant/requirements-upload-table";
+import {
+  applicantCheckboxCardClass,
+  applicantErrorPanelClass,
+  applicantFormControlClass,
+  applicantPanelClass,
+  applicantRadioLabelClass,
+  applicantSummaryLabelClass,
+  applicantSummaryTileClass,
+  applicantSummaryValueClass,
+} from "@/components/applicant/applicant-ui-styles";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import {
+  getApplicationSubmitButtonLabel,
+  getApplicationSubmitSuccessMessage,
+  getResubmissionConfirmMessage,
+  isReturnedCorrectionResubmission,
+} from "@/lib/resubmission-copy";
 
 type NewApplicationFieldKey = keyof BusinessInfo | "requiredDocuments";
 
@@ -92,11 +109,12 @@ const operationFields: Array<{
     label: "Employees Residing within Municipality",
     key: "employeesWithinMunicipality",
   },
-  { label: "Delivery Vehicles", key: "deliveryVehicles" },
+  { label: "Van / Truck", key: "deliveryVanTruck", helperText: "Number of vans or trucks, if applicable." },
+  { label: "Motorcycle", key: "deliveryMotorcycle", helperText: "Number of motorcycles, if applicable." },
   { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos." },
 ];
 
-// taxIncentives removed from applicant form (field preserved in DB / type for existing records and BPLO display)
+// taxIncentives restored on Business Operation step (field preserved in DB / type for existing records)
 
 const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   businessType: "Business Type",
@@ -114,7 +132,9 @@ const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   businessOperationType: "Business Office Type",
   nationality: "Nationality",
   email: "Email",
-  phone: "Contact Number",
+  phone: "Mobile Number",
+  telephone: "Telephone Number",
+  corporationNationality: "Corporation Nationality",
   country: "Country",
   countryCode: "Country Code",
   province: "Province",
@@ -140,6 +160,8 @@ const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   maleEmployees: "Male Employees",
   femaleEmployees: "Female Employees",
   employeesWithinMunicipality: "Employees Residing within Municipality",
+  deliveryVanTruck: "Van / Truck",
+  deliveryMotorcycle: "Motorcycle",
   deliveryVehicles: "Delivery Vehicles",
   businessActivity: "Business Activity",
   lineOfBusiness: "Line of Business",
@@ -177,7 +199,8 @@ const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
     "maleEmployees",
     "femaleEmployees",
     "employeesWithinMunicipality",
-    "deliveryVehicles",
+    "deliveryVanTruck",
+    "deliveryMotorcycle",
     "businessActivity",
     "lineOfBusiness",
     "assetSize",
@@ -252,7 +275,13 @@ const FIELD_NAVIGATION_MAP: Record<NewApplicationFieldKey, FieldNavigationConfig
   ownerAge: { step: 0, label: "Owner Age", selector: '[data-field-key="ownerFirstName"]' },
   sex: { step: 0, label: "Sex", selector: '[data-field-key="sex"]' },
   nationality: { step: 0, label: "Nationality", selector: '[data-field-key="nationality"]' },
-  phone: { step: 0, label: "Contact Number", selector: '[data-field-key="phone"]' },
+  phone: { step: 0, label: "Mobile Number", selector: '[data-field-key="phone"]' },
+  telephone: { step: 0, label: "Telephone Number", selector: '[data-field-key="telephone"]' },
+  corporationNationality: {
+    step: 0,
+    label: "Corporation Nationality",
+    selector: '[data-field-key="corporationNationality"]',
+  },
   country: { step: 0, label: "Country", selector: '[data-field-key="businessAddress"]' },
   countryCode: { step: 0, label: "Country Code", selector: '[data-field-key="businessAddress"]' },
   province: { step: 0, label: "Province", selector: '[data-field-key="businessAddress"]' },
@@ -309,7 +338,9 @@ const FIELD_NAVIGATION_MAP: Record<NewApplicationFieldKey, FieldNavigationConfig
     label: "Employees Residing within Municipality",
     selector: '[data-field-key="employeesWithinMunicipality"]',
   },
-  deliveryVehicles: { step: 1, label: "Delivery Vehicles", selector: '[data-field-key="deliveryVehicles"]' },
+  deliveryVanTruck: { step: 1, label: "Van / Truck", selector: '[data-field-key="deliveryVanTruck"]' },
+  deliveryMotorcycle: { step: 1, label: "Motorcycle", selector: '[data-field-key="deliveryMotorcycle"]' },
+  deliveryVehicles: { step: 1, label: "Delivery Vehicles", selector: '[data-field-key="deliveryVanTruck"]' },
   propertyOwnership: { step: 1, label: "Property Ownership", selector: '[data-field-key="propertyOwnership"]' },
   taxDeclarationNumber: {
     step: 1,
@@ -498,10 +529,10 @@ function ReviewStat({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    <div className={applicantSummaryTileClass}>
+      <p className={applicantSummaryLabelClass}>{label}</p>
+      <p className={applicantSummaryValueClass}>{value}</p>
+      {helper ? <p className="mt-1 ui-caption">{helper}</p> : null}
     </div>
   );
 }
@@ -529,7 +560,8 @@ function FieldCard({
     <FormField label={label} required hint={helperText} error={error}>
       <input
         data-field-key={fieldKey}
-        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+        aria-label={label}
+        className={applicantFormControlClass}
         value={value}
         disabled={disabled}
         onBlur={onBlur}
@@ -574,7 +606,8 @@ const READ_ONLY_LOCKED_FIELDS: Array<keyof BusinessInfo> = [
   "maleEmployees",
   "femaleEmployees",
   "employeesWithinMunicipality",
-  "deliveryVehicles",
+  "deliveryVanTruck",
+  "deliveryMotorcycle",
   "businessActivity",
   "lineOfBusiness",
   "assetSize",
@@ -697,6 +730,10 @@ export function NewApplicationForm() {
   );
 
   const isReadOnly = Boolean(editId && existingApplicationAccess && !existingApplicationAccess.canEdit);
+  const isResubmission = isReturnedCorrectionResubmission({
+    editId,
+    applicationStatus: existingApplicationAccess?.status,
+  });
   const lockInteractivityClass = isReadOnly ? "pointer-events-none" : "";
 
   useEffect(() => {
@@ -842,10 +879,7 @@ export function NewApplicationForm() {
   if (editId && draftLoading) {
     return (
       <SectionCard title="Loading saved draft" description="Restoring your saved application values.">
-        <EmptyState
-          title="Loading draft"
-          description="Please wait while the saved application is loaded into the form."
-        />
+        <LoadingState message="Loading draft…" compact />
       </SectionCard>
     );
   }
@@ -1062,6 +1096,13 @@ export function NewApplicationForm() {
   function back() {
     if (isReadOnly) return;
     setStep((current) => Math.max(current - 1, 0));
+  }
+
+  function handleFinalSubmit() {
+    if (isResubmission && !window.confirm(getResubmissionConfirmMessage("NEW"))) {
+      return;
+    }
+    void persist("SUBMIT");
   }
 
   async function persist(mode: PersistMode) {
@@ -1312,7 +1353,7 @@ export function NewApplicationForm() {
       setPendingDocumentPreviews({});
       setStatusMessage({
         kind: "success",
-        text: `Application ${data.application.applicationNumber} submitted successfully.`,
+        text: getApplicationSubmitSuccessMessage("NEW", isResubmission, data.application.applicationNumber),
       });
       return data.application.id;
     }
@@ -1364,6 +1405,8 @@ export function NewApplicationForm() {
         mimeType: file.type,
         sizeBytes: file.size,
         fileSize: file.size,
+        validationStatus: "Pending Review",
+        validationRemarks: null,
       },
     }));
     setMissingDocNames((current) =>
@@ -1432,11 +1475,11 @@ export function NewApplicationForm() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page-stack">
       <FormStepper steps={steps} currentStep={step} />
 
       {errorSummaryItems.length > 0 ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" data-field-key="errorSummary">
+        <div className={applicantErrorPanelClass} data-field-key="errorSummary">
           <p className="font-semibold">Please complete the following fields:</p>
           <ul className="mt-2 list-disc pl-5">
             {errorSummaryItems.map((item) => (
@@ -1541,7 +1584,7 @@ export function NewApplicationForm() {
               >
                 <select
                   data-field-key="businessActivity"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={(() => {
                     // If the value is "Others: <text>", show just "Others, please specify" in the dropdown
                     if (info.businessActivity?.startsWith("Others:")) {
@@ -1589,7 +1632,8 @@ export function NewApplicationForm() {
                     <input
                       data-field-key="businessActivity"
                       type="text"
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                      aria-label="Please specify business activity"
+                      className={applicantFormControlClass}
                       placeholder="Enter your business activity"
                       value={(() => {
                         // Extract the custom text from "Others: <text>" format
@@ -1621,7 +1665,7 @@ export function NewApplicationForm() {
               >
                 <select
                   data-field-key="lineOfBusiness"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={info.lineOfBusiness}
                   disabled={isReadOnly}
                   onChange={(event) => {
@@ -1641,13 +1685,13 @@ export function NewApplicationForm() {
                   ))}
                 </select>
                 {fieldErrors.lineOfBusiness ? (
-                  <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.lineOfBusiness}</p>
+                  <p className="mt-1 text-xs font-medium text-[var(--danger)]">{fieldErrors.lineOfBusiness}</p>
                 ) : null}
               </FormField>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <label className={applicantCheckboxCardClass}>
                 <input
                   data-field-key="isMarket"
                   type="checkbox"
@@ -1661,12 +1705,12 @@ export function NewApplicationForm() {
                   }
                 />
                 <span>
-                  <span className="block font-semibold text-slate-900">Market business</span>
+                  <span className="block font-semibold text-[var(--foreground)]">Market business</span>
                   Mark this if the business operates inside a public market or market stall so Market Clearance becomes required.
                 </span>
               </label>
 
-              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <label className={applicantCheckboxCardClass}>
                 <input
                   data-field-key="isAgriculture"
                   type="checkbox"
@@ -1680,7 +1724,7 @@ export function NewApplicationForm() {
                   }
                 />
                 <span>
-                  <span className="block font-semibold text-slate-900">Agriculture-related business</span>
+                  <span className="block font-semibold text-[var(--foreground)]">Agriculture-related business</span>
                   Mark this if the business requires Department of Agriculture clearance.
                 </span>
               </label>
@@ -1693,12 +1737,12 @@ export function NewApplicationForm() {
           >
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-sm">
-                <span className="mb-1 block font-medium text-slate-700">
-                  Property Ownership <span className="text-red-600">*</span>
+                <span className="mb-1 block font-medium text-[var(--foreground)]">
+                  Property Ownership <span className="text-[var(--danger)]">*</span>
                 </span>
                 <select
                   data-field-key="propertyOwnership"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={info.propertyOwnership}
                   onChange={(event) =>
                     setInfo((current) =>
@@ -1714,7 +1758,7 @@ export function NewApplicationForm() {
                 </select>
               </label>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <div className={applicantPanelClass}>
                 {info.propertyOwnership === "Owned"
                   ? "Provide the tax declaration and property identification details below."
                   : "If the property is not owned, make sure the required lease or consent document is uploaded in the document step."}
@@ -1749,6 +1793,19 @@ export function NewApplicationForm() {
                   />
                 </>
               ) : null}
+
+              <FieldCard
+                label="Tax Incentives from Government Entity"
+                value={info.taxIncentives}
+                fieldKey="taxIncentives"
+                helperText="Optional. Indicate any applicable tax incentives, if any."
+                error={fieldErrors.taxIncentives}
+                disabled={isReadOnly}
+                onBlur={() => validateFieldOnBlur("taxIncentives")}
+                onChange={(value) =>
+                  setInfo((current) => normalizeBusinessInfo({ ...current, taxIncentives: value }))
+                }
+              />
             </div>
           </SectionCard>
         </div>
@@ -1766,42 +1823,40 @@ export function NewApplicationForm() {
             title="Document Upload"
             description="Required files may vary based on business type and property ownership."
           >
-            <div className="grid gap-3 md:grid-cols-2">
-              {requiredDocs.map((doc) => {
+            <RequirementsUploadTable
+              accept={DOCUMENT_FILE_INPUT_ACCEPT}
+              rows={requiredDocs.map((doc) => {
                 const uploadedDoc = getUploadedDocumentForRequiredName(doc);
-                return (
-                  <UploadSlot
-                    key={doc}
-                    label={doc}
-                    required
-                    helperText="Prepare a clear file copy before uploading."
-                    disabled={submitting || isReadOnly}
-                    fileName={uploadedDoc?.fileName}
-                    uploadedAt={uploadedDoc?.uploadedAt}
-                    previewUrl={
-                      pendingDocumentPreviews[doc] ??
-                      (uploadedDoc?.id && applicationId
-                        ? `/api/applicant/applications/${applicationId}/documents/${uploadedDoc.id}/download`
-                        : undefined)
-                    }
-                    error={
-                      missingDocNames.some(
-                        (m) => normalizeDocumentName(m) === normalizeDocumentName(doc)
-                      )
-                        ? "This document is required."
-                        : undefined
-                    }
-                    onFileChange={(file) => {
-                      void handleDocumentUpload(doc, file);
-                    }}
-                    accept={DOCUMENT_FILE_INPUT_ACCEPT}
-                    onRemove={() => {
-                      void handleDocumentDelete(uploadedDoc?.documentName ?? doc);
-                    }}
-                  />
+                const isMissing = missingDocNames.some(
+                  (m) => normalizeDocumentName(m) === normalizeDocumentName(doc)
                 );
+                return {
+                  documentName: doc,
+                  description: getDocumentRequirementDescription(doc),
+                  required: true,
+                  fileName: uploadedDoc?.fileName,
+                  uploadedAt: uploadedDoc?.uploadedAt,
+                  previewUrl:
+                    pendingDocumentPreviews[doc] ??
+                    (uploadedDoc?.id && applicationId
+                      ? `/api/applicant/applications/${applicationId}/documents/${uploadedDoc.id}/download`
+                      : undefined),
+                  error: isMissing ? "This document is required." : undefined,
+                  remarks: uploadedDoc?.validationRemarks ?? undefined,
+                  validationStatus: uploadedDoc?.fileName
+                    ? uploadedDoc.validationStatus ?? "Pending Review"
+                    : undefined,
+                  disabled: submitting || isReadOnly,
+                };
               })}
-            </div>
+              onFileChange={(documentName, file) => {
+                void handleDocumentUpload(documentName, file);
+              }}
+              onRemove={(documentName) => {
+                const uploadedDoc = getUploadedDocumentForRequiredName(documentName);
+                void handleDocumentDelete(uploadedDoc?.documentName ?? documentName);
+              }}
+            />
           </SectionCard>
         </div>
       ) : null}
@@ -1813,7 +1868,7 @@ export function NewApplicationForm() {
             description="Choose how you prefer to pay the assessed fees. Final payment details are confirmed after BPLO assessment."
           >
             <div className="grid gap-3 md:grid-cols-3">
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+              <label className={applicantRadioLabelClass}>
                 <input
                   type="radio"
                   name="paymentFrequency"
@@ -1826,7 +1881,7 @@ export function NewApplicationForm() {
                 />
                 Annual
               </label>
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+              <label className={applicantRadioLabelClass}>
                 <input
                   type="radio"
                   name="paymentFrequency"
@@ -1839,7 +1894,7 @@ export function NewApplicationForm() {
                 />
                 Bi-Annual
               </label>
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+              <label className={applicantRadioLabelClass}>
                 <input
                   type="radio"
                   name="paymentFrequency"
@@ -1883,12 +1938,10 @@ export function NewApplicationForm() {
                 <button
                   type="button"
                   disabled={submitting || isReadOnly}
-                  onClick={() => {
-                    void persist("SUBMIT");
-                  }}
+                  onClick={handleFinalSubmit}
                   className={actionButtonStyles("primary", "md")}
                 >
-                  Submit Application
+                  {getApplicationSubmitButtonLabel("NEW", isResubmission)}
                 </button>
               </div>
             }
@@ -1932,14 +1985,14 @@ export function NewApplicationForm() {
               />
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Main Office Address</p>
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Main Office Address</p>
               <p className="mt-1">{info.mainOfficeAddress || "-"}</p>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Business Address</p>
-              <p className="mt-0.5 text-xs text-slate-500">
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Business Address</p>
+              <p className="mt-0.5 ui-caption">
                 {info.businessLatitude != null && info.businessLongitude != null
                   ? "Business location pinned"
                   : "Business location not pinned"}
@@ -1947,8 +2000,8 @@ export function NewApplicationForm() {
               <p className="mt-1">{info.businessAddress || "-"}</p>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Before you submit</p>
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Before you submit</p>
               <ul className="mt-2 space-y-1">
                 <li>• Review the business information and operational details for accuracy.</li>
                 <li>• Confirm each required document is uploaded with a clear file copy.</li>

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { checkSmsProviderEnvConfiguration } from "../src/lib/sms-config";
 import { prisma } from "../src/lib/prisma";
 
 function resolveApplicantPhone(formData: unknown): string | null {
@@ -13,47 +14,6 @@ function assert(condition: unknown, message: string) {
   if (!condition) {
     throw new Error(message);
   }
-}
-
-function checkSmsEnvConfiguration(): { ok: boolean; details: string } {
-  const smsEnabled = process.env.SMS_ENABLED?.trim().toLowerCase() === "true";
-  const provider = process.env.SMS_PROVIDER?.trim().toLowerCase() ?? "semaphore";
-
-  if (!smsEnabled) {
-    return {
-      ok: true,
-      details: "SMS_ENABLED is false. SMS optional mode active; delivery log should still record SKIPPED.",
-    };
-  }
-
-  if (provider === "twilio") {
-    const hasConfig = Boolean(
-      process.env.TWILIO_ACCOUNT_SID?.trim() &&
-        process.env.TWILIO_AUTH_TOKEN?.trim() &&
-        process.env.TWILIO_FROM_NUMBER?.trim()
-    );
-    return {
-      ok: hasConfig,
-      details: hasConfig
-        ? "Twilio environment variables configured."
-        : "Missing TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER while SMS_ENABLED=true.",
-    };
-  }
-
-  if (provider === "semaphore") {
-    const hasConfig = Boolean(process.env.SEMAPHORE_API_KEY?.trim());
-    return {
-      ok: hasConfig,
-      details: hasConfig
-        ? "Semaphore environment variables configured."
-        : "Missing SEMAPHORE_API_KEY while SMS_ENABLED=true.",
-    };
-  }
-
-  return {
-    ok: false,
-    details: `Unsupported SMS_PROVIDER: ${provider}`,
-  };
 }
 
 async function main() {
@@ -104,28 +64,48 @@ async function main() {
     phone,
   });
 
-  const envCheck = checkSmsEnvConfiguration();
+  const envCheck = checkSmsProviderEnvConfiguration();
   assert(envCheck.ok, `[SMS VERIFY] Env check failed: ${envCheck.details}`);
   console.log("[SMS VERIFY] Env check: PASS", { details: envCheck.details });
 
   const permitIssuanceSource = await readFile("src/lib/bplo-permit-issuance.ts", "utf8");
   const smsSource = await readFile("src/lib/sms.ts", "utf8");
+  const smsConfigSource = await readFile("src/lib/sms-config.ts", "utf8");
+  const jitNoPermitSource = await readFile("src/lib/jit-no-permit-notifications.ts", "utf8");
 
   const forReleaseTriggerCount = (permitIssuanceSource.match(/status:\s*\"FOR_RELEASE\"\s+as\s+const/g) ?? []).length;
   const releasedTriggerCount = (permitIssuanceSource.match(/status:\s*\"RELEASED\"\s+as\s+const/g) ?? []).length;
   const senderCallCount = (permitIssuanceSource.match(/sendReleaseStatusSms\(/g) ?? []).length;
   const hasDeliveryLogCreate = smsSource.includes("prisma.smsDeliveryLog.create");
+  const hasCentralizedIsSmsEnabled = smsConfigSource.includes("export function isSmsEnabled()");
+  const releaseSmsUsesCentralConfig = smsSource.includes('from "@/lib/sms-config"');
+  const jitSmsUsesCentralConfig = jitNoPermitSource.includes('from "@/lib/sms-config"');
+  const jitSmsUsesTransactionalSender = jitNoPermitSource.includes("sendTransactionalSms(");
+  const noDuplicateProviderFetchInJit =
+    !jitNoPermitSource.includes("api.twilio.com") && !jitNoPermitSource.includes("api.semaphore.co");
+  const releaseSmsGatedBeforeSend = smsSource.includes("if (!isSmsEnabled())");
+  const jitSmsGatedBeforeSend = jitNoPermitSource.includes("if (!isSmsEnabled())");
 
   assert(forReleaseTriggerCount >= 1, "FOR_RELEASE trigger context for SMS not found.");
   assert(releasedTriggerCount >= 1, "RELEASED trigger context for SMS not found.");
   assert(senderCallCount >= 2, "Expected sendReleaseStatusSms calls for prepare/release flows.");
   assert(hasDeliveryLogCreate, "SmsDeliveryLog creation not found in SMS sender implementation.");
+  assert(hasCentralizedIsSmsEnabled, "Centralized isSmsEnabled() not found in sms-config.");
+  assert(releaseSmsUsesCentralConfig, "Release SMS sender must import sms-config.");
+  assert(jitSmsUsesCentralConfig, "JIT no-permit notifications must import sms-config.");
+  assert(jitSmsUsesTransactionalSender, "JIT no-permit notifications must use sendTransactionalSms.");
+  assert(noDuplicateProviderFetchInJit, "JIT no-permit notifications must not call provider APIs directly.");
+  assert(releaseSmsGatedBeforeSend, "Release SMS sender must gate on isSmsEnabled().");
+  assert(jitSmsGatedBeforeSend, "JIT no-permit SMS path must gate on isSmsEnabled().");
 
   console.log("[SMS VERIFY] Trigger log linkage check: PASS", {
     forReleaseTriggerCount,
     releasedTriggerCount,
     senderCallCount,
     hasDeliveryLogCreate,
+    hasCentralizedIsSmsEnabled,
+    jitSmsUsesTransactionalSender,
+    noDuplicateProviderFetchInJit,
   });
 
   console.log("verify-sms-delivery-log: PASS");

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import * as PrismaClientPackage from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const PrismaClient = (PrismaClientPackage as any).PrismaClient as new (options?: any) => any;
@@ -415,8 +416,8 @@ function buildBusinessInfo(overrides: Record<string, unknown> = {}) {
 async function seedBaseData() {
   console.log("Seeding base data...");
 
-  // Backward compatibility: older databases can have a legacy public.Role enum.
-  await prisma.$executeRawUnsafe(`
+  // Static enum migration only; no user-controlled SQL fragments.
+  await prisma.$executeRaw(Prisma.sql`
 DO $$
 BEGIN
   IF EXISTS (
@@ -847,20 +848,6 @@ async function syncDebugHistory(
   }
 }
 
-let inspectionColumnCache: Set<string> | null = null;
-
-async function getInspectionColumnSet(): Promise<Set<string>> {
-  if (inspectionColumnCache) {
-    return inspectionColumnCache;
-  }
-
-  const rows = (await prisma.$queryRawUnsafe("PRAGMA table_info('Inspection')")) as Array<{
-    name?: string;
-  }>;
-  inspectionColumnCache = new Set(rows.map((row) => row.name).filter((name): name is string => Boolean(name)));
-  return inspectionColumnCache;
-}
-
 async function upsertDebugInspectionSeed(input: {
   marker: string;
   businessRecordId: string;
@@ -889,72 +876,42 @@ async function upsertDebugInspectionSeed(input: {
     sizeBytes: number;
   };
 }) {
-  const inspectionColumns = await getInspectionColumnSet();
-  const supports = (column: string) => inspectionColumns.has(column);
-
-  const existing = (await prisma.$queryRawUnsafe(
-    'SELECT "id" FROM "Inspection" WHERE "businessRecordId" = ? AND "applicationId" = ? AND "comment" LIKE ? LIMIT 1',
-    input.businessRecordId,
-    input.applicationId,
-    `${input.marker}%`
+  const existing = (await prisma.$queryRaw(
+    Prisma.sql`SELECT "id" FROM "Inspection" WHERE "businessRecordId" = ${input.businessRecordId} AND "applicationId" = ${input.applicationId} AND "comment" LIKE ${`${input.marker}%`} LIMIT 1`
   )) as Array<{ id: string }>;
 
-  const data: Record<string, unknown> = {
+  const inspectionData = {
     inspectorId: input.inspectorId,
     complianceStatus: input.complianceStatus,
     status: input.status,
     comment: input.comment,
+    decidedById: input.decidedById ?? null,
+    revocationDecision: input.revocationDecision ?? null,
+    revocationRemarks: input.revocationRemarks ?? null,
+    decidedAt: input.decidedAt ?? null,
+    revocationSettledAt: input.revocationSettledAt ?? null,
+    evidenceFileName: input.evidence?.fileName ?? null,
+    evidenceStoragePath: input.evidence?.storagePath ?? null,
+    evidenceMimeType: input.evidence?.mimeType ?? null,
+    evidenceSizeBytes: input.evidence?.sizeBytes ?? null,
   };
-
-  if (supports("decidedById")) data.decidedById = input.decidedById ?? null;
-  if (supports("revocationDecision")) data.revocationDecision = input.revocationDecision ?? null;
-  if (supports("revocationRemarks")) data.revocationRemarks = input.revocationRemarks ?? null;
-  if (supports("decidedAt")) data.decidedAt = input.decidedAt ?? null;
-  if (supports("revocationSettledAt")) data.revocationSettledAt = input.revocationSettledAt ?? null;
-  if (supports("evidenceFileName")) data.evidenceFileName = input.evidence?.fileName ?? null;
-  if (supports("evidenceStoragePath")) data.evidenceStoragePath = input.evidence?.storagePath ?? null;
-  if (supports("evidenceMimeType")) data.evidenceMimeType = input.evidence?.mimeType ?? null;
-  if (supports("evidenceSizeBytes")) data.evidenceSizeBytes = input.evidence?.sizeBytes ?? null;
 
   const existingId = existing[0]?.id;
   if (existingId) {
-    const setClauses: string[] = [];
-    const params: unknown[] = [];
-
-    for (const [key, value] of Object.entries(data)) {
-      setClauses.push(`"${key}" = ?`);
-      params.push(value);
-    }
-
-    if (setClauses.length > 0) {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Inspection" SET ${setClauses.join(", ")} WHERE "id" = ?`,
-        ...params,
-        existingId
-      );
-    }
-
+    await prisma.inspection.update({
+      where: { id: existingId },
+      data: inspectionData,
+    });
     return;
   }
 
-  const createData: Record<string, unknown> = {
-    businessRecordId: input.businessRecordId,
-    applicationId: input.applicationId,
-    ...data,
-  };
-
-  if (supports("id")) createData.id = randomUUID();
-  if (supports("createdAt")) createData.createdAt = new Date();
-  if (supports("updatedAt")) createData.updatedAt = new Date();
-
-  const createColumns = Object.keys(createData);
-  const placeholders = createColumns.map(() => "?");
-  const createValues = createColumns.map((column) => createData[column]);
-
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "Inspection" (${createColumns.map((column) => `"${column}"`).join(", ")}) VALUES (${placeholders.join(", ")})`,
-    ...createValues
-  );
+  await prisma.inspection.create({
+    data: {
+      businessRecordId: input.businessRecordId,
+      applicationId: input.applicationId,
+      ...inspectionData,
+    },
+  });
 }
 
 async function seedPhase14WorkflowDebugData() {

@@ -1,12 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireBploSession } from "@/lib/bplo-api";
-import { listPermitIssuanceEntries } from "@/lib/bplo-permit-issuance";
+import { listPermitIssuanceBucketPaginated } from "@/lib/bplo-permit-issuance";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import {
+  bploEmptyStateClass,
+  bploMobileRecordCardClass,
+  bploTableClass,
+  bploTypeBadgeClass,
+  paymentStatusBadgeClass,
+} from "@/components/bplo/bplo-ui-styles";
 
 const TYPE_LABEL: Record<string, string> = {
   NEW: "New",
@@ -19,19 +27,46 @@ function dateOnly(value: string | null): string {
   return new Date(value).toLocaleDateString("en-PH");
 }
 
-export default async function BploPermitIssuancePage() {
+interface PageProps {
+  searchParams: Promise<{
+    pageSize?: string;
+    blockedPage?: string;
+    paidPage?: string;
+    forReleasePage?: string;
+    releasedPage?: string;
+  }>;
+}
+
+export default async function BploPermitIssuancePage({ searchParams }: PageProps) {
   const session = await requireBploSession();
   if (!session) notFound();
 
-  const data = await listPermitIssuanceEntries();
+  const params = await searchParams;
+  const pagination = { pageSize: params.pageSize };
+
+  const [blockedResult, paidResult, forReleaseResult, releasedResult] = await Promise.all([
+    listPermitIssuanceBucketPaginated("blocked", { page: params.blockedPage, ...pagination }),
+    listPermitIssuanceBucketPaginated("paid", { page: params.paidPage, ...pagination }),
+    listPermitIssuanceBucketPaginated("forRelease", { page: params.forReleasePage, ...pagination }),
+    listPermitIssuanceBucketPaginated("released", { page: params.releasedPage, ...pagination }),
+  ]);
+
+  const data = {
+    blocked: blockedResult.records,
+    paid: paidResult.records,
+    forRelease: forReleaseResult.records,
+    released: releasedResult.records,
+  };
+
+  const baseQueryParams = { pageSize: params.pageSize };
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="BPLO"
         title="Permit Issuance"
         description="Prepare and release business permits or closure certificates for paid applications using the existing issuance flow."
-        badge={<RoleBadge role="BPLO" />}
+        badge={<RoleBadge roleType="BPLO" />}
       />
 
       <InfoBanner
@@ -42,34 +77,35 @@ export default async function BploPermitIssuancePage() {
 
       <div className="space-y-4">
         <ResponsiveDataTable
-          title={`Blocked / Awaiting Payment (${data.blocked.length})`}
+          title={`Blocked / Awaiting Payment (${blockedResult.totalCount})`}
           description="Applications that cannot be prepared yet because required payment is missing, pending verification, or not yet eligible."
+          switchAt="xl"
           table={
             data.blocked.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-slate-500">No blocked applications at the moment.</div>
+              <div className={bploEmptyStateClass}>No blocked applications at the moment.</div>
             ) : (
-              <table className="w-full text-sm">
+              <table className={bploTableClass}>
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50 text-left text-slate-700">
-                    <th className="px-4 py-3 font-semibold">Application Number</th>
-                    <th className="px-4 py-3 font-semibold">Business Name</th>
-                    <th className="px-4 py-3 font-semibold">Payment Status</th>
-                    <th className="px-4 py-3 font-semibold">Release Payment</th>
-                    <th className="px-4 py-3 font-semibold">Amount Paid</th>
-                    <th className="px-4 py-3 font-semibold">Block Reason</th>
-                    <th className="px-4 py-3 font-semibold">Action</th>
+                  <tr>
+                    <th>Application Number</th>
+                    <th>Business Name</th>
+                    <th>Payment Status</th>
+                    <th>Release Payment</th>
+                    <th>Amount Paid</th>
+                    <th>Block Reason</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {data.blocked.map((row) => (
-                    <tr key={row.applicationId} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.applicationNumber}</td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{row.businessName}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.paymentStatus ?? "NO PAYMENT REFERENCE"}</td>
-                      <td className="px-4 py-3 text-slate-600">₱ {row.requiredReleasePayment.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
-                      <td className="px-4 py-3 text-slate-600">₱ {row.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.blockingReason ?? "Awaiting payment action"}</td>
-                      <td className="px-4 py-3">
+                    <tr key={row.applicationId}>
+                      <td className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</td>
+                      <td className="font-medium text-[var(--foreground)]">{row.businessName}</td>
+                      <td className="text-[var(--ink-muted)]">{row.paymentStatus ?? "NO PAYMENT REFERENCE"}</td>
+                      <td className="text-[var(--ink-muted)]">₱ {row.requiredReleasePayment.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      <td className="text-[var(--ink-muted)]">₱ {row.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      <td className="text-[var(--ink-muted)]">{row.blockingReason ?? "Awaiting payment action"}</td>
+                      <td>
                         <button type="button" disabled className={actionButtonStyles("secondary", "sm")}>
                           Awaiting Payment
                         </button>
@@ -82,17 +118,17 @@ export default async function BploPermitIssuancePage() {
           }
           mobile={
             data.blocked.length === 0 ? (
-              <div className="p-4 text-sm text-slate-500">No blocked applications at the moment.</div>
+              <div className="p-4 text-sm text-[var(--ink-muted)]">No blocked applications at the moment.</div>
             ) : (
               <div className="space-y-3 p-4">
                 {data.blocked.map((row) => (
-                  <article key={row.applicationId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                    <p className="mt-1 text-xs text-slate-500">Payment: {row.paymentStatus ?? "NO PAYMENT REFERENCE"}</p>
-                    <p className="text-xs text-slate-500">Required Release Payment: ₱ {row.requiredReleasePayment.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
-                    <p className="text-xs text-slate-500">Amount Paid: ₱ {row.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
-                    <p className="mt-2 text-xs text-slate-600">{row.blockingReason ?? "Awaiting payment action"}</p>
+                  <article key={row.applicationId} className={bploMobileRecordCardClass}>
+                    <p className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{row.businessName}</p>
+                    <p className="mt-1 ui-caption">Payment: {row.paymentStatus ?? "NO PAYMENT REFERENCE"}</p>
+                    <p className="ui-caption">Required Release Payment: ₱ {row.requiredReleasePayment.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+                    <p className="ui-caption">Amount Paid: ₱ {row.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+                    <p className="mt-2 text-xs text-[var(--ink-muted)]">{row.blockingReason ?? "Awaiting payment action"}</p>
                     <div className="mt-3">
                       <button type="button" disabled className={actionButtonStyles("secondary", "sm")}>
                         Awaiting Payment
@@ -105,48 +141,60 @@ export default async function BploPermitIssuancePage() {
           }
         />
 
+        <PaginationControls
+          basePath="/bplo/permit-issuance"
+          queryParams={{ ...baseQueryParams, blockedPage: params.blockedPage, paidPage: params.paidPage, forReleasePage: params.forReleasePage, releasedPage: params.releasedPage }}
+          pageParamKey="blockedPage"
+          page={blockedResult.page}
+          pageSize={blockedResult.pageSize}
+          totalCount={blockedResult.totalCount}
+          totalPages={blockedResult.totalPages}
+          recordLabel="blocked applications"
+        />
+
         <ResponsiveDataTable
-          title={`Paid Applications (${data.paid.length})`}
+          title={`Paid Applications (${paidResult.totalCount})`}
           description="Verified payments waiting for permit or certificate preparation."
+          switchAt="xl"
           table={
             data.paid.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-slate-500">No records available yet in this section. Paid applications will appear here once payment verification is completed.</div>
+              <div className={bploEmptyStateClass}>No records available yet in this section. Paid applications will appear here once payment verification is completed.</div>
             ) : (
-            <table className="w-full text-sm">
+            <table className={bploTableClass}>
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50 text-left text-slate-700">
-                  <th className="px-4 py-3 font-semibold">Application Number</th>
-                  <th className="px-4 py-3 font-semibold">Business Name</th>
-                  <th className="px-4 py-3 font-semibold">Applicant</th>
-                  <th className="px-4 py-3 font-semibold">Application Type</th>
-                  <th className="px-4 py-3 font-semibold">TOP Number</th>
-                  <th className="px-4 py-3 font-semibold">Payment Status</th>
-                  <th className="px-4 py-3 font-semibold">Date Paid</th>
-                  <th className="px-4 py-3 font-semibold">Action</th>
+                <tr>
+                  <th>Application Number</th>
+                  <th>Business Name</th>
+                  <th>Applicant</th>
+                  <th>Application Type</th>
+                  <th>TOP Number</th>
+                  <th>Payment Status</th>
+                  <th>Date Paid</th>
+                  <th>Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {data.paid.map((row) => (
-                  <tr key={row.applicationId} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.applicationNumber}</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">{row.businessName}</td>
-                    <td className="px-4 py-3 text-slate-600">
+                  <tr key={row.applicationId}>
+                    <td className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</td>
+                    <td className="font-medium text-[var(--foreground)]">{row.businessName}</td>
+                    <td className="text-[var(--ink-muted)]">
                       <p>{row.applicantName}</p>
-                      <p className="text-xs text-slate-600">{row.applicantEmail}</p>
+                      <p className="ui-caption">{row.applicantEmail}</p>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                    <td>
+                      <span className={bploTypeBadgeClass}>
                         {TYPE_LABEL[row.applicationType] ?? row.applicationType}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.topNumber ?? "-"}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs text-teal-700">
+                    <td className="font-mono text-xs text-[var(--ink-muted)]">{row.topNumber ?? "-"}</td>
+                    <td>
+                      <span className={`${paymentStatusBadgeClass("VERIFIED")}`}>
                         {row.paymentStatus ?? "-"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{dateOnly(row.datePaid)}</td>
-                    <td className="px-4 py-3">
+                    <td className="text-[var(--ink-muted)]">{dateOnly(row.datePaid)}</td>
+                    <td>
                       <Link href={`/bplo/permit-issuance/${row.applicationId}`} className={actionButtonStyles("primary", "sm")}>
                         {row.applicationType === "CLOSURE" ? "Prepare Certificate" : "Prepare Permit"}
                       </Link>
@@ -159,14 +207,14 @@ export default async function BploPermitIssuancePage() {
           }
           mobile={
             data.paid.length === 0 ? (
-              <div className="p-4 text-sm text-slate-500">No records available yet in this section.</div>
+              <div className="p-4 text-sm text-[var(--ink-muted)]">No records available yet in this section.</div>
             ) : (
               <div className="space-y-3 p-4">
                 {data.paid.map((row) => (
-                  <article key={row.applicationId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                    <p className="text-xs text-slate-500">{TYPE_LABEL[row.applicationType] ?? row.applicationType} • Paid: {dateOnly(row.datePaid)}</p>
+                  <article key={row.applicationId} className={bploMobileRecordCardClass}>
+                    <p className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{row.businessName}</p>
+                    <p className="ui-caption">{TYPE_LABEL[row.applicationType] ?? row.applicationType} • Paid: {dateOnly(row.datePaid)}</p>
                     <div className="mt-3">
                       <Link href={`/bplo/permit-issuance/${row.applicationId}`} className={actionButtonStyles("primary", "sm")}>
                         {row.applicationType === "CLOSURE" ? "Prepare Certificate" : "Prepare Permit"}
@@ -179,37 +227,49 @@ export default async function BploPermitIssuancePage() {
           }
         />
 
+        <PaginationControls
+          basePath="/bplo/permit-issuance"
+          queryParams={{ ...baseQueryParams, blockedPage: params.blockedPage, paidPage: params.paidPage, forReleasePage: params.forReleasePage, releasedPage: params.releasedPage }}
+          pageParamKey="paidPage"
+          page={paidResult.page}
+          pageSize={paidResult.pageSize}
+          totalCount={paidResult.totalCount}
+          totalPages={paidResult.totalPages}
+          recordLabel="paid applications"
+        />
+
         <ResponsiveDataTable
-          title={`For Release (${data.forRelease.length})`}
+          title={`For Release (${forReleaseResult.totalCount})`}
           description="Prepared documents waiting to be marked as released."
+          switchAt="xl"
           table={
             data.forRelease.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-slate-500">No records available yet in this section. Prepared permits and certificates will appear here when ready for release.</div>
+              <div className={bploEmptyStateClass}>No records available yet in this section. Prepared permits and certificates will appear here when ready for release.</div>
             ) : (
-            <table className="w-full text-sm">
+            <table className={bploTableClass}>
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50 text-left text-slate-700">
-                  <th className="px-4 py-3 font-semibold">Application Number</th>
-                  <th className="px-4 py-3 font-semibold">Business Name</th>
-                  <th className="px-4 py-3 font-semibold">Application Type</th>
-                  <th className="px-4 py-3 font-semibold">Permit / Certificate Number</th>
-                  <th className="px-4 py-3 font-semibold">Prepared Date</th>
-                  <th className="px-4 py-3 font-semibold">Action</th>
+                <tr>
+                  <th>Application Number</th>
+                  <th>Business Name</th>
+                  <th>Application Type</th>
+                  <th>Permit / Certificate Number</th>
+                  <th>Prepared Date</th>
+                  <th>Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {data.forRelease.map((row) => (
-                  <tr key={row.applicationId} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.applicationNumber}</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">{row.businessName}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                  <tr key={row.applicationId}>
+                    <td className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</td>
+                    <td className="font-medium text-[var(--foreground)]">{row.businessName}</td>
+                    <td>
+                      <span className={bploTypeBadgeClass}>
                         {TYPE_LABEL[row.applicationType] ?? row.applicationType}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.documentNumber ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-600">{dateOnly(row.preparedDate)}</td>
-                    <td className="px-4 py-3">
+                    <td className="font-mono text-xs text-[var(--ink-muted)]">{row.documentNumber ?? "-"}</td>
+                    <td className="text-[var(--ink-muted)]">{dateOnly(row.preparedDate)}</td>
+                    <td>
                       <Link href={`/bplo/permit-issuance/${row.applicationId}`} className={actionButtonStyles("warning", "sm")}>
                         Mark Released
                       </Link>
@@ -222,14 +282,14 @@ export default async function BploPermitIssuancePage() {
           }
           mobile={
             data.forRelease.length === 0 ? (
-              <div className="p-4 text-sm text-slate-500">No records available yet in this section.</div>
+              <div className="p-4 text-sm text-[var(--ink-muted)]">No records available yet in this section.</div>
             ) : (
               <div className="space-y-3 p-4">
                 {data.forRelease.map((row) => (
-                  <article key={row.applicationId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                    <p className="text-xs text-slate-500">{TYPE_LABEL[row.applicationType] ?? row.applicationType} • Prepared: {dateOnly(row.preparedDate)}</p>
+                  <article key={row.applicationId} className={bploMobileRecordCardClass}>
+                    <p className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{row.businessName}</p>
+                    <p className="ui-caption">{TYPE_LABEL[row.applicationType] ?? row.applicationType} • Prepared: {dateOnly(row.preparedDate)}</p>
                     <div className="mt-3">
                       <Link href={`/bplo/permit-issuance/${row.applicationId}`} className={actionButtonStyles("warning", "sm")}>
                         Mark Released
@@ -242,39 +302,51 @@ export default async function BploPermitIssuancePage() {
           }
         />
 
+        <PaginationControls
+          basePath="/bplo/permit-issuance"
+          queryParams={{ ...baseQueryParams, blockedPage: params.blockedPage, paidPage: params.paidPage, forReleasePage: params.forReleasePage, releasedPage: params.releasedPage }}
+          pageParamKey="forReleasePage"
+          page={forReleaseResult.page}
+          pageSize={forReleaseResult.pageSize}
+          totalCount={forReleaseResult.totalCount}
+          totalPages={forReleaseResult.totalPages}
+          recordLabel="for-release applications"
+        />
+
         <ResponsiveDataTable
-          title={`Released (${data.released.length})`}
+          title={`Released (${releasedResult.totalCount})`}
           description="Completed permit and certificate release records."
+          switchAt="xl"
           table={
             data.released.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-slate-500">No records available yet in this section. Released permits and certificates will appear here for reference.</div>
+              <div className={bploEmptyStateClass}>No records available yet in this section. Released permits and certificates will appear here for reference.</div>
             ) : (
-            <table className="w-full text-sm">
+            <table className={bploTableClass}>
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50 text-left text-slate-700">
-                  <th className="px-4 py-3 font-semibold">Application Number</th>
-                  <th className="px-4 py-3 font-semibold">Business Name</th>
-                  <th className="px-4 py-3 font-semibold">Application Type</th>
-                  <th className="px-4 py-3 font-semibold">Permit / Certificate Number</th>
-                  <th className="px-4 py-3 font-semibold">Released Date</th>
-                  <th className="px-4 py-3 font-semibold">Released By</th>
-                  <th className="px-4 py-3 font-semibold">Action</th>
+                <tr>
+                  <th>Application Number</th>
+                  <th>Business Name</th>
+                  <th>Application Type</th>
+                  <th>Permit / Certificate Number</th>
+                  <th>Released Date</th>
+                  <th>Released By</th>
+                  <th>Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {data.released.map((row) => (
-                  <tr key={row.applicationId} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.applicationNumber}</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">{row.businessName}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                  <tr key={row.applicationId}>
+                    <td className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</td>
+                    <td className="font-medium text-[var(--foreground)]">{row.businessName}</td>
+                    <td>
+                      <span className={bploTypeBadgeClass}>
                         {TYPE_LABEL[row.applicationType] ?? row.applicationType}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.documentNumber ?? "-"}</td>
-                    <td className="px-4 py-3 text-slate-600">{dateOnly(row.releasedDate)}</td>
-                    <td className="px-4 py-3 text-slate-600">{row.releasedBy ?? "-"}</td>
-                    <td className="px-4 py-3">
+                    <td className="font-mono text-xs text-[var(--ink-muted)]">{row.documentNumber ?? "-"}</td>
+                    <td className="text-[var(--ink-muted)]">{dateOnly(row.releasedDate)}</td>
+                    <td className="text-[var(--ink-muted)]">{row.releasedBy ?? "-"}</td>
+                    <td>
                       <Link href={`/bplo/permit-issuance/${row.applicationId}`} className={actionButtonStyles("secondary", "sm")}>
                         View
                       </Link>
@@ -287,15 +359,15 @@ export default async function BploPermitIssuancePage() {
           }
           mobile={
             data.released.length === 0 ? (
-              <div className="p-4 text-sm text-slate-500">No records available yet in this section.</div>
+              <div className="p-4 text-sm text-[var(--ink-muted)]">No records available yet in this section.</div>
             ) : (
               <div className="space-y-3 p-4">
                 {data.released.map((row) => (
-                  <article key={row.applicationId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                    <p className="text-xs text-slate-500">{TYPE_LABEL[row.applicationType] ?? row.applicationType} • Released: {dateOnly(row.releasedDate)}</p>
-                    <p className="text-xs text-slate-500">By: {row.releasedBy ?? "-"}</p>
+                  <article key={row.applicationId} className={bploMobileRecordCardClass}>
+                    <p className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{row.businessName}</p>
+                    <p className="ui-caption">{TYPE_LABEL[row.applicationType] ?? row.applicationType} • Released: {dateOnly(row.releasedDate)}</p>
+                    <p className="ui-caption">By: {row.releasedBy ?? "-"}</p>
                     <div className="mt-3">
                       <Link href={`/bplo/permit-issuance/${row.applicationId}`} className={actionButtonStyles("secondary", "sm")}>View</Link>
                     </div>
@@ -304,6 +376,17 @@ export default async function BploPermitIssuancePage() {
               </div>
             )
           }
+        />
+
+        <PaginationControls
+          basePath="/bplo/permit-issuance"
+          queryParams={{ ...baseQueryParams, blockedPage: params.blockedPage, paidPage: params.paidPage, forReleasePage: params.forReleasePage, releasedPage: params.releasedPage }}
+          pageParamKey="releasedPage"
+          page={releasedResult.page}
+          pageSize={releasedResult.pageSize}
+          totalCount={releasedResult.totalCount}
+          totalPages={releasedResult.totalPages}
+          recordLabel="released applications"
         />
       </div>
     </section>

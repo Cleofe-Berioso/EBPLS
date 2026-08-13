@@ -256,33 +256,33 @@ export function ProfilePictureCard({ userName }: ProfilePictureCardProps) {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-gray-200 bg-gray-50 p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-        <p className="text-sm text-gray-600">Loading profile picture...</p>
+      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-[var(--border-color)] bg-[var(--muted-surface)] p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--ink-muted)]" />
+        <p className="text-sm text-[var(--ink-muted)]">Loading profile picture...</p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-gray-200 bg-white p-8">
+      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-[var(--border-color)] bg-[var(--surface)] p-8">
         {hasProfilePicture && profilePictureUrl && !imageFailed ? (
           <>
             <img
               src={profilePictureUrl}
               alt={userName}
-              className="h-32 w-32 rounded-full border-2 border-gray-200 object-cover"
+              className="h-32 w-32 rounded-full border-2 border-[var(--border-color)] object-cover"
               referrerPolicy="no-referrer"
               onError={() => setImageFailed(true)}
             />
-            <p className="text-sm text-gray-600">{userName}</p>
+            <p className="text-sm text-[var(--ink-muted)]">{userName}</p>
           </>
         ) : (
           <>
-            <div className="flex h-32 w-32 items-center justify-center rounded-full border-2 border-gray-200 bg-gradient-to-br from-blue-100 to-blue-200">
-              <Camera className="h-12 w-12 text-blue-400" />
+            <div className="flex h-32 w-32 items-center justify-center rounded-full border-2 border-[var(--border-color)] bg-[var(--muted-surface)]">
+              <Camera className="h-12 w-12 text-[var(--info)]" />
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[var(--ink-muted)]">
               {hasProfilePicture ? "Profile picture could not be loaded" : "No profile picture yet"}
             </p>
           </>
@@ -295,7 +295,7 @@ export function ProfilePictureCard({ userName }: ProfilePictureCardProps) {
           </button>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
       </div>
 
       <Modal
@@ -362,6 +362,7 @@ export function ProfilePictureCard({ userName }: ProfilePictureCardProps) {
                 ref={fileInputRef}
                 type="file"
                 accept={PROFILE_IMAGE_FILE_INPUT_ACCEPT}
+                aria-label="Choose profile image"
                 className="sr-only"
                 disabled={submitting}
                 onChange={(event) => {
@@ -373,9 +374,10 @@ export function ProfilePictureCard({ userName }: ProfilePictureCardProps) {
           </div>
 
           {cameraActive ? (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-black">
+            <div className="overflow-hidden rounded-2xl border border-[var(--border-color)] bg-black">
               <video
                 ref={videoRef}
+                aria-label="Camera preview"
                 className="h-auto max-h-[360px] w-full object-contain"
                 autoPlay
                 playsInline
@@ -386,19 +388,19 @@ export function ProfilePictureCard({ userName }: ProfilePictureCardProps) {
 
           {previewUrl ? (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</p>
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+              <p className="ui-caption font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]">Preview</p>
+              <div className="overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--muted-surface)]">
                 <img src={previewUrl} alt="Profile preview" className="h-auto max-h-[360px] w-full object-contain" />
               </div>
-              <p className="text-xs text-slate-600">Selected file: {file?.name}</p>
+              <p className="text-xs text-[var(--ink-muted)]">Selected file: {file?.name}</p>
             </div>
           ) : null}
 
-          {!cameraActive && !previewUrl ? <p className="text-sm text-slate-600">No new image selected yet.</p> : null}
+          {!cameraActive && !previewUrl ? <p className="text-sm text-[var(--ink-muted)]">No new image selected yet.</p> : null}
 
-          {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+          {error ? <p className="text-sm font-medium text-[var(--danger)]">{error}</p> : null}
           {message ? (
-            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--success)]">
               <CheckCircle2 className="h-4 w-4" />
               {message}
             </p>

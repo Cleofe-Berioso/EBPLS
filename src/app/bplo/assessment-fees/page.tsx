@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { listAssessmentFeeApplications } from "@/lib/bplo-assessment";
+import {
+  bploEmptyStateClass,
+  bploMobileRecordCardClass,
+  bploTableClass,
+} from "@/components/bplo/bplo-ui-styles";
 import { PageHeader } from "@/components/ui/page-header";
-import { TableContainer } from "@/components/ui/table-container";
+import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { actionButtonStyles } from "@/components/ui/action-button";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -11,8 +16,8 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const ASSESSMENT_STATUS_BADGE: Record<string, string> = {
-  DRAFT: "border border-amber-200 bg-amber-50 text-amber-800",
-  GENERATED: "border border-green-200 bg-green-50 text-green-800",
+  DRAFT: "border border-[var(--border-color)] bg-[var(--warning-soft)] text-[var(--warning)]",
+  GENERATED: "border border-[var(--border-color)] bg-[var(--success-soft)] text-[var(--success)]",
 };
 
 export default async function BploAssessmentFeesPage() {
@@ -26,18 +31,18 @@ export default async function BploAssessmentFeesPage() {
         description="Department Head approved applications are ready for fee computation and Tax Order of Payment generation."
       />
 
-      <TableContainer
+      <ResponsiveDataTable
         title="Assessment Queue"
         description={`${rows.length} record${rows.length === 1 ? "" : "s"} ready for assessment or currently under assessment.`}
-      >
-        {rows.length === 0 ? (
-          <div className="px-6 py-8 text-sm text-slate-500">
+        switchAt="xl"
+        table={rows.length === 0 ? (
+          <div className={bploEmptyStateClass}>
             No records available yet. This section will populate as applications are approved by the Department Head.
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className={bploTableClass}>
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-left text-slate-700">
+              <tr className="border-b border-[var(--border-color)] bg-[var(--muted-surface)] text-left text-[var(--foreground)]">
                 <th className="px-4 py-3 font-semibold">Application No.</th>
                 <th className="px-4 py-3 font-semibold">Business Name</th>
                 <th className="px-4 py-3 font-semibold">Applicant</th>
@@ -48,22 +53,22 @@ export default async function BploAssessmentFeesPage() {
                 <th className="px-4 py-3 font-semibold">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-[var(--border-color)]">
               {rows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/60">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-700">{row.applicationNumber}</td>
-                  <td className="px-4 py-3 font-medium text-slate-900">{row.businessName}</td>
-                  <td className="px-4 py-3 text-slate-600">
+                <tr key={row.id} className="hover:bg-[var(--muted-surface)]/60">
+                  <td className="px-4 py-3 font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</td>
+                  <td className="px-4 py-3 font-medium text-[var(--foreground)]">{row.businessName}</td>
+                  <td className="px-4 py-3 text-[var(--ink-muted)]">
                     <p>{row.applicantName}</p>
-                    <p className="text-xs text-slate-600">{row.applicantEmail}</p>
+                    <p className="text-xs text-[var(--ink-muted)]">{row.applicantEmail}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                    <span className="rounded-full border border-[var(--border-color)] bg-[var(--info-soft)] px-2 py-0.5 text-xs text-[var(--info)]">
                       {TYPE_LABEL[row.applicationType] ?? row.applicationType}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {row.lineOfBusiness !== "-" ? row.lineOfBusiness : <span className="text-slate-600">—</span>}
+                  <td className="px-4 py-3 text-[var(--ink-muted)]">
+                    {row.lineOfBusiness !== "-" ? row.lineOfBusiness : <span className="text-[var(--ink-muted)]">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     {row.assessmentStatus ? (
@@ -74,14 +79,14 @@ export default async function BploAssessmentFeesPage() {
                           {row.assessmentStatus === "GENERATED" ? "TOP Generated" : "Draft Saved"}
                         </span>
                         {row.reassessmentRequested ? (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">Re-assessment Requested</span>
+                          <span className="rounded-full border border-[var(--border-color)] bg-[var(--warning-soft)] px-2 py-0.5 text-xs text-[var(--warning)]">Re-assessment Requested</span>
                         ) : null}
                       </div>
                     ) : (
-                      <span className="text-xs text-slate-600">Not started</span>
+                      <span className="text-xs text-[var(--ink-muted)]">Not started</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{row.lastUpdated}</td>
+                  <td className="px-4 py-3 text-[var(--ink-muted)]">{row.lastUpdated}</td>
                   <td className="px-4 py-3">
                     <Link href={`/bplo/assessment-fees/${row.id}`} className={actionButtonStyles("primary", "sm")}>
                       {row.assessmentStatus ? "View Assessment" : "Assess"}
@@ -92,7 +97,56 @@ export default async function BploAssessmentFeesPage() {
             </tbody>
           </table>
         )}
-      </TableContainer>
+        mobile={rows.length === 0 ? (
+          <div className="p-4 text-sm text-[var(--ink-muted)]">
+            No records available yet. This section will populate as applications are approved by the Department Head.
+          </div>
+        ) : (
+          <div className="space-y-3 p-4">
+            {rows.map((row) => (
+              <article key={row.id} className={bploMobileRecordCardClass}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-all font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{row.businessName}</p>
+                    <p className="mt-1 text-sm text-[var(--ink-muted)]">{row.applicantName}</p>
+                    <p className="break-all text-xs text-[var(--ink-muted)]">{row.applicantEmail}</p>
+                  </div>
+                  <span className="rounded-full border border-[var(--border-color)] bg-[var(--info-soft)] px-2 py-0.5 text-xs text-[var(--info)]">
+                    {TYPE_LABEL[row.applicationType] ?? row.applicationType}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 text-sm text-[var(--ink-muted)]">
+                  <p>
+                    <span className="font-semibold text-[var(--foreground)]">Line of Business:</span>{" "}
+                    {row.lineOfBusiness !== "-" ? row.lineOfBusiness : "—"}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {row.assessmentStatus ? (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${ASSESSMENT_STATUS_BADGE[row.assessmentStatus] ?? ""}`}
+                      >
+                        {row.assessmentStatus === "GENERATED" ? "TOP Generated" : "Draft Saved"}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-[var(--ink-muted)]">Not started</span>
+                    )}
+                    {row.reassessmentRequested ? (
+                      <span className="rounded-full border border-[var(--border-color)] bg-[var(--warning-soft)] px-2 py-0.5 text-xs text-[var(--warning)]">Re-assessment Requested</span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-[var(--ink-muted)]">Last Updated: {row.lastUpdated}</p>
+                </div>
+                <div className="mt-3">
+                  <Link href={`/bplo/assessment-fees/${row.id}`} className={actionButtonStyles("primary", "sm")}>
+                    {row.assessmentStatus ? "View Assessment" : "Assess"}
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      />
     </section>
   );
 }

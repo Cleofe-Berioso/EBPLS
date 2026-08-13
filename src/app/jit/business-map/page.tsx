@@ -15,7 +15,7 @@ export default async function JitBusinessMapPage() {
         eyebrow="JIT"
         title="Business Map"
         description="Read-only released business map for Joint Inspection Team planning and monitoring."
-        badge={<RoleBadge role="VIEW_ONLY" label="JIT" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="JIT" />}
       />
 
       <InfoBanner

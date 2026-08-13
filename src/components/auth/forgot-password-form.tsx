@@ -111,7 +111,7 @@ export function ForgotPasswordForm() {
     <div className="relative z-10 w-full max-w-md">
       <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
         {/* Header */}
-        <div className="bg-[#0b8754] px-8 py-8 text-center text-white">
+        <div className="bg-[var(--primary)] px-8 py-8 text-center text-white">
           <div className="mb-4 flex justify-center">
             <div className="rounded-full bg-white p-2 shadow-sm">
               <Image
@@ -123,9 +123,9 @@ export function ForgotPasswordForm() {
               />
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality of Enrique B. Magalona</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">Municipality of Enrique B. Magalona</p>
           <h1 className="mt-2 text-2xl font-bold text-white">Reset Password</h1>
-          <p className="mt-2 text-sm text-[#d1fae5]">Secure password recovery with OTP verification</p>
+          <p className="mt-2 text-sm text-[var(--primary-soft)]">Secure password recovery with OTP verification</p>
         </div>
 
         <div className="p-8">
@@ -133,8 +133,8 @@ export function ForgotPasswordForm() {
           {step === "success" ? (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <div className="rounded-full bg-green-100 p-4">
-                  <CheckCircle className="h-8 w-8 text-[#0b8754]" />
+                <div className="rounded-full bg-[var(--success-soft)] p-4">
+                  <CheckCircle className="h-8 w-8 text-[var(--success)]" />
                 </div>
               </div>
               <h2 className="text-xl font-bold text-slate-900 mb-2">Password Reset Successful!</h2>
@@ -143,7 +143,7 @@ export function ForgotPasswordForm() {
               </p>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] shadow-sm"
+                className="inline-flex w-full items-center justify-center rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)]"
               >
                 Back to Sign In
               </Link>
@@ -156,7 +156,7 @@ export function ForgotPasswordForm() {
               <form onSubmit={handleRequestOtp} className="space-y-5">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-1">Enter Your Email</h3>
-                  <p className="text-sm text-slate-600">We'll send you a one-time password (OTP) to verify your identity.</p>
+                  <p className="text-sm text-slate-600">We&apos;ll send you a one-time password (OTP) to verify your identity.</p>
                 </div>
 
                 {error && (
@@ -169,12 +169,9 @@ export function ForgotPasswordForm() {
                 )}
 
                 {successMessage && step === "email" && (
-                  <div
-                    role="status"
-                    className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-                  >
+                  <output className="block rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
                     {successMessage}
-                  </div>
+                  </output>
                 )}
 
                 <div>
@@ -191,7 +188,7 @@ export function ForgotPasswordForm() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 bg-slate-50/50"
+                      className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                       placeholder="your.email@example.com"
                     />
                   </div>
@@ -200,12 +197,12 @@ export function ForgotPasswordForm() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm flex items-center justify-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
                 >
                   {loading ? (
                     <>
                       <Loader className="h-4 w-4 animate-spin" />
-                      Sending...
+                      Sending…
                     </>
                   ) : (
                     "Send OTP"
@@ -214,7 +211,7 @@ export function ForgotPasswordForm() {
 
                 <Link
                   href="/login"
-                  className="flex items-center justify-center gap-2 text-sm text-[#0b8754] hover:text-[#096a42] font-semibold"
+                  className="flex items-center justify-center gap-2 text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)]"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Back to Sign In
@@ -230,7 +227,7 @@ export function ForgotPasswordForm() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-1">Enter Your OTP</h3>
                   <p className="text-sm text-slate-600">
-                    We've sent a 6-digit code to <span className="font-semibold">{email}</span>
+                    We&apos;ve sent a 6-digit code to <span className="font-semibold">{email}</span>
                   </p>
                 </div>
 
@@ -259,7 +256,7 @@ export function ForgotPasswordForm() {
                       required
                       value={otp}
                       onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                      className="block w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-center text-2xl font-bold tracking-widest text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 bg-slate-50/50"
+                      className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-center text-2xl font-bold tracking-widest text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                       placeholder="000000"
                     />
                   </div>
@@ -268,12 +265,12 @@ export function ForgotPasswordForm() {
                 <button
                   type="submit"
                   disabled={loading || otp.length !== 6}
-                  className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm flex items-center justify-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
                 >
                   {loading ? (
                     <>
                       <Loader className="h-4 w-4 animate-spin" />
-                      Verifying...
+                      Verifying…
                     </>
                   ) : (
                     "Verify OTP"
@@ -283,9 +280,9 @@ export function ForgotPasswordForm() {
                 <button
                   type="button"
                   onClick={handleResendOtp}
-                  className="w-full text-sm text-[#0b8754] hover:text-[#096a42] font-semibold py-2"
+                  className="w-full py-2 text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)]"
                 >
-                  Didn't receive the code? Request a new one
+                  Didn&apos;t receive the code? Request a new one
                 </button>
 
                 <Link
@@ -331,7 +328,7 @@ export function ForgotPasswordForm() {
                       required
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 bg-slate-50/50"
+                      className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                       placeholder="At least 8 characters"
                     />
                     <button
@@ -359,7 +356,7 @@ export function ForgotPasswordForm() {
                       required
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 bg-slate-50/50"
+                      className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                       placeholder="Confirm your password"
                     />
                     <button
@@ -375,12 +372,12 @@ export function ForgotPasswordForm() {
                 <button
                   type="submit"
                   disabled={loading || newPassword.length < 8 || newPassword !== confirmPassword}
-                  className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm flex items-center justify-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
                 >
                   {loading ? (
                     <>
                       <Loader className="h-4 w-4 animate-spin" />
-                      Resetting...
+                      Resetting…
                     </>
                   ) : (
                     "Reset Password"

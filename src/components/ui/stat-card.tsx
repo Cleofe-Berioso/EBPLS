@@ -2,31 +2,26 @@ import type { ReactNode } from "react";
 
 type StatTone = "green" | "blue" | "amber" | "red" | "slate";
 
-const TONE_STYLES: Record<StatTone, { container: string; icon: string; value: string }> = {
+const TONE_STYLES: Record<StatTone, { container: string; icon: string }> = {
   green: {
-    container: "border-emerald-100",
-    icon: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100",
-    value: "text-slate-900",
+    container: "border-[var(--border-color)]",
+    icon: "bg-[var(--success-soft)] text-[var(--success)] ring-1 ring-[var(--border-color)]",
   },
   blue: {
-    container: "border-sky-100",
-    icon: "bg-sky-50 text-sky-700 ring-1 ring-sky-100",
-    value: "text-slate-900",
+    container: "border-[var(--border-color)]",
+    icon: "bg-[var(--info-soft)] text-[var(--info)] ring-1 ring-[var(--border-color)]",
   },
   amber: {
-    container: "border-amber-100",
-    icon: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
-    value: "text-slate-900",
+    container: "border-[var(--border-color)]",
+    icon: "bg-[var(--warning-soft)] text-[var(--warning)] ring-1 ring-[var(--border-color)]",
   },
   red: {
-    container: "border-rose-100",
-    icon: "bg-rose-50 text-rose-700 ring-1 ring-rose-100",
-    value: "text-slate-900",
+    container: "border-[var(--border-color)]",
+    icon: "bg-[var(--danger-soft)] text-[var(--danger)] ring-1 ring-[var(--border-color)]",
   },
   slate: {
-    container: "border-slate-200",
-    icon: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
-    value: "text-slate-800",
+    container: "border-[var(--border-color)]",
+    icon: "bg-[var(--muted-surface)] text-[var(--ink-muted)] ring-1 ring-[var(--border-color)]",
   },
 };
 
@@ -46,17 +41,17 @@ export function StatCard({
   const palette = TONE_STYLES[tone];
 
   return (
-    <div
-      className={`ui-stat-card app-surface relative p-4 sm:p-5 lg:p-6 ${palette.container} h-full`}
-    >
+    <div className={`ui-stat-card app-surface relative h-full p-3.5 transition-shadow hover:shadow-[var(--card-shadow-hover)] sm:p-4 ${palette.container}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="ui-muted-text text-sm font-medium text-slate-600">{title}</p>
-          <p className={`mt-2 text-3xl font-semibold tracking-tight lg:text-4xl ${palette.value}`}>{value}</p>
-          {subtitle ? <p className="ui-muted-text mt-2 text-sm leading-6 text-slate-500">{subtitle}</p> : null}
+          <p className="ui-caption font-semibold uppercase tracking-wide">{title}</p>
+          <p className="ui-stat-value mt-1.5 tabular-nums">{value}</p>
+          {subtitle ? <p className="ui-caption mt-1.5 line-clamp-2">{subtitle}</p> : null}
         </div>
         {icon ? (
-          <div className={`rounded-xl p-2.5 sm:p-3 flex-shrink-0 ${palette.icon}`}>{icon}</div>
+          <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] ${palette.icon}`}>
+            {icon}
+          </div>
         ) : null}
       </div>
     </div>

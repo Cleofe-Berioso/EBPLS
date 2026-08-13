@@ -1,9 +1,11 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { mapDocumentValidationStatusToUi } from "@/lib/document-validation";
 import { getAuditLogs } from "@/lib/audit-log";
 import { getPaymentReferencesFromFormData } from "@/lib/payment-reference";
 import { toMoneyNumber } from "@/lib/money";
+import { buildPaginatedResult, clampPage, clampPageSize, resolvePagination, type PaginatedResult } from "@/lib/pagination";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -157,6 +159,8 @@ export interface SuperAdminApplicationDetail {
     mimeType: string;
     sizeBytes: number;
     uploadedAt: string;
+    validationStatus: string;
+    validationRemarks: string | null;
   }>;
   feeAssessment: {
     assessmentNumber: string | null;
@@ -271,16 +275,6 @@ function parseDateAtEndOfDay(value?: string): Date | undefined {
 
   const parsed = new Date(`${trimmed}T23:59:59.999Z`);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function clampPage(value?: number): number {
-  if (!value || Number.isNaN(value) || value < 1) return 1;
-  return Math.floor(value);
-}
-
-function clampPageSize(value?: number): number {
-  if (!value || Number.isNaN(value)) return 25;
-  return Math.min(Math.max(Math.floor(value), 1), 100);
 }
 
 function humanizeAuditValue(value: string): string {
@@ -484,40 +478,54 @@ export async function getSuperAdminDashboardSummary(): Promise<SuperAdminDashboa
 }
 
 export async function listSuperAdminApplications(
-  search?: string
-): Promise<SuperAdminApplicationListRow[]> {
+  search?: string,
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<SuperAdminApplicationListRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
   const normalizedSearch = search?.trim();
 
-  const rows = await prisma.businessApplication.findMany({
-    where: normalizedSearch
-      ? {
-          OR: [
-            { applicationNumber: { contains: normalizedSearch } },
-            { applicant: { email: { contains: normalizedSearch } } },
-          ],
-        }
-      : undefined,
-    include: {
-      applicant: { select: { email: true } },
-      businessRecord: { select: { businessName: true } },
-      feeAssessment: { select: { assessmentNumber: true } },
-      permitIssuance: { select: { documentNumber: true } },
-    },
-    orderBy: [{ updatedAt: "desc" }],
-  });
+  const where = normalizedSearch
+    ? {
+        OR: [
+          { applicationNumber: { contains: normalizedSearch, mode: "insensitive" as const } },
+          { applicant: { email: { contains: normalizedSearch, mode: "insensitive" as const } } },
+        ],
+      }
+    : undefined;
 
-  return rows.map((row) => ({
-    id: row.id,
-    applicationNumber: row.applicationNumber,
-    businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
-    applicantEmail: row.applicant.email,
-    applicationType: row.applicationType as ApplicationType,
-    status: mapDbStatusToUi(row.status),
-    topNumber: row.feeAssessment?.assessmentNumber ?? null,
-    permitOrCertificateNumber: row.permitIssuance?.documentNumber ?? null,
-    dateSubmitted: toDateOnly(row.submittedAt),
-    lastUpdated: toDateOnly(row.updatedAt),
-  }));
+  const [rows, totalCount] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where,
+      include: {
+        applicant: { select: { email: true } },
+        businessRecord: { select: { businessName: true } },
+        feeAssessment: { select: { assessmentNumber: true } },
+        permitIssuance: { select: { documentNumber: true } },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.businessApplication.count({ where }),
+  ]);
+
+  return buildPaginatedResult(
+    rows.map((row) => ({
+      id: row.id,
+      applicationNumber: row.applicationNumber,
+      businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
+      applicantEmail: row.applicant.email,
+      applicationType: row.applicationType as ApplicationType,
+      status: mapDbStatusToUi(row.status),
+      topNumber: row.feeAssessment?.assessmentNumber ?? null,
+      permitOrCertificateNumber: row.permitIssuance?.documentNumber ?? null,
+      dateSubmitted: toDateOnly(row.submittedAt),
+      lastUpdated: toDateOnly(row.updatedAt),
+    })),
+    totalCount,
+    page,
+    pageSize
+  );
 }
 
 export async function getSuperAdminApplicationDetail(
@@ -536,6 +544,8 @@ export async function getSuperAdminApplicationDetail(
           mimeType: true,
           sizeBytes: true,
           uploadedAt: true,
+          validationStatus: true,
+          validationRemarks: true,
         },
         orderBy: { uploadedAt: "asc" },
       },
@@ -670,6 +680,8 @@ export async function getSuperAdminApplicationDetail(
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
       uploadedAt: doc.uploadedAt.toISOString(),
+      validationStatus: mapDocumentValidationStatusToUi(doc.validationStatus),
+      validationRemarks: doc.validationRemarks ?? null,
     })),
     feeAssessment: {
       assessmentNumber: row.feeAssessment?.assessmentNumber ?? null,
@@ -866,55 +878,72 @@ export async function getSuperAdminActivityFilterOptions(): Promise<SuperAdminAc
   };
 }
 
-export async function listSuperAdminUsers(filters?: {
-  search?: string;
-  role?: "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
-  status?: "ALL" | "ACTIVE" | "DISABLED";
-}): Promise<SuperAdminUserRow[]> {
+export async function listSuperAdminUsers(
+  filters?: {
+    search?: string;
+    role?: "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
+    status?: "ALL" | "ACTIVE" | "DISABLED";
+    page?: number | string;
+    pageSize?: number | string;
+  }
+): Promise<PaginatedResult<SuperAdminUserRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(filters);
   const normalizedSearch = filters?.search?.trim();
   const roleFilter = filters?.role ?? "ALL";
   const statusFilter = filters?.status ?? "ALL";
 
-  const users = await prisma.user.findMany({
-    where: {
-      ...(normalizedSearch
-        ? {
-            OR: [
-              { name: { contains: normalizedSearch } },
-              { email: { contains: normalizedSearch } },
-            ],
-          }
-        : {}),
-      ...(roleFilter !== "ALL" ? { role: roleFilter } : {}),
-      ...(statusFilter === "ALL"
-        ? {}
-        : {
-            isActive: statusFilter === "ACTIVE",
-          }),
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-      updatedAt: true,
-      profileImageStoragePath: true,
-    },
-    orderBy: [{ createdAt: "desc" }],
-  });
+  const where = {
+    ...(normalizedSearch
+      ? {
+          OR: [
+            { name: { contains: normalizedSearch, mode: "insensitive" as const } },
+            { email: { contains: normalizedSearch, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    ...(roleFilter !== "ALL" ? { role: roleFilter } : {}),
+    ...(statusFilter === "ALL"
+      ? {}
+      : {
+          isActive: statusFilter === "ACTIVE",
+        }),
+  };
 
-  return users.map((user) => ({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    status: user.isActive ? "ACTIVE" : "DISABLED",
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt.toISOString(),
-    profileImageStoragePath: user.profileImageStoragePath,
-  }));
+  const [users, totalCount] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        profileImageStoragePath: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  return buildPaginatedResult(
+    users.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.isActive ? "ACTIVE" : "DISABLED",
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+      profileImageStoragePath: user.profileImageStoragePath,
+    })),
+    totalCount,
+    page,
+    pageSize
+  );
 }
 
 export async function getSuperAdminUserSummary(): Promise<SuperAdminUserSummary> {
@@ -1328,7 +1357,7 @@ export interface InspectionComplianceReportFilters {
   inspectionStatus?: string;
 }
 
-const VALID_COMPLIANCE_STATUSES = ["COMPLIANT", "NON_COMPLIANT"] as const;
+const VALID_COMPLIANCE_STATUSES = ["PENDING_REVIEW", "COMPLIANT", "NON_COMPLIANT"] as const;
 function parseComplianceStatus(
   v?: string
 ): (typeof VALID_COMPLIANCE_STATUSES)[number] | undefined {
@@ -1406,7 +1435,7 @@ export async function getInspectionComplianceReport(
     businessName: row.businessRecord?.businessName ?? "-",
     applicationNumber: row.application?.applicationNumber ?? "-",
     inspector: row.inspector?.name ?? "-",
-    complianceStatus: row.complianceStatus === "COMPLIANT" ? "Compliant" : "Non-Compliant",
+    complianceStatus: row.complianceStatus === "COMPLIANT" ? "Compliant" : row.complianceStatus === "PENDING_REVIEW" ? "Pending Review" : "Non-Compliant",
     inspectionStatus: labelInspectionStatus(row.status),
     decidedBy: row.decidedBy?.name ?? "-",
     decidedAt: toDateOnly(row.decidedAt),
@@ -1476,7 +1505,7 @@ export async function getAuditTrailReport(
   const startDate = parseDateAtStartOfDay(filters.from);
   const endDate = parseDateAtEndOfDay(filters.to);
   const actorRole = parseAuditActorRole(filters.actorRole);
-  const module = parseAuditModule(filters.module);
+  const auditModule = parseAuditModule(filters.module);
 
   const rows = await prisma.auditLog.findMany({
     where: {
@@ -1489,7 +1518,7 @@ export async function getAuditTrailReport(
           }
         : {}),
       ...(actorRole ? { actorRole } : {}),
-      ...(module ? { module } : {}),
+      ...(auditModule ? { module: auditModule } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 1000,

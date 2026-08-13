@@ -1,4 +1,10 @@
 import Link from "next/link";
+import {
+  superadminFormControlClass,
+  superadminMobileRecordCardClass,
+  superadminSummaryLabelClass,
+  superadminTableClass,
+} from "@/components/superadmin/superadmin-ui-styles";
 import { PageHeader } from "@/components/ui/page-header";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -9,22 +15,31 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import type { ApplicationStatus } from "@/lib/applicant-types";
 import { listSuperAdminApplications } from "@/lib/superadmin-data";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 interface PageProps {
-  searchParams: Promise<{ search?: string }>;
+  searchParams: Promise<{ search?: string; page?: string; pageSize?: string }>;
 }
 
 export default async function SuperAdminApplicationsPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const rows = await listSuperAdminApplications(params.search);
+  const result = await listSuperAdminApplications(params.search, {
+    page: params.page,
+    pageSize: params.pageSize,
+  });
+  const rows = result.records;
+  const queryParams = {
+    search: params.search,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
 
   return (
-    <section className="space-y-4">
+    <section className="ui-page-stack">
       <PageHeader
-        eyebrowClassName="text-slate-600"
         title="All Applications"
         description="Read-only directory of application records across the full applicant-to-BPLO workflow."
-        badge={<RoleBadge role="VIEW_ONLY" label="View-Only Oversight" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="View-Only Oversight" />}
       />
 
       <InfoBanner
@@ -40,7 +55,8 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
             name="search"
             defaultValue={params.search ?? ""}
             placeholder="Search by application number or applicant email"
-            className="w-full max-w-md rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            aria-label="Search applications by number or email"
+            className={`max-w-md ${superadminFormControlClass}`}
           />
           <button type="submit" className={actionButtonStyles("readOnly", "sm")}>
             Search
@@ -53,7 +69,8 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
 
       <ResponsiveDataTable
         title="Application Records"
-        description={`${rows.length} application${rows.length === 1 ? "" : "s"} matched the current search.`}
+        description={`${result.totalCount} application${result.totalCount === 1 ? "" : "s"} matched the current search.`}
+        switchAt="xl"
         table={rows.length === 0 ? (
           <div className="p-5">
             <EmptyState
@@ -62,40 +79,36 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
             />
           </div>
         ) : (
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-700">
+          <table className={superadminTableClass}>
+            <thead>
               <tr>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Application Number</th>
-                <th className="px-4 py-3 font-semibold">Business Name</th>
-                <th className="px-4 py-3 font-semibold">Applicant Email</th>
-                <th className="px-4 py-3 font-semibold">Application Type</th>
-                <th className="px-4 py-3 font-semibold">TOP Number</th>
-                <th className="px-4 py-3 font-semibold">Permit / Certificate No.</th>
-                <th className="px-4 py-3 font-semibold">Date Submitted</th>
-                <th className="px-4 py-3 font-semibold">Last Updated</th>
-                <th className="px-4 py-3 font-semibold">Action</th>
+                <th>Status</th>
+                <th>Application Number</th>
+                <th>Business Name</th>
+                <th>Applicant Email</th>
+                <th>Application Type</th>
+                <th>TOP Number</th>
+                <th>Permit / Certificate No.</th>
+                <th>Date Submitted</th>
+                <th>Last Updated</th>
+                <th>Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="align-top hover:bg-slate-50/60">
-                  <td className="px-4 py-3">
+                <tr key={row.id} className="align-top">
+                  <td>
                     <StatusBadge status={row.status as ApplicationStatus} />
                   </td>
-                  <td className="max-w-[11rem] break-all px-4 py-3 font-medium text-slate-900">{row.applicationNumber}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.businessName}</td>
-                  <td className="max-w-[13rem] break-all px-4 py-3 text-slate-600">{row.applicantEmail}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.applicationType}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-700">
-                    {row.topNumber ?? "-"}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-700">
-                    {row.permitOrCertificateNumber ?? "-"}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{row.dateSubmitted}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.lastUpdated}</td>
-                  <td className="px-4 py-3">
+                  <td className="max-w-[11rem] break-all font-medium text-[var(--foreground)]">{row.applicationNumber}</td>
+                  <td className="text-[var(--ink-muted)]">{row.businessName}</td>
+                  <td className="max-w-[13rem] break-all text-[var(--ink-muted)]">{row.applicantEmail}</td>
+                  <td className="text-[var(--ink-muted)]">{row.applicationType}</td>
+                  <td className="font-mono ui-caption">{row.topNumber ?? "-"}</td>
+                  <td className="font-mono ui-caption">{row.permitOrCertificateNumber ?? "-"}</td>
+                  <td className="text-[var(--ink-muted)]">{row.dateSubmitted}</td>
+                  <td className="text-[var(--ink-muted)]">{row.lastUpdated}</td>
+                  <td>
                     <Link
                       href={`/superadmin/applications/${row.id}`}
                       className={actionButtonStyles("secondary", "sm")}
@@ -118,16 +131,18 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
         ) : (
           <div className="space-y-3 p-4">
             {rows.map((row) => (
-              <article key={row.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <article key={row.id} className={superadminMobileRecordCardClass}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="break-all font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                    <p className="break-all text-xs text-slate-500">{row.applicantEmail}</p>
+                    <p className="break-all font-mono ui-caption">{row.applicationNumber}</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{row.businessName}</p>
+                    <p className="break-all ui-caption">{row.applicantEmail}</p>
                   </div>
                   <StatusBadge status={row.status as ApplicationStatus} />
                 </div>
-                <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">{row.applicationType} • Submitted: {row.dateSubmitted}</p>
+                <p className={`mt-2 ${superadminSummaryLabelClass}`}>
+                  {row.applicationType} • Submitted: {row.dateSubmitted}
+                </p>
                 <div className="mt-3">
                   <Link
                     href={`/superadmin/applications/${row.id}`}
@@ -140,6 +155,17 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
             ))}
           </div>
         )}
+      />
+
+      <PaginationControls
+        basePath="/superadmin/applications"
+        queryParams={queryParams}
+        page={result.page}
+        pageSize={result.pageSize}
+        totalCount={result.totalCount}
+        totalPages={result.totalPages}
+        recordLabel="applications"
+        sortHint="Recently updated applications appear first."
       />
     </section>
   );

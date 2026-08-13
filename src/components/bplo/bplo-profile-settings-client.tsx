@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Loader2, UserCircle2 } from "lucide-react";
 import { SectionCard } from "@/components/ui/section-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { bploFormControlClass, bploPanelClass } from "@/components/bplo/bplo-ui-styles";
 import {
   PROFILE_IMAGE_FILE_INPUT_ACCEPT,
   validateProfileImageFile,
@@ -182,7 +183,7 @@ export function BploProfileSettingsClient({ initialProfile }: { initialProfile: 
     <div className="space-y-4">
       <SectionCard title="Profile Picture" description="Upload your staff profile photo for top-bar identity.">
         <div className="flex flex-col gap-4 md:flex-row md:items-start">
-          <div className="inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 text-slate-500">
+          <div className="inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--muted-surface)] text-[var(--ink-muted)]">
             {imagePreviewUrl ? (
               <img src={imagePreviewUrl} alt="Selected profile" className="h-full w-full object-cover" />
             ) : profile.profilePictureUrl ? (
@@ -196,8 +197,9 @@ export function BploProfileSettingsClient({ initialProfile }: { initialProfile: 
             <input
               type="file"
               accept={PROFILE_IMAGE_FILE_INPUT_ACCEPT}
+              aria-label="Upload profile picture"
               onChange={(event) => onSelectImage(event.currentTarget.files?.[0] ?? null)}
-              className="block w-full max-w-md rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+              className={`block w-full max-w-md rounded-xl border border-[var(--border-color)] bg-[var(--surface)] px-3 py-2 text-sm ${bploFormControlClass}`}
             />
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -216,7 +218,7 @@ export function BploProfileSettingsClient({ initialProfile }: { initialProfile: 
                 )}
               </button>
             </div>
-            {imageError ? <p className="text-sm text-red-600">{imageError}</p> : null}
+            {imageError ? <p className="text-sm text-[var(--danger)]">{imageError}</p> : null}
           </div>
         </div>
       </SectionCard>
@@ -224,50 +226,50 @@ export function BploProfileSettingsClient({ initialProfile }: { initialProfile: 
       <SectionCard title="Name Setup" description="Set your personal BPLO display name.">
         <form className="space-y-3" onSubmit={saveProfileName}>
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1 text-sm text-slate-700">
+            <label className="space-y-1 text-sm text-[var(--ink-muted)]">
               <span className="font-medium">First Name</span>
               <input
                 value={form.firstName}
                 onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))}
                 required
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={`w-full rounded-xl border border-[var(--border-color)] px-3 py-2 ${bploFormControlClass}`}
               />
             </label>
 
-            <label className="space-y-1 text-sm text-slate-700">
+            <label className="space-y-1 text-sm text-[var(--ink-muted)]">
               <span className="font-medium">Last Name</span>
               <input
                 value={form.lastName}
                 onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))}
                 required
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={`w-full rounded-xl border border-[var(--border-color)] px-3 py-2 ${bploFormControlClass}`}
               />
             </label>
 
-            <label className="space-y-1 text-sm text-slate-700">
+            <label className="space-y-1 text-sm text-[var(--ink-muted)]">
               <span className="font-medium">Middle Name</span>
               <input
                 value={form.middleName}
                 onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={`w-full rounded-xl border border-[var(--border-color)] px-3 py-2 ${bploFormControlClass}`}
               />
             </label>
 
-            <label className="space-y-1 text-sm text-slate-700">
+            <label className="space-y-1 text-sm text-[var(--ink-muted)]">
               <span className="font-medium">Suffix</span>
               <input
                 value={form.suffix}
                 onChange={(event) => setForm((current) => ({ ...current, suffix: event.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                className={`w-full rounded-xl border border-[var(--border-color)] px-3 py-2 ${bploFormControlClass}`}
               />
             </label>
           </div>
 
           <div className="grid gap-2 md:grid-cols-2">
-            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <p className={`${bploPanelClass} text-sm text-[var(--ink-muted)]`}>
               <span className="font-semibold">Email:</span> {profile.email}
             </p>
-            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <p className={`${bploPanelClass} text-sm text-[var(--ink-muted)]`}>
               <span className="font-semibold">Role:</span> {profile.role}
             </p>
           </div>
@@ -283,8 +285,8 @@ export function BploProfileSettingsClient({ initialProfile }: { initialProfile: 
                 "Save Name"
               )}
             </button>
-            {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {message ? <p className="text-sm text-[var(--success)]">{message}</p> : null}
+            {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
           </div>
         </form>
       </SectionCard>

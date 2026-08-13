@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { superadminSummaryRowClass } from "@/components/superadmin/superadmin-ui-styles";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
@@ -19,12 +20,11 @@ export default async function SuperAdminReportsPage() {
   const totalClosure = reports.applicationsByType.find((row) => row.type === "CLOSURE")?.count ?? 0;
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
-        eyebrowClassName="text-slate-600"
         title="Reports"
         description="View-only reporting cards, grouped summaries, and Business Location monitoring sourced from existing live records."
-        badge={<RoleBadge role="VIEW_ONLY" label="Read-Only Reports" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Read-Only Reports" />}
       />
 
       <InfoBanner
@@ -79,12 +79,9 @@ export default async function SuperAdminReportsPage() {
           ) : (
             <div className="space-y-2">
               {reports.applicationsByStatus.map((row) => (
-                <div
-                  key={row.status}
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                >
-                  <span className="text-sm font-medium text-slate-700">{row.status}</span>
-                  <span className="text-sm font-semibold text-slate-900">
+                <div key={row.status} className={superadminSummaryRowClass}>
+                  <span className="text-sm font-medium text-[var(--ink-muted)]">{row.status}</span>
+                  <span className="text-sm font-semibold text-[var(--foreground)]">
                     {row.count.toLocaleString("en-PH")}
                   </span>
                 </div>
@@ -105,12 +102,9 @@ export default async function SuperAdminReportsPage() {
           ) : (
             <div className="space-y-2">
               {reports.applicationsByType.map((row) => (
-                <div
-                  key={row.type}
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                >
-                  <span className="text-sm font-medium text-slate-700">{row.type}</span>
-                  <span className="text-sm font-semibold text-slate-900">
+                <div key={row.type} className={superadminSummaryRowClass}>
+                  <span className="text-sm font-medium text-[var(--ink-muted)]">{row.type}</span>
+                  <span className="text-sm font-semibold text-[var(--foreground)]">
                     {row.count.toLocaleString("en-PH")}
                   </span>
                 </div>
@@ -179,13 +173,13 @@ export default async function SuperAdminReportsPage() {
 type CardTone = "blue" | "green" | "indigo" | "amber" | "slate" | "purple" | "red";
 
 const cardToneStyles: Record<CardTone, { border: string; icon: string; title: string; btn: string }> = {
-  blue:   { border: "border-blue-200",   icon: "bg-blue-100 text-blue-600",   title: "text-blue-900",   btn: "border-blue-400 bg-blue-600 hover:bg-blue-700 text-white" },
-  green:  { border: "border-green-200",  icon: "bg-green-100 text-green-600",  title: "text-green-900",  btn: "border-green-400 bg-green-600 hover:bg-green-700 text-white" },
-  indigo: { border: "border-indigo-200", icon: "bg-indigo-100 text-indigo-600", title: "text-indigo-900", btn: "border-indigo-400 bg-indigo-600 hover:bg-indigo-700 text-white" },
-  amber:  { border: "border-amber-200",  icon: "bg-amber-100 text-amber-600",  title: "text-amber-900",  btn: "border-amber-400 bg-amber-600 hover:bg-amber-700 text-white" },
-  slate:  { border: "border-slate-200",  icon: "bg-slate-100 text-slate-600",  title: "text-slate-900",  btn: "border-slate-400 bg-slate-600 hover:bg-slate-700 text-white" },
-  purple: { border: "border-purple-200", icon: "bg-purple-100 text-purple-600", title: "text-purple-900", btn: "border-purple-400 bg-purple-600 hover:bg-purple-700 text-white" },
-  red:    { border: "border-red-200",    icon: "bg-red-100 text-red-600",    title: "text-red-900",    btn: "border-red-400 bg-red-600 hover:bg-red-700 text-white" },
+  blue:   { border: "border-[var(--info)]", icon: "bg-[var(--info-soft)] text-[var(--info)]", title: "text-[var(--foreground)]", btn: "border-[var(--info)] bg-[var(--info)] hover:opacity-90 text-white" },
+  green:  { border: "border-[var(--success)]", icon: "bg-[var(--success-soft)] text-[var(--success)]", title: "text-[var(--foreground)]", btn: "border-[var(--success)] bg-[var(--success)] hover:opacity-90 text-white" },
+  indigo: { border: "border-[var(--info)]", icon: "bg-[var(--info-soft)] text-[var(--info)]", title: "text-[var(--foreground)]", btn: "border-[var(--info)] bg-[var(--info)] hover:opacity-90 text-white" },
+  amber:  { border: "border-[var(--warning)]", icon: "bg-[var(--warning-soft)] text-[var(--warning)]", title: "text-[var(--foreground)]", btn: "border-[var(--warning)] bg-[var(--warning)] hover:opacity-90 text-white" },
+  slate:  { border: "border-[var(--border-color)]",  icon: "bg-[var(--muted-surface)] text-[var(--ink-muted)]",  title: "text-[var(--foreground)]",  btn: "border-[var(--border-color)] bg-[var(--foreground)] hover:opacity-90 text-[var(--surface)]" },
+  purple: { border: "border-[var(--accent)]", icon: "bg-[var(--accent-soft)] text-[var(--accent)]", title: "text-[var(--foreground)]", btn: "border-[var(--accent)] bg-[var(--accent)] hover:opacity-90 text-white" },
+  red:    { border: "border-[var(--danger)]", icon: "bg-[var(--danger-soft)] text-[var(--danger)]", title: "text-[var(--foreground)]", btn: "border-[var(--danger)] bg-[var(--danger)] hover:opacity-90 text-white" },
 };
 
 function PrintableReportCard({
@@ -201,13 +195,13 @@ function PrintableReportCard({
 }) {
   const styles = cardToneStyles[tone];
   return (
-    <div className={`flex flex-col gap-3 rounded-xl border p-4 ${styles.border} bg-white`}>
+    <div className={`flex flex-col gap-3 rounded-[var(--radius-card)] border bg-[var(--surface)] p-4 ${styles.border}`}>
       <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold ${styles.icon}`}>
         ⬜
       </div>
       <div className="flex-1 space-y-1">
         <p className={`text-sm font-semibold ${styles.title}`}>{title}</p>
-        <p className="text-xs leading-relaxed text-slate-500">{description}</p>
+        <p className="ui-caption leading-relaxed">{description}</p>
       </div>
       <Link
         href={href}

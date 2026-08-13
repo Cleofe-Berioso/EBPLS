@@ -1,16 +1,24 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE } from "@/lib/applicant-api";
 import { mapDbStatusToUi, isEditableStatus } from "@/lib/application-mappers";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
 import { toMoneyNumber } from "@/lib/money";
 import { resolveBucketByMimeType } from "@/lib/document-storage";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
+import { mapDocumentValidationStatusToUi } from "@/lib/document-validation";
 import {
   DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
   MAX_DOCUMENT_FILE_SIZE_BYTES,
   validateDocumentFileUpload,
 } from "@/lib/document-upload-rules";
-import { APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE } from "@/lib/applicant-api";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
+import {
+  extractRevocationApplicantMessage,
+  isRevocationHistoryRemarks,
+  resolveRevocationNotificationTitle,
+} from "@/lib/revocation-notification-copy";
+import type { NotificationType } from "@/types/notifications";
 import {
   applyLockedBusinessFields,
   BUSINESS_ACTIVITY_OPTIONS,
@@ -18,6 +26,8 @@ import {
   isRecognizedEbMagalonaBarangay as isRecognizedEbMagalonaBarangayFromRules,
   normalizeBusinessInfo,
   validateBusinessIdentityFormats,
+  requiresCorporationNationality,
+  isValidCorporationNationality,
 } from "@/lib/business-rules";
 import {
   EB_MAGALONA_CITY,
@@ -81,6 +91,9 @@ interface SafeApplicantDocument {
   mimeType: string;
   sizeBytes: number;
   uploadedAt: Date;
+  validationStatus: string;
+  validationRemarks: string | null;
+  validatedAt: Date | null;
 }
 
 interface SubmitFileInput {
@@ -107,6 +120,9 @@ function toSafeApplicantDocument(doc: {
   mimeType: string;
   sizeBytes: number;
   uploadedAt: Date;
+  validationStatus?: string;
+  validationRemarks?: string | null;
+  validatedAt?: Date | null;
 }): SafeApplicantDocument {
   return {
     id: doc.id,
@@ -115,6 +131,9 @@ function toSafeApplicantDocument(doc: {
     mimeType: doc.mimeType,
     sizeBytes: doc.sizeBytes,
     uploadedAt: doc.uploadedAt,
+    validationStatus: mapDocumentValidationStatusToUi(doc.validationStatus),
+    validationRemarks: doc.validationRemarks ?? null,
+    validatedAt: doc.validatedAt ?? null,
   };
 }
 
@@ -741,6 +760,13 @@ function validateSubmitPayload(
       missingFields.push("nationality");
     }
 
+    if (requiresCorporationNationality(normalizedFormData.businessType)) {
+      const corpNationality = normalizedFormData.corporationNationality?.trim() ?? "";
+      if (!corpNationality || !isValidCorporationNationality(corpNationality)) {
+        missingFields.push("corporationNationality");
+      }
+    }
+
     if (!ALLOWED_PAYMENT_FREQUENCIES.includes(normalizedFormData.paymentFrequency)) {
       missingFields.push("paymentFrequency (must be ANNUAL, BI_ANNUAL, or QUARTERLY)");
     }
@@ -748,6 +774,11 @@ function validateSubmitPayload(
     const normalizedPhone = normalizedFormData.phone.replace(/[\s-]/g, "");
     if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
       missingFields.push("phone (must be a valid Philippine mobile number)");
+    }
+
+    const normalizedTelephone = normalizedFormData.telephone?.replace(/[\s-]/g, "") ?? "";
+    if (normalizedTelephone.length > 0 && !/^(\+63|0)?[\d]{7,12}$/.test(normalizedTelephone)) {
+      missingFields.push("telephone (invalid format)");
     }
 
     const email = normalizedFormData.email.trim();
@@ -936,6 +967,50 @@ export async function listApplicantApplications(applicantId: string): Promise<Ap
   return getCachedApplicantApplications(applicantId);
 }
 
+export async function listApplicantApplicationsPaginated(
+  applicantId: string,
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<ApplicantApplicationRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+
+  const [applications, totalCount] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where: { applicantId },
+      include: {
+        documents: true,
+        businessRecord: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip,
+      take,
+    }),
+    prisma.businessApplication.count({ where: { applicantId } }),
+  ]);
+
+  return buildPaginatedResult(
+    (applications as ApplicationWithDocs[]).map(mapApplicationToRow),
+    totalCount,
+    page,
+    pageSize
+  );
+}
+
+export async function getApplicantLatestApplication(applicantId: string): Promise<ApplicantApplicationRow | null> {
+  const application = await prisma.businessApplication.findFirst({
+    where: { applicantId },
+    include: {
+      documents: true,
+      businessRecord: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!application) return null;
+  return mapApplicationToRow(application as ApplicationWithDocs);
+}
+
 export async function getApplicantApplicationDetail(applicantId: string, applicationId: string) {
   const app = await prisma.businessApplication.findFirst({
     where: {
@@ -984,6 +1059,9 @@ export async function getApplicantApplicationDetail(applicantId: string, applica
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
       uploadedAt: doc.uploadedAt.toISOString(),
+      validationStatus: mapDocumentValidationStatusToUi(doc.validationStatus),
+      validationRemarks: doc.validationRemarks ?? null,
+      validatedAt: doc.validatedAt ? doc.validatedAt.toISOString() : null,
     })),
     history: app.history.map((item: any) => ({
       id: item.id,
@@ -1274,6 +1352,8 @@ export async function saveApplicantApplication(
                 replacedStoragePaths.push(existingDoc.storagePath);
               }
 
+              const storageChanged = existingDoc.storagePath !== doc.storagePath;
+
               await tx.applicationDocument.update({
                 where: { id: existingDoc.id },
                 data: {
@@ -1286,6 +1366,14 @@ export async function saveApplicantApplication(
                   sizeBytes: doc.sizeBytes,
                   fileSize: doc.fileSize,
                   uploadedAt: new Date(),
+                  ...(storageChanged
+                    ? {
+                        validationStatus: "PENDING_REVIEW",
+                        validationRemarks: null,
+                        validatedAt: null,
+                        validatedById: null,
+                      }
+                    : {}),
                 },
               });
             } else {
@@ -1470,6 +1558,7 @@ export async function createApplicantDocument(
   });
 
   if (existing) {
+    const storageChanged = existing.storagePath !== input.storagePath;
     const updated = await prisma.applicationDocument.update({
       where: { id: existing.id },
       data: {
@@ -1482,6 +1571,14 @@ export async function createApplicantDocument(
         sizeBytes: input.sizeBytes,
         fileSize: input.fileSize ?? input.sizeBytes,
         uploadedAt: new Date(),
+        ...(storageChanged
+          ? {
+              validationStatus: "PENDING_REVIEW",
+              validationRemarks: null,
+              validatedAt: null,
+              validatedById: null,
+            }
+          : {}),
       },
     } as any);
     return updated;
@@ -1567,8 +1664,16 @@ export async function deleteApplicantDocument(applicantId: string, applicationId
 
 // Map a DB application status to a NotificationType for the notification dropdown.
 function dbStatusToNotificationType(
-  dbStatus: string
-): "APPLICATION_SUBMITTED" | "RETURNED_FOR_CORRECTION" | "APPROVED_FOR_PAYMENT" | "REJECTED" | "ASSESSMENT_GENERATED" | "PAYMENT_VERIFIED" | "PERMIT_RELEASED" | "CLOSURE_APPROVED" | "INSPECTION_RELATED" {
+  dbStatus: string,
+  fromStatus?: string | null,
+  remarks?: string | null
+): NotificationType {
+  if (isRevocationHistoryRemarks(remarks)) {
+    if (dbStatus === "REVOCATION_REVIEW") return "REVOCATION_REVIEW";
+    if (dbStatus === "REVOKED") return "REVOCATION_APPROVED";
+    if (dbStatus === "RELEASED" && fromStatus === "REVOCATION_REVIEW") return "REVOCATION_DENIED";
+  }
+
   switch (dbStatus) {
     case "SUBMITTED":
       return "APPLICATION_SUBMITTED";
@@ -1578,8 +1683,11 @@ function dbStatusToNotificationType(
     case "APPROVED_FOR_PAYMENT":
       return "APPROVED_FOR_PAYMENT";
     case "REJECTED":
-    case "REVOKED":
       return "REJECTED";
+    case "REVOKED":
+      return "REVOCATION_APPROVED";
+    case "REVOCATION_REVIEW":
+      return "REVOCATION_REVIEW";
     case "PAID":
     case "FOR_RELEASE":
       return "PAYMENT_VERIFIED";
@@ -1594,9 +1702,33 @@ function dbStatusToNotificationType(
 function buildNotificationContent(
   dbStatus: string,
   applicationNumber: string,
-  remarks: string | null
+  remarks: string | null,
+  fromStatus?: string | null
 ): { title: string; message: string } {
   const appNum = applicationNumber ?? "your application";
+
+  if (isRevocationHistoryRemarks(remarks)) {
+    const extracted = extractRevocationApplicantMessage(remarks);
+    if (dbStatus === "REVOCATION_REVIEW") {
+      return {
+        title: resolveRevocationNotificationTitle("REVOCATION_REVIEW_ENTERED"),
+        message: extracted ?? `Application ${appNum} is under permit revocation review.`,
+      };
+    }
+    if (dbStatus === "REVOKED") {
+      return {
+        title: resolveRevocationNotificationTitle("REVOCATION_APPROVED"),
+        message: extracted ?? `Your business permit for application ${appNum} has been revoked.`,
+      };
+    }
+    if (dbStatus === "RELEASED" && fromStatus === "REVOCATION_REVIEW") {
+      return {
+        title: resolveRevocationNotificationTitle("REVOCATION_DENIED"),
+        message: extracted ?? `The revocation request for application ${appNum} was denied and your permit status was restored.`,
+      };
+    }
+  }
+
   switch (dbStatus) {
     case "SUBMITTED":
       return {
@@ -1642,9 +1774,16 @@ function buildNotificationContent(
           ? `Application ${appNum} was rejected: ${remarks}`
           : `Application ${appNum} has been rejected. Please contact BPLO for details.`,
       };
+    case "REVOCATION_REVIEW":
+      return {
+        title: "Permit Revocation Under Review",
+        message: remarks
+          ? `Application ${appNum} is under permit revocation review: ${remarks}`
+          : `Application ${appNum} is under permit revocation review. Contact BPLO for details.`,
+      };
     case "REVOKED":
       return {
-        title: "Permit Revoked",
+        title: "Business Permit Revoked",
         message: remarks
           ? `Permit for application ${appNum} was revoked: ${remarks}`
           : `Your business permit for application ${appNum} has been revoked.`,
@@ -1652,7 +1791,6 @@ function buildNotificationContent(
     case "UNDER_REVIEW":
     case "DEPARTMENT_HEAD_REVIEW":
     case "DEPARTMENT_HEAD_APPROVED":
-    case "REVOCATION_REVIEW":
       return {
         title: "Application Under Review",
         message: `Application ${appNum} is currently being reviewed by the BPLO.`,
@@ -1687,13 +1825,14 @@ const getCachedApplicantNotifications = cache(async (applicantId: string) => {
       const { title, message } = buildNotificationContent(
         item.toStatus,
         app.applicationNumber,
-        item.remarks ?? null
+        item.remarks ?? null,
+        item.fromStatus ?? null
       );
       return {
         id: item.id,
         applicationId: app.id,
         applicationNumber: app.applicationNumber,
-        type: dbStatusToNotificationType(item.toStatus),
+        type: dbStatusToNotificationType(item.toStatus, item.fromStatus ?? null, item.remarks ?? null),
         title,
         message,
         timestamp: item.createdAt.toISOString(),
@@ -1708,8 +1847,59 @@ const getCachedApplicantNotifications = cache(async (applicantId: string) => {
   );
 });
 
-export async function listApplicantNotifications(applicantId: string) {
-  return getCachedApplicantNotifications(applicantId);
+export async function listApplicantNotifications(
+  applicantId: string,
+  pagination?: { page?: number | string; pageSize?: number | string }
+) {
+  if (!pagination) {
+    return getCachedApplicantNotifications(applicantId);
+  }
+
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+
+  const where = {
+    application: { applicantId },
+  };
+
+  const [historyRows, totalCount] = await Promise.all([
+    prisma.applicationHistory.findMany({
+      where,
+      include: {
+        application: {
+          select: {
+            id: true,
+            applicationNumber: true,
+            applicationType: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+    prisma.applicationHistory.count({ where }),
+  ]);
+
+  const records = historyRows.map((item) => {
+    const { title, message } = buildNotificationContent(
+      item.toStatus,
+      item.application.applicationNumber,
+      item.remarks ?? null,
+      item.fromStatus ?? null
+    );
+    return {
+      id: item.id,
+      applicationId: item.application.id,
+      applicationNumber: item.application.applicationNumber,
+      type: dbStatusToNotificationType(item.toStatus, item.fromStatus ?? null, item.remarks ?? null),
+      title,
+      message,
+      timestamp: item.createdAt.toISOString(),
+      isRead: false,
+    };
+  });
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
 export async function getApplicantTopSummary(applicantId: string) {

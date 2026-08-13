@@ -18,7 +18,7 @@ export default async function ApplicantProfilePage() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <PageHeader
         eyebrow="Applicant"
         title="Profile"
@@ -35,7 +35,7 @@ export default async function ApplicantProfilePage() {
       </div>
 
       <SectionCard title="Account Details" description="System-managed applicant identity from the active session.">
-        <div className="space-y-3 text-sm text-gray-700">
+        <div className="space-y-3 text-sm text-[var(--ink-muted)] [&_strong]:text-[var(--foreground)]">
           <p><strong>Name:</strong> {formatValue(session.user.name)}</p>
           <p><strong>Email:</strong> {formatValue(session.user.email)}</p>
           <p><strong>Role:</strong> APPLICANT</p>
@@ -44,7 +44,7 @@ export default async function ApplicantProfilePage() {
       </SectionCard>
 
       <SectionCard title="Notes">
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-[var(--ink-muted)]">
           This page reflects live applicant identity from your active session. Fields not yet stored in the database display as &quot;Not provided&quot;.
         </p>
       </SectionCard>

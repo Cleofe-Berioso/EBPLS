@@ -83,19 +83,19 @@ export function StatusTracker({
                   key={`${step.label}-${index}`}
               className={`rounded-2xl border px-4 py-4 text-sm ${
                 active
-                  ? "border-green-200 bg-green-50 text-green-900"
+                  ? "border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)]"
                   : done
-                    ? "border-green-200 bg-green-50/70 text-green-800"
-                    : "border-slate-200 bg-slate-50 text-slate-700"
+                    ? "border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)]"
+                    : "border-[var(--border-color)] bg-[var(--muted-surface)] text-[var(--ink-muted)]"
               }`}
             >
               <span
                 className={`mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
                   active
-                    ? "bg-green-700 text-white"
+                    ? "bg-[var(--success)] text-white"
                     : done
-                      ? "bg-green-100 text-green-800"
-                      : "bg-white text-slate-700"
+                      ? "bg-[var(--success-soft)] text-[var(--success)]"
+                      : "bg-[var(--surface)] text-[var(--ink-muted)]"
                 }`}
               >
                 {index + 1}

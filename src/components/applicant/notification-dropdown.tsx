@@ -14,7 +14,7 @@ import type { Notification } from "@/types/notifications";
  */
 export function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const { notifications, unreadCount, isLoading, error, markAsRead, markAllAsRead, addLocalNotification, refetch } =
@@ -67,14 +67,14 @@ export function NotificationDropdown() {
         aria-label="Notifications"
         aria-expanded={isOpen}
         aria-haspopup="true"
-        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-white text-[var(--ink-muted)] shadow-sm transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
       >
         <Bell className="h-4 w-4" />
 
         {/* Unread Badge */}
         {unreadCount > 0 && (
           <span
-            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-xs font-semibold text-white"
+            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--success)] text-xs font-semibold text-white"
             aria-label={`${unreadCount} unread notifications`}
           >
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -84,19 +84,18 @@ export function NotificationDropdown() {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div
+        <section
           ref={dropdownRef}
-          role="region"
           aria-label="Notifications panel"
-          className="absolute -right-2 top-12 z-50 w-96 max-w-[calc(100vw-1rem)] rounded-2xl border border-slate-200 bg-white shadow-xl sm:w-96"
+          className="absolute -right-2 top-12 z-50 w-96 max-w-[calc(100vw-1rem)] rounded-2xl border border-[var(--border-color)] bg-white shadow-xl sm:w-96"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">Notifications</h2>
+          <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
+            <h2 className="text-sm font-semibold text-[var(--foreground)]">Notifications</h2>
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+                className="text-xs font-semibold text-[var(--primary)] transition-colors hover:text-[var(--primary-strong)]"
                 title="Mark all as read"
               >
                 Mark all as read
@@ -105,32 +104,32 @@ export function NotificationDropdown() {
           </div>
 
           {/* Content */}
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className="max-h-[min(400px,calc(100dvh-6rem))] overflow-y-auto overscroll-contain">
             {isLoading ? (
               <div className="flex items-center justify-center px-4 py-8">
-                <p className="text-sm text-slate-500">Loading notifications...</p>
+                <p className="text-sm text-[var(--ink-muted)]">Loading notifications…</p>
               </div>
             ) : error ? (
               <div className="px-4 py-8 text-center">
-                <p className="text-sm text-red-600">Failed to load notifications</p>
+                <p className="text-sm text-[var(--danger)]">Failed to load notifications</p>
                 <button
                   type="button"
                   onClick={() => void refetch()}
-                  className="mt-3 text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+                  className="mt-3 text-xs font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)]"
                 >
                   Retry
                 </button>
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-4 py-8">
-                <Bell className="h-8 w-8 text-slate-300 mb-2" />
-                <p className="text-sm font-medium text-slate-600">No notifications yet</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  You're all caught up! Check back soon.
+                <Bell className="h-8 w-8 text-[var(--border-color)] mb-2" />
+                <p className="text-sm font-medium text-[var(--ink-muted)]">No notifications yet</p>
+                <p className="text-xs text-[var(--ink-muted)] mt-1">
+                  You&apos;re all caught up! Check back soon.
                 </p>
                 <button
                   onClick={() => addLocalNotification()}
-                  className="mt-3 inline-flex items-center rounded-md bg-emerald-600 px-3 py-1 text-sm font-semibold text-white hover:bg-emerald-700"
+                  className="mt-3 inline-flex items-center rounded-md bg-[var(--primary)] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[var(--primary-strong)]"
                 >
                   Add test notification
                 </button>
@@ -150,17 +149,17 @@ export function NotificationDropdown() {
 
           {/* Footer */}
           {notifications.length > 0 && (
-            <div className="border-t border-slate-200 px-4 py-3">
+            <div className="border-t border-[var(--border-color)] px-4 py-3">
               <Link
                 href="/applicant/notifications"
                 onClick={() => setIsOpen(false)}
-                className="inline-block text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+                className="inline-block text-sm font-semibold text-[var(--primary)] transition-colors hover:text-[var(--primary-strong)]"
               >
                 View all notifications →
               </Link>
             </div>
           )}
-        </div>
+        </section>
       )}
     </div>
   );
@@ -181,29 +180,29 @@ function NotificationItem({
   const getIconColor = (): string => {
     switch (iconType) {
       case "check":
-        return "text-emerald-600";
+        return "text-[var(--primary)]";
       case "alert":
-        return "text-amber-600";
+        return "text-[var(--warning)]";
       case "error":
-        return "text-red-600";
+        return "text-[var(--danger)]";
       default:
-        return "text-blue-600";
+        return "text-[var(--info)]";
     }
   };
 
   const getBgColor = (): string => {
-    if (notification.isRead) return "hover:bg-slate-50";
-    return "bg-emerald-50/40 hover:bg-emerald-50/60";
+    if (notification.isRead) return "hover:bg-[var(--muted-surface)]";
+    return "bg-[var(--primary-soft)] hover:bg-[var(--success-soft)]";
   };
 
   const getLeftBorderColor = (): string => {
-    if (notification.isRead) return "border-l-slate-200";
-    return "border-l-emerald-500";
+    if (notification.isRead) return "border-l-[var(--border-color)]";
+    return "border-l-[var(--primary)]";
   };
 
   return (
     <div
-      className={`flex items-start gap-3 border-l-3 px-3 py-2.5 rounded-lg transition-colors ${getBgColor()} ${getLeftBorderColor()}`}
+      className={`flex items-start gap-3 rounded-lg border-l-3 px-3 py-2.5 transition-colors ${getBgColor()} ${getLeftBorderColor()}`}
     >
       {/* Icon */}
       <div className={`mt-0.5 flex-shrink-0 ${getIconColor()}`}>
@@ -217,10 +216,10 @@ function NotificationItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-slate-900 line-clamp-1">
+            <p className="text-sm font-semibold text-[var(--foreground)] line-clamp-1">
               {notification.title}
             </p>
-            <p className="text-xs text-slate-600 line-clamp-2 mt-0.5">
+            <p className="text-xs text-[var(--ink-muted)] line-clamp-2 mt-0.5">
               {notification.message}
             </p>
           </div>
@@ -229,7 +228,7 @@ function NotificationItem({
           {!notification.isRead && (
             <button
               onClick={() => onMarkAsRead(notification.id)}
-              className="flex-shrink-0 ml-2 text-emerald-600 hover:text-emerald-700 transition-colors"
+              className="ml-2 flex-shrink-0 text-[var(--primary)] transition-colors hover:text-[var(--primary-strong)]"
               title="Mark as read"
               aria-label={`Mark "${notification.title}" as read`}
             >
@@ -237,7 +236,7 @@ function NotificationItem({
             </button>
           )}
         </div>
-        <p className="text-xs text-slate-500 mt-1">
+        <p className="text-xs text-[var(--ink-muted)] mt-1">
           {formatNotificationTime(notification.timestamp)}
         </p>
       </div>

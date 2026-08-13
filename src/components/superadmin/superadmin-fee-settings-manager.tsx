@@ -9,7 +9,17 @@ import { SectionCard } from "@/components/ui/section-card";
 import { FormField } from "@/components/ui/form-field";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingState } from "@/components/ui/loading-state";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import {
+  superadminAuditPillClass,
+  superadminFormControlClass,
+  superadminFormPanelClass,
+  superadminPanelClass,
+  superadminSummaryLabelClass,
+  superadminTableClass,
+} from "@/components/superadmin/superadmin-ui-styles";
+
 
 type Flash = { type: "success" | "danger" | "info"; message: string } | null;
 
@@ -92,11 +102,11 @@ function formatAmount(value: number): string {
 
 function extensionStatus(extension: RenewalExtension) {
   return extension.isActive ? (
-    <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-800">
+    <span className="inline-flex rounded-full border border-[var(--success)] bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--success)]">
       Enabled
     </span>
   ) : (
-    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-700">
+    <span className={`${superadminAuditPillClass} uppercase tracking-wide`}>
       Disabled
     </span>
   );
@@ -538,12 +548,11 @@ export function SuperAdminFeeSettingsManager() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
-        eyebrowClassName="text-slate-600"
         title="System Fee Settings"
         description="Configure fee tables, renewal penalties, and official extension rules."
-        badge={<RoleBadge role="VIEW_ONLY" label="Configuration Scope" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Configuration Scope" />}
       />
 
       <InfoBanner
@@ -553,6 +562,8 @@ export function SuperAdminFeeSettingsManager() {
       />
 
       {flash ? <InfoBanner title={flash.message} variant={flashVariant} /> : null}
+
+      {isLoading ? <LoadingState message="Loading fee settings…" compact /> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Active Fee Categories" value={summary.activeCategories.toString()} subtitle="Categories with active configured entries" tone="blue" />
@@ -565,12 +576,12 @@ export function SuperAdminFeeSettingsManager() {
         title="Fee Table Maintenance"
         description="Configure Mayor's Permit Fee entries by business category and valid classification. Fixed-fee categories such as Power and Private Port are maintained here."
       >
-        <form className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/85 p-4 md:grid-cols-2 xl:grid-cols-5" onSubmit={saveFeeItem}>
+        <form className={`grid gap-3 ${superadminFormPanelClass} md:grid-cols-2 xl:grid-cols-5`} onSubmit={saveFeeItem}>
           <FormField label="Business Category" required>
             <select
               value={feeForm.category}
               onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             >
               {categories.length === 0 ? <option value="">No categories available</option> : null}
               {categories.map((item) => (
@@ -583,7 +594,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={feeForm.classification}
               onChange={(e) => setFeeForm((prev) => ({ ...prev, classification: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             >
               {classificationOptions.length === 0 ? <option value="">No classifications available</option> : null}
               {classificationOptions.map((classification) => (
@@ -597,9 +608,10 @@ export function SuperAdminFeeSettingsManager() {
               type="number"
               min={0}
               step="0.01"
+              aria-label="Fee Amount"
               value={feeForm.amount}
               onChange={(e) => setFeeForm((prev) => ({ ...prev, amount: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             />
           </FormField>
 
@@ -607,7 +619,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={feeForm.isActive ? "ACTIVE" : "INACTIVE"}
               onChange={(e) => setFeeForm((prev) => ({ ...prev, isActive: e.target.value === "ACTIVE" }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             >
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
@@ -625,14 +637,15 @@ export function SuperAdminFeeSettingsManager() {
           <ResponsiveDataTable
             title="Configured Fee Table Entries"
             description={isLoading ? "Loading configured entries..." : `${feeItems.length} fee table entries`} 
+            switchAt="xl"
             table={
               feeItems.length === 0 && !isLoading ? (
                 <div className="p-5">
                   <EmptyState title="No fee configuration entries yet" description="Add entries to override hardcoded fee defaults." />
                 </div>
               ) : (
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-700">
+                <table className={superadminTableClass}>
+                  <thead>
                     <tr>
                       <th className="px-4 py-3.5 font-semibold">Category</th>
                       <th className="px-4 py-3.5 font-semibold">Classification</th>
@@ -642,20 +655,20 @@ export function SuperAdminFeeSettingsManager() {
                       <th className="px-4 py-3.5 font-semibold">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {feeItems.map((item) => (
-                      <tr key={item.id} className="align-top hover:bg-slate-50/70">
-                        <td className="px-4 py-3.5 font-medium text-slate-900">{categoryLabelMap.get(item.category) ?? item.category}</td>
-                        <td className="px-4 py-3.5 text-slate-700">{item.classification}</td>
-                        <td className="px-4 py-3.5 text-slate-700">{formatAmount(item.amount)}</td>
+                      <tr key={item.id} className="align-top">
+                        <td className="px-4 py-3.5 font-medium text-[var(--foreground)]">{categoryLabelMap.get(item.category) ?? item.category}</td>
+                        <td className="px-4 py-3.5 text-[var(--ink-muted)]">{item.classification}</td>
+                        <td className="px-4 py-3.5 text-[var(--ink-muted)]">{formatAmount(item.amount)}</td>
                         <td className="px-4 py-3.5">
                           {item.isActive ? (
-                            <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-800">Active</span>
+                            <span className="inline-flex rounded-full border border-[var(--success)] bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--success)]">Active</span>
                           ) : (
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-700">Inactive</span>
+                            <span className={`${superadminAuditPillClass} uppercase tracking-wide`}>Inactive</span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 text-slate-600">{formatDate(item.updatedAt)}</td>
+                        <td className="px-4 py-3.5 text-[var(--ink-muted)]">{formatDate(item.updatedAt)}</td>
                         <td className="px-4 py-3.5">
                           <button
                             type="button"
@@ -680,16 +693,16 @@ export function SuperAdminFeeSettingsManager() {
                 <div className="space-y-3 p-4">
                   {feeItems.map((item) => (
                     <article key={item.id} className="app-surface p-4">
-                      <p className="text-sm font-semibold text-slate-900">{categoryLabelMap.get(item.category) ?? item.category}</p>
-                      <p className="text-xs text-slate-600">{item.classification}</p>
-                      <p className="mt-1 text-sm text-slate-700">{formatAmount(item.amount)}</p>
-                      <p className="mt-1 text-xs text-slate-500">Updated: {formatDate(item.updatedAt)}</p>
+                      <p className="text-sm font-semibold text-[var(--foreground)]">{categoryLabelMap.get(item.category) ?? item.category}</p>
+                      <p className="ui-caption">{item.classification}</p>
+                      <p className="mt-1 text-sm text-[var(--ink-muted)]">{formatAmount(item.amount)}</p>
+                      <p className="mt-1 ui-caption">Updated: {formatDate(item.updatedAt)}</p>
                       <div className="mt-3 flex items-center justify-between gap-2">
                         <div>
                           {item.isActive ? (
-                            <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-800">Active</span>
+                            <span className="inline-flex rounded-full border border-[var(--success)] bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--success)]">Active</span>
                           ) : (
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-700">Inactive</span>
+                            <span className={`${superadminAuditPillClass} uppercase tracking-wide`}>Inactive</span>
                           )}
                         </div>
                         <button
@@ -719,9 +732,10 @@ export function SuperAdminFeeSettingsManager() {
               type="number"
               min={0}
               step="0.01"
+              aria-label="Renewal Late Surcharge (%)"
               value={penaltyForm.renewalSurchargePercent}
               onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalSurchargePercent: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             />
           </FormField>
 
@@ -730,9 +744,10 @@ export function SuperAdminFeeSettingsManager() {
               type="number"
               min={0}
               step="0.01"
+              aria-label="Monthly Interest (%)"
               value={penaltyForm.monthlyInterestPercent}
               onChange={(e) => setPenaltyForm((prev) => ({ ...prev, monthlyInterestPercent: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             />
           </FormField>
 
@@ -741,17 +756,18 @@ export function SuperAdminFeeSettingsManager() {
               type="number"
               min={0}
               step="0.01"
+              aria-label="Liquor/Tobacco Add-on (%)"
               value={penaltyForm.liquorTobaccoAddOnPercent}
               onChange={(e) => setPenaltyForm((prev) => ({ ...prev, liquorTobaccoAddOnPercent: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             />
           </FormField>
 
           <div className="md:col-span-2 xl:col-span-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className={`mb-2 ${superadminSummaryLabelClass}`}>
               Renewal Compliance Penalties (JIT — RENEWAL_RELATED)
             </p>
-            <p className="mb-3 text-xs text-slate-500">
+            <p className="mb-3 ui-caption">
               Fixed penalty amounts (₱) applied per violation severity when a renewal application has unsettled RENEWAL_RELATED non-compliance cases. Set to 0 to disable.
             </p>
             <div className="grid gap-3 md:grid-cols-3">
@@ -760,9 +776,10 @@ export function SuperAdminFeeSettingsManager() {
                   type="number"
                   min={0}
                   step="0.01"
+                  aria-label="Minor Violation Penalty (₱)"
                   value={penaltyForm.renewalComplianceMinorPenalty}
                   onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceMinorPenalty: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                  className={superadminFormControlClass}
                 />
               </FormField>
               <FormField label="Major Violation Penalty (₱)">
@@ -770,9 +787,10 @@ export function SuperAdminFeeSettingsManager() {
                   type="number"
                   min={0}
                   step="0.01"
+                  aria-label="Major Violation Penalty (₱)"
                   value={penaltyForm.renewalComplianceMajorPenalty}
                   onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceMajorPenalty: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                  className={superadminFormControlClass}
                 />
               </FormField>
               <FormField label="Severe Violation Penalty (₱)">
@@ -780,9 +798,10 @@ export function SuperAdminFeeSettingsManager() {
                   type="number"
                   min={0}
                   step="0.01"
+                  aria-label="Severe Violation Penalty (₱)"
                   value={penaltyForm.renewalComplianceSeverePenalty}
                   onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceSeverePenalty: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+                  className={superadminFormControlClass}
                 />
               </FormField>
             </div>
@@ -800,30 +819,33 @@ export function SuperAdminFeeSettingsManager() {
         title="Renewal Extension Settings"
         description="Create, enable, and disable extension periods with surcharge/interest waiver rules."
       >
-        <form className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/85 p-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={createExtension}>
+        <form className={`grid gap-3 ${superadminFormPanelClass} md:grid-cols-2 xl:grid-cols-3`} onSubmit={createExtension}>
           <FormField label="Extension Title" required>
             <input
+              aria-label="Extension Title"
               value={extensionForm.title}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             />
           </FormField>
 
           <FormField label="Start Date" required>
             <input
               type="date"
+              aria-label="Start Date"
               value={extensionForm.startDate}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, startDate: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             />
           </FormField>
 
           <FormField label="End Date" required>
             <input
               type="date"
+              aria-label="End Date"
               value={extensionForm.endDate}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, endDate: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             />
           </FormField>
 
@@ -831,7 +853,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={extensionForm.waiveSurcharge ? "YES" : "NO"}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, waiveSurcharge: e.target.value === "YES" }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             >
               <option value="YES">Yes</option>
               <option value="NO">No</option>
@@ -842,7 +864,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={extensionForm.waiveInterest ? "YES" : "NO"}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, waiveInterest: e.target.value === "YES" }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             >
               <option value="YES">Yes</option>
               <option value="NO">No</option>
@@ -853,7 +875,7 @@ export function SuperAdminFeeSettingsManager() {
             <select
               value={extensionForm.isActive ? "ENABLED" : "DISABLED"}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, isActive: e.target.value === "ENABLED" }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             >
               <option value="ENABLED">Enabled</option>
               <option value="DISABLED">Disabled</option>
@@ -862,9 +884,10 @@ export function SuperAdminFeeSettingsManager() {
 
           <FormField label="Remarks / Reason">
             <input
+              aria-label="Remarks / Reason"
               value={extensionForm.remarks}
               onChange={(e) => setExtensionForm((prev) => ({ ...prev, remarks: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500"
+              className={superadminFormControlClass}
             />
           </FormField>
 
@@ -879,14 +902,15 @@ export function SuperAdminFeeSettingsManager() {
           <ResponsiveDataTable
             title="Configured Renewal Extensions"
             description={extensions.length === 0 ? "No extensions configured yet." : `${extensions.length} extensions configured`} 
+            switchAt="xl"
             table={
               extensions.length === 0 ? (
                 <div className="p-5">
                   <EmptyState title="No renewal extensions yet" description="Create extension windows for special renewal periods." />
                 </div>
               ) : (
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-700">
+                <table className={superadminTableClass}>
+                  <thead>
                     <tr>
                       <th className="px-4 py-3.5 font-semibold">Title</th>
                       <th className="px-4 py-3.5 font-semibold">Period</th>
@@ -897,17 +921,17 @@ export function SuperAdminFeeSettingsManager() {
                       <th className="px-4 py-3.5 font-semibold">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {extensions.map((item) => (
-                      <tr key={item.id} className="align-top hover:bg-slate-50/70">
-                        <td className="px-4 py-3.5 font-medium text-slate-900">{item.title}</td>
-                        <td className="px-4 py-3.5 text-slate-700">
+                      <tr key={item.id} className="align-top">
+                        <td className="px-4 py-3.5 font-medium text-[var(--foreground)]">{item.title}</td>
+                        <td className="px-4 py-3.5 text-[var(--ink-muted)]">
                           {new Date(item.startDate).toLocaleDateString("en-PH")} - {new Date(item.endDate).toLocaleDateString("en-PH")}
                         </td>
-                        <td className="px-4 py-3.5 text-slate-700">{item.waiveSurcharge ? "Yes" : "No"}</td>
-                        <td className="px-4 py-3.5 text-slate-700">{item.waiveInterest ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3.5 text-[var(--ink-muted)]">{item.waiveSurcharge ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3.5 text-[var(--ink-muted)]">{item.waiveInterest ? "Yes" : "No"}</td>
                         <td className="px-4 py-3.5">{extensionStatus(item)}</td>
-                        <td className="px-4 py-3.5 text-slate-600">{formatDate(item.updatedAt)}</td>
+                        <td className="px-4 py-3.5 text-[var(--ink-muted)]">{formatDate(item.updatedAt)}</td>
                         <td className="px-4 py-3.5">
                           <button
                             type="button"
@@ -932,13 +956,13 @@ export function SuperAdminFeeSettingsManager() {
                 <div className="space-y-3 p-4">
                   {extensions.map((item) => (
                     <article key={item.id} className="app-surface p-4">
-                      <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                      <p className="mt-1 text-xs text-slate-600">
+                      <p className="text-sm font-semibold text-[var(--foreground)]">{item.title}</p>
+                      <p className="mt-1 ui-caption">
                         {new Date(item.startDate).toLocaleDateString("en-PH")} - {new Date(item.endDate).toLocaleDateString("en-PH")}
                       </p>
-                      <p className="mt-1 text-xs text-slate-600">Waive Surcharge: {item.waiveSurcharge ? "Yes" : "No"}</p>
-                      <p className="text-xs text-slate-600">Waive Interest: {item.waiveInterest ? "Yes" : "No"}</p>
-                      <p className="mt-1 text-xs text-slate-500">Updated: {formatDate(item.updatedAt)}</p>
+                      <p className="mt-1 ui-caption">Waive Surcharge: {item.waiveSurcharge ? "Yes" : "No"}</p>
+                      <p className="ui-caption">Waive Interest: {item.waiveInterest ? "Yes" : "No"}</p>
+                      <p className="mt-1 ui-caption">Updated: {formatDate(item.updatedAt)}</p>
                       <div className="mt-3 flex items-center justify-between gap-2">
                         {extensionStatus(item)}
                         <button
@@ -964,10 +988,10 @@ export function SuperAdminFeeSettingsManager() {
         ) : (
           <div className="space-y-2">
             {recentUpdates.map((item, index) => (
-              <div key={`${item.type}-${index}-${item.updatedAt}`} className="rounded-xl border border-slate-200 bg-slate-50/85 px-4 py-3 text-sm text-slate-700">
-                <p className="font-semibold text-slate-900">{item.type}</p>
+              <div key={`${item.type}-${index}-${item.updatedAt}`} className={superadminPanelClass}>
+                <p className="font-semibold text-[var(--foreground)]">{item.type}</p>
                 <p className="mt-1">{item.message}</p>
-                <p className="mt-1 text-xs text-slate-500">{formatDate(item.updatedAt)}</p>
+                <p className="mt-1 ui-caption">{formatDate(item.updatedAt)}</p>
               </div>
             ))}
           </div>
@@ -975,22 +999,22 @@ export function SuperAdminFeeSettingsManager() {
       </SectionCard>
 
       <SectionCard title="JIT Portal Access Control" description="Enable or disable the JIT Portal system-wide. Disabling will enforce unresolved government-agency compliance cases.">
-        <div className="rounded-xl border border-slate-200 bg-slate-50/85 p-4">
+        <div className={superadminFormPanelClass}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-semibold text-slate-900">JIT Portal Status</p>
-              <p className="mt-1 text-sm text-slate-700">
+              <p className="font-semibold text-[var(--foreground)]">JIT Portal Status</p>
+              <p className="mt-1 text-sm text-[var(--ink-muted)]">
                 {jitPortalEnabled ? (
-                  <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800">
+                  <span className="inline-flex rounded-full border border-[var(--success)] bg-[var(--success-soft)] px-3 py-1.5 text-sm font-semibold text-[var(--success)]">
                     Enabled
                   </span>
                 ) : (
-                  <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-800">
+                  <span className="inline-flex rounded-full border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-1.5 text-sm font-semibold text-[var(--danger)]">
                     Disabled
                   </span>
                 )}
               </p>
-              {jitPortalUpdatedAt && <p className="mt-2 text-xs text-slate-500">Last updated: {formatDate(jitPortalUpdatedAt)}</p>}
+              {jitPortalUpdatedAt && <p className="mt-2 ui-caption">Last updated: {formatDate(jitPortalUpdatedAt)}</p>}
             </div>
             <button
               type="button"
@@ -1003,9 +1027,9 @@ export function SuperAdminFeeSettingsManager() {
           </div>
 
           {showJitConfirm && (
-            <div className="mt-4 rounded-xl border-2 border-red-200 bg-red-50 p-4">
-              <p className="font-semibold text-red-900">Disable JIT Portal?</p>
-              <p className="mt-2 text-sm text-red-800">
+            <div className="mt-4 rounded-xl border-2 border-[var(--danger)] bg-[var(--danger-soft)] p-4">
+              <p className="font-semibold text-[var(--danger)]">Disable JIT Portal?</p>
+              <p className="mt-2 text-sm text-[var(--danger)]">
                 Disabling the JIT Portal will prevent JIT users from accessing inspection features and will mark unresolved government-agency-related flagged cases as expired/unsettled. Affected businesses will be blocked from renewal and must complete closure processing if required.
               </p>
               <div className="mt-4 flex gap-2">

@@ -1,28 +1,54 @@
 import Link from "next/link";
 import { resolveApplicantSessionContext } from "@/lib/applicant-api";
-import { listApplicantApplications } from "@/lib/applications";
+import {
+  getApplicantLatestApplication,
+  listApplicantApplicationsPaginated,
+} from "@/lib/applications";
 import { StatusBadge } from "@/components/applicant/status-badge";
+import { applicantMobileRecordCardClass, applicantTableClass } from "@/components/applicant/applicant-ui-styles";
 import { StatusTracker } from "@/components/applicant/status-tracker";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
 
-export default async function MyApplicationsPage() {
+interface PageProps {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}
+
+export default async function MyApplicationsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
   const authContext = await resolveApplicantSessionContext();
-  const applications = authContext.ok ? await listApplicantApplications(authContext.applicantId) : [];
-  const latest = applications[0];
+
+  const applicationResult = authContext.ok
+    ? await listApplicantApplicationsPaginated(authContext.applicantId, params)
+    : {
+        records: [],
+        totalCount: 0,
+        page: 1,
+        pageSize: 25 as const,
+        totalPages: 1,
+      };
+
+  const latest = authContext.ok ? await getApplicantLatestApplication(authContext.applicantId) : null;
+  const applications = applicationResult.records;
+
+  const queryParams = {
+    page: params.page,
+    pageSize: params.pageSize,
+  };
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="Applicant"
         title="My Applications"
         description="Track all applications from submission through release. Returned and rejected records remain visible for reference."
-        badge={<RoleBadge role="APPLICANT" />}
+        badge={<RoleBadge roleType="APPLICANT" />}
         actions={
           <Link href="/applicant/application" className={actionButtonStyles("secondary", "sm")}>
             New filing
@@ -58,31 +84,31 @@ export default async function MyApplicationsPage() {
 
       <ResponsiveDataTable
         title="Application Records"
-        description="Review status, submission date, and available actions for each application."
+        description={`${applicationResult.totalCount} application${applicationResult.totalCount === 1 ? "" : "s"} on file.`}
         table={
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-700">
+          <table className={applicantTableClass}>
+            <thead>
               <tr>
-                <th className="px-4 py-4 font-semibold sm:px-6">Status</th>
-                <th className="px-4 py-4 font-semibold sm:px-6">Application Number</th>
-                <th className="px-4 py-4 font-semibold sm:px-6">Business Name</th>
-                <th className="px-4 py-4 font-semibold sm:px-6">Application Type</th>
-                <th className="px-4 py-4 font-semibold sm:px-6">Date Submitted</th>
-                <th className="px-4 py-4 font-semibold sm:px-6">Action</th>
+                <th>Status</th>
+                <th>Application Number</th>
+                <th>Business Name</th>
+                <th>Application Type</th>
+                <th>Date Submitted</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {applications.map((row) => (
-                <tr key={row.id} className="border-t border-slate-100 align-top hover:bg-slate-50/60">
-                  <td className="px-4 py-4 sm:px-6"><StatusBadge status={row.status} /></td>
-                  <td className="px-4 py-4 font-medium text-slate-900 sm:px-6">{row.applicationNumber}</td>
-                  <td className="px-4 py-4 text-slate-700 sm:px-6">{row.businessName}</td>
-                  <td className="px-4 py-4 text-slate-700 sm:px-6">{row.applicationType}</td>
-                  <td className="px-4 py-4 text-slate-600 sm:px-6">{row.dateSubmitted}</td>
-                  <td className="px-4 py-4 sm:px-6">
+                <tr key={row.id}>
+                  <td><StatusBadge status={row.status} /></td>
+                  <td className="font-medium">{row.applicationNumber}</td>
+                  <td>{row.businessName}</td>
+                  <td>{row.applicationType}</td>
+                  <td className="text-[var(--ink-muted)]">{row.dateSubmitted}</td>
+                  <td>
                     <div className="flex flex-wrap gap-2">
                       <Link href={`/applicant/my-applications/${row.id}`} className={actionButtonStyles("secondary", "sm")}>
-                        View Details
+                        View
                       </Link>
                       {row.status === "Draft" ? (
                         <Link
@@ -106,7 +132,7 @@ export default async function MyApplicationsPage() {
               ))}
               {applications.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-8 text-slate-500 sm:px-6" colSpan={6}>
+                  <td className="py-6 text-[var(--ink-muted)]" colSpan={6}>
                     No records available yet. This table will populate as applications are processed.
                   </td>
                 </tr>
@@ -116,26 +142,26 @@ export default async function MyApplicationsPage() {
         }
         mobile={
           applications.length === 0 ? (
-            <div className="p-5">
+            <div className="p-4">
               <EmptyState
                 title="No records available yet"
                 description="This section will populate as applications are processed."
               />
             </div>
           ) : (
-            <div className="space-y-3 p-4">
+            <div className="space-y-2.5 p-3.5">
               {applications.map((row) => (
-                <article key={row.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <article key={row.id} className={applicantMobileRecordCardClass}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                      <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{row.applicationType}</p>
+                      <p className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{row.businessName}</p>
+                      <p className="mt-1 text-xs uppercase tracking-wide text-[var(--ink-muted)]">{row.applicationType}</p>
                     </div>
                     <StatusBadge status={row.status} />
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">Submitted: {row.dateSubmitted}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <p className="mt-1.5 text-xs text-[var(--ink-muted)]">Submitted: {row.dateSubmitted}</p>
+                  <div className="mt-2.5 flex flex-wrap gap-2">
                     <Link href={`/applicant/my-applications/${row.id}`} className={actionButtonStyles("secondary", "sm")}>View</Link>
                     {row.status === "Draft" ? (
                       <Link
@@ -159,8 +185,18 @@ export default async function MyApplicationsPage() {
             </div>
           )
         }
-      >
-      </ResponsiveDataTable>
+      />
+
+      <PaginationControls
+        basePath="/applicant/my-applications"
+        queryParams={queryParams}
+        page={applicationResult.page}
+        pageSize={applicationResult.pageSize}
+        totalCount={applicationResult.totalCount}
+        totalPages={applicationResult.totalPages}
+        recordLabel="applications"
+        sortHint="Newest applications appear first."
+      />
     </section>
   );
 }

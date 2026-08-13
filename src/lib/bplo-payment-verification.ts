@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { assertStatusTransition } from "@/lib/application-status";
 import { toMoneyNumber } from "@/lib/money";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -262,6 +263,69 @@ export async function listPaymentVerificationEntries(): Promise<PaymentVerificat
     verified: allRows.filter((r) => r.paymentStatus === "VERIFIED"),
     rejected: allRows.filter((r) => r.paymentStatus === "REJECTED"),
   };
+}
+
+const paymentReferenceApplicationWhere = {
+  applicationType: { in: ["NEW", "RENEWAL", "CLOSURE"] as const },
+  status: { in: BPLO_PAYMENT_VISIBLE_STATUSES },
+  feeAssessment: { isNot: null },
+};
+
+const paymentReferenceInclude = {
+  application: {
+    include: {
+      applicant: { select: { id: true, name: true, email: true } },
+      businessRecord: { select: { businessName: true } },
+      feeAssessment: {
+        select: {
+          assessmentNumber: true,
+          annualAssessedAmount: true,
+          releasePaymentAmount: true,
+          totalAmount: true,
+        },
+      },
+    },
+  },
+} as const;
+
+export async function listPaymentVerificationEntriesPaginated(
+  tab: "PENDING" | "VERIFIED" | "REJECTED",
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<PaymentVerificationRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+  const where = {
+    status: tab,
+    application: paymentReferenceApplicationWhere,
+  };
+
+  const [refs, totalCount] = await Promise.all([
+    (prisma as any).paymentReference.findMany({
+      where,
+      include: paymentReferenceInclude,
+      orderBy: { submittedAt: "desc" },
+      skip,
+      take,
+    }),
+    (prisma as any).paymentReference.count({ where }),
+  ]);
+
+  const records = (refs as any[]).map((ref) =>
+    toRow({
+      app: {
+        id: ref.application.id,
+        applicationNumber: ref.application.applicationNumber,
+        applicationType: ref.application.applicationType,
+        status: ref.application.status,
+        formData: ref.application.formData,
+        applicant: ref.application.applicant,
+        businessRecord: ref.application.businessRecord,
+        feeAssessment: ref.application.feeAssessment,
+      },
+      ref,
+    })
+  );
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
 async function findReference(paymentReferenceId: string) {

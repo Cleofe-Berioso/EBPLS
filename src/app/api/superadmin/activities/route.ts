@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid actorRole filter" }, { status: 400 });
   }
   const searchKeyword = sanitizeFilterText(searchParams.get("search"), 120);
-  const module = sanitizeFilterText(searchParams.get("module"), 80);
+  const auditModule = sanitizeFilterText(searchParams.get("module"), 80);
   const action = sanitizeFilterText(searchParams.get("action"), 80);
   const dateFrom = sanitizeFilterText(searchParams.get("dateFrom"), 20);
   const dateTo = sanitizeFilterText(searchParams.get("dateTo"), 20);
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
   const activities = await listSuperAdminActivities({
     searchKeyword,
     actorRole,
-    module,
+    module: auditModule,
     action,
     dateFrom,
     dateTo,

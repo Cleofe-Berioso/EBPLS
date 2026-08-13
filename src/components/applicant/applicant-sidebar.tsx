@@ -2,8 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, FileText, FolderOpen, LayoutDashboard, MapPin, Receipt, User } from "lucide-react";
-import { RoleBadge } from "@/components/ui/role-badge";
+import { Bell, FileText, FolderOpen, LayoutDashboard, Receipt, User } from "lucide-react";
+import {
+  PortalSidebarBrand,
+  PortalSidebarFooter,
+  sidebarAsideClass,
+  sidebarGroupLabelClass,
+  sidebarHeaderClass,
+  sidebarNavIconClass,
+  sidebarNavLabelClass,
+  sidebarNavLinkClass,
+  sidebarNavPaddingClass,
+} from "@/components/ui/portal-layout-shell";
 
 type SidebarItem = {
   label: string;
@@ -42,72 +52,68 @@ export function ApplicantSidebar({
   mobileOpen,
   collapsed,
   onCloseMobile,
+  userName,
+  onCollapseToggle,
 }: {
   mobileOpen: boolean;
   collapsed: boolean;
   onCloseMobile: () => void;
+  userName: string;
+  onCollapseToggle: () => void;
 }) {
   const pathname = usePathname();
 
   const renderNavItem = (item: SidebarItem) => {
     const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
     const Icon = SIDEBAR_ICONS[item.label as keyof typeof SIDEBAR_ICONS];
+
     return (
       <Link
         key={item.href}
         href={item.href}
         onClick={onCloseMobile}
-        className={`flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-medium transition-colors ${
-          active
-            ? "bg-emerald-50 text-emerald-800"
-            : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-        } ${collapsed ? "lg:justify-center" : ""}`}
+        className={sidebarNavLinkClass(active, collapsed)}
         title={collapsed ? item.label : undefined}
       >
-        {Icon && <Icon className={`h-4 w-4 ${active ? "text-emerald-700" : "text-slate-500"}`} />}
-        <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>
+        {Icon ? <Icon className={sidebarNavIconClass(active)} /> : null}
+        <span className={sidebarNavLabelClass(collapsed)}>{item.label}</span>
       </Link>
     );
   };
 
   return (
-    <aside
-      className={`app-sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-200 lg:z-30 ${
-        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-      } ${collapsed ? "w-20" : "w-72"}`}
-    >
-      <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Business Permit Online System</p>
-            <h2 className={`mt-2 text-xl font-semibold tracking-tight text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Applicant Portal</h2>
-            <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Submit, track, and monitor applications.</p>
-          </div>
-        </div>
-        <div className={`mt-3 flex items-center gap-2 ${collapsed ? "lg:justify-center" : ""}`}>
-          <RoleBadge role="APPLICANT" label="Applicant Portal" />
-        </div>
+    <aside className={sidebarAsideClass(mobileOpen, collapsed)}>
+      <div className={sidebarHeaderClass(collapsed)}>
+        <PortalSidebarBrand
+          portalTitle="Applicant Portal"
+          description="File, track, and monitor permit transactions."
+          roleType="APPLICANT"
+          roleLabel="Applicant"
+          collapsed={collapsed}
+        />
       </div>
 
-      <nav className={`overflow-y-auto py-5 lg:flex-1 ${collapsed ? "px-2" : "px-3"}`}>
+      <nav className={`app-sidebar-nav ${sidebarNavPaddingClass(collapsed)}`} aria-label="Applicant navigation">
         {APPLICANT_SIDEBAR_STRUCTURE.map((item, idx) => {
           if ("href" in item) {
-            return <div key={item.href}>{renderNavItem(item)}</div>;
-          } else {
             return (
-              <div key={item.group} className={`${idx > 0 ? "mt-5" : ""}`}>
-                <p className={`text-xs font-semibold uppercase tracking-[0.1em] text-slate-500 ${collapsed ? "lg:hidden" : "px-3 pb-2 pt-1"}`}>
-                  {collapsed ? "" : item.group}
-                </p>
-                <div className="space-y-1">
-                  {item.items.map((subitem) => renderNavItem(subitem))}
-                </div>
+              <div key={item.href} className={idx > 0 ? "mt-1" : ""}>
+                {renderNavItem(item)}
               </div>
             );
           }
+
+          return (
+            <div key={item.group} className="mt-4">
+              <p className={sidebarGroupLabelClass(collapsed)}>{item.group}</p>
+              {collapsed ? <div className="app-sidebar-group-divider" /> : null}
+              <div className="space-y-0.5">{item.items.map((subitem) => renderNavItem(subitem))}</div>
+            </div>
+          );
         })}
       </nav>
 
+      <PortalSidebarFooter userName={userName} collapsed={collapsed} onCollapseToggle={onCollapseToggle} />
     </aside>
   );
 }

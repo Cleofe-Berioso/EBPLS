@@ -45,21 +45,21 @@ export function UploadSlot({
     <div
       className={`block rounded-2xl border border-dashed p-4 transition-colors ${
         error && !fileName
-          ? "border-red-400 bg-red-50/70"
+          ? "border-[var(--danger)] bg-[var(--danger-soft)]"
           : fileName
             ? uploadedAt
-              ? "border-emerald-300 bg-emerald-50/85"
-              : "border-amber-300 bg-amber-50/85"
-            : "border-slate-300 bg-slate-50/70"
-      } ${disabled ? "bg-slate-50" : ""}`}
+              ? "border-[var(--success)] bg-[var(--success-soft)]"
+              : "border-[var(--warning)] bg-[var(--warning-soft)]"
+            : "border-[var(--border-color)] bg-[var(--muted-surface)]/70"
+      } ${disabled ? "bg-[var(--muted-surface)]" : ""}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <span className="text-sm font-medium text-slate-900">
+          <span className="text-sm font-medium text-[var(--foreground)]">
             {label}
-            {required ? <span className="text-red-600"> *</span> : null}
+            {required ? <span className="text-[var(--danger)]"> *</span> : null}
           </span>
-          <p className="mt-1 text-xs text-slate-600">
+          <p className="mt-1 text-xs text-[var(--ink-muted)]">
             {helperText ?? "Upload a clear and readable file. Latest copy is recommended."}
           </p>
         </div>
@@ -67,9 +67,9 @@ export function UploadSlot({
           className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
             fileName
               ? uploadedAt
-                ? "border border-emerald-200 bg-white text-emerald-700"
-                : "border border-amber-200 bg-white text-amber-700"
-              : "border border-slate-300 bg-white text-slate-700"
+                ? "border border-[var(--success)] bg-[var(--surface)] text-[var(--success)]"
+                : "border border-[var(--warning)] bg-[var(--surface)] text-[var(--warning)]"
+              : "border border-[var(--border-color)] bg-[var(--surface)] text-[var(--foreground)]"
           }`}
         >
           {fileName ? (uploadedAt ? "Uploaded" : "Selected") : "Pending"}
@@ -78,11 +78,11 @@ export function UploadSlot({
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label
           htmlFor={inputId}
-          className="inline-flex cursor-pointer items-center rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800"
+          className="inline-flex cursor-pointer items-center rounded-lg bg-[var(--success)] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[var(--primary-strong)]"
         >
           {fileName ? "Replace Selection" : "Choose File"}
         </label>
-        <span className="text-xs text-slate-600">
+        <span className="text-xs text-[var(--ink-muted)]">
           {fileName
             ? "Ready to submit after final application submission."
             : "Accepted format follows current backend validation rules."}
@@ -99,7 +99,7 @@ export function UploadSlot({
           event.target.value = "";
         }}
       />
-      <p className="mt-2 text-xs text-slate-700">
+      <p className="mt-2 text-xs text-[var(--ink-muted)]">
         {fileName ? `Selected: ${fileName}` : "No file selected"}
       </p>
         {fileName && previewUrl ? (
@@ -107,14 +107,14 @@ export function UploadSlot({
             href={previewUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-flex rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100"
+            className="mt-2 inline-flex rounded-md border border-[var(--border-color)] px-2 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--muted-surface)]"
           >
             Preview
           </a>
         ) : null}
-      {fileName && !uploadedAt ? <p className="mt-1 text-xs text-slate-500">Ready to submit</p> : null}
+      {fileName && !uploadedAt ? <p className="mt-1 text-xs text-[var(--ink-muted)]">Ready to submit</p> : null}
       {uploadedAt && fileName ? (
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-[var(--ink-muted)]">
           Uploaded: {formatUploadTimestamp(uploadedAt)}
         </p>
       ) : null}
@@ -123,13 +123,13 @@ export function UploadSlot({
           type="button"
           disabled={disabled}
           onClick={onRemove}
-          className="mt-2 rounded-md border border-red-200 px-2 py-1 text-xs text-red-800 disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600"
+          className="mt-2 rounded-md border border-[var(--danger)] px-2 py-1 text-xs text-[var(--danger)] disabled:border-[var(--border-color)] disabled:bg-[var(--muted-surface)] disabled:text-[var(--ink-muted)]"
         >
           Remove
         </button>
       ) : null}
       {error && !fileName ? (
-        <p className="mt-1 text-xs font-medium text-red-600">{error}</p>
+        <p className="mt-1 text-xs font-medium text-[var(--danger)]">{error}</p>
       ) : null}
     </div>
   );

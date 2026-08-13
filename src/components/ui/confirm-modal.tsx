@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { InlineAlert } from "@/components/ui/inline-alert";
 import { Modal } from "@/components/ui/modal";
 
 type ConfirmModalProps = {
@@ -61,8 +62,14 @@ export function ConfirmModal({
         </div>
       }
     >
-      <div className="space-y-4">
-        {message ? <div className="text-sm leading-6 text-slate-600">{message}</div> : null}
+      <div className="space-y-3">
+        {message ? (
+          typeof message === "string" ? (
+            <InlineAlert variant={variant === "danger" ? "error" : "info"} message={message} />
+          ) : (
+            <div className="text-sm leading-6 text-[var(--ink-muted)]">{message}</div>
+          )
+        ) : null}
         {children}
       </div>
     </Modal>

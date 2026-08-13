@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { applicantSummaryLabelClass, applicantSummaryTileClass } from "@/components/applicant/applicant-ui-styles";
 import { AlertCircle, Check, Clock3, X } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -82,55 +83,55 @@ function getStateMeta(state: StepState) {
     case "completed":
       return {
         pill: "Completed",
-        pillClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
-        containerClassName: "border-emerald-100 bg-white",
-        labelClassName: "text-slate-900",
-        circleClassName: "border-emerald-600 bg-emerald-600 text-white shadow-sm shadow-emerald-200",
+        pillClassName: "bg-[var(--success-soft)] text-[var(--success)]",
+        containerClassName: "border-[var(--border-color)] bg-[var(--surface)]",
+        labelClassName: "text-[var(--foreground)]",
+        circleClassName: "border-[var(--success)] bg-[var(--success)] text-white",
         icon: Check,
       };
     case "current":
       return {
         pill: "Current stage",
-        pillClassName: "border-emerald-200 bg-emerald-50 text-emerald-800",
-        containerClassName: "border-emerald-200 bg-white",
-        labelClassName: "text-emerald-950",
-        circleClassName: "border-emerald-600 bg-white text-emerald-700 ring-2 ring-emerald-100",
+        pillClassName: "bg-[var(--primary-soft)] text-[var(--primary-strong)]",
+        containerClassName: "border-[var(--border-color)] bg-[var(--surface)]",
+        labelClassName: "text-[var(--foreground)]",
+        circleClassName: "border-[var(--primary)] bg-[var(--surface)] text-[var(--primary-strong)] ring-2 ring-[var(--primary-soft)]",
         icon: null,
       };
     case "released":
       return {
         pill: "Released",
-        pillClassName: "border-emerald-200 bg-emerald-50 text-emerald-800",
-        containerClassName: "border-emerald-200 bg-white",
-        labelClassName: "text-emerald-950",
-        circleClassName: "border-emerald-600 bg-emerald-600 text-white ring-2 ring-emerald-100 shadow-sm shadow-emerald-200",
+        pillClassName: "bg-[var(--success-soft)] text-[var(--success)]",
+        containerClassName: "border-[var(--border-color)] bg-[var(--surface)]",
+        labelClassName: "text-[var(--foreground)]",
+        circleClassName: "border-[var(--success)] bg-[var(--success)] text-white ring-2 ring-[var(--success-soft)]",
         icon: Check,
       };
     case "returned":
       return {
         pill: "Returned",
-        pillClassName: "border-amber-200 bg-amber-50 text-amber-700",
-        containerClassName: "border-amber-200 bg-white",
-        labelClassName: "text-amber-950",
-        circleClassName: "border-amber-400 bg-amber-100 text-amber-700 ring-2 ring-amber-100",
+        pillClassName: "bg-[var(--warning-soft)] text-[var(--warning)]",
+        containerClassName: "border-[var(--border-color)] bg-[var(--surface)]",
+        labelClassName: "text-[var(--foreground)]",
+        circleClassName: "border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--warning)] ring-2 ring-[var(--warning-soft)]",
         icon: AlertCircle,
       };
     case "rejected":
       return {
         pill: "Rejected",
-        pillClassName: "border-rose-200 bg-rose-50 text-rose-700",
-        containerClassName: "border-rose-200 bg-white",
-        labelClassName: "text-rose-950",
-        circleClassName: "border-rose-500 bg-rose-100 text-rose-700 ring-2 ring-rose-100",
+        pillClassName: "bg-[var(--danger-soft)] text-[var(--danger)]",
+        containerClassName: "border-[var(--border-color)] bg-[var(--surface)]",
+        labelClassName: "text-[var(--foreground)]",
+        circleClassName: "border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] ring-2 ring-[var(--danger-soft)]",
         icon: X,
       };
     case "pending":
       return {
         pill: "Pending",
-        pillClassName: "border-slate-200 bg-slate-100 text-slate-600",
-        containerClassName: "border-slate-200 bg-white",
-        labelClassName: "text-slate-700",
-        circleClassName: "border-slate-300 bg-white text-slate-400",
+        pillClassName: "bg-[var(--muted-surface)] text-[var(--ink-muted)]",
+        containerClassName: "border-[var(--border-color)] bg-[var(--surface)]",
+        labelClassName: "text-[var(--ink-muted)]",
+        circleClassName: "border-[var(--border-color)] bg-[var(--surface)] text-[var(--ink-muted)]",
         icon: Clock3,
       };
   }
@@ -170,7 +171,7 @@ function StepCard({
   const meta = getStateMeta(state);
 
   return (
-    <li className={`relative flex gap-4 rounded-xl border p-4 shadow-sm before:absolute before:left-5 before:top-10 before:bottom-[-0.5rem] before:border-l before:border-dashed before:border-slate-200 before:content-[''] last:before:hidden ${meta.containerClassName}`}>
+    <li className={`relative flex gap-4 rounded-[var(--radius-card)] border p-4 shadow-sm before:absolute before:left-5 before:top-10 before:bottom-[-0.5rem] before:border-l before:border-dashed before:border-[var(--border-color)] before:content-[''] last:before:hidden ${meta.containerClassName}`}>
       <div className="relative flex flex-col items-center pt-0.5">
         <StepCircle index={index} state={state} />
       </div>
@@ -178,10 +179,10 @@ function StepCard({
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-semibold leading-6 ${meta.labelClassName}`}>{label}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.04em] ${meta.pillClassName}`}>
+          <span className={`ui-badge ${meta.pillClassName}`}>
             {meta.pill}
           </span>
-          {dateLabel ? <span className="text-xs text-slate-500">{dateLabel}</span> : null}
+          {dateLabel ? <span className="ui-caption">{dateLabel}</span> : null}
         </div>
       </div>
     </li>
@@ -208,12 +209,12 @@ function DesktopStep({
       <div className={`mt-3 flex min-h-[7.25rem] w-full flex-col items-center rounded-xl border px-3 py-3.5 shadow-sm transition-colors duration-200 ${meta.containerClassName}`}>
         <p className={`max-w-full text-sm font-semibold leading-6 ${meta.labelClassName}`}>{label}</p>
         <div className="mt-2 flex flex-col items-center gap-2">
-          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.04em] ${meta.pillClassName}`}>
+          <span className={`ui-badge ${meta.pillClassName}`}>
             {meta.pill}
           </span>
-          {dateLabel ? <span className="text-xs leading-5 text-slate-500">{dateLabel}</span> : null}
+          {dateLabel ? <span className="ui-caption leading-5">{dateLabel}</span> : null}
         </div>
-        {footerLabel ? <span className="mt-auto pt-3 text-[11px] font-medium uppercase tracking-[0.2em] text-emerald-600">{footerLabel}</span> : null}
+        {footerLabel ? <span className="mt-auto pt-3 text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--success)]">{footerLabel}</span> : null}
       </div>
     </li>
   );
@@ -246,20 +247,20 @@ export function ApplicationProgressOverview({
 
   return (
     <div className="space-y-5" aria-label={`Application progress for ${application.applicationNumber}`}>
-      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-3">
+      <div className={`grid gap-3 ${applicantSummaryTileClass} sm:grid-cols-3 bg-[var(--surface)]`}>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">Current Status</p>
+          <p className={applicantSummaryLabelClass}>Current Status</p>
           <div className="mt-2">
             <StatusBadge status={application.status} />
           </div>
         </div>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">Application No</p>
-          <p className="mt-2 font-mono text-sm font-semibold text-slate-900">{application.applicationNumber}</p>
+          <p className={applicantSummaryLabelClass}>Application No</p>
+          <p className="mt-2 font-mono text-sm font-semibold text-[var(--foreground)]">{application.applicationNumber}</p>
         </div>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">Last Updated</p>
-          <p className="mt-2 text-sm font-medium text-slate-900">{lastUpdated ?? submittedAt ?? "-"}</p>
+          <p className={applicantSummaryLabelClass}>Last Updated</p>
+          <p className="mt-2 text-sm font-medium text-[var(--foreground)]">{lastUpdated ?? submittedAt ?? "-"}</p>
         </div>
       </div>
 
@@ -285,7 +286,7 @@ export function ApplicationProgressOverview({
 
         <div className="hidden xl:block">
           <div className="relative">
-            <span className="absolute left-6 right-6 top-5 h-px bg-slate-200" aria-hidden="true" />
+            <span className="absolute left-6 right-6 top-5 h-px bg-[var(--border-color)]" aria-hidden="true" />
             <ol className="relative grid grid-cols-7 gap-2">
               {WORKFLOW_STEPS.map((stepLabel, index) => {
                 const state = getStepState(application.status, currentIndex, index);
@@ -306,7 +307,7 @@ export function ApplicationProgressOverview({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600">
+      <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border-color)] pt-4 text-sm text-[var(--ink-muted)]">
         {[
           { label: "Completed", state: "completed" as const },
           { label: "Current Stage", state: "current" as const },

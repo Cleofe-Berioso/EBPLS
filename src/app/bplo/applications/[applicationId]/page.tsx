@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Mail, Phone } from "lucide-react";
 import { getBploApplicationDetail } from "@/lib/bplo-applications";
+import { getRequiredDocumentsValidationForApplication } from "@/lib/document-validation-server";
 import { formatPersonName } from "@/lib/person-name";
 import { resolveApplicantProfileImageUrl } from "@/lib/profile-image-url";
 import { StatusBadge } from "@/components/applicant/status-badge";
@@ -14,6 +15,13 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Timeline } from "@/components/ui/timeline";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { BploDocumentPreviewList } from "@/components/bplo/bplo-document-preview-list";
+import {
+  bploPanelClass,
+  bploSummaryLabelClass,
+  bploSummaryTileClass,
+  bploSummaryValueClass,
+  bploWarningPanelClass,
+} from "@/components/bplo/bplo-ui-styles";
 import { UserAvatar } from "@/components/ui/user-avatar";
 
 interface PageProps {
@@ -147,6 +155,16 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
     expiresInSeconds: PROFILE_IMAGE_SIGNED_URL_TTL_SECONDS,
   });
   const statusGuidance = getStatusGuidance(application.status);
+  const documentValidation = await getRequiredDocumentsValidationForApplication(application.id);
+  const approvalBlockMessage = documentValidation.ready
+    ? undefined
+    : `Resolve required document validation first: ${documentValidation.blockers
+        .map((blocker) =>
+          blocker.reason === "missing"
+            ? `${blocker.documentName} (missing upload)`
+            : `${blocker.documentName} (${blocker.validationStatus})`
+        )
+        .join("; ")}`;
   const latestRemarks = application.history.find(
     (item: any) => typeof item.remarks === "string" && item.remarks.trim().length > 0
   );
@@ -167,7 +185,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
   const longitude = typeof formData.businessLongitude === "number" ? formData.businessLongitude : null;
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <DetailHeader
         title="Application Review"
         subtitle={application.applicationNumber}
@@ -192,18 +210,18 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
             </div>
 
             <div className="min-w-0 space-y-3 text-center sm:text-left">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">Applicant</p>
+              <p className="ui-caption font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">Applicant</p>
               <div className="space-y-1.5">
-                <h3 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-[2rem]">{applicantName}</h3>
-                <p className="text-sm text-slate-500">{application.businessName}</p>
+                <h3 className="text-xl font-semibold tracking-tight text-[var(--foreground)] sm:text-2xl">{applicantName}</h3>
+                <p className="text-sm text-[var(--ink-muted)]">{application.businessName}</p>
               </div>
-              <div className="space-y-2 text-sm text-slate-600">
+              <div className="space-y-2 text-sm text-[var(--ink-muted)]">
                 <div className="flex items-center justify-center gap-2 sm:justify-start">
-                  <Mail className="h-4 w-4 text-slate-400" />
+                  <Mail className="h-4 w-4 text-[var(--ink-muted)]" />
                   <span className="break-all">{application.applicant.email}</span>
                 </div>
                 <div className="flex items-center justify-center gap-2 sm:justify-start">
-                  <Phone className="h-4 w-4 text-slate-400" />
+                  <Phone className="h-4 w-4 text-[var(--ink-muted)]" />
                   <span>{applicantContactNumber}</span>
                 </div>
               </div>
@@ -211,22 +229,22 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           </div>
 
           <div className="grid gap-3 text-sm sm:grid-cols-2 lg:w-[26rem] lg:grid-cols-2 lg:self-stretch">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Application Number</p>
-              <p className="mt-2 font-medium text-slate-900">{application.applicationNumber}</p>
+            <div className={bploSummaryTileClass}>
+              <p className={bploSummaryLabelClass}>Application Number</p>
+              <p className={bploSummaryValueClass}>{application.applicationNumber}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Application Type</p>
-              <p className="mt-2 font-medium text-slate-900">{application.applicationType}</p>
+            <div className={bploSummaryTileClass}>
+              <p className={bploSummaryLabelClass}>Application Type</p>
+              <p className={bploSummaryValueClass}>{application.applicationType}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date Submitted</p>
-              <p className="mt-2 font-medium text-slate-900">
+            <div className={bploSummaryTileClass}>
+              <p className={bploSummaryLabelClass}>Date Submitted</p>
+              <p className={bploSummaryValueClass}>
                 {application.submittedAt ? formatDateTime(application.submittedAt) : "-"}
               </p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Current Status</p>
+            <div className={bploSummaryTileClass}>
+              <p className={bploSummaryLabelClass}>Current Status</p>
               <div className="mt-2">
                 <StatusBadge status={application.status as ApplicationStatus} />
               </div>
@@ -237,19 +255,24 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
 
       <SectionCard title="Current Status" description="Current workflow meaning and expected next step.">
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <div className={bploPanelClass}>
             <p>
-              <span className="font-semibold text-slate-900">Status meaning:</span> {statusGuidance.meaning}
+              <span className="font-semibold text-[var(--foreground)]">Status meaning:</span> {statusGuidance.meaning}
             </p>
             <p className="mt-2">
-              <span className="font-semibold text-slate-900">Expected next step:</span> {statusGuidance.nextStep}
+              <span className="font-semibold text-[var(--foreground)]">Expected next step:</span> {statusGuidance.nextStep}
             </p>
           </div>
           <StatusTracker status={application.status as ApplicationStatus} />
         </div>
       </SectionCard>
 
-      <BploReviewActions applicationId={application.id} currentStatus={application.status} />
+      <BploReviewActions
+        applicationId={application.id}
+        currentStatus={application.status}
+        approvalBlocked={!documentValidation.ready}
+        approvalBlockMessage={approvalBlockMessage}
+      />
 
       <SectionCard title="Documents" description="Requirements attached by the applicant for BPLO review.">
         <BploDocumentPreviewList applicationId={application.id} documents={application.documents} />
@@ -257,9 +280,9 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
 
       <SectionCard title="Remarks" description="Latest BPLO remarks and comment trail context.">
         {latestRemarks ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm text-amber-900">{latestRemarks.remarks}</p>
-            <p className="mt-2 text-xs text-amber-800">
+          <div className={bploWarningPanelClass}>
+            <p className="text-sm text-[var(--foreground)]">{latestRemarks.remarks}</p>
+            <p className="mt-2 ui-caption">
               {latestRemarks.actorName}
               {latestRemarks.actorRole ? ` / ${latestRemarks.actorRole}` : ""} - {new Date(latestRemarks.createdAt).toLocaleString("en-PH")}
             </p>
@@ -272,7 +295,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
       <SectionCard title="Submitted Information" description="Complete read-only snapshot of submitted data for BPLO review.">
         <div className="grid gap-4 lg:grid-cols-2">
           <SectionCard title="Applicant / Owner Information" description="Filed owner identity and contact details.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               {ownerFirstName || ownerMiddleName || ownerSurname ? (
                 <>
                   <p><strong>First Name:</strong> {ownerFirstName || "-"}</p>
@@ -292,7 +315,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Business Identity" description="Registration and business identity fields.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Business Name:</strong> {readText(formData, ["businessName"], application.businessName)}</p>
               <p><strong>Trade Name:</strong> {readText(formData, ["tradeName"])}</p>
               <p><strong>Business Type:</strong> {readText(formData, ["businessType"])}</p>
@@ -306,7 +329,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Address and Location" description="Filed address and map pin details.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Main Office Address:</strong> {readText(formData, ["mainOfficeAddress"])}</p>
               <p><strong>Business Address:</strong> {readText(formData, ["businessAddress"])}</p>
               <p><strong>Barangay:</strong> {readText(formData, ["barangay"])}</p>
@@ -317,7 +340,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Business Operation Details" description="Operational and property declarations.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Business Area:</strong> {readText(formData, ["businessArea"])}</p>
               <p><strong>Total Floor Area:</strong> {readText(formData, ["totalFloorArea"])}</p>
               <p><strong>Asset Size:</strong> {readText(formData, ["assetSize"])}</p>
@@ -332,7 +355,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Employee Counts" description="Submitted staffing and vehicles declarations.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Total Employees:</strong> {readText(formData, ["totalEmployees"])}</p>
               <p><strong>Male Employees:</strong> {readText(formData, ["maleEmployees"])}</p>
               <p><strong>Female Employees:</strong> {readText(formData, ["femaleEmployees"])}</p>
@@ -342,7 +365,7 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Application-specific Notes" description="Renewal and closure-specific submitted details.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Application Type:</strong> {application.applicationType}</p>
 
               {application.applicationType === "RENEWAL" ? (

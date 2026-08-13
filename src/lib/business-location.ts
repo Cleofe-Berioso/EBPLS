@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
 import {
   inferMapBusinessCategory,
   MAP_CATEGORY_META,
@@ -592,6 +593,212 @@ export async function listActivePermittedBusinessLocations(
   }
 
   return filtered;
+}
+
+export async function listActivePermittedBusinessLocationsPaginated(
+  filters: BusinessMapFilters = {},
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<BusinessLocationMapRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+  const search = filters.search?.trim();
+
+  const businessRecordWhere: Record<string, unknown> = {
+    businessStatus: "ACTIVE",
+    applications: {
+      some: {
+        status: { in: [...ACTIVE_PERMITTED_MAP_APP_STATUSES] },
+        applicationType: { in: ["NEW", "RENEWAL"] },
+      },
+    },
+  };
+
+  if (search) {
+    businessRecordWhere.OR = [
+      { businessName: { contains: search, mode: "insensitive" } },
+      { tradeName: { contains: search, mode: "insensitive" } },
+      { ownerName: { contains: search, mode: "insensitive" } },
+      { applicant: { name: { contains: search, mode: "insensitive" } } },
+      {
+        applications: {
+          some: {
+            applicationNumber: { contains: search, mode: "insensitive" },
+          },
+        },
+      },
+      {
+        applications: {
+          some: {
+            permitIssuance: {
+              is: {
+                documentNumber: { contains: search, mode: "insensitive" },
+              },
+            },
+          },
+        },
+      },
+    ];
+  }
+
+  const where = { businessRecord: businessRecordWhere };
+
+  const [locations, totalCount] = await Promise.all([
+    prisma.businessLocation.findMany({
+      where,
+      select: {
+        id: true,
+        latitude: true,
+        longitude: true,
+        address: true,
+        barangay: true,
+        status: true,
+        remarks: true,
+        updatedAt: true,
+        businessRecord: {
+          select: {
+            id: true,
+            businessName: true,
+            tradeName: true,
+            ownerName: true,
+            lineOfBusiness: true,
+            permitExpirationDate: true,
+            applicant: {
+              select: {
+                name: true,
+              },
+            },
+            applications: {
+              where: {
+                status: { in: [...ACTIVE_PERMITTED_MAP_APP_STATUSES] },
+                applicationType: { in: ["NEW", "RENEWAL"] },
+              },
+              orderBy: {
+                updatedAt: "desc",
+              },
+              take: 1,
+              select: {
+                id: true,
+                applicationNumber: true,
+                applicationType: true,
+                status: true,
+                submittedAt: true,
+                formData: true,
+                documents: {
+                  select: {
+                    id: true,
+                    documentName: true,
+                    fileName: true,
+                    uploadedAt: true,
+                  },
+                  orderBy: {
+                    uploadedAt: "desc",
+                  },
+                },
+                history: {
+                  where: {
+                    actorRole: "BPLO",
+                    remarks: {
+                      not: null,
+                    },
+                  },
+                  select: {
+                    remarks: true,
+                    createdAt: true,
+                  },
+                  orderBy: {
+                    createdAt: "desc",
+                  },
+                  take: 1,
+                },
+                permitIssuance: {
+                  select: {
+                    documentNumber: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      skip,
+      take,
+    }),
+    prisma.businessLocation.count({ where }),
+  ]);
+
+  const rows = locations
+    .map((location: (typeof locations)[number]) => {
+      const latestApplication = location.businessRecord.applications[0];
+      if (!latestApplication) return null;
+
+      const lineOfBusiness =
+        typeof latestApplication.formData === "object" && latestApplication.formData
+          ? ((latestApplication.formData as Record<string, unknown>).lineOfBusiness as string | undefined)
+          : undefined;
+
+      const businessType =
+        typeof latestApplication.formData === "object" && latestApplication.formData
+          ? ((latestApplication.formData as Record<string, unknown>).businessType as string | undefined)
+          : undefined;
+
+      const tradeName =
+        typeof latestApplication.formData === "object" && latestApplication.formData
+          ? ((latestApplication.formData as Record<string, unknown>).tradeName as string | undefined)
+          : undefined;
+
+      const ownerNameFromForm =
+        typeof latestApplication.formData === "object" && latestApplication.formData
+          ? ((latestApplication.formData as Record<string, unknown>).ownerName as string | undefined)
+          : undefined;
+
+      const category = inferMapBusinessCategory({
+        businessType: businessType ?? null,
+        lineOfBusiness: (lineOfBusiness ?? location.businessRecord.lineOfBusiness ?? "").trim(),
+      });
+      const categoryMeta = MAP_CATEGORY_META[category];
+
+      return {
+        locationId: location.id,
+        businessRecordId: location.businessRecord.id,
+        applicationId: latestApplication.id,
+        applicantName: location.businessRecord.applicant?.name ?? "-",
+        tradeName: (tradeName ?? location.businessRecord.tradeName ?? null)?.trim() || null,
+        businessName: location.businessRecord.businessName,
+        businessType: businessType?.trim() || null,
+        ownerName: (ownerNameFromForm ?? location.businessRecord.ownerName).trim(),
+        businessCategory: category,
+        businessCategoryLabel: categoryMeta.label,
+        businessCategoryColor: categoryMeta.color,
+        applicationNumber: latestApplication.applicationNumber,
+        applicationType: latestApplication.applicationType as BusinessMapApplicationType,
+        submittedAt: latestApplication.submittedAt ? latestApplication.submittedAt.toISOString() : null,
+        permitOrCertificateNumber: latestApplication.permitIssuance?.documentNumber ?? null,
+        permitValidUntil: location.businessRecord.permitExpirationDate
+          ? location.businessRecord.permitExpirationDate.toISOString()
+          : null,
+        lineOfBusiness: (lineOfBusiness ?? location.businessRecord.lineOfBusiness ?? null)?.trim() || null,
+        applicationStatus: mapDbStatusToUi(latestApplication.status),
+        bploRemarks: latestApplication.history[0]?.remarks?.trim() || null,
+        documents: latestApplication.documents.map((doc) => ({
+          id: doc.id,
+          documentName: doc.documentName,
+          fileName: doc.fileName,
+          uploadedAt: doc.uploadedAt.toISOString(),
+        })),
+        latitude: location.latitude,
+        longitude: location.longitude,
+        address: location.address,
+        barangay: location.barangay,
+        status: location.status as LocationStatus,
+        remarks: location.remarks,
+        updatedAt: location.updatedAt.toISOString(),
+      } satisfies BusinessLocationMapRow;
+    })
+    .filter((row: BusinessLocationMapRow | null): row is BusinessLocationMapRow => Boolean(row));
+
+  return buildPaginatedResult(rows, totalCount, page, pageSize);
 }
 
 export async function listBploBusinessLocations(

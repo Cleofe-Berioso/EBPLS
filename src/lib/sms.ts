@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logSmsAction } from "@/lib/audit-log";
+import { getSmsProviderEnvLabel, isSmsEnabled, resolveSmsProvider, type SmsProviderName } from "@/lib/sms-config";
 
 export type ReleaseSmsStatus = "FOR_RELEASE" | "RELEASED";
 
@@ -16,14 +17,17 @@ export interface ReleaseSmsPayload {
 export interface SmsSendResult {
   attempted: boolean;
   sent: boolean;
-  provider: "twilio" | "semaphore" | "none";
+  provider: SmsProviderName;
   reason?: string;
   providerMessageId?: string;
   toPhone: string | null;
 }
 
-function isSmsEnabled(): boolean {
-  return process.env.SMS_ENABLED?.trim().toLowerCase() === "true";
+export interface SmsProviderSendResult {
+  ok: boolean;
+  provider: SmsProviderName;
+  reason?: string;
+  providerMessageId?: string;
 }
 
 function normalizePhMobile(raw: string | null): string | null {
@@ -67,7 +71,7 @@ async function createSmsDeliveryLog(input: {
   applicationId: string;
   applicantId?: string | null;
   phoneNumber: string | null;
-  provider: "twilio" | "semaphore" | "none";
+  provider: SmsProviderName;
   status: "SKIPPED" | "SENT" | "FAILED";
   messageBody: string;
   providerResponse?: string;
@@ -84,20 +88,19 @@ async function createSmsDeliveryLog(input: {
         providerResponse: input.providerResponse,
       },
     });
-      // Audit: SMS delivery logged
-      void logSmsAction(
-        null,
-        "SMS_SYSTEM",
-        input.applicantId,
-        null,
-        input.applicationId,
-        input.status as any,
-        input.phoneNumber,
-        input.provider,
-        input.status,
-        `SMS ${input.status.toLowerCase()}: ${input.provider}`,
-        { providerResponse: input.providerResponse }
-      );
+    void logSmsAction(
+      null,
+      "SMS_SYSTEM",
+      input.applicantId,
+      null,
+      input.applicationId,
+      input.status as "SKIPPED" | "SENT" | "FAILED",
+      input.phoneNumber,
+      input.provider,
+      input.status,
+      `SMS ${input.status.toLowerCase()}: ${input.provider}`,
+      { providerResponse: input.providerResponse }
+    );
   } catch (error) {
     console.error("[SMS] log failed", {
       applicationId: input.applicationId,
@@ -206,16 +209,40 @@ async function sendViaSemaphore(
   }
 }
 
+/**
+ * Sends an SMS via the configured provider.
+ * Caller must gate with isSmsEnabled() before invoking when SMS should be optional.
+ */
+export async function sendTransactionalSms(to: string, body: string): Promise<SmsProviderSendResult> {
+  const provider = resolveSmsProvider();
+
+  if (provider === "none") {
+    return {
+      ok: false,
+      provider: "none",
+      reason: `Unsupported SMS_PROVIDER: ${getSmsProviderEnvLabel()}`,
+    };
+  }
+
+  if (provider === "twilio") {
+    const twilio = await sendViaTwilio(to, body);
+    if (!twilio.ok) {
+      return { ok: false, provider: "twilio", reason: twilio.reason };
+    }
+    return { ok: true, provider: "twilio", providerMessageId: twilio.sid };
+  }
+
+  const semaphore = await sendViaSemaphore(to, body);
+  if (!semaphore.ok) {
+    return { ok: false, provider: "semaphore", reason: semaphore.reason };
+  }
+  return { ok: true, provider: "semaphore", providerMessageId: semaphore.messageId };
+}
+
 export async function sendReleaseStatusSms(payload: ReleaseSmsPayload): Promise<SmsSendResult> {
   const normalizedPhone = normalizePhMobile(payload.toPhone);
   const phoneForLog = normalizedPhone ?? payload.toPhone?.trim() ?? null;
-  const providerEnv = process.env.SMS_PROVIDER?.trim().toLowerCase() ?? "semaphore";
-  const provider =
-    providerEnv === "twilio"
-      ? "twilio"
-      : providerEnv === "semaphore"
-        ? "semaphore"
-        : "none";
+  const provider = resolveSmsProvider();
   const body = buildReleaseSmsMessage({
     applicantName: payload.applicantName,
     businessName: payload.businessName,
@@ -265,7 +292,7 @@ export async function sendReleaseStatusSms(payload: ReleaseSmsPayload): Promise<
   }
 
   if (provider === "none") {
-    const reason = `Unsupported SMS_PROVIDER: ${providerEnv}`;
+    const reason = `Unsupported SMS_PROVIDER: ${getSmsProviderEnvLabel()}`;
     console.warn("[SMS] skipped", {
       applicationId: payload.applicationId,
       applicationNumber: payload.applicationNumber,
@@ -284,87 +311,30 @@ export async function sendReleaseStatusSms(payload: ReleaseSmsPayload): Promise<
     return { attempted: false, sent: false, provider: "none", reason, toPhone: normalizedPhone };
   }
 
-  if (provider === "twilio") {
-    const twilio = await sendViaTwilio(normalizedPhone, body);
-    if (!twilio.ok) {
-      console.error("[SMS] failed", {
-        applicationId: payload.applicationId,
-        applicationNumber: payload.applicationNumber,
-        status: payload.status,
-        provider: "twilio",
-        toPhone: normalizedPhone,
-        reason: twilio.reason,
-      });
-      await createSmsDeliveryLog({
-        applicationId: payload.applicationId,
-        applicantId: payload.applicantId,
-        phoneNumber: normalizedPhone,
-        provider: "twilio",
-        status: "FAILED",
-        messageBody: body,
-        providerResponse: twilio.reason,
-      });
-      return {
-        attempted: true,
-        sent: false,
-        provider: "twilio",
-        reason: twilio.reason,
-        toPhone: normalizedPhone,
-      };
-    }
-
-    console.info("[SMS] sent", {
-      applicationId: payload.applicationId,
-      applicationNumber: payload.applicationNumber,
-      status: payload.status,
-      provider: "twilio",
-      toPhone: normalizedPhone,
-      providerMessageId: twilio.sid,
-    });
-
-    await createSmsDeliveryLog({
-      applicationId: payload.applicationId,
-      applicantId: payload.applicantId,
-      phoneNumber: normalizedPhone,
-      provider: "twilio",
-      status: "SENT",
-      messageBody: body,
-      providerResponse: twilio.sid ? `Message SID: ${twilio.sid}` : "Message sent",
-    });
-
-    return {
-      attempted: true,
-      sent: true,
-      provider: "twilio",
-      providerMessageId: twilio.sid,
-      toPhone: normalizedPhone,
-    };
-  }
-
-  const semaphore = await sendViaSemaphore(normalizedPhone, body);
-  if (!semaphore.ok) {
+  const delivery = await sendTransactionalSms(normalizedPhone, body);
+  if (!delivery.ok) {
     console.error("[SMS] failed", {
       applicationId: payload.applicationId,
       applicationNumber: payload.applicationNumber,
       status: payload.status,
-      provider: "semaphore",
+      provider: delivery.provider,
       toPhone: normalizedPhone,
-      reason: semaphore.reason,
+      reason: delivery.reason,
     });
     await createSmsDeliveryLog({
       applicationId: payload.applicationId,
       applicantId: payload.applicantId,
       phoneNumber: normalizedPhone,
-      provider: "semaphore",
+      provider: delivery.provider,
       status: "FAILED",
       messageBody: body,
-      providerResponse: semaphore.reason,
+      providerResponse: delivery.reason,
     });
     return {
       attempted: true,
       sent: false,
-      provider: "semaphore",
-      reason: semaphore.reason,
+      provider: delivery.provider,
+      reason: delivery.reason,
       toPhone: normalizedPhone,
     };
   }
@@ -373,26 +343,30 @@ export async function sendReleaseStatusSms(payload: ReleaseSmsPayload): Promise<
     applicationId: payload.applicationId,
     applicationNumber: payload.applicationNumber,
     status: payload.status,
-    provider: "semaphore",
+    provider: delivery.provider,
     toPhone: normalizedPhone,
-    providerMessageId: semaphore.messageId,
+    providerMessageId: delivery.providerMessageId,
   });
 
   await createSmsDeliveryLog({
     applicationId: payload.applicationId,
     applicantId: payload.applicantId,
     phoneNumber: normalizedPhone,
-    provider: "semaphore",
+    provider: delivery.provider,
     status: "SENT",
     messageBody: body,
-    providerResponse: semaphore.messageId ? `Message ID: ${semaphore.messageId}` : "Message sent",
+    providerResponse: delivery.providerMessageId
+      ? delivery.provider === "twilio"
+        ? `Message SID: ${delivery.providerMessageId}`
+        : `Message ID: ${delivery.providerMessageId}`
+      : "Message sent",
   });
 
   return {
     attempted: true,
     sent: true,
-    provider: "semaphore",
-    providerMessageId: semaphore.messageId,
+    provider: delivery.provider,
+    providerMessageId: delivery.providerMessageId,
     toPhone: normalizedPhone,
   };
 }

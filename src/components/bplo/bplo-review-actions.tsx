@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { bploFormControlClass, bploPanelClass } from "@/components/bplo/bplo-ui-styles";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -10,6 +11,8 @@ import { SectionCard } from "@/components/ui/section-card";
 interface BploReviewActionsProps {
   applicationId: string;
   currentStatus: string;
+  approvalBlocked?: boolean;
+  approvalBlockMessage?: string;
 }
 
 const ACTIONS_BY_STATUS: Record<string, Array<{ action: string; label: string; requiresRemarks: boolean; variant: "primary" | "warning" | "danger" }>> = {
@@ -25,7 +28,12 @@ const ACTIONS_BY_STATUS: Record<string, Array<{ action: string; label: string; r
   ],
 };
 
-export function BploReviewActions({ applicationId, currentStatus }: BploReviewActionsProps) {
+export function BploReviewActions({
+  applicationId,
+  currentStatus,
+  approvalBlocked = false,
+  approvalBlockMessage,
+}: BploReviewActionsProps) {
   const router = useRouter();
   const [remarks, setRemarks] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -34,6 +42,11 @@ export function BploReviewActions({ applicationId, currentStatus }: BploReviewAc
   const actions = ACTIONS_BY_STATUS[currentStatus] ?? [];
 
   async function runAction(action: string, requiresRemarks: boolean) {
+    if (action === "approve-assessment" && approvalBlocked) {
+      setMessage(approvalBlockMessage ?? "All required documents must be marked Valid before approval.");
+      return;
+    }
+
     if (requiresRemarks && !remarks.trim()) {
       setMessage("Remarks are required for this action.");
       return;
@@ -82,7 +95,8 @@ export function BploReviewActions({ applicationId, currentStatus }: BploReviewAc
           hint="Required for return and reject actions; stored in application history."
         >
           <textarea
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+            aria-label="Remarks"
+            className={bploFormControlClass}
             rows={3}
             value={remarks}
             onChange={(event) => setRemarks(event.target.value)}
@@ -96,19 +110,33 @@ export function BploReviewActions({ applicationId, currentStatus }: BploReviewAc
           variant="readOnly"
         />
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50/85 p-3">
+        {approvalBlocked ? (
+          <InfoBanner
+            title="Approval blocked by document validation"
+            description={
+              approvalBlockMessage ??
+              "All required documents must be marked Valid before sending this application to Department Head review."
+            }
+            variant="danger"
+          />
+        ) : null}
+
+        <div className={bploPanelClass}>
           <div className="flex flex-wrap gap-2">
-          {actions.map((item) => (
+          {actions.map((item) => {
+            const blockedByDocuments = item.action === "approve-assessment" && approvalBlocked;
+            return (
             <button
               key={item.action}
               type="button"
-              disabled={pendingAction !== null}
+              disabled={pendingAction !== null || blockedByDocuments}
               onClick={() => runAction(item.action, item.requiresRemarks)}
               className={actionButtonStyles(item.variant, "sm")}
             >
               {pendingAction === item.action ? "Processing..." : item.label}
             </button>
-          ))}
+          );
+          })}
           </div>
         </div>
 

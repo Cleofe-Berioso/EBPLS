@@ -15,7 +15,7 @@ export default async function DepartmentHeadSettlementManagementPage() {
         eyebrow="Department Head"
         title="Settlement Management"
         description="View and settle eligible government-agency-related compliance cases."
-        badge={<RoleBadge role="VIEW_ONLY" label="Department Head" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Department Head" />}
       />
 
       <InfoBanner

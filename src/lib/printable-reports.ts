@@ -189,6 +189,7 @@ export const BUSINESS_STATUS_OPTIONS: Array<{ value: string; label: string }> = 
 
 export const INSPECTION_COMPLIANCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "", label: "All Compliance" },
+  { value: "PENDING_REVIEW", label: "Pending Review" },
   { value: "COMPLIANT", label: "Compliant" },
   { value: "NON_COMPLIANT", label: "Non-Compliant" },
 ];

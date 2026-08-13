@@ -3,15 +3,16 @@ import { NextResponse } from "next/server";
 import {
   ADDRESS_API_NOT_CONFIGURED_MESSAGE,
   ADDRESS_API_REQUEST_FAILED_MESSAGE,
+  assertAllowedPsgcCloudUrl,
+  fetchTrustedHttpsJson,
   getCountryStateCityApiKey,
   jsonAddressError,
   normalizeCountryStateCityCity,
+  PSGC_CLOUD_BASE_URL,
 } from "@/lib/address-server";
 import type { CountryStateCityCity } from "@/lib/address-types";
 
 export const dynamic = "force-dynamic";
-
-const PSGC_CLOUD_BASE_URL = "https://psgc.cloud/api/v2";
 
 type PsgcCloudProvince = {
   code?: string;
@@ -61,7 +62,9 @@ function normalizeLabel(value: unknown): string | null {
 }
 
 async function fetchCloudArray<T>(url: string): Promise<T[]> {
-  const response = await fetch(url, { cache: "no-store" });
+  const response = await fetchTrustedHttpsJson(assertAllowedPsgcCloudUrl(url), {
+    allowedHostname: "psgc.cloud",
+  });
   if (!response.ok) {
     throw new Error("Request failed");
   }

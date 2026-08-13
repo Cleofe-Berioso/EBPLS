@@ -10,7 +10,9 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") ?? undefined;
+  const page = searchParams.get("page") ?? undefined;
+  const pageSize = searchParams.get("pageSize") ?? undefined;
 
-  const applications = await listSuperAdminApplications(search);
-  return NextResponse.json({ applications });
+  const result = await listSuperAdminApplications(search, { page, pageSize });
+  return NextResponse.json({ applications: result.records, pagination: result });
 }

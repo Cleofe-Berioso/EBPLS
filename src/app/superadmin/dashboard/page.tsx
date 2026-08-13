@@ -4,11 +4,14 @@ import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
+import { DashboardQueueCard } from "@/components/ui/dashboard-queue-card";
 import { DashboardLineChart } from "@/components/ui/dashboard-line-chart";
 import { DashboardStackedBarChart } from "@/components/ui/dashboard-stacked-bar-chart";
 import { DashboardHorizontalBarChart } from "@/components/ui/dashboard-horizontal-bar-chart";
 import { DashboardPieChart } from "@/components/ui/dashboard-pie-chart";
 import { DashboardGaugeCard } from "@/components/ui/dashboard-gauge-card";
+import { DASHBOARD_CHART_COLORS } from "@/components/ui/dashboard-chart-card";
+import { Activity, ClipboardList, MessageSquareWarning, Users } from "lucide-react";
 import {
   getSuperAdminDashboardSummary,
   getSuperAdminReportsSummary,
@@ -46,19 +49,19 @@ export default async function SuperAdminDashboard() {
       title: "Closure Applications",
       value: totalClosure.toLocaleString("en-PH"),
       subtitle: "Closure application records",
-      tone: "slate" as const,
+      tone: "blue" as const,
     },
     {
       title: "Total Users",
       value: summary.totalUsers.toLocaleString("en-PH"),
       subtitle: "Applicant and system role accounts",
-      tone: "slate" as const,
+      tone: "blue" as const,
     },
     {
       title: "Total Applications",
       value: summary.totalApplications.toLocaleString("en-PH"),
       subtitle: "System-wide application records",
-      tone: "slate" as const,
+      tone: "blue" as const,
     },
     {
       title: "Released Permits/Certificates",
@@ -69,12 +72,13 @@ export default async function SuperAdminDashboard() {
   ];
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <PageHeader
-        eyebrowClassName="text-slate-600"
+        eyebrow="Super Admin"
         title="IT ADMINISTRATOR Dashboard"
         description="Operational analytics for system activity, workflow volume, compliance, and messaging logs."
-        badge={<RoleBadge role="VIEW_ONLY" label="Read-Only Monitoring" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Read-Only Monitoring" />}
+        showHeroWatermark
       />
 
       <InfoBanner
@@ -83,11 +87,48 @@ export default async function SuperAdminDashboard() {
         variant="readOnly"
       />
 
+      <SectionCard title="Oversight Priorities" description="High-level queues and signals for system monitoring.">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardQueueCard
+            title="Applications Registry"
+            description="System-wide application records available for audit."
+            count={summary.totalApplications}
+            href="/superadmin/applications"
+            tone="info"
+            icon={<ClipboardList className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="User Accounts"
+            description="Applicant and staff accounts managed in the system."
+            count={summary.totalUsers}
+            href="/superadmin/users"
+            tone="success"
+            icon={<Users className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Recent Activity"
+            description="Application history entries recorded in the last 7 days."
+            count={metrics.systemHealth.recentActivityVolume}
+            href="/superadmin/activities"
+            tone="warning"
+            icon={<Activity className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Failed SMS"
+            description="SMS delivery failures recorded in the last 7 days."
+            count={metrics.systemHealth.recentFailedSmsCount}
+            href="/superadmin/reports"
+            tone="danger"
+            icon={<MessageSquareWarning className="h-4 w-4" />}
+          />
+        </div>
+      </SectionCard>
+
       <SectionCard
         title="System Totals"
         description="Core system totals preserved for high-level oversight."
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {systemTotalsCards.map((card) => (
             <StatCard
               key={card.title}
@@ -106,11 +147,11 @@ export default async function SuperAdminDashboard() {
           description="Daily activity log volume by actor role. Uses application history logs as a proxy for daily active users."
           data={metrics.userActivityByRole}
           series={[
-            { key: "applicant", label: "Applicant", color: "#2563eb" },
-            { key: "bplo", label: "BPLO", color: "#0f766e" },
-            { key: "departmentHead", label: "Department Head", color: "#ea580c" },
-            { key: "jit", label: "JIT", color: "#7c3aed" },
-            { key: "superAdmin", label: "Super Admin", color: "#334155" },
+            { key: "applicant", label: "Applicant", color: DASHBOARD_CHART_COLORS[2] },
+            { key: "bplo", label: "BPLO", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "departmentHead", label: "Department Head", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "jit", label: "JIT", color: DASHBOARD_CHART_COLORS[6] },
+            { key: "superAdmin", label: "Super Admin", color: DASHBOARD_CHART_COLORS[5] },
           ]}
           emptyTitle="No user activity logs available yet."
           emptyDescription="System user activity will appear once workflow history entries are recorded."
@@ -122,12 +163,12 @@ export default async function SuperAdminDashboard() {
           data={metrics.applicationVolumeAcrossSystem}
           categoryKey="stage"
           series={[
-            { key: "bploReview", label: "BPLO Review", color: "#2563eb" },
-            { key: "bploAssessment", label: "BPLO Assessment", color: "#0891b2" },
-            { key: "bploPayment", label: "BPLO Payment", color: "#ea580c" },
-            { key: "bploRelease", label: "BPLO Release", color: "#16a34a" },
-            { key: "departmentHeadApproval", label: "Department Head Approval", color: "#7c3aed" },
-            { key: "jitInspection", label: "JIT Inspection", color: "#dc2626" },
+            { key: "bploReview", label: "BPLO Review", color: DASHBOARD_CHART_COLORS[2] },
+            { key: "bploAssessment", label: "BPLO Assessment", color: DASHBOARD_CHART_COLORS[6] },
+            { key: "bploPayment", label: "BPLO Payment", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "bploRelease", label: "BPLO Release", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "departmentHeadApproval", label: "Department Head Approval", color: DASHBOARD_CHART_COLORS[5] },
+            { key: "jitInspection", label: "JIT Inspection", color: DASHBOARD_CHART_COLORS[4] },
           ]}
           emptyTitle="No application volume data available yet."
           emptyDescription="Stage volume will appear once applications and inspections are available."
@@ -138,15 +179,15 @@ export default async function SuperAdminDashboard() {
           description="Daily trend for submissions, approvals, returns/rejections, inspections, payment verification, permit releases, and SMS outcomes."
           data={metrics.transactionVolume}
           series={[
-            { key: "logins", label: "Logins (if tracked)", color: "#64748b" },
-            { key: "submitted", label: "Applications Submitted", color: "#2563eb" },
-            { key: "approvals", label: "Approvals", color: "#16a34a" },
-            { key: "returnsRejections", label: "Returns/Rejections", color: "#dc2626" },
-            { key: "inspections", label: "Inspections", color: "#7c3aed" },
-            { key: "paymentVerification", label: "Payment Verification", color: "#ea580c" },
-            { key: "permitReleases", label: "Permit Releases", color: "#0891b2" },
-            { key: "smsSent", label: "SMS Sent", color: "#22c55e" },
-            { key: "smsFailed", label: "SMS Failed", color: "#ef4444" },
+            { key: "logins", label: "Logins (if tracked)", color: DASHBOARD_CHART_COLORS[5] },
+            { key: "submitted", label: "Applications Submitted", color: DASHBOARD_CHART_COLORS[2] },
+            { key: "approvals", label: "Approvals", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "returnsRejections", label: "Returns/Rejections", color: DASHBOARD_CHART_COLORS[4] },
+            { key: "inspections", label: "Inspections", color: DASHBOARD_CHART_COLORS[6] },
+            { key: "paymentVerification", label: "Payment Verification", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "permitReleases", label: "Permit Releases", color: DASHBOARD_CHART_COLORS[1] },
+            { key: "smsSent", label: "SMS Sent", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "smsFailed", label: "SMS Failed", color: DASHBOARD_CHART_COLORS[4] },
           ]}
           emptyTitle="No transaction activity available yet."
           emptyDescription="Activity trends will render when history and related logs contain records."
@@ -158,10 +199,10 @@ export default async function SuperAdminDashboard() {
           data={metrics.complianceRevocationTrends}
           categoryKey="metric"
           series={[
-            { key: "releasedPermits", label: "Approved/Released Permits", color: "#16a34a" },
-            { key: "verifiedNonCompliant", label: "Verified Non-Compliant", color: "#f97316" },
-            { key: "revokedBusinesses", label: "Revoked Businesses", color: "#dc2626" },
-            { key: "restrictedRenewals", label: "Restricted/Disabled Renewals", color: "#7c3aed" },
+            { key: "releasedPermits", label: "Approved/Released Permits", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "verifiedNonCompliant", label: "Verified Non-Compliant", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "revokedBusinesses", label: "Revoked Businesses", color: DASHBOARD_CHART_COLORS[4] },
+            { key: "restrictedRenewals", label: "Restricted/Disabled Renewals", color: DASHBOARD_CHART_COLORS[5] },
           ]}
           emptyTitle="No compliance or revocation records yet."
           emptyDescription="Compliance and revocation trends will appear once inspection and revocation data exists."
@@ -210,7 +251,7 @@ export default async function SuperAdminDashboard() {
         title="System Health Indicators"
         description="Internal indicators only; this is not full server uptime or infrastructure monitoring."
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <DashboardGaugeCard
             title="Database Reachability"
             description={metrics.systemHealth.databaseReachable ? "Database ping succeeded." : "Database ping failed."}
@@ -222,7 +263,7 @@ export default async function SuperAdminDashboard() {
             title="Last Successful Dashboard Check"
             value={lastCheckLabel}
             subtitle="Last aggregation run"
-            tone="slate"
+            tone="blue"
           />
           <StatCard
             title="Recent Failed SMS (7 days)"

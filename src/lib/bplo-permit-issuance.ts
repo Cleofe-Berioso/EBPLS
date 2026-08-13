@@ -5,6 +5,7 @@ import { toMoneyNumber } from "@/lib/money";
 import { sendReleaseStatusSms } from "@/lib/sms";
 import { upsertBusinessLocationForBusinessRecord } from "@/lib/business-location";
 import { finalizeComplianceRelatedClosure } from "@/lib/compliance-closure";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -253,6 +254,42 @@ function toListRow(app: any): PermitIssuanceRow {
   };
 }
 
+export type PermitIssuanceBucket = "blocked" | "paid" | "forRelease" | "released";
+
+const PERMIT_ISSUANCE_BUCKET_STATUS: Record<PermitIssuanceBucket, DbApplicationStatus> = {
+  blocked: "APPROVED_FOR_PAYMENT",
+  paid: "PAID",
+  forRelease: "FOR_RELEASE",
+  released: "RELEASED",
+};
+
+const permitIssuanceInclude = {
+  applicant: { select: { name: true, email: true } },
+  businessRecord: { select: { businessName: true } },
+  feeAssessment: {
+    select: {
+      assessmentNumber: true,
+      releasePaymentAmount: true,
+      amountPaid: true,
+      remainingBalance: true,
+    },
+  },
+  paymentReferences: {
+    orderBy: { submittedAt: "desc" as const },
+    take: 1,
+    select: {
+      transactionNumber: true,
+      status: true,
+    },
+  },
+  history: { select: { toStatus: true, createdAt: true }, orderBy: { createdAt: "asc" as const } },
+  permitIssuance: {
+    include: {
+      releasedBy: { select: { name: true } },
+    },
+  },
+} as const;
+
 export async function listPermitIssuanceEntries(): Promise<PermitIssuanceLists> {
   const rows = await prisma.businessApplication.findMany({
     where: {
@@ -303,6 +340,27 @@ export async function listPermitIssuanceEntries(): Promise<PermitIssuanceLists> 
       .filter((row) => row.status === "RELEASED")
       .map(toListRow),
   };
+}
+
+export async function listPermitIssuanceBucketPaginated(
+  bucket: PermitIssuanceBucket,
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<PermitIssuanceRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+  const where = { status: PERMIT_ISSUANCE_BUCKET_STATUS[bucket] };
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where,
+      include: permitIssuanceInclude,
+      orderBy: [{ updatedAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.businessApplication.count({ where }),
+  ]);
+
+  return buildPaginatedResult(rows.map(toListRow), totalCount, page, pageSize);
 }
 
 export async function getPermitIssuanceDetail(applicationId: string): Promise<PermitIssuanceDetail | null> {

@@ -34,7 +34,7 @@ function CardShell({ subtitle, title, children }: { subtitle: string; title: str
   return (
     <div className="relative z-10 w-full max-w-md">
       <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
-        <div className="bg-[#0b8754] px-8 py-8 text-center text-white">
+        <div className="bg-[var(--primary)] px-8 py-8 text-center text-white">
           <div className="mb-4 flex justify-center">
             <div className="rounded-full bg-white p-2 shadow-sm">
               <Image
@@ -46,9 +46,9 @@ function CardShell({ subtitle, title, children }: { subtitle: string; title: str
               />
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality of Enrique B. Magalona</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">Municipality of Enrique B. Magalona</p>
           <h1 className="mt-2 text-2xl font-bold text-white">{title}</h1>
-          <p className="mt-2 text-sm text-[#d1fae5]">{subtitle}</p>
+          <p className="mt-2 text-sm text-[var(--primary-soft)]">{subtitle}</p>
         </div>
         {children}
         <div className="bg-slate-50 px-8 py-4">
@@ -62,7 +62,7 @@ function CardShell({ subtitle, title, children }: { subtitle: string; title: str
           Need account assistance? Contact BPLO at{" "}
           <a
             href="mailto:support@bplo.gov.ph"
-            className="font-semibold text-[#0b8754] hover:text-[#096a42]"
+            className="font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)]"
           >
             support@bplo.gov.ph
           </a>
@@ -88,22 +88,22 @@ function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
             <div
               className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                 current === n
-                  ? "bg-[#0b8754] text-white"
+                  ? "bg-[var(--primary)] text-white"
                   : current > n
-                  ? "bg-[#bbf7d0] text-[#0b8754]"
+                  ? "bg-[var(--primary-soft)] text-[var(--primary)]"
                   : "bg-slate-200 text-slate-500"
               }`}
             >
               {current > n ? "✓" : n}
             </div>
-            <span className={`text-[10px] font-medium ${current === n ? "text-[#0b8754]" : "text-slate-400"}`}>
+            <span className={`text-[10px] font-medium ${current === n ? "text-[var(--primary)]" : "text-slate-400"}`}>
               {label}
             </span>
           </div>
           {i < steps.length - 1 && (
             <div
               className={`h-0.5 w-10 mb-3 rounded-full transition-colors ${
-                current > n ? "bg-[#0b8754]" : "bg-slate-200"
+                current > n ? "bg-[var(--primary)]" : "bg-slate-200"
               }`}
             />
           )}
@@ -126,7 +126,7 @@ export function RegisterForm() {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Saved form data carried across steps
-  const savedData = useRef<FormData | null>(null);
+  const [savedData, setSavedData] = useState<FormData | null>(null);
 
   // ── Start resend countdown ─────────────────────────────────────────────────
   function startCountdown() {
@@ -215,7 +215,7 @@ export function RegisterForm() {
       }
 
       // OTP sent — save form data and proceed to OTP step
-      savedData.current = data;
+      setSavedData(data);
       setOtp(["", "", "", "", "", ""]);
       setOtpState({ status: "idle" });
       setFormState({ status: "idle" });
@@ -236,7 +236,13 @@ export function RegisterForm() {
 
     setOtpState({ status: "loading" });
 
-    const email = savedData.current!.email;
+    if (!savedData) {
+      setOtpState({ status: "error", message: "Registration details were lost. Please restart the form." });
+      setStep("form");
+      return;
+    }
+
+    const email = savedData.email;
 
     try {
       // 1. Verify OTP
@@ -257,7 +263,7 @@ export function RegisterForm() {
       const registerRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(savedData.current),
+        body: JSON.stringify(savedData),
       });
 
       const registerJson = await registerRes.json();
@@ -277,13 +283,19 @@ export function RegisterForm() {
   // ── Step 2b: resend OTP ────────────────────────────────────────────────────
   async function handleResend() {
     if (!canResend) return;
+    if (!savedData) {
+      setOtpState({ status: "error", message: "Registration details were lost. Please restart the form." });
+      setStep("form");
+      return;
+    }
+
     setOtpState({ status: "loading" });
 
     try {
       const res = await fetch("/api/auth/register/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: savedData.current!.email }),
+        body: JSON.stringify({ email: savedData.email }),
       });
 
       const json = await res.json();
@@ -317,7 +329,7 @@ export function RegisterForm() {
           <div className="mt-6 text-center">
             <Link
               href="/login"
-              className="inline-flex w-full items-center justify-center rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] shadow-sm"
+              className="inline-flex w-full items-center justify-center rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)]"
             >
               Go to Login
             </Link>
@@ -343,9 +355,9 @@ export function RegisterForm() {
           )}
 
           <div className="mb-5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <ShieldCheck className="mb-1 inline-block h-4 w-4 text-[#0b8754]" />{" "}
+            <ShieldCheck className="mb-1 inline-block h-4 w-4 text-[var(--primary)]" />{" "}
             We sent a 6-digit OTP to{" "}
-            <span className="font-semibold text-slate-800">{savedData.current?.email}</span>.
+            <span className="font-semibold text-slate-800">{savedData?.email}</span>.
             Check your inbox and spam folder.
           </div>
 
@@ -364,7 +376,7 @@ export function RegisterForm() {
                   disabled={isLoading}
                   onChange={(e) => handleDigitChange(i, e.target.value)}
                   onKeyDown={(e) => handleDigitKeyDown(i, e)}
-                  className="h-14 w-11 rounded-xl border border-slate-200 bg-slate-50 text-center text-2xl font-bold text-slate-900 outline-none transition-all focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 disabled:opacity-50"
+                  className="h-14 w-11 rounded-xl border border-slate-200 bg-slate-50 text-center text-2xl font-bold text-slate-900 outline-none transition-colors focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)] disabled:opacity-50"
                   aria-label={`OTP digit ${i + 1}`}
                 />
               ))}
@@ -373,7 +385,7 @@ export function RegisterForm() {
             <button
               type="submit"
               disabled={isLoading || otpValue.length !== 6}
-              className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm"
+              className="w-full rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
             >
               {isLoading ? "Verifying…" : "Verify & Create Account"}
             </button>
@@ -386,7 +398,7 @@ export function RegisterForm() {
                 type="button"
                 onClick={handleResend}
                 disabled={isLoading}
-                className="inline-flex items-center gap-1 font-semibold text-[#0b8754] hover:text-[#096a42] disabled:opacity-50"
+                className="inline-flex items-center gap-1 font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)] disabled:opacity-50"
               >
                 <RotateCcw className="h-4 w-4" />
                 Resend OTP
@@ -403,7 +415,7 @@ export function RegisterForm() {
             <button
               type="button"
               onClick={() => { setStep("form"); setFormState({ status: "idle" }); }}
-              className="text-slate-500 hover:text-[#0b8754]"
+              className="text-slate-500 hover:text-[var(--primary)]"
             >
               ← Back to registration form
             </button>
@@ -443,10 +455,11 @@ export function RegisterForm() {
                 id="firstName"
                 name="firstName"
                 type="text"
+                aria-label="First Name"
                 autoComplete="given-name"
                 required
-                defaultValue={savedData.current?.firstName ?? ""}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                defaultValue={savedData?.firstName ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Juan"
               />
             </div>
@@ -465,9 +478,10 @@ export function RegisterForm() {
                 id="middleName"
                 name="middleName"
                 type="text"
+                aria-label="Middle Name"
                 autoComplete="additional-name"
-                defaultValue={savedData.current?.middleName ?? ""}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                defaultValue={savedData?.middleName ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Santos"
               />
             </div>
@@ -486,10 +500,11 @@ export function RegisterForm() {
                 id="lastName"
                 name="lastName"
                 type="text"
+                aria-label="Last Name"
                 autoComplete="family-name"
                 required
-                defaultValue={savedData.current?.lastName ?? ""}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                defaultValue={savedData?.lastName ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Dela Cruz"
               />
             </div>
@@ -508,9 +523,10 @@ export function RegisterForm() {
                 id="suffix"
                 name="suffix"
                 type="text"
+                aria-label="Suffix"
                 autoComplete="honorific-suffix"
-                defaultValue={savedData.current?.suffix ?? ""}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                defaultValue={savedData?.suffix ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Jr."
               />
             </div>
@@ -531,10 +547,11 @@ export function RegisterForm() {
                 id="email"
                 name="email"
                 type="email"
+                aria-label="Email"
                 autoComplete="email"
                 required
-                defaultValue={savedData.current?.email ?? ""}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                defaultValue={savedData?.email ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="your.email@example.com"
               />
             </div>
@@ -555,11 +572,12 @@ export function RegisterForm() {
                 id="contactNumber"
                 name="contactNumber"
                 type="tel"
+                aria-label="Contact Number"
                 autoComplete="tel"
                 required
                 pattern="^(\+63|0)9\d{9}$"
-                defaultValue={savedData.current?.contactNumber ?? ""}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                defaultValue={savedData?.contactNumber ?? ""}
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="09XX-XXX-XXXX"
               />
             </div>
@@ -581,9 +599,10 @@ export function RegisterForm() {
                 name="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
+                aria-label="Password"
                 required
                 minLength={8}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="At least 8 characters"
               />
               <button
@@ -593,9 +612,9 @@ export function RegisterForm() {
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
               >
                 {showPassword ? (
-                  <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
+                  <EyeOff className="h-5 w-5 text-slate-400 transition-colors hover:text-[var(--primary)]" />
                 ) : (
-                  <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
+                  <Eye className="h-5 w-5 text-slate-400 transition-colors hover:text-[var(--primary)]" />
                 )}
               </button>
             </div>
@@ -617,9 +636,10 @@ export function RegisterForm() {
                 name="confirmPassword"
                 type={showConfirm ? "text" : "password"}
                 autoComplete="new-password"
+                aria-label="Confirm Password"
                 required
                 minLength={8}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20"
+                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Re-enter your password"
               />
               <button
@@ -629,9 +649,9 @@ export function RegisterForm() {
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
               >
                 {showConfirm ? (
-                  <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
+                  <EyeOff className="h-5 w-5 text-slate-400 transition-colors hover:text-[var(--primary)]" />
                 ) : (
-                  <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
+                  <Eye className="h-5 w-5 text-slate-400 transition-colors hover:text-[var(--primary)]" />
                 )}
               </button>
             </div>
@@ -640,7 +660,7 @@ export function RegisterForm() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm"
+            className="w-full rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
           >
             {isLoading ? "Sending OTP…" : "Send Verification OTP"}
           </button>
@@ -651,7 +671,7 @@ export function RegisterForm() {
             Already have an account?{" "}
             <Link
               href="/login"
-              className="font-semibold text-[#0b8754] hover:text-[#096a42]"
+              className="font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)]"
             >
               Sign in
             </Link>

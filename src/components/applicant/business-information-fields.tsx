@@ -6,9 +6,12 @@ import type { BusinessInfo } from "@/lib/applicant-types";
 import {
   EB_MAGALONA_BARANGAYS,
   canUseMainOfficeAsBusinessLocation,
+  CORPORATION_NATIONALITY_OPTIONS,
+  getOwnerRoleLabel,
   getRegistrationHelperText,
   getRegistrationLabel,
   normalizeEbMagalonaBarangayName,
+  requiresCorporationNationality,
   resolveNationalityOnBusinessTypeChange,
 } from "@/lib/business-rules";
 import { formatOwnerName } from "@/lib/person-name";
@@ -41,17 +44,15 @@ function fieldLocked(lockedFields: Array<keyof BusinessInfo>, key: keyof Busines
 }
 
 function fieldClasses(locked: boolean) {
-  return `w-full rounded-xl border px-3 py-3 text-sm transition-colors ${
-    locked
-      ? "border-slate-300 bg-slate-100 text-slate-800 shadow-inner"
-      : "border-slate-300 bg-white text-slate-900 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-100"
-  }`;
+  return locked
+    ? "w-full text-sm border-[var(--border-color)] bg-[var(--muted-surface)] text-[var(--ink-muted)] shadow-inner"
+    : "w-full text-sm";
 }
 
 function LockedHint({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
-    <p className="mt-1 text-xs text-slate-600">
+    <p className="mt-1 ui-caption">
       Pulled from the existing business record.
     </p>
   );
@@ -68,6 +69,19 @@ function normalizeAddressName(value: string): string {
     .trim();
 }
 
+type FetchedAddressList = {
+  key: string;
+  options: AddressOption[];
+  loading: boolean;
+  error?: string;
+};
+
+const EMPTY_FETCHED_ADDRESS_LIST: FetchedAddressList = {
+  key: "",
+  options: [],
+  loading: false,
+};
+
 export function BusinessInformationFields({
   value,
   onChange,
@@ -78,6 +92,8 @@ export function BusinessInformationFields({
 }: BusinessInformationFieldsProps) {
   const registrationLabel = getRegistrationLabel(value.businessType);
   const registrationHelperText = getRegistrationHelperText(value.businessType);
+  const ownerRoleLabel = getOwnerRoleLabel(value.businessType);
+  const showCorporationNationality = requiresCorporationNationality(value.businessType);
   const ownerIdentityLocked =
     fieldLocked(lockedFields, "ownerName") ||
     fieldLocked(lockedFields, "ownerFirstName") ||
@@ -109,15 +125,9 @@ export function BusinessInformationFields({
   const [countryOptions, setCountryOptions] = useState<AddressOption[]>([]);
   const [countryLoading, setCountryLoading] = useState(false);
   const [countryError, setCountryError] = useState<string | undefined>();
-  const [provinceOptions, setProvinceOptions] = useState<AddressOption[]>([]);
-  const [provinceLoading, setProvinceLoading] = useState(false);
-  const [provinceError, setProvinceError] = useState<string | undefined>();
-  const [cityOptions, setCityOptions] = useState<AddressOption[]>([]);
-  const [cityLoading, setCityLoading] = useState(false);
-  const [cityError, setCityError] = useState<string | undefined>();
-  const [barangayOptions, setBarangayOptions] = useState<AddressOption[]>([]);
-  const [barangayLoading, setBarangayLoading] = useState(false);
-  const [barangayError, setBarangayError] = useState<string | undefined>();
+  const [provinceList, setProvinceList] = useState<FetchedAddressList>(EMPTY_FETCHED_ADDRESS_LIST);
+  const [cityList, setCityList] = useState<FetchedAddressList>(EMPTY_FETCHED_ADDRESS_LIST);
+  const [barangayList, setBarangayList] = useState<FetchedAddressList>(EMPTY_FETCHED_ADDRESS_LIST);
 
   // Business address barangays: loaded from API, with static EB_MAGALONA_BARANGAYS as fallback.
   const [businessBarangayOptions, setBusinessBarangayOptions] = useState<string[]>([...EB_MAGALONA_BARANGAYS]);
@@ -125,15 +135,41 @@ export function BusinessInformationFields({
 
   // Keep refs to latest value/onChange so backfill effects don't re-run on every render.
   const latestValueRef = useRef(value);
-  latestValueRef.current = value;
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    latestValueRef.current = value;
+    onChangeRef.current = onChange;
+  });
+
+  const provinceFetchKey = selectedMainOfficeCountryCode;
+  const provinceOptions = provinceList.key === provinceFetchKey ? provinceList.options : [];
+  const provinceLoading = provinceList.key === provinceFetchKey && provinceList.loading;
+  const provinceError = provinceList.key === provinceFetchKey ? provinceList.error : undefined;
+
+  const cityFetchKey =
+    selectedMainOfficeCountryCode && selectedMainOfficeProvinceCode
+      ? `${selectedMainOfficeCountryCode}:${selectedMainOfficeProvinceCode}`
+      : "";
+  const cityOptions = cityList.key === cityFetchKey ? cityList.options : [];
+  const cityLoading = cityList.key === cityFetchKey && cityList.loading;
+  const cityError = cityList.key === cityFetchKey ? cityList.error : undefined;
 
   const selectedMainOfficeCityCode = cityOptions.find(
     (option) =>
       option.name === selectedMainOfficeCity ||
       normalizeAddressName(option.name) === normalizeAddressName(selectedMainOfficeCity)
   )?.value;
+
+  const barangayFetchKey =
+    isMainOfficePhilippines &&
+    selectedMainOfficeCountryCode &&
+    selectedMainOfficeProvince &&
+    selectedMainOfficeCity
+      ? `${selectedMainOfficeCountryCode}:${selectedMainOfficeProvinceCode}:${selectedMainOfficeCity}:${selectedMainOfficeCityCode ?? ""}`
+      : "";
+  const barangayOptions = barangayList.key === barangayFetchKey ? barangayList.options : [];
+  const barangayLoading = barangayList.key === barangayFetchKey && barangayList.loading;
+  const barangayError = barangayList.key === barangayFetchKey ? barangayList.error : undefined;
 
   useEffect(() => {
     let active = true;
@@ -157,66 +193,63 @@ export function BusinessInformationFields({
   }, []);
 
   useEffect(() => {
+    if (!provinceFetchKey) return;
+
     let active = true;
-    if (!selectedMainOfficeCountryCode) {
-      setProvinceOptions([]);
-      setCityOptions([]);
-      setBarangayOptions([]);
-      return;
-    }
-    setProvinceLoading(true);
-    loadStates(selectedMainOfficeCountryCode)
+    setProvinceList({ key: provinceFetchKey, options: [], loading: true });
+
+    loadStates(provinceFetchKey)
       .then((options) => {
         if (!active) return;
-        setProvinceOptions(options);
-        setProvinceError(undefined);
+        setProvinceList({ key: provinceFetchKey, options, loading: false, error: undefined });
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setProvinceError(error instanceof Error ? error.message : "Address list could not be loaded. Please try again.");
-      })
-      .finally(() => {
-        if (active) setProvinceLoading(false);
+        setProvinceList({
+          key: provinceFetchKey,
+          options: [],
+          loading: false,
+          error: error instanceof Error ? error.message : "Address list could not be loaded. Please try again.",
+        });
       });
+
     return () => {
       active = false;
     };
-  }, [selectedMainOfficeCountryCode]);
+  }, [provinceFetchKey]);
 
   useEffect(() => {
+    if (!cityFetchKey) return;
+
     let active = true;
-    if (!selectedMainOfficeCountryCode || !selectedMainOfficeProvinceCode) {
-      setCityOptions([]);
-      setBarangayOptions([]);
-      return;
-    }
-    setCityLoading(true);
+    setCityList({ key: cityFetchKey, options: [], loading: true });
+
     loadCities(selectedMainOfficeCountryCode, selectedMainOfficeProvinceCode, selectedMainOfficeProvince)
       .then((options) => {
         if (!active) return;
-        setCityOptions(options);
-        setCityError(undefined);
+        setCityList({ key: cityFetchKey, options, loading: false, error: undefined });
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setCityError(error instanceof Error ? error.message : "Address list could not be loaded. Please try again.");
-      })
-      .finally(() => {
-        if (active) setCityLoading(false);
+        setCityList({
+          key: cityFetchKey,
+          options: [],
+          loading: false,
+          error: error instanceof Error ? error.message : "Address list could not be loaded. Please try again.",
+        });
       });
+
     return () => {
       active = false;
     };
-  }, [selectedMainOfficeCountryCode, selectedMainOfficeProvinceCode]);
+  }, [cityFetchKey, selectedMainOfficeCountryCode, selectedMainOfficeProvinceCode, selectedMainOfficeProvince]);
 
   useEffect(() => {
+    if (!barangayFetchKey) return;
+
     let active = true;
-    if (!isMainOfficePhilippines || !selectedMainOfficeCountryCode || !selectedMainOfficeProvince || !selectedMainOfficeCity) {
-      setBarangayOptions([]);
-      setBarangayError(undefined);
-      return;
-    }
-    setBarangayLoading(true);
+    setBarangayList({ key: barangayFetchKey, options: [], loading: true });
+
     loadBarangays({
       countryCode: selectedMainOfficeCountryCode,
       provinceName: selectedMainOfficeProvince,
@@ -226,26 +259,28 @@ export function BusinessInformationFields({
     })
       .then((options) => {
         if (!active) return;
-        setBarangayOptions(options);
-        setBarangayError(undefined);
+        setBarangayList({ key: barangayFetchKey, options, loading: false, error: undefined });
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setBarangayError(error instanceof Error ? error.message : "Address list could not be loaded. Please try again.");
-      })
-      .finally(() => {
-        if (active) setBarangayLoading(false);
+        setBarangayList({
+          key: barangayFetchKey,
+          options: [],
+          loading: false,
+          error: error instanceof Error ? error.message : "Address list could not be loaded. Please try again.",
+        });
       });
+
     return () => {
       active = false;
     };
   }, [
-    isMainOfficePhilippines,
+    barangayFetchKey,
     selectedMainOfficeCity,
+    selectedMainOfficeCityCode,
     selectedMainOfficeCountryCode,
     selectedMainOfficeProvince,
     selectedMainOfficeProvinceCode,
-    selectedMainOfficeCityCode,
   ]);
 
   // Load business address barangays from API on mount; fall back to static list on failure.
@@ -359,17 +394,18 @@ export function BusinessInformationFields({
       >
         {fieldLocked(lockedFields, "businessType") ? (
           <div className="mb-2">
-            <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+            <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
               Locked
             </span>
           </div>
         ) : null}
         <select
           data-field-key="businessType"
+          aria-label="Business Type"
           className={fieldClasses(fieldLocked(lockedFields, "businessType"))}
           value={value.businessType}
           disabled={fieldLocked(lockedFields, "businessType")}
-          onChange={(event) =>
+            onChange={(event) =>
             onChange({
               ...value,
               businessType: event.target.value as BusinessInfo["businessType"],
@@ -378,10 +414,16 @@ export function BusinessInformationFields({
                 event.target.value as BusinessInfo["businessType"],
                 value.nationality
               ),
+              corporationNationality: requiresCorporationNationality(
+                event.target.value as BusinessInfo["businessType"]
+              )
+                ? value.corporationNationality
+                : undefined,
             })
           }
         >
           <option>Sole Proprietorship</option>
+          <option>One Person Corporation</option>
           <option>Corporation</option>
           <option>Partnership</option>
           <option>Cooperative</option>
@@ -397,13 +439,14 @@ export function BusinessInformationFields({
       >
         {fieldLocked(lockedFields, "registrationNumber") ? (
           <div className="mb-2">
-            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
               Locked
             </span>
           </div>
         ) : null}
         <input
           data-field-key="registrationNumber"
+          aria-label={registrationLabel}
           className={fieldClasses(fieldLocked(lockedFields, "registrationNumber"))}
           value={value.registrationNumber}
           disabled={fieldLocked(lockedFields, "registrationNumber")}
@@ -422,13 +465,14 @@ export function BusinessInformationFields({
       >
         {fieldLocked(lockedFields, "tin") ? (
           <div className="mb-2">
-            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
               Locked
             </span>
           </div>
         ) : null}
           <input
             data-field-key="tin"
+            aria-label="TIN"
             className={fieldClasses(fieldLocked(lockedFields, "tin"))}
             value={value.tin}
             disabled={fieldLocked(lockedFields, "tin")}
@@ -448,13 +492,14 @@ export function BusinessInformationFields({
       >
         {fieldLocked(lockedFields, "businessName") ? (
           <div className="mb-2">
-            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
               Locked
             </span>
           </div>
         ) : null}
         <input
           data-field-key="businessName"
+          aria-label="Business Name"
           className={fieldClasses(fieldLocked(lockedFields, "businessName"))}
           value={value.businessName}
           disabled={fieldLocked(lockedFields, "businessName")}
@@ -471,13 +516,14 @@ export function BusinessInformationFields({
       >
         {fieldLocked(lockedFields, "tradeName") ? (
           <div className="mb-2">
-            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
               Locked
             </span>
           </div>
         ) : null}
         <input
           data-field-key="tradeName"
+          aria-label="Trade Name"
           className={fieldClasses(fieldLocked(lockedFields, "tradeName"))}
           value={value.tradeName}
           disabled={fieldLocked(lockedFields, "tradeName")}
@@ -487,20 +533,21 @@ export function BusinessInformationFields({
       </FormField>
 
       <FormField
-        label="Owner / President First Name"
-        hint="Indicate the authorized owner or president's first name."
+        label={`${ownerRoleLabel} First Name`}
+        hint={`Indicate the authorized ${ownerRoleLabel.toLowerCase()}'s first name.`}
         required
         error={fieldErrors.ownerFirstName ?? fieldErrors.ownerName}
       >
         {ownerIdentityLocked ? (
           <div className="mb-2">
-            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
               Locked
             </span>
           </div>
         ) : null}
         <input
           data-field-key="ownerFirstName"
+          aria-label={`${ownerRoleLabel} First Name`}
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerFirstName ?? ""}
           disabled={ownerIdentityLocked}
@@ -523,12 +570,13 @@ export function BusinessInformationFields({
       </FormField>
 
       <FormField
-        label="Owner / President Middle Name"
+        label={`${ownerRoleLabel} Middle Name`}
         hint="Optional. Leave blank if not applicable."
         error={fieldErrors.ownerMiddleName}
       >
         <input
           data-field-key="ownerMiddleName"
+          aria-label={`${ownerRoleLabel} Middle Name`}
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerMiddleName ?? ""}
           disabled={ownerIdentityLocked}
@@ -550,13 +598,14 @@ export function BusinessInformationFields({
       </FormField>
 
       <FormField
-        label="Owner / President Surname"
-        hint="Indicate the authorized owner or president's surname."
+        label={`${ownerRoleLabel} Surname`}
+        hint={`Indicate the authorized ${ownerRoleLabel.toLowerCase()}'s surname.`}
         required
         error={fieldErrors.ownerSurname ?? fieldErrors.ownerName}
       >
         <input
           data-field-key="ownerSurname"
+          aria-label={`${ownerRoleLabel} Surname`}
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerSurname ?? ""}
           disabled={ownerIdentityLocked}
@@ -578,12 +627,13 @@ export function BusinessInformationFields({
       </FormField>
 
       <FormField
-        label="Owner / President Suffix"
+        label={`${ownerRoleLabel} Suffix`}
         hint="Optional. Examples: Jr, Sr, III."
         error={fieldErrors.ownerSuffix}
       >
         <input
           data-field-key="ownerSuffix"
+          aria-label={`${ownerRoleLabel} Suffix`}
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerSuffix ?? ""}
           disabled={ownerIdentityLocked}
@@ -611,6 +661,7 @@ export function BusinessInformationFields({
         >
           <select
             data-field-key="sex"
+            aria-label="Sex"
             className={fieldClasses(fieldLocked(lockedFields, "sex"))}
             value={value.sex ?? ""}
             disabled={fieldLocked(lockedFields, "sex")}
@@ -633,13 +684,14 @@ export function BusinessInformationFields({
         >
           {nationalityLocked ? (
             <div className="mb-2">
-              <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+              <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
                 Locked
               </span>
             </div>
           ) : null}
           <select
             data-field-key="nationality"
+            aria-label="Nationality"
             className={fieldClasses(nationalityLocked)}
             value={value.nationality}
             disabled={nationalityLocked}
@@ -657,6 +709,38 @@ export function BusinessInformationFields({
           <LockedHint visible={fieldLocked(lockedFields, "nationality")} />
         </FormField>
 
+      {showCorporationNationality ? (
+        <FormField
+          label="Corporation Nationality"
+          hint="Indicate whether the corporation is Filipino-owned or foreign-owned."
+          required
+          error={fieldErrors.corporationNationality}
+        >
+          <select
+            data-field-key="corporationNationality"
+            aria-label="Corporation Nationality"
+            className={fieldClasses(fieldLocked(lockedFields, "corporationNationality"))}
+            value={value.corporationNationality ?? ""}
+            disabled={fieldLocked(lockedFields, "corporationNationality")}
+            onChange={(event) =>
+              onChange({
+                ...value,
+                corporationNationality: event.target.value as BusinessInfo["corporationNationality"],
+              })
+            }
+          >
+            <option value="" disabled>
+              Select corporation nationality
+            </option>
+            {CORPORATION_NATIONALITY_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </FormField>
+      ) : null}
+
       <FormField
         label="Email"
         hint="Use an active email address for notifications."
@@ -666,6 +750,7 @@ export function BusinessInformationFields({
         <input
           data-field-key="email"
           type="email"
+          aria-label="Email"
           className={fieldClasses(fieldLocked(lockedFields, "email"))}
           value={value.email}
           disabled={fieldLocked(lockedFields, "email")}
@@ -683,6 +768,7 @@ export function BusinessInformationFields({
           >
             <div data-field-key="mainOfficeCountry">
             <SearchableSelect
+              ariaLabel="Main Office Country"
               options={countryOptions}
               value={value.mainOfficeCountryCode ?? ""}
               selectedLabel={value.mainOfficeCountry ?? ""}
@@ -714,6 +800,7 @@ export function BusinessInformationFields({
           >
             <div data-field-key="mainOfficeProvince">
             <SearchableSelect
+              ariaLabel="Main Office Province / State"
               options={provinceOptions}
               value={value.mainOfficeProvinceCode ?? ""}
               selectedLabel={value.mainOfficeProvince ?? ""}
@@ -743,6 +830,7 @@ export function BusinessInformationFields({
           >
             <div data-field-key="mainOfficeCityMunicipality">
             <SearchableSelect
+              ariaLabel="Main Office City / Municipality"
               options={cityOptions}
               value={selectedMainOfficeCityCode ?? value.mainOfficeCityMunicipality ?? ""}
               selectedLabel={value.mainOfficeCityMunicipality ?? ""}
@@ -771,6 +859,7 @@ export function BusinessInformationFields({
             >
               <div data-field-key="mainOfficeBarangay">
               <SearchableSelect
+                ariaLabel="Main Office Barangay"
                 options={barangayOptions}
                 value={value.mainOfficeBarangay ?? ""}
                 selectedLabel={value.mainOfficeBarangay ?? ""}
@@ -822,6 +911,7 @@ export function BusinessInformationFields({
             >
               <input
                 data-field-key="mainOfficeStreetAddress"
+                aria-label="Main Office Street / Address Line"
                 className={fieldClasses(fieldLocked(lockedFields, "mainOfficeStreetAddress"))}
                 value={value.mainOfficeStreetAddress ?? ""}
                 disabled={
@@ -856,7 +946,7 @@ export function BusinessInformationFields({
                   <span data-field-key="mainOfficeAddress">{value.mainOfficeAddress}</span>
                 </div>
               ) : (
-                <div className="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm italic text-slate-400">
+                <div className="w-full rounded-[var(--radius-control)] border border-dashed border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-3 text-sm italic text-[var(--ink-muted)]">
                   Complete address fields to generate full address.
                 </div>
               )}
@@ -873,13 +963,14 @@ export function BusinessInformationFields({
           >
             {fieldLocked(lockedFields, "mainOfficeAddress") ? (
               <div className="mb-2">
-                <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
                   Locked
                 </span>
               </div>
             ) : null}
             <input
               data-field-key="mainOfficeAddress"
+              aria-label="Main Office Address"
               className={fieldClasses(fieldLocked(lockedFields, "mainOfficeAddress"))}
               value={value.mainOfficeAddress}
               disabled={fieldLocked(lockedFields, "mainOfficeAddress")}
@@ -892,10 +983,10 @@ export function BusinessInformationFields({
       <div className="md:col-span-2">
         <div className="mb-4">
           <div data-field-key="businessAddress" />
-          <p className="mb-1 text-sm font-semibold text-slate-700">
+          <p className="mb-1 text-sm font-semibold text-[var(--foreground)]">
             Business Address / Place of Operation
           </p>
-          <label className="mb-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
+          <label className="mb-3 inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-color)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]">
             <input
               type="checkbox"
               checked={Boolean(value.sameAsMainOffice)}
@@ -905,23 +996,23 @@ export function BusinessInformationFields({
             Use Main Office Barangay for Business Address
           </label>
           {value.sameAsMainOffice && !sameAsMainOfficeAllowed ? (
-            <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p className="mb-2 rounded-xl border border-[var(--warning)] bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
               Main Office Address is outside EB Magalona. Please enter the Business Address separately.
             </p>
           ) : null}
           {generatedBusinessAddress ? (
-            <div className="w-full rounded-xl border border-slate-300 bg-slate-100 px-3 py-3 text-sm text-slate-800 shadow-inner">
+            <div className="w-full rounded-[var(--radius-control)] border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-3 text-sm text-[var(--ink-muted)] shadow-inner">
               {generatedBusinessAddress}
             </div>
           ) : (
-            <div className="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm italic text-slate-400">
+            <div className="w-full rounded-[var(--radius-control)] border border-dashed border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-3 text-sm italic text-[var(--ink-muted)]">
               Complete Barangay and Street fields below to generate address preview.
             </div>
           )}
         </div>
 
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
-          <p className="text-sm font-semibold text-slate-900">Fixed Business Location</p>
+        <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--muted-surface)] p-3.5 sm:p-4 md:col-span-2">
+          <p className="text-sm font-semibold text-[var(--foreground)]">Fixed Business Location</p>
           <div className="grid gap-3 md:grid-cols-3">
             <FormField
               label="Country"
@@ -963,6 +1054,7 @@ export function BusinessInformationFields({
         >
           <select
             data-field-key="businessBarangay"
+            aria-label="Business Barangay"
             className={fieldClasses(businessBarangayLoading || fieldLocked(lockedFields, "businessBarangay"))}
             value={value.businessBarangay ?? ""}
             disabled={businessBarangayLoading || fieldLocked(lockedFields, "businessBarangay")}
@@ -998,6 +1090,7 @@ export function BusinessInformationFields({
         >
           <input
             data-field-key="businessStreetAddress"
+            aria-label="Business Street / Purok / Building / Unit"
             className={fieldClasses(fieldLocked(lockedFields, "businessStreetAddress"))}
             value={value.businessStreetAddress ?? ""}
             disabled={fieldLocked(lockedFields, "businessStreetAddress")}
@@ -1016,7 +1109,7 @@ export function BusinessInformationFields({
             placeholder="e.g., 123 Main St, Purok 5, or Building A Unit 201"
           />
           {value.businessLatitude != null && !value.businessStreetAddress ? (
-            <p className="mt-1 text-xs text-amber-700">
+            <p className="mt-1 text-xs text-[var(--warning)]">
               Enter the exact street, purok, building, or unit.
             </p>
           ) : null}
@@ -1036,7 +1129,7 @@ export function BusinessInformationFields({
             error={fieldErrors.businessLatitude ?? fieldErrors.businessLongitude}
           />
           {Number.isFinite(value.businessLatitude) && Number.isFinite(value.businessLongitude) ? (
-            <p className="mt-2 text-xs font-medium text-emerald-700">
+            <p className="mt-2 text-xs font-medium text-[var(--success)]">
               Pinned coordinates: {value.businessLatitude.toFixed(6)}, {value.businessLongitude.toFixed(6)}
             </p>
           ) : null}
@@ -1044,13 +1137,29 @@ export function BusinessInformationFields({
       </div>
 
       <FormField
-        label="Contact Number"
-        hint="Provide a reachable contact number."
+        label="Telephone Number"
+        hint="Optional landline or office number, if applicable."
+        error={fieldErrors.telephone}
+      >
+        <input
+          data-field-key="telephone"
+          aria-label="Telephone Number"
+          className={fieldClasses(fieldLocked(lockedFields, "telephone"))}
+          value={value.telephone ?? ""}
+          disabled={fieldLocked(lockedFields, "telephone")}
+          onChange={(event) => onChange({ ...value, telephone: event.target.value })}
+        />
+      </FormField>
+
+      <FormField
+        label="Mobile Number"
+        hint="Provide a reachable Philippine mobile number."
         required
         error={fieldErrors.phone}
       >
         <input
           data-field-key="phone"
+          aria-label="Mobile Number"
           className={fieldClasses(fieldLocked(lockedFields, "phone"))}
           value={value.phone}
           disabled={fieldLocked(lockedFields, "phone")}
@@ -1063,7 +1172,7 @@ export function BusinessInformationFields({
           label="Liquor/Tobacco Business"
           hint="If selected, BPLO will automatically apply the required 25% surcharge during assessment."
         >
-          <label className="flex items-center gap-2 text-sm text-slate-800">
+          <label className="flex items-center gap-2 text-sm text-[var(--foreground)]">
             <input
               data-field-key="isLiquorOrTobacco"
               type="checkbox"

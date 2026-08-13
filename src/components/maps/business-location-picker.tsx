@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { EB_MAGALONA_CENTER, isWithinEbMagalona } from "@/lib/eb-magalona";
 
 const LeafletBusinessMap = dynamic(
@@ -12,8 +12,8 @@ const LeafletBusinessMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex min-h-[340px] items-center justify-center rounded-[30px] border border-slate-200 bg-slate-50 text-sm text-slate-600">
-        Loading map...
+      <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-[var(--border-color)] bg-[var(--muted-surface)] text-sm text-[var(--ink-muted)]">
+        Loading map…
       </div>
     ),
   }
@@ -38,15 +38,20 @@ export function BusinessLocationPicker({
   error,
 }: BusinessLocationPickerProps) {
   const [validationError, setValidationError] = useState<string | null>(null);
+  const selectionKey = `${readOnly}|${value?.latitude ?? "none"}|${value?.longitude ?? "none"}`;
+  const [validationSelectionKey, setValidationSelectionKey] = useState(selectionKey);
+
+  if (selectionKey !== validationSelectionKey) {
+    setValidationSelectionKey(selectionKey);
+    if (validationError !== null) {
+      setValidationError(null);
+    }
+  }
 
   const selectedPosition = useMemo<[number, number] | null>(() => {
     if (!value) return null;
     return [value.latitude, value.longitude];
   }, [value]);
-
-  useEffect(() => {
-    setValidationError(null);
-  }, [readOnly, value?.latitude, value?.longitude]);
 
   function handleSelectPosition(next: LocationValue) {
     if (readOnly) return;
@@ -71,7 +76,7 @@ export function BusinessLocationPicker({
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="overflow-hidden rounded-[28px] border border-[var(--border-color)] bg-[var(--surface)] p-3 shadow-sm">
         <LeafletBusinessMap
           center={[EB_MAGALONA_CENTER.latitude, EB_MAGALONA_CENTER.longitude]}
           zoom={13}
@@ -79,19 +84,19 @@ export function BusinessLocationPicker({
           selectedPosition={selectedPosition}
           onSelectPosition={readOnly ? undefined : handleSelectPosition}
           selectedLabel="Selected Business Location"
-          className="h-[340px] w-full overflow-hidden rounded-[24px] border border-slate-200 sm:h-[420px] lg:h-[520px]"
+          className="h-[clamp(320px,52vh,480px)] w-full overflow-hidden rounded-2xl border border-[var(--border-color)]"
           useEbMagalonaBounds
           markerVariant="emoji"
         />
       </div>
 
-      <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-        <p className="font-medium text-slate-900">Pin the actual business location within EB Magalona.</p>
-        <p className="text-sm text-slate-600">
+      <div className="space-y-2 rounded-2xl border border-[var(--border-color)] bg-[var(--muted-surface)] px-4 py-3 text-sm text-[var(--ink-muted)]">
+        <p className="font-medium text-[var(--foreground)]">Pin the actual business location within EB Magalona.</p>
+        <p className="text-sm text-[var(--ink-muted)]">
           Selected Business Location:{" "}
           {value ? `${value.latitude.toFixed(6)}, ${value.longitude.toFixed(6)}` : "Not selected"}
         </p>
-        {displayError ? <p className="text-sm font-medium text-red-700">{displayError}</p> : null}
+        {displayError ? <p className="text-sm font-medium text-[var(--danger)]">{displayError}</p> : null}
       </div>
     </div>
   );

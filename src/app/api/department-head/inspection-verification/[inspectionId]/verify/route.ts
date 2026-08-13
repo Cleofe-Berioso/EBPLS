@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { safeApiErrorMessage } from "@/lib/api-errors";
 import { applyDepartmentHeadInspectionVerification, requireDepartmentHeadSession } from "@/lib/department-head-api";
 import { logInspectionAction } from "@/lib/audit-log";
+import { notifyApplicantRevocationEvent } from "@/lib/revocation-notifications";
 
 export async function POST(
   req: Request,
@@ -14,9 +15,9 @@ export async function POST(
 
   const { inspectionId } = await params;
 
-  let payload: { remarks?: string; nonComplianceType?: string; violationSeverity?: string } = {};
+  let payload: { remarks?: string; nonComplianceType?: string; violationSeverity?: string; complianceDecision?: string } = {};
   try {
-    payload = (await req.json()) as { remarks?: string; nonComplianceType?: string; violationSeverity?: string };
+    payload = (await req.json()) as { remarks?: string; nonComplianceType?: string; violationSeverity?: string; complianceDecision?: string };
   } catch {
     payload = {};
   }
@@ -27,7 +28,8 @@ export async function POST(
       session.user.id,
       payload.remarks,
       payload.nonComplianceType,
-      payload.violationSeverity
+      payload.violationSeverity,
+      payload.complianceDecision
     );
     const isCompliant = result.complianceStatus === "COMPLIANT";
     const nextInspectionStatus = isCompliant ? "VERIFIED_COMPLIANT" : "VERIFIED_NON_COMPLIANT";
@@ -56,6 +58,14 @@ export async function POST(
         complianceCaseStatus: result.complianceCaseStatus,
       }
     );
+
+    if (!isCompliant) {
+      void notifyApplicantRevocationEvent({
+        inspectionId: result.inspectionId,
+        eventType: "REVOCATION_REVIEW_ENTERED",
+        departmentHeadRemarks: payload.remarks,
+      });
+    }
 
     return NextResponse.json({ result });
   } catch (error) {

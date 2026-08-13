@@ -8,6 +8,7 @@ import { actionButtonStyles } from "@/components/ui/action-button";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
+import { bploPanelClass } from "@/components/bplo/bplo-ui-styles";
 
 export default async function BploAssessmentDetailPage({
   params,
@@ -37,7 +38,7 @@ export default async function BploAssessmentDetailPage({
             eyebrow="BPLO"
             title="Assessment & Fees"
             description="Already Processed"
-            badge={<RoleBadge role="BPLO" />}
+            badge={<RoleBadge roleType="BPLO" />}
             actions={
               <Link href="/bplo/assessment-fees" className={actionButtonStyles("secondary", "sm")}>
                 Back to List
@@ -51,11 +52,11 @@ export default async function BploAssessmentDetailPage({
                 title="Tax Order of Payment already generated"
                 description={`Application ${application.applicationNumber} has already been approved and moved to payment verification. The assessment for this application cannot be edited further.`}
               />
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-700">
-                  <span className="font-semibold">Current Status:</span> {application.status}
+              <div className={bploPanelClass}>
+                <p className="text-sm text-[var(--ink-muted)]">
+                  <span className="font-semibold text-[var(--foreground)]">Current Status:</span> {application.status}
                 </p>
-                <p className="mt-1 text-xs text-slate-600">
+                <p className="mt-1 text-xs text-[var(--ink-muted)]">
                   Next: Payment Verification
                 </p>
               </div>
@@ -80,7 +81,7 @@ export default async function BploAssessmentDetailPage({
         eyebrow="BPLO"
         title="Assessment & Fees"
         description={`${detail.applicationNumber} — ${detail.businessName}`}
-        badge={<RoleBadge role="BPLO" />}
+        badge={<RoleBadge roleType="BPLO" />}
         actions={
           <Link href="/bplo/assessment-fees" className={actionButtonStyles("secondary", "sm")}>
             Back to List
@@ -90,7 +91,7 @@ export default async function BploAssessmentDetailPage({
 
       {detail.assessment?.reassessmentRequestedAt ? (
         <div className="px-6">
-          <span className="inline-block rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+          <span className="inline-block rounded-full border border-[var(--warning)] bg-[var(--warning-soft)] px-3 py-1 text-xs font-medium text-[var(--warning)]">
             Re-assessment Requested
           </span>
         </div>

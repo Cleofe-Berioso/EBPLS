@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { requireJitSession } from "@/lib/jit-api";
-import { listJitInspectableBusinesses } from "@/lib/jit-inspections";
+import { listJitInspectableBusinessesPaginated } from "@/lib/jit-inspections";
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await requireJitSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rows = await listJitInspectableBusinesses();
-  return NextResponse.json({ rows });
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get("search") ?? undefined;
+  const page = searchParams.get("page") ?? undefined;
+  const pageSize = searchParams.get("pageSize") ?? undefined;
+
+  const result = await listJitInspectableBusinessesPaginated({ search, page, pageSize });
+  return NextResponse.json(result);
 }

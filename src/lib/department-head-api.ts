@@ -1,8 +1,15 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { mapDocumentValidationStatusToUi } from "@/lib/document-validation";
+import { assertRequiredDocumentsReadyForApproval } from "@/lib/document-validation-server";
 import { assertStatusTransition } from "@/lib/application-status";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { createAuditLog } from "@/lib/audit-log";
+import {
+  buildRevocationContextFromParts,
+  buildRevocationHistoryRemarksForEvent,
+} from "@/lib/revocation-notifications";
+import { getJitInspectionChecklist } from "@/lib/jit-declared-inputs";
 
 type DepartmentHeadAction = "APPROVE" | "RETURN" | "REJECT";
 type RevocationDecisionAction = "APPROVE" | "DENY";
@@ -229,6 +236,8 @@ export async function listDepartmentHeadApprovalQueue(): Promise<DepartmentHeadA
       documentName: doc.documentName,
       fileName: doc.fileName,
       uploadedAt: doc.uploadedAt.toISOString(),
+      validationStatus: mapDocumentValidationStatusToUi(doc.validationStatus),
+      validationRemarks: doc.validationRemarks ?? null,
     })),
   }));
 }
@@ -257,6 +266,10 @@ export async function applyDepartmentHeadAction(
 
     if (current.status !== "DEPARTMENT_HEAD_REVIEW") {
       throw new Error("Application is not in Department Head review stage");
+    }
+
+    if (action === "APPROVE") {
+      await assertRequiredDocumentsReadyForApproval(applicationId);
     }
 
     const nextStatus = getNextStatus(action);
@@ -415,6 +428,22 @@ export async function listDepartmentHeadInspectionVerificationQueue(): Promise<D
       hasEvidence: Boolean(row.evidenceStoragePath),
       applicationStatus: mapDbStatusToUi(row.application.status),
     }));
+}
+
+export async function getDepartmentHeadInspectionChecklistForVerification(inspectionId: string) {
+  const inspection = await prisma.inspection.findFirst({
+    where: {
+      id: inspectionId,
+      status: "DH_VERIFICATION_PENDING",
+    },
+    select: { id: true },
+  });
+
+  if (!inspection) {
+    throw new Error("Inspection not found");
+  }
+
+  return getJitInspectionChecklist(inspectionId);
 }
 
 export interface DepartmentHeadSettlementRow {
@@ -611,7 +640,8 @@ export async function applyDepartmentHeadInspectionVerification(
   departmentHeadUserId: string,
   remarks?: string,
   nonComplianceType?: string,
-  violationSeverity?: string
+  violationSeverity?: string,
+  complianceDecision?: string
 ) {
   const normalizedRemarks = remarks?.trim();
 
@@ -623,17 +653,22 @@ export async function applyDepartmentHeadInspectionVerification(
     const inspection = await tx.inspection.findUnique({
       where: { id: inspectionId },
       include: {
+        inspector: { select: { name: true } },
         application: {
           select: {
             id: true,
             status: true,
             applicationNumber: true,
+            applicantId: true,
+            applicant: { select: { email: true } },
+            permitIssuance: { select: { documentNumber: true } },
           },
         },
         businessRecord: {
           select: {
             id: true,
             businessStatus: true,
+            businessName: true,
           },
         },
       },
@@ -659,11 +694,12 @@ export async function applyDepartmentHeadInspectionVerification(
       throw new Error("JIT cannot verify its own submitted inspection");
     }
 
-    if (inspection.complianceStatus === "COMPLIANT") {
+    if (inspection.complianceStatus === "COMPLIANT" || (inspection.complianceStatus === "PENDING_REVIEW" && complianceDecision === "COMPLIANT")) {
       await tx.inspection.update({
         where: { id: inspection.id },
         data: {
           status: "VERIFIED_COMPLIANT",
+          complianceStatus: "COMPLIANT",
           decidedById: departmentHeadUserId,
           decidedAt: new Date(),
         },
@@ -727,6 +763,7 @@ export async function applyDepartmentHeadInspectionVerification(
       where: { id: inspection.id },
       data: {
         status: "VERIFIED_NON_COMPLIANT",
+        complianceStatus: "NON_COMPLIANT",
         decidedById: departmentHeadUserId,
         decidedAt: new Date(),
         nonComplianceType: nonComplianceType,
@@ -739,6 +776,29 @@ export async function applyDepartmentHeadInspectionVerification(
       },
     });
 
+    const departmentHeadUser = await tx.user.findUnique({
+      where: { id: departmentHeadUserId },
+      select: { name: true },
+    });
+
+    const revocationContext = buildRevocationContextFromParts({
+      applicationId: inspection.application.id,
+      applicationNumber: inspection.application.applicationNumber,
+      applicantId: inspection.application.applicantId,
+      applicantEmail: inspection.application.applicant.email,
+      inspectionId: inspection.id,
+      businessName: inspection.businessRecord.businessName,
+      permitNumber: inspection.application.permitIssuance?.documentNumber ?? null,
+      recommendationRemarks: inspection.revocationRecommendationRemarks ?? inspection.revocationRemarks,
+      inspectionComment: inspection.comment,
+      nonComplianceType,
+      violationSeverity,
+      departmentHeadRemarks: normalizedRemarks,
+      eventDate: new Date(),
+      departmentOfficerLabel: departmentHeadUser?.name ?? "Department Head",
+      eventType: "REVOCATION_REVIEW_ENTERED",
+    });
+
     await tx.applicationHistory.create({
       data: {
         applicationId: inspection.application.id,
@@ -746,7 +806,7 @@ export async function applyDepartmentHeadInspectionVerification(
         actorRole: "DEPARTMENT_HEAD",
         fromStatus: "RELEASED",
         toStatus: "REVOCATION_REVIEW",
-        remarks: `Department Head verified NON_COMPLIANT inspection. Type: ${nonComplianceType}, Severity: ${violationSeverity}. Remarks: ${normalizedRemarks}`,
+        remarks: buildRevocationHistoryRemarksForEvent("REVOCATION_REVIEW_ENTERED", revocationContext),
       },
     });
 
@@ -912,16 +972,21 @@ export async function applyDepartmentHeadRevocationDecision(
     const inspection = await tx.inspection.findUnique({
       where: { id: inspectionId },
       include: {
+        inspector: { select: { name: true } },
         application: {
           select: {
             id: true,
             status: true,
             applicationNumber: true,
+            applicantId: true,
+            applicant: { select: { email: true } },
+            permitIssuance: { select: { documentNumber: true } },
           },
         },
         businessRecord: {
           select: {
             id: true,
+            businessName: true,
           },
         },
       },
@@ -963,6 +1028,13 @@ export async function applyDepartmentHeadRevocationDecision(
       );
     }
 
+    const departmentHeadUser = await tx.user.findUnique({
+      where: { id: departmentHeadUserId },
+      select: { name: true },
+    });
+
+    const decisionDate = new Date();
+
     if (action === "APPROVE") {
       assertStatusTransition(inspection.application.status, "REVOKED");
 
@@ -994,7 +1066,27 @@ export async function applyDepartmentHeadRevocationDecision(
           actorRole: "DEPARTMENT_HEAD",
           fromStatus: "REVOCATION_REVIEW",
           toStatus: "REVOKED",
-          remarks: `Revocation approved. Remarks: ${normalizedRemarks}`,
+          remarks: buildRevocationHistoryRemarksForEvent(
+            "REVOCATION_APPROVED",
+            buildRevocationContextFromParts({
+              applicationId: inspection.application.id,
+              applicationNumber: inspection.application.applicationNumber,
+              applicantId: inspection.application.applicantId,
+              applicantEmail: inspection.application.applicant.email,
+              inspectionId: inspection.id,
+              businessName: inspection.businessRecord.businessName,
+              permitNumber: inspection.application.permitIssuance?.documentNumber ?? null,
+              recommendationRemarks: inspection.revocationRecommendationRemarks ?? inspection.revocationRemarks,
+              inspectionComment: inspection.comment,
+              nonComplianceType: inspection.nonComplianceType,
+              violationSeverity: inspection.violationSeverity,
+              departmentHeadRemarks: null,
+              decisionRemarks: normalizedRemarks,
+              eventDate: decisionDate,
+              departmentOfficerLabel: departmentHeadUser?.name ?? "Department Head",
+              eventType: "REVOCATION_APPROVED",
+            })
+          ),
         },
       });
     } else {
@@ -1028,7 +1120,27 @@ export async function applyDepartmentHeadRevocationDecision(
           actorRole: "DEPARTMENT_HEAD",
           fromStatus: "REVOCATION_REVIEW",
           toStatus: "RELEASED",
-          remarks: `Revocation denied. Remarks: ${normalizedRemarks}`,
+          remarks: buildRevocationHistoryRemarksForEvent(
+            "REVOCATION_DENIED",
+            buildRevocationContextFromParts({
+              applicationId: inspection.application.id,
+              applicationNumber: inspection.application.applicationNumber,
+              applicantId: inspection.application.applicantId,
+              applicantEmail: inspection.application.applicant.email,
+              inspectionId: inspection.id,
+              businessName: inspection.businessRecord.businessName,
+              permitNumber: inspection.application.permitIssuance?.documentNumber ?? null,
+              recommendationRemarks: inspection.revocationRecommendationRemarks ?? inspection.revocationRemarks,
+              inspectionComment: inspection.comment,
+              nonComplianceType: inspection.nonComplianceType,
+              violationSeverity: inspection.violationSeverity,
+              departmentHeadRemarks: null,
+              decisionRemarks: normalizedRemarks,
+              eventDate: decisionDate,
+              departmentOfficerLabel: departmentHeadUser?.name ?? "Department Head",
+              eventType: "REVOCATION_DENIED",
+            })
+          ),
         },
       });
     }

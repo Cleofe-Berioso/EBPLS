@@ -15,7 +15,7 @@ export default async function DepartmentHeadRevokePermitListPage() {
         eyebrow="Department Head"
         title="Restrictions List"
         description="Businesses currently blocked from renewal because of approved revocation."
-        badge={<RoleBadge role="VIEW_ONLY" label="Department Head" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Department Head" />}
       />
 
       <InfoBanner
