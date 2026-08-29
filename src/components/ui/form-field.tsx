@@ -97,7 +97,7 @@ export function FormField({
   });
 
   return (
-    <div className="block space-y-2">
+    <div className="block space-y-1.5">
       <label
         id={labelId}
         className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--foreground)]"
@@ -113,7 +113,7 @@ export function FormField({
         </p>
       ) : null}
       {!error && hint ? (
-        <p id={hintId} className="text-sm leading-5 text-[var(--ink-muted)]">
+        <p id={hintId} className="text-xs leading-4 text-[var(--ink-muted)]">
           {hint}
         </p>
       ) : null}

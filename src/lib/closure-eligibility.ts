@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import type { BusinessInfo } from "@/lib/applicant-types";
+import {
+  optionalDecimalFromDb,
+  optionalIntFromDb,
+  tinFromDb,
+} from "@/lib/business-rules";
 
 export type ClosureTypeValue = "RETIREMENT" | "NON_COMPLIANT_RELATED" | "OTHERS";
 
@@ -28,6 +33,8 @@ type EligibleBusinessStatus = "PAID" | "FOR_RELEASE" | "RELEASED";
 
 const ELIGIBLE_EXISTING_BUSINESS_STATUSES: EligibleBusinessStatus[] = ["PAID", "FOR_RELEASE", "RELEASED"];
 
+const CLOSURE_APPLICATION_STATUSES = [...ELIGIBLE_EXISTING_BUSINESS_STATUSES, "REVOKED"] as const;
+
 const FORCED_CLOSURE_STATUSES = new Set([
   "FORCED_CLOSURE_PENDING",
   "EXPIRED_UNSETTLED",
@@ -40,12 +47,23 @@ function hasEligibleHistory(applications: Array<{ status: string }>): boolean {
   );
 }
 
+function hasRevokedPermitHistory(applications: Array<{ status: string }>): boolean {
+  return applications.some((application) => application.status === "REVOKED");
+}
+
+function resolveHasRevokedPermit(
+  businessStatus: BusinessSnapshot["businessStatus"],
+  applications: Array<{ status: string }>
+): boolean {
+  return businessStatus === "INACTIVE" || hasRevokedPermitHistory(applications);
+}
+
 function buildBusinessInfo(row: any): BusinessInfo {
   return {
     businessType: row.businessType as BusinessInfo["businessType"],
     registrationNumber: row.registrationNumber,
     paymentFrequency: "ANNUAL",
-    tin: row.tin,
+    tin: tinFromDb(row.tin),
     businessName: row.businessName,
     tradeName: row.tradeName,
     ownerName: row.ownerName,
@@ -73,20 +91,20 @@ function buildBusinessInfo(row: any): BusinessInfo {
     businessBarangay: row.businessBarangay ?? undefined,
     businessStreetAddress: row.businessStreetAddress ?? undefined,
     sameAsMainOffice: row.sameAsMainOffice,
-    businessArea: row.businessArea ?? "",
-    totalFloorArea: row.totalFloorArea ?? "",
-    totalEmployees: row.totalEmployees ?? "",
-    maleEmployees: row.maleEmployees ?? "",
-    femaleEmployees: row.femaleEmployees ?? "",
-    employeesWithinMunicipality: row.employeesWithinMunicipality ?? "",
-    deliveryVehicles: row.deliveryVehicles ?? "",
+    businessArea: optionalDecimalFromDb(row.businessArea),
+    totalFloorArea: optionalDecimalFromDb(row.totalFloorArea),
+    totalEmployees: optionalIntFromDb(row.totalEmployees),
+    maleEmployees: optionalIntFromDb(row.maleEmployees),
+    femaleEmployees: optionalIntFromDb(row.femaleEmployees),
+    employeesWithinMunicipality: optionalIntFromDb(row.employeesWithinMunicipality),
+    deliveryVehicles: optionalIntFromDb(row.deliveryVehicles),
     propertyOwnership: (row.propertyOwnership as BusinessInfo["propertyOwnership"]) ?? "Owned",
     taxDeclarationNumber: row.taxDeclarationNumber ?? "",
     propertyIdentificationNumber: row.propertyIdentificationNumber ?? "",
     taxIncentives: row.taxIncentives ?? "",
     businessActivity: row.businessActivity ?? "",
     lineOfBusiness: row.lineOfBusiness ?? "",
-    assetSize: row.assetSize ?? "",
+    assetSize: optionalDecimalFromDb(row.assetSize),
     isMarket: Boolean(row.isMarket),
     isAgriculture: Boolean(row.isAgriculture),
     isLiquorOrTobacco: Boolean(row.isLiquorOrTobacco),
@@ -165,6 +183,19 @@ function getEligibility(snapshot: BusinessSnapshot): ClosureEligibilityResult {
     };
   }
 
+  // Revoked permits cannot be renewed, but the business must still be closable.
+  if (resolveHasRevokedPermit(snapshot.businessStatus, snapshot.applications)) {
+    return {
+      eligible: true,
+      isComplianceForcedClosure: false,
+      reasonCode: "REVOKED_PERMIT_CLOSURE",
+      userFriendlyReason: null,
+      blockingInspectionId: null,
+      complianceCaseStatus: null,
+      nonComplianceType: null,
+    };
+  }
+
   const hasVerifiedLocation = snapshot.location?.status === "VERIFIED";
   const eligibleHistory = hasEligibleHistory(snapshot.applications);
 
@@ -220,7 +251,7 @@ export async function resolveClosureEligibilityForBusiness(
       applications: {
         where: {
           status: {
-            in: ELIGIBLE_EXISTING_BUSINESS_STATUSES,
+            in: [...CLOSURE_APPLICATION_STATUSES],
           },
         },
         select: {
@@ -269,7 +300,9 @@ export async function listClosureEligibleBusinesses(applicantId: string): Promis
   const rows = await prisma.businessRecord.findMany({
     where: {
       applicantId,
-      businessStatus: "ACTIVE",
+      businessStatus: {
+        in: ["ACTIVE", "INACTIVE"],
+      },
     },
     include: {
       location: {
@@ -282,7 +315,7 @@ export async function listClosureEligibleBusinesses(applicantId: string): Promis
       applications: {
         where: {
           status: {
-            in: ELIGIBLE_EXISTING_BUSINESS_STATUSES,
+            in: [...CLOSURE_APPLICATION_STATUSES],
           },
         },
         select: {
@@ -320,7 +353,7 @@ export async function listClosureEligibleBusinesses(applicantId: string): Promis
       registrationNumber: row.registrationNumber,
       businessName: row.businessName,
       businessStatus: row.businessStatus as "ACTIVE" | "INACTIVE" | "CLOSED",
-      hasRevokedPermit: row.applications.some((application: any) => application.status === "REVOKED"),
+      hasRevokedPermit: resolveHasRevokedPermit(row.businessStatus, row.applications),
       closedAt: row.closedAt ? row.closedAt.toISOString() : null,
       businessInfo: buildBusinessInfo(row),
       closureEligibility,

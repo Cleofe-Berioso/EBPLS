@@ -3,10 +3,12 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getSupabaseStorageAdminClient } from "@/lib/supabase-storage-server";
-import { localWriteFile, localDeleteFile, resolveLocalFilePath } from "@/lib/local-storage";
+import { localWriteFile, localDeleteFile, localReadFile, resolveLocalFilePath } from "@/lib/local-storage";
 import { formatOwnerName } from "@/lib/person-name";
 
-const LOCAL_STORAGE = process.env.STORAGE_DRIVER === "local";
+function isLocalStorageDriver(): boolean {
+  return process.env.STORAGE_DRIVER === "local";
+}
 import {
   ALLOWED_DOCUMENT_MIME_TYPES,
   DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
@@ -193,7 +195,7 @@ export async function uploadDocumentFile(params: {
       `${Date.now()}-${safeFileName}`,
     ]);
 
-  if (LOCAL_STORAGE) {
+  if (isLocalStorageDriver()) {
     if (!upsert) {
       try {
         await fs.access(resolveLocalFilePath(storagePath));
@@ -311,7 +313,7 @@ export async function createStorageSignedUrl(params: {
 }) {
   const bucket = resolveBucketByMimeType(params.mimeType);
 
-  if (LOCAL_STORAGE) {
+  if (isLocalStorageDriver()) {
     const qs = params.download && params.downloadFileName
       ? `?download=${encodeURIComponent(params.downloadFileName)}`
       : "";
@@ -333,6 +335,118 @@ export async function createStorageSignedUrl(params: {
   };
 }
 
+/**
+ * Serve a stored file for authenticated route handlers.
+ * Local storage streams bytes directly (avoids brittle redirects behind ngrok/proxies).
+ * Remote storage returns a short-lived signed URL for the caller to redirect to.
+ */
+export async function createStoredFileDelivery(params: {
+  storagePath: string;
+  mimeType: string;
+  downloadFileName?: string;
+  download?: boolean;
+  expiresIn?: number;
+}): Promise<
+  | { mode: "stream"; response: Response }
+  | { mode: "redirect"; signedUrl: string }
+> {
+  if (isLocalStorageDriver()) {
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await localReadFile(params.storagePath);
+    } catch {
+      throw new Error("Stored file not found");
+    }
+
+    const headers = new Headers({
+      "Content-Type": params.mimeType || "application/octet-stream",
+      "Content-Length": String(fileBuffer.byteLength),
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+
+    const rawName = (params.downloadFileName || "download").replace(/[\r\n"]/g, "_");
+    const asciiName = rawName.replace(/[^\x20-\x7E]/g, "_") || "download";
+    const utf8Name = encodeURIComponent(rawName);
+
+    if (params.download) {
+      headers.set(
+        "Content-Disposition",
+        `attachment; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`
+      );
+    } else {
+      headers.set("Content-Disposition", `inline; filename="${asciiName}"`);
+    }
+
+    return {
+      mode: "stream",
+      response: new Response(new Uint8Array(fileBuffer), {
+        status: 200,
+        headers,
+      }),
+    };
+  }
+
+  const signed = await createStorageSignedUrl(params);
+  return { mode: "redirect", signedUrl: signed.signedUrl };
+}
+
+function configuredPublicOrigin(): string | null {
+  for (const value of [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.AUTH_URL,
+    process.env.NEXTAUTH_URL,
+  ]) {
+    const trimmed = value?.trim();
+    if (!trimmed) continue;
+    try {
+      return new URL(trimmed).origin;
+    } catch {
+      // Ignore invalid env URL values.
+    }
+  }
+  return null;
+}
+
+function isLocalHostName(host: string): boolean {
+  const normalized = host.toLowerCase();
+  return (
+    normalized.startsWith("localhost:") ||
+    normalized.startsWith("127.0.0.1:") ||
+    normalized === "localhost" ||
+    normalized === "127.0.0.1"
+  );
+}
+
+/** Prefer proxy-aware public origin so redirects stay on the browser's host (e.g. ngrok). */
+export function resolveRequestPublicOrigin(req: Request): string {
+  const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  if (forwardedHost) {
+    return `${forwardedProto || "https"}://${forwardedHost}`;
+  }
+
+  const host = req.headers.get("host")?.trim();
+  if (host) {
+    if (isLocalHostName(host)) {
+      const configured = configuredPublicOrigin();
+      if (configured) {
+        return configured;
+      }
+    }
+
+    const proto = forwardedProto || (host.includes("localhost") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+
+  const requestOrigin = new URL(req.url).origin;
+  if (isLocalHostName(new URL(req.url).host)) {
+    return configuredPublicOrigin() ?? requestOrigin;
+  }
+
+  return requestOrigin;
+}
+
 export async function createStorageSignedUrlByPath(params: {
   storagePath: string;
   expiresIn?: number;
@@ -341,7 +455,7 @@ export async function createStorageSignedUrlByPath(params: {
 }) {
   const bucket = resolveBucketByStoragePath(params.storagePath);
 
-  if (LOCAL_STORAGE) {
+  if (isLocalStorageDriver()) {
     const qs = params.download && params.downloadFileName
       ? `?download=${encodeURIComponent(params.downloadFileName)}`
       : "";
@@ -369,7 +483,7 @@ export async function deleteStorageObject(params: {
 }) {
   const bucket = params.mimeType ? resolveBucketByMimeType(params.mimeType) : inferBucketFromStoragePath(params.storagePath);
 
-  if (LOCAL_STORAGE) {
+  if (isLocalStorageDriver()) {
     await localDeleteFile(params.storagePath);
     return { bucket };
   }

@@ -62,7 +62,7 @@ function buildReleaseSmsMessage(input: {
       : "Please claim your released permit/certificate at BPLO with a valid ID.";
 
   return trimMessageForSms(
-    `Hello ${shortName(input.applicantName)}. eBPPS update: ${input.businessName} ` +
+    `Hello ${shortName(input.applicantName)}. BPOS update: ${input.businessName} ` +
       `(Ref ${input.applicationNumber}) is now ${input.status}. ${instruction}`
   );
 }

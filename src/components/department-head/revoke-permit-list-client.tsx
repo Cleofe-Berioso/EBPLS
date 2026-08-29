@@ -16,6 +16,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { SectionCard } from "@/components/ui/section-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import type { PaginationPageSize } from "@/lib/pagination";
 
 type RevokedPermitRow = {
   inspectionId: string;
@@ -63,36 +65,66 @@ export function RevokePermitListClient() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [remarksInput, setRemarksInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const selected = useMemo(
     () => rows.find((row) => row.inspectionId === selectedId) ?? null,
     [rows, selectedId]
   );
 
-  async function loadRows() {
+  async function loadRows(next?: { page?: number; pageSize?: PaginationPageSize }) {
+    const nextPage = next?.page ?? page;
+    const nextPageSize = next?.pageSize ?? pageSize;
+
     try {
       setLoading(true);
-      const response = await fetch("/api/department-head/revoke-permit-list", { cache: "no-store" });
-      const data = (await response.json()) as { rows?: RevokedPermitRow[]; error?: string };
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        pageSize: String(nextPageSize),
+      });
+      const response = await fetch(`/api/department-head/revoke-permit-list?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const data = (await response.json()) as {
+        records?: RevokedPermitRow[];
+        rows?: RevokedPermitRow[];
+        totalCount?: number;
+        page?: number;
+        pageSize?: PaginationPageSize;
+        totalPages?: number;
+        error?: string;
+      };
 
       if (!response.ok) {
         setMessage({ type: "error", text: data.error ?? "Unable to load revoked permit list." });
         setRows([]);
         setSelectedId(null);
+        setTotalCount(0);
+        setTotalPages(1);
         setLoading(false);
         return;
       }
 
-      const nextRows = data.rows ?? [];
+      const nextRows = data.records ?? data.rows ?? [];
       setRows(nextRows);
+      setTotalCount(data.totalCount ?? nextRows.length);
+      setPage(data.page ?? nextPage);
+      setPageSize(data.pageSize ?? nextPageSize);
+      setTotalPages(data.totalPages ?? 1);
       setSelectedId((current) => {
         if (current && nextRows.some((row) => row.inspectionId === current)) return current;
         return nextRows[0]?.inspectionId ?? null;
       });
-    } catch (err) {
+      setMessage(null);
+    } catch {
       setMessage({ type: "error", text: "Unable to load revoked permit list." });
       setRows([]);
       setSelectedId(null);
+      setTotalCount(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -100,7 +132,8 @@ export function RevokePermitListClient() {
 
   useEffect(() => {
     void loadRows();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -111,9 +144,7 @@ export function RevokePermitListClient() {
         {loading ? (
           <LoadingState message="Loading restricted businesses…" compact />
         ) : rows.length === 0 ? (
-          <div className={dhPanelClass}>
-            No restricted businesses found.
-          </div>
+          <div className={dhPanelClass}>No restricted businesses found.</div>
         ) : (
           <div className="space-y-2">
             {rows.map((row) => {
@@ -129,7 +160,9 @@ export function RevokePermitListClient() {
                   <p className={dhSummaryValueClass}>{row.businessName}</p>
                   <p className="mt-1 ui-caption">Decision: {formatDateTime(row.revocationDecisionDate)}</p>
                   <div className="mt-1 flex items-center gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--danger)]">{row.inspectionStatus}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--danger)]">
+                      {row.inspectionStatus}
+                    </p>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                         row.isSettled
@@ -145,6 +178,25 @@ export function RevokePermitListClient() {
             })}
           </div>
         )}
+
+        <div className="mt-3">
+          <PaginationControls
+            basePath="/department-head/revoke-permit-list"
+            queryParams={{}}
+            mode="client"
+            isLoading={loading}
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            recordLabel="businesses"
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+        </div>
       </SectionCard>
 
       <SectionCard
@@ -192,11 +244,15 @@ export function RevokePermitListClient() {
               </div>
               <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
                 <p className={dhSummaryLabelClass}>Department Head Revocation Remarks</p>
-                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.revocationRemarks ?? "No remarks recorded."}</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">
+                  {selected.revocationRemarks ?? "No remarks recorded."}
+                </p>
               </div>
               <div className={dhSummaryTileClass}>
                 <p className={dhSummaryLabelClass}>Revocation Decision Date</p>
-                <p className="mt-1 text-sm text-[var(--foreground)]">{formatDateTime(selected.revocationDecisionDate)}</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">
+                  {formatDateTime(selected.revocationDecisionDate)}
+                </p>
               </div>
               <div className={dhSummaryTileClass}>
                 <p className={dhSummaryLabelClass}>Decided By</p>
@@ -206,9 +262,7 @@ export function RevokePermitListClient() {
                 <p className={dhSummaryLabelClass}>Current Status</p>
                 <p className="mt-1 text-sm text-[var(--foreground)]">Application: {selected.applicationStatus}</p>
                 <p className="ui-caption">Business: {selected.businessStatus}</p>
-                <p className="ui-caption">
-                  Settlement: {selected.isSettled ? "Settled" : "Unsettled"}
-                </p>
+                <p className="ui-caption">Settlement: {selected.isSettled ? "Settled" : "Unsettled"}</p>
               </div>
               {selected.isSettled ? (
                 <div className="rounded-xl border border-[var(--success)] bg-[var(--success-soft)] p-3 md:col-span-2 xl:col-span-3">
@@ -263,7 +317,9 @@ export function RevokePermitListClient() {
                 >
                   Mark as Settled
                 </button>
-                <p className="text-sm text-[var(--ink-muted)]">Mark violation as settled without reactivating permit.</p>
+                <p className="text-sm text-[var(--ink-muted)]">
+                  Mark violation as settled without reactivating permit.
+                </p>
               </div>
             ) : null}
 
@@ -285,11 +341,14 @@ export function RevokePermitListClient() {
                 if (!selected) return;
                 try {
                   setIsSubmitting(true);
-                  const res = await fetch(`/api/department-head/revoke-permit-list/${selected.inspectionId}/mark-settled`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ remarks }),
-                  });
+                  const res = await fetch(
+                    `/api/department-head/revoke-permit-list/${selected.inspectionId}/mark-settled`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ remarks }),
+                    }
+                  );
                   const data = await res.json();
                   if (!res.ok) {
                     setMessage({ type: "error", text: data.error ?? "Unable to mark as settled." });
@@ -298,7 +357,7 @@ export function RevokePermitListClient() {
                   setIsModalOpen(false);
                   await loadRows();
                   setMessage(null);
-                } catch (err) {
+                } catch {
                   setMessage({ type: "error", text: "Unable to mark as settled." });
                 } finally {
                   setIsSubmitting(false);

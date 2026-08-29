@@ -286,6 +286,8 @@ export async function getBploApplicationDetail(applicationId: string) {
     applicationNumber: row.applicationNumber,
     applicant: row.applicant,
     applicationType: row.applicationType,
+    closureType: row.closureType ?? null,
+    closureTypeOtherReason: row.closureTypeOtherReason ?? null,
     status: mapDbStatusToUi(row.status),
     rawStatus: row.status,
     submittedAt: row.submittedAt ? row.submittedAt.toISOString() : null,
@@ -332,7 +334,9 @@ export async function getBploApplicationDocument(applicationId: string, document
     throw new Error("Application not found");
   }
 
-  if (!BPLO_QUEUE_REVIEW_STATUSES.includes(application.status as DbApplicationStatus)) {
+  // Preview/download must work for any application BPLO can open by ID.
+  // Queue-status gating applies only to validation mutations, not read access.
+  if (application.status === "DRAFT") {
     throw new Error("Application is not available for BPLO review");
   }
 

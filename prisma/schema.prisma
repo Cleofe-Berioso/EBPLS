@@ -107,6 +107,7 @@ model User {
   forcedClosureRecords Inspection[] @relation("InspectionForcedClosureBy")
   bploComplianceReviewRecords Inspection[] @relation("InspectionBploComplianceReviewer")
   feeConfigurationUpdates FeeConfigurationItem[] @relation("FeeConfigUpdatedBy")
+  feeConfigurationCategoryUpdates FeeConfigurationCategory[] @relation("FeeConfigCategoryUpdatedBy")
   systemFeeSettingUpdates SystemFeeSetting[] @relation("SystemFeeSettingUpdatedBy")
   renewalExtensionUpdates RenewalExtension[] @relation("RenewalExtensionUpdatedBy")
   smsDeliveryLogs SmsDeliveryLog[] @relation("SmsDeliveryLogApplicant")
@@ -124,7 +125,7 @@ model BusinessRecord {
   applicantId        String
   businessType       String
   registrationNumber String   @unique
-  tin                String
+  tin                BigInt
   businessName       String
   tradeName          String
   ownerName          String
@@ -139,20 +140,20 @@ model BusinessRecord {
   mainOfficeAddress  String
   businessAddress    String
   sameAsMainOffice   Boolean  @default(true)
-  businessArea       String?
-  totalFloorArea     String?
-  totalEmployees     String?
-  maleEmployees      String?
-  femaleEmployees    String?
-  employeesWithinMunicipality String?
-  deliveryVehicles   String?
+  businessArea       Decimal? @db.Decimal(10, 2)
+  totalFloorArea     Decimal? @db.Decimal(10, 2)
+  totalEmployees     Int?
+  maleEmployees      Int?
+  femaleEmployees    Int?
+  employeesWithinMunicipality Int?
+  deliveryVehicles   Int?
   propertyOwnership  String?
   taxDeclarationNumber String?
   propertyIdentificationNumber String?
   taxIncentives      String?
   businessActivity   String?
   lineOfBusiness     String?
-  assetSize          String?
+  assetSize          Decimal? @db.Decimal(10, 3)
   isMarket           Boolean  @default(false)
   isAgriculture      Boolean  @default(false)
   permitExpirationDate DateTime?
@@ -654,6 +655,21 @@ model FeeConfigurationItem {
   @@index([category, isActive])
 }
 
+model FeeConfigurationCategory {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  label           String
+  classifications Json
+  isActive        Boolean  @default(true)
+  updatedById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  updatedBy User? @relation("FeeConfigCategoryUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([isActive, label])
+}
+
 model SystemFeeSetting {
   id                              String   @id @default(cuid())
   renewalSurchargePercent         Float    @default(25)
@@ -662,6 +678,7 @@ model SystemFeeSetting {
   powerDistributionFixedFee       Decimal  @default(10000)
   privatePortFixedFee             Decimal  @default(50000)
   jitPortalEnabled                Boolean  @default(true)
+  jitInspectionCycleStartedAt     DateTime?
   renewalComplianceMinorPenalty   Decimal  @default(0)
   renewalComplianceMajorPenalty   Decimal  @default(0)
   renewalComplianceSeverePenalty  Decimal  @default(0)

@@ -1,6 +1,7 @@
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import type { BusinessInfo } from "@/lib/applicant-types";
 import { mapDocumentValidationStatusToUi } from "@/lib/document-validation";
+import { tinFromDb } from "@/lib/business-rules";
 import { toMoneyNumber } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { resolveRequiredDocuments } from "@/lib/required-documents";
@@ -71,7 +72,7 @@ function buildBusinessInformation(formData: BusinessInfo, record: {
   tradeName: string;
   ownerName: string;
   registrationNumber: string;
-  tin: string;
+  tin: string | bigint | number;
   email: string;
   phone: string;
   businessAddress: string;
@@ -82,7 +83,7 @@ function buildBusinessInformation(formData: BusinessInfo, record: {
     tradeName: pickString(formData.tradeName) ?? record.tradeName,
     businessType: pickString(formData.businessType),
     registrationNumber: pickString(formData.registrationNumber) ?? record.registrationNumber,
-    tin: pickString(formData.tin) ?? record.tin,
+    tin: pickString(formData.tin) ?? tinFromDb(record.tin),
     ownerName: pickString(formData.ownerName) ?? record.ownerName,
     nationality: pickString(formData.nationality),
     email: pickString(formData.email) ?? record.email,

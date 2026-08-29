@@ -5,7 +5,9 @@ import {
   getBusinessRegistryReport,
   type BusinessRegistryReportFilters,
 } from "@/lib/superadmin-data";
+import { buildRegistryReportNarrative, REPORT_PURPOSES } from "@/lib/report-narrative-builders";
 import { ReportPageHeader } from "@/components/print/reports/report-page-header";
+import { ReportNarrative, ReportSection } from "@/components/print/reports/report-section";
 import { ReportSummaryCard } from "@/components/print/reports/report-summary-card";
 import { ReportTable } from "@/components/print/reports/report-table";
 import { ReportEmptyState } from "@/components/print/reports/report-empty-state";
@@ -45,13 +47,20 @@ export default async function BusinessRegistryReportPage({ searchParams }: PageP
 
   const meta = buildReportMetadata({
     title: "Business Registry Report",
-    generatedBy: session.user.name ?? "Super Admin",
+    generatedBy: session.user.name ?? "IT Administrator",
   });
 
   const activeCount = rows.filter((r) => r.businessStatus === "Active").length;
   const inactiveCount = rows.filter((r) => r.businessStatus === "Inactive").length;
   const closedCount = rows.filter((r) => r.businessStatus === "Closed").length;
   const withPermit = rows.filter((r) => r.permitNumber !== "-").length;
+  const narrative = buildRegistryReportNarrative({
+    total: rows.length,
+    activeCount,
+    inactiveCount,
+    closedCount,
+    withPermit,
+  });
 
   const resetHref = "/superadmin/reports/print/business-registry";
 
@@ -125,19 +134,27 @@ export default async function BusinessRegistryReportPage({ searchParams }: PageP
         </form>
       </div>
 
-      {/* ── Summary ──────────────────────────────────────────────────── */}
-      <ReportSummaryCard
-        title="Summary"
-        items={[
-          { label: "Total Records", value: rows.length, tone: "slate" },
-          { label: "Active", value: activeCount, tone: "green" },
-          { label: "Inactive", value: inactiveCount, tone: "amber" },
-          { label: "Closed", value: closedCount, tone: "red" },
-          { label: "With Permit", value: withPermit, tone: "indigo" },
-        ]}
-      />
+      <ReportSection number={1} title="Report Purpose" description="What this masterlist report explains.">
+        <ReportNarrative paragraphs={[REPORT_PURPOSES.registry]} />
+      </ReportSection>
 
-      {/* ── Detail table ─────────────────────────────────────────────── */}
+      <ReportSection number={2} title="Findings & Interpretation" description="Reading the registry as operational information.">
+        <ReportNarrative paragraphs={narrative.paragraphs} bullets={narrative.bullets} />
+      </ReportSection>
+
+      <ReportSection number={3} title="Summary Statistics" description="Headline counts for the filtered registry view.">
+        <ReportSummaryCard
+          items={[
+            { label: "Total Records", value: rows.length, hint: "Business records in scope" },
+            { label: "Active", value: activeCount, hint: "Operating businesses" },
+            { label: "Inactive", value: inactiveCount, hint: "Not currently active" },
+            { label: "Closed", value: closedCount, hint: "Marked closed in registry" },
+            { label: "With Permit", value: withPermit, hint: "Linked to a released permit no." },
+          ]}
+        />
+      </ReportSection>
+
+      <ReportSection number={4} title="Detailed Registry Records" description="Line-level masterlist evidence.">
       {rows.length === 0 ? (
         <ReportEmptyState description="No business registry records match the selected filters." />
       ) : (
@@ -147,6 +164,7 @@ export default async function BusinessRegistryReportPage({ searchParams }: PageP
           rows={(rows as unknown) as Record<string, unknown>[]}
         />
       )}
+      </ReportSection>
     </div>
   );
 }

@@ -53,7 +53,7 @@
 | E2 | BPLO Officer | Reviews applications, transitions status, computes fees, generates TOP, verifies payments, prepares/releases permit, verifies map points | src/app/api/bplo/applications/[applicationId]/under-review/route.ts, src/app/api/bplo/assessment-fees/[applicationId]/generate-top/route.ts, src/app/api/bplo/payment-verification/[paymentReferenceId]/approve/route.ts, src/app/api/bplo/permit-issuance/[applicationId]/release/route.ts |
 | E3 | Department Head | Approves/rejects/returns DH review queue, verifies JIT inspections, decides revocations, settles revoked records | src/app/api/department-head/application-approval/[applicationId]/approve/route.ts, src/app/api/department-head/inspection-verification/[inspectionId]/verify/route.ts, src/app/api/department-head/permit-to-revoke/[inspectionId]/approve-revocation/route.ts, src/app/api/department-head/revoke-permit-list/[inspectionId]/mark-settled/route.ts |
 | E4 | JIT Inspector | Submits compliance/non-compliance inspections with evidence | src/app/api/jit/inspect-a-business/[businessRecordId]/route.ts, src/lib/jit-inspections.ts |
-| E5 | Super Admin | Monitors reports/activities, manages users, fee settings, extension windows | src/app/api/superadmin/activities/route.ts, src/app/api/superadmin/reports/route.ts, src/app/api/superadmin/users/[userId]/disable/route.ts, src/app/api/superadmin/settings/fees/route.ts |
+| E5 | IT Administrator | Monitors reports/activities, manages users, fee settings, extension windows | src/app/api/superadmin/activities/route.ts, src/app/api/superadmin/reports/route.ts, src/app/api/superadmin/users/[userId]/disable/route.ts, src/app/api/superadmin/settings/fees/route.ts |
 | E6 | Google OAuth | Optional social login identity provider | src/lib/auth.ts |
 | E7 | CountryStateCity API | Provides countries/states/cities for address form options | src/app/api/address/countries/route.ts, src/app/api/address/states/route.ts, src/app/api/address/cities/route.ts |
 | E8 | PSGC API | Provides barangay data for PH addresses | src/app/api/address/barangays/route.ts |
@@ -87,7 +87,7 @@ flowchart TD
   E2[BPLO Officer]
   E3[Department Head]
   E4[JIT Inspector]
-  E5[Super Admin]
+  E5[IT Administrator]
   E6[[Google OAuth]]
   E7[[CountryStateCity API]]
   E8[[PSGC API]]
@@ -131,7 +131,7 @@ flowchart TD
   E2[BPLO Officer]
   E3[Department Head]
   E4[JIT Inspector]
-  E5[Super Admin]
+  E5[IT Administrator]
   S1[[Third-party APIs and SMS]]
 
   P1((Auth and Session Control))
@@ -142,7 +142,7 @@ flowchart TD
   P6((Permit/Certificate Issuance and Release))
   P7((Business Location and Map Verification))
   P8((JIT Inspection and DH Revocation Workflow))
-  P9((Super Admin Audit/Reports/Settings))
+  P9((IT Administrator Audit/Reports/Settings))
 
   D1[(User)]
   D2[(BusinessApplication)]
@@ -236,7 +236,7 @@ flowchart TD
 
 | Process ID | Process Name | Purpose | Main files/routes | Data stores/models used | External entities involved |
 |---|---|---|---|---|---|
-| P1 | Auth and Session Control | Authenticate users, enforce role path boundaries and API role checks | src/lib/auth.ts, src/proxy.ts, src/lib/rbac.ts, src/app/api/auth/register/route.ts | User | Applicant, BPLO, Department Head, JIT, Super Admin, Google OAuth |
+| P1 | Auth and Session Control | Authenticate users, enforce role path boundaries and API role checks | src/lib/auth.ts, src/proxy.ts, src/lib/rbac.ts, src/app/api/auth/register/route.ts | User | Applicant, BPLO, Department Head, JIT, IT Administrator, Google OAuth |
 | P2 | Applicant Application and Document Submission | Save/submit NEW/RENEWAL/CLOSURE, validate, store docs | src/app/api/applicant/applications/route.ts, src/lib/applications.ts, src/app/api/applicant/applications/[applicationId]/documents/route.ts, src/lib/document-storage.ts | BusinessApplication, ApplicationDocument, ApplicationHistory, local files | Applicant |
 | P3 | BPLO Review and Transition | Move review queue states and capture remarks | src/lib/bplo-applications.ts, src/app/api/bplo/applications/* | BusinessApplication, ApplicationHistory | BPLO |
 | P4 | Fee Assessment and TOP Generation | Compute fees, save draft, generate TOP and transition to APPROVED_FOR_PAYMENT | src/lib/bplo-assessment.ts, src/lib/fee-computation.ts, src/lib/fee-settings.ts, src/app/api/bplo/assessment-fees/* | BusinessApplication, FeeAssessment, FeeAssessmentLineItem, ApplicationHistory, FeeConfigurationItem, SystemFeeSetting, RenewalExtension | BPLO |
@@ -244,7 +244,7 @@ flowchart TD
 | P6 | Permit/Certificate Issuance and Release | Prepare/release permit/closure certificate, update business status/record, trigger SMS | src/lib/bplo-permit-issuance.ts, src/app/api/bplo/permit-issuance/*, src/lib/sms.ts | PermitIssuance, BusinessApplication, BusinessRecord, BusinessLocation, SmsDeliveryLog, ApplicationHistory | BPLO, SMS Provider |
 | P7 | Business Location and Map Verification | Persist pin locations and verify/return by BPLO, list for BPLO/JIT maps | src/lib/business-location.ts, src/app/api/bplo/business-map/*, src/app/api/jit/business-map/route.ts, src/app/api/applicant/business-location/* | BusinessLocation, BusinessRecord, BusinessApplication | Applicant, BPLO, JIT |
 | P8 | JIT Inspection and DH Revocation Workflow | JIT submits inspection evidence, DH verifies, revocation decision applied | src/lib/jit-inspections.ts, src/lib/department-head-api.ts, src/app/api/jit/inspect-a-business/[businessRecordId]/route.ts, src/app/api/department-head/* | Inspection, BusinessApplication, BusinessRecord, ApplicationHistory, local files | JIT, Department Head |
-| P9 | Super Admin Audit/Reports/Settings | Read reports, activities, manage users and fee settings | src/lib/superadmin-data.ts, src/lib/audit-log.ts, src/lib/fee-settings.ts, src/app/api/superadmin/* | AuditLog, User, BusinessApplication, FeeAssessment, Inspection, SmsDeliveryLog, Fee config tables | Super Admin |
+| P9 | IT Administrator Audit/Reports/Settings | Read reports, activities, manage users and fee settings | src/lib/superadmin-data.ts, src/lib/audit-log.ts, src/lib/fee-settings.ts, src/app/api/superadmin/* | AuditLog, User, BusinessApplication, FeeAssessment, Inspection, SmsDeliveryLog, Fee config tables | IT Administrator |
 
 ## 6. Level 2 Module DFDs
 
@@ -580,7 +580,7 @@ Status: Found
 
 ```mermaid
 flowchart TD
-  E5[Super Admin]
+  E5[IT Administrator]
   P9_1((Read dashboard/activities/reports))
   P9_2((Apply user management actions))
   P9_3((Apply fee/penalty/extension settings))
@@ -614,7 +614,7 @@ flowchart TD
 ```
 
 Subprocess summary
-- Super Admin can read broad analytics and activity logs.
+- IT Administrator can read broad analytics and activity logs.
 - User management supports disable/reactivate/reset password.
 - Fee settings and extension windows are mutable with validations.
 - Audit writes are best-effort and non-blocking.
@@ -1133,7 +1133,7 @@ Failure/success flow summary
   - OR submission and BPLO verification with amount threshold
   - Permit preparation/release with business record updates
   - JIT inspection + DH verification/revocation decisions
-  - Super Admin reporting/settings/audit infrastructure
+  - IT Administrator reporting/settings/audit infrastructure
 - Partial flows:
   - Strong atomicity across file storage and DB writes
   - Audit consistency across all privileged actions

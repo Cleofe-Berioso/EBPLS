@@ -330,7 +330,7 @@ export async function logSettingsAction(
   actorId: string | null,
   actorName: string | null,
   actorRole: string | null,
-  settingType: "FEE_CONFIGURATION" | "SYSTEM_FEE" | "RENEWAL_EXTENSION" | "OTHER",
+  settingType: "FEE_CONFIGURATION" | "FEE_CATEGORY" | "SYSTEM_FEE" | "RENEWAL_EXTENSION" | "OTHER",
   settingId: string,
   action: "CREATED" | "UPDATED" | "DELETED",
   description?: string,

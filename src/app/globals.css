@@ -5,11 +5,11 @@
   /* Typography */
   --font-body: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
   --font-display: var(--font-body);
-  --text-page-title: clamp(1.25rem, 1.25vw, 1.625rem);
-  --text-detail-title: 1.375rem;
-  --text-section-title: 1.0625rem;
-  --text-body: 0.9375rem;
-  --text-body-lg: 1rem;
+  --text-page-title: clamp(1.125rem, 1.1vw, 1.375rem);
+  --text-detail-title: 1.25rem;
+  --text-section-title: 1rem;
+  --text-body: 0.875rem;
+  --text-body-lg: 0.9375rem;
   --text-caption: 0.75rem;
 
   /* Core palette — institutional off-white & forest */
@@ -58,19 +58,19 @@
   --radius-card: 0.875rem;
   --radius-control: 0.625rem;
 
-  /* Spacing */
+  /* Spacing — denser for less page scroll at 1366×768 */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
+  --space-3: 0.625rem;
+  --space-4: 0.875rem;
+  --space-5: 1rem;
+  --space-6: 1.25rem;
+  --space-8: 1.5rem;
 
-  /* Surfaces & compact typography (Batch 8A / 10A) */
+  /* Surfaces & compact typography (Batch 8A / 10A / density) */
   --surface-header: #f8f9f8;
-  --text-stat-value: 1.375rem;
-  --text-gauge-value: 1.75rem;
+  --text-stat-value: 1.25rem;
+  --text-gauge-value: 1.5rem;
 }
 
 @theme inline {
@@ -150,7 +150,7 @@ h1, h2, h3, h4, h5, h6,
 .ui-page-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-3);
 }
 
 .ui-surface-header {
@@ -260,9 +260,9 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .ui-table th {
-  padding: 0.625rem 1rem;
+  padding: 0.5rem 0.75rem;
   color: var(--ink-muted);
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.025em;
   text-transform: uppercase;
@@ -270,9 +270,9 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .ui-table td {
-  padding: 0.625rem 1rem;
-  font-size: 0.875rem;
-  line-height: 1.45;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
   vertical-align: top;
   color: var(--foreground);
 }
@@ -368,22 +368,22 @@ button, a, input, select, textarea {
 
 .app-portal-header-bar {
   display: flex;
-  min-height: 3.5rem;
+  min-height: 3rem;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.5rem 1rem;
+  gap: 0.625rem;
+  padding: 0.375rem 0.875rem;
 }
 
 @media (min-width: 640px) {
   .app-portal-header-bar {
-    padding-inline: 1.25rem;
+    padding-inline: 1rem;
   }
 }
 
 @media (min-width: 1024px) {
   .app-portal-header-bar {
-    padding-inline: 1.5rem;
+    padding-inline: 1.25rem;
   }
 }
 
@@ -409,49 +409,49 @@ button, a, input, select, textarea {
 
 .app-portal-main {
   min-width: 0;
-  padding: 0.875rem 1rem 2rem;
+  padding: 0.625rem 0.875rem 1.25rem;
 }
 
 @media (min-width: 640px) {
   .app-portal-main {
-    padding: 1rem 1.25rem 2.25rem;
+    padding: 0.75rem 1rem 1.5rem;
   }
 }
 
 @media (min-width: 1024px) {
   .app-portal-main {
-    padding-inline: 1.5rem;
-    padding-bottom: 2.5rem;
+    padding-inline: 1.25rem;
+    padding-bottom: 1.75rem;
   }
 }
 
 .app-sidebar-header {
   border-bottom: 1px solid var(--sidebar-border);
-  padding: 0.875rem 1rem;
+  padding: 0.625rem 0.875rem;
 }
 
 .app-sidebar-header--collapsed {
-  padding-inline: 0.75rem;
-  padding-block: 0.875rem;
+  padding-inline: 0.625rem;
+  padding-block: 0.625rem;
 }
 
 .app-sidebar-nav {
   overflow-y: auto;
   flex: 1;
-  padding-block: 0.75rem;
+  padding-block: 0.5rem;
 }
 
 .app-sidebar-nav-link {
   display: flex;
   min-height: 2.5rem;
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.5rem;
   border-radius: var(--radius-control);
   border-left-width: 3px;
-  padding: 0.45rem 0.7rem;
-  font-size: 0.875rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.3;
   transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
 }
 
@@ -563,7 +563,7 @@ table tbody tr:hover {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: var(--radius-control);
+  border-radius: 9999px;
   background: rgba(197, 160, 89, 0.12);
   box-shadow: inset 0 0 0 1px rgba(197, 160, 89, 0.28);
 }
@@ -576,19 +576,19 @@ table tbody tr:hover {
 .ui-page-header-watermark {
   pointer-events: none;
   position: absolute;
-  right: 0.75rem;
+  right: 0.5rem;
   top: 50%;
-  height: 7rem;
-  width: 7rem;
+  height: 5.5rem;
+  width: 5.5rem;
   transform: translateY(-50%);
-  opacity: 0.055;
+  opacity: 0.05;
 }
 
 @media (min-width: 640px) {
   .ui-page-header-watermark {
-    right: 1.25rem;
-    height: 8.5rem;
-    width: 8.5rem;
+    right: 1rem;
+    height: 6.5rem;
+    width: 6.5rem;
   }
 }
 

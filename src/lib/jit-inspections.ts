@@ -3,6 +3,7 @@ import {
   getChecklistQuestionForDepartment,
   type ChecklistItemInput,
 } from "@/lib/jit-post-audit-checklist";
+import { getJitInspectionCycleStartedAt } from "@/lib/jit-settings";
 import { prisma } from "@/lib/prisma";
 import type { PaginatedResult } from "@/lib/pagination";
 
@@ -111,12 +112,14 @@ async function attachLatestInspections(rows: BusinessLocationMapRow[]): Promise<
     return [];
   }
 
+  const cycleStartedAt = await getJitInspectionCycleStartedAt();
   const inspectionModel = (prisma as any).inspection;
   const inspections = await inspectionModel.findMany({
     where: {
       businessRecordId: {
         in: businessRecordIds,
       },
+      ...(cycleStartedAt ? { createdAt: { gte: cycleStartedAt } } : {}),
     },
     orderBy: {
       createdAt: "desc",
@@ -154,11 +157,12 @@ async function attachLatestInspections(rows: BusinessLocationMapRow[]): Promise<
 
 export async function listJitInspectableBusinessesPaginated(options?: {
   search?: string;
+  barangay?: string;
   page?: number | string;
   pageSize?: number | string;
 }): Promise<PaginatedResult<JitInspectableBusinessRow>> {
   const locationResult = await listActivePermittedBusinessLocationsPaginated(
-    { search: options?.search },
+    { search: options?.search, barangay: options?.barangay },
     options
   );
 

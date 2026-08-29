@@ -16,9 +16,9 @@ export function FilterBar({
   contentClassName?: string;
 }) {
   return (
-    <section className={`app-surface px-4 py-4 sm:px-5 lg:px-6 ${className}`}>
+    <section className={`app-surface px-3.5 py-3 sm:px-4 lg:px-5 ${className}`}>
       {(title || description || actions) ? (
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between lg:gap-3">
+        <div className="mb-2.5 flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between lg:gap-2.5">
           <div className="min-w-0">
             {title ? (
               <h3
@@ -29,10 +29,10 @@ export function FilterBar({
               </h3>
             ) : null}
             {description ? (
-              <p className="ui-caption mt-1">{description}</p>
+              <p className="ui-caption mt-0.5">{description}</p>
             ) : null}
           </div>
-          {actions ? <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">{actions}</div> : null}
+          {actions ? <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div> : null}
         </div>
       ) : null}
       <div className={contentClassName}>{children}</div>

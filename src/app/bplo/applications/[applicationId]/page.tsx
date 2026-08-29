@@ -2,19 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Mail, Phone } from "lucide-react";
 import { getBploApplicationDetail } from "@/lib/bplo-applications";
-import { getRequiredDocumentsValidationForApplication } from "@/lib/document-validation-server";
 import { formatPersonName } from "@/lib/person-name";
 import { resolveApplicantProfileImageUrl } from "@/lib/profile-image-url";
 import { StatusBadge } from "@/components/applicant/status-badge";
 import { StatusTracker } from "@/components/applicant/status-tracker";
-import { BploReviewActions } from "@/components/bplo/bplo-review-actions";
-import type { ApplicationStatus } from "@/lib/applicant-types";
+import { BploApplicationReviewSection } from "@/components/bplo/bplo-application-review-section";
+import type { ApplicationStatus, BusinessInfo } from "@/lib/applicant-types";
 import { DetailHeader } from "@/components/ui/detail-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { Timeline } from "@/components/ui/timeline";
 import { actionButtonStyles } from "@/components/ui/action-button";
-import { BploDocumentPreviewList } from "@/components/bplo/bplo-document-preview-list";
 import {
   bploPanelClass,
   bploSummaryLabelClass,
@@ -87,6 +85,20 @@ function getStatusGuidance(status: string): { meaning: string; nextStep: string 
     };
   }
 
+  if (status === "Department Head Review") {
+    return {
+      meaning: "BPLO review is complete. The application is waiting in the Department Head approval queue.",
+      nextStep: "No further BPLO review action is needed here. Department Head decides approve, return, or reject.",
+    };
+  }
+
+  if (status === "Department Head Approved") {
+    return {
+      meaning: "Department Head approved this application for fee assessment.",
+      nextStep: "Continue in Fees & Assessment to prepare the Tax Order of Payment.",
+    };
+  }
+
   if (status === "Assessed") {
     return {
       meaning: "Review stage is complete and the application was assessed.",
@@ -155,16 +167,6 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
     expiresInSeconds: PROFILE_IMAGE_SIGNED_URL_TTL_SECONDS,
   });
   const statusGuidance = getStatusGuidance(application.status);
-  const documentValidation = await getRequiredDocumentsValidationForApplication(application.id);
-  const approvalBlockMessage = documentValidation.ready
-    ? undefined
-    : `Resolve required document validation first: ${documentValidation.blockers
-        .map((blocker) =>
-          blocker.reason === "missing"
-            ? `${blocker.documentName} (missing upload)`
-            : `${blocker.documentName} (${blocker.validationStatus})`
-        )
-        .join("; ")}`;
   const latestRemarks = application.history.find(
     (item: any) => typeof item.remarks === "string" && item.remarks.trim().length > 0
   );
@@ -197,8 +199,8 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
         }
       />
 
-      <SectionCard contentClassName="py-6 sm:py-7">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <SectionCard contentClassName="py-4 sm:py-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <div className="flex shrink-0 justify-center sm:justify-start">
               <UserAvatar
@@ -263,20 +265,20 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
               <span className="font-semibold text-[var(--foreground)]">Expected next step:</span> {statusGuidance.nextStep}
             </p>
           </div>
-          <StatusTracker status={application.status as ApplicationStatus} />
+          <StatusTracker
+            status={application.status as ApplicationStatus}
+            applicationType={application.applicationType}
+          />
         </div>
       </SectionCard>
 
-      <BploReviewActions
+      <BploApplicationReviewSection
         applicationId={application.id}
         currentStatus={application.status}
-        approvalBlocked={!documentValidation.ready}
-        approvalBlockMessage={approvalBlockMessage}
+        applicationType={application.applicationType}
+        formData={application.formData as unknown as BusinessInfo}
+        documents={application.documents}
       />
-
-      <SectionCard title="Documents" description="Requirements attached by the applicant for BPLO review.">
-        <BploDocumentPreviewList applicationId={application.id} documents={application.documents} />
-      </SectionCard>
 
       <SectionCard title="Remarks" description="Latest BPLO remarks and comment trail context.">
         {latestRemarks ? (
@@ -331,7 +333,9 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
           <SectionCard title="Address and Location" description="Filed address and map pin details.">
             <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Main Office Address:</strong> {readText(formData, ["mainOfficeAddress"])}</p>
+              <p><strong>Main Office Zip Code:</strong> {readText(formData, ["mainOfficeZipCode"])}</p>
               <p><strong>Business Address:</strong> {readText(formData, ["businessAddress"])}</p>
+              <p><strong>Business Zip Code:</strong> {readText(formData, ["businessZipCode"], "6118")}</p>
               <p><strong>Barangay:</strong> {readText(formData, ["barangay"])}</p>
               <p><strong>Street:</strong> {readText(formData, ["streetAddress"])}</p>
               <p><strong>Coordinates:</strong> {latitude != null && longitude != null ? `${latitude}, ${longitude}` : "-"}</p>
@@ -376,6 +380,34 @@ export default async function BploApplicationDetailPage({ params }: PageProps) {
               ) : null}
               {application.applicationType === "RENEWAL" ? (
                 <p><strong>Gross Profit:</strong> {readText(formData, ["grossProfit"])}</p>
+              ) : null}
+              {application.applicationType === "CLOSURE" ? (
+                <>
+                  <p>
+                    <strong>Closure Type:</strong>{" "}
+                    {application.closureType === "RETIREMENT"
+                      ? "Retirement"
+                      : application.closureType === "NON_COMPLIANT_RELATED"
+                        ? "Non-compliant Related"
+                        : application.closureType === "OTHERS"
+                          ? application.closureTypeOtherReason?.trim()
+                            ? `Others — ${application.closureTypeOtherReason.trim()}`
+                            : "Others"
+                          : "-"}
+                  </p>
+                  <p>
+                    <strong>Line of Business:</strong>{" "}
+                    {readText(formData, ["closureLineOfBusiness", "lineOfBusiness"])}
+                  </p>
+                  <p>
+                    <strong>Business Activity:</strong>{" "}
+                    {readText(formData, ["closureBusinessActivity", "businessActivity"])}
+                  </p>
+                  <p>
+                    <strong>Last Date of Operation:</strong>{" "}
+                    {readText(formData, ["closureLastDateOfOperation"])}
+                  </p>
+                </>
               ) : null}
             </div>
           </SectionCard>

@@ -10,9 +10,15 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") ?? undefined;
+  const barangay = searchParams.get("barangay") ?? undefined;
   const page = searchParams.get("page") ?? undefined;
   const pageSize = searchParams.get("pageSize") ?? undefined;
 
-  const result = await listJitInspectableBusinessesPaginated({ search, page, pageSize });
+  const result = await listJitInspectableBusinessesPaginated({
+    search,
+    barangay,
+    page,
+    pageSize,
+  });
   return NextResponse.json(result);
 }

@@ -22,7 +22,7 @@ import {
   type DocumentValidationUiStatus,
 } from "@/lib/document-validation";
 
-type BploDocumentListItem = {
+export type BploDocumentListItem = {
   id: string;
   documentName: string;
   fileName: string;
@@ -37,6 +37,7 @@ type BploDocumentListItem = {
 type BploDocumentPreviewListProps = {
   applicationId: string;
   documents: BploDocumentListItem[];
+  onDocumentsChange?: (documents: BploDocumentListItem[]) => void;
 };
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
@@ -113,7 +114,11 @@ function DocumentValidationEditor({
       `/api/bplo/applications/${applicationId}/documents/${document.id}/validation`,
       {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+        credentials: "same-origin",
         body: JSON.stringify({
           status: UI_TO_DB_OPTION[status],
           remarks: remarks.trim() || undefined,
@@ -183,12 +188,27 @@ function DocumentValidationEditor({
   );
 }
 
-export function BploDocumentPreviewList({ applicationId, documents: initialDocuments }: BploDocumentPreviewListProps) {
+export function BploDocumentPreviewList({
+  applicationId,
+  documents: initialDocuments,
+  onDocumentsChange,
+}: BploDocumentPreviewListProps) {
   const [documents, setDocuments] = useState(initialDocuments);
+
+  function updateDocuments(next: BploDocumentListItem[] | ((current: BploDocumentListItem[]) => BploDocumentListItem[])) {
+    setDocuments((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      onDocumentsChange?.(resolved);
+      return resolved;
+    });
+  }
   const [selectedDocument, setSelectedDocument] = useState<BploDocumentListItem | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const previewType = useMemo(() => resolvePreviewType(selectedDocument), [selectedDocument]);
   const previewUrl = useMemo(() => {
@@ -197,13 +217,6 @@ export function BploDocumentPreviewList({ applicationId, documents: initialDocum
     }
 
     return `/api/bplo/applications/${applicationId}/documents/${selectedDocument.id}/preview`;
-  }, [applicationId, selectedDocument]);
-  const downloadUrl = useMemo(() => {
-    if (!applicationId || !selectedDocument?.id) {
-      return null;
-    }
-
-    return `/api/bplo/applications/${applicationId}/documents/${selectedDocument.id}/download`;
   }, [applicationId, selectedDocument]);
 
   const unavailablePreviewError =
@@ -215,6 +228,7 @@ export function BploDocumentPreviewList({ applicationId, documents: initialDocum
     setSelectedDocument(document);
     setIsDocumentModalOpen(true);
     setPreviewError(null);
+    setDownloadError(null);
     setIsPreviewLoading(type === "image" || type === "pdf");
   }
 
@@ -226,8 +240,64 @@ export function BploDocumentPreviewList({ applicationId, documents: initialDocum
   }
 
   function handleValidationSaved(updated: BploDocumentListItem) {
-    setDocuments((current) => current.map((doc) => (doc.id === updated.id ? { ...doc, ...updated } : doc)));
+    updateDocuments((current) =>
+      current.map((doc) => (doc.id === updated.id ? { ...doc, ...updated } : doc))
+    );
     setSelectedDocument((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
+  }
+
+  async function downloadDocument(document: BploDocumentListItem) {
+    if (!applicationId || !document.id || isDownloading) return;
+
+    setIsDownloading(true);
+    setDownloadingDocumentId(document.id);
+    setDownloadError(null);
+    if (isDocumentModalOpen) {
+      setPreviewError(null);
+    }
+
+    try {
+      const response = await fetch(
+        `/api/bplo/applications/${applicationId}/documents/${document.id}/download`,
+        {
+          method: "GET",
+          credentials: "same-origin",
+          headers: {
+            "ngrok-skip-browser-warning": "true",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        let message = `Unable to download document (HTTP ${response.status}).`;
+        try {
+          const data = (await response.json()) as { error?: string };
+          if (data.error) message = data.error;
+        } catch {
+          // Keep status-based message when body is not JSON.
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = document.fileName || document.documentName || "document";
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to download document.";
+      setDownloadError(message);
+      if (isDocumentModalOpen) {
+        setPreviewError(message);
+      }
+    } finally {
+      setIsDownloading(false);
+      setDownloadingDocumentId(null);
+    }
   }
 
   const footer = selectedDocument ? (
@@ -246,11 +316,14 @@ export function BploDocumentPreviewList({ applicationId, documents: initialDocum
           Open in New Tab
         </button>
       )}
-      {downloadUrl ? (
-        <a href={downloadUrl} className={actionButtonStyles("secondary", "sm")}>
-          Download
-        </a>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => void downloadDocument(selectedDocument)}
+        disabled={isDownloading}
+        className={actionButtonStyles("secondary", "sm")}
+      >
+        {isDownloading && downloadingDocumentId === selectedDocument.id ? "Downloading…" : "Download"}
+      </button>
       <button type="button" onClick={closeDocumentModal} className={actionButtonStyles("primary", "sm")}>
         Close
       </button>
@@ -280,13 +353,23 @@ export function BploDocumentPreviewList({ applicationId, documents: initialDocum
                   </p>
                 ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => openDocument(document)}
-                className={actionButtonStyles("secondary", "sm")}
-              >
-                View
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openDocument(document)}
+                  className={actionButtonStyles("secondary", "sm")}
+                >
+                  View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void downloadDocument(document)}
+                  disabled={isDownloading}
+                  className={actionButtonStyles("secondary", "sm")}
+                >
+                  {isDownloading && downloadingDocumentId === document.id ? "Downloading…" : "Download"}
+                </button>
+              </div>
             </div>
             <DocumentValidationEditor
               applicationId={applicationId}
@@ -301,6 +384,12 @@ export function BploDocumentPreviewList({ applicationId, documents: initialDocum
           </li>
         ) : null}
       </ul>
+
+      {!isDocumentModalOpen && downloadError ? (
+        <div className="mt-3 rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--danger)]">
+          {downloadError}
+        </div>
+      ) : null}
 
       <Modal
         open={isDocumentModalOpen}
@@ -364,7 +453,6 @@ export function BploDocumentPreviewList({ applicationId, documents: initialDocum
                   <iframe
                     title={selectedDocument.fileName}
                     src={previewUrl}
-                    sandbox="allow-same-origin"
                     className="h-[70vh] w-full bg-white"
                     onLoad={() => setIsPreviewLoading(false)}
                   />

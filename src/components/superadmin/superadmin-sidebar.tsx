@@ -97,15 +97,15 @@ export function SuperAdminSidebar({
     <aside className={sidebarAsideClass(mobileOpen, collapsed)}>
       <div className={sidebarHeaderClass(collapsed)}>
         <PortalSidebarBrand
-          portalTitle="Super Admin Portal"
+          portalTitle="IT Administrator Portal"
           description="Monitor users, reports, settings, and audit activity."
           roleType="SUPER_ADMIN"
-          roleLabel="Super Admin"
+          roleLabel="IT Administrator"
           collapsed={collapsed}
         />
       </div>
 
-      <nav className={`app-sidebar-nav ${sidebarNavPaddingClass(collapsed)}`} aria-label="Super Admin navigation">
+      <nav className={`app-sidebar-nav ${sidebarNavPaddingClass(collapsed)}`} aria-label="IT Administrator navigation">
         {SUPERADMIN_SIDEBAR_ITEMS.map((item, idx) => {
           if ("href" in item) {
             return (

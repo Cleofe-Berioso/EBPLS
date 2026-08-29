@@ -9,6 +9,15 @@ const ROLE_STYLES: Record<RoleBadgeValue, string> = {
   VIEW_ONLY: "border border-[var(--border-color)] bg-[var(--muted-surface)] text-[var(--ink-muted)]",
 };
 
+const ROLE_LABELS: Record<RoleBadgeValue, string> = {
+  APPLICANT: "APPLICANT",
+  BPLO: "BPLO",
+  SUPER_ADMIN: "IT Administrator",
+  DEPARTMENT_HEAD: "DEPARTMENT HEAD",
+  JIT: "JIT",
+  VIEW_ONLY: "VIEW ONLY",
+};
+
 export function RoleBadge({
   roleType,
   label,
@@ -20,7 +29,7 @@ export function RoleBadge({
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${ROLE_STYLES[roleType]}`}
     >
-      {label ?? roleType.replace("_", " ")}
+      {label ?? ROLE_LABELS[roleType]}
     </span>
   );
 }

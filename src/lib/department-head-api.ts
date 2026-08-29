@@ -10,6 +10,7 @@ import {
   buildRevocationHistoryRemarksForEvent,
 } from "@/lib/revocation-notifications";
 import { getJitInspectionChecklist } from "@/lib/jit-declared-inputs";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
 
 type DepartmentHeadAction = "APPROVE" | "RETURN" | "REJECT";
 type RevocationDecisionAction = "APPROVE" | "DENY";
@@ -34,6 +35,8 @@ export interface DepartmentHeadApprovalRow {
   id: string;
   applicationNumber: string;
   applicationType: "NEW" | "RENEWAL" | "CLOSURE";
+  closureType: string | null;
+  closureTypeOtherReason: string | null;
   ownerName: string;
   businessName: string;
   businessType: string;
@@ -57,6 +60,8 @@ export interface DepartmentHeadApprovalRow {
     documentName: string;
     fileName: string;
     uploadedAt: string;
+    validationStatus?: string;
+    validationRemarks?: string | null;
   }>;
 }
 
@@ -167,6 +172,9 @@ function toDateTime(date: Date | null): string {
 }
 
 function getTextField(formData: unknown, key: string, fallback = "-"): string {
+  if (!formData || typeof formData !== "object" || Array.isArray(formData)) {
+    return fallback;
+  }
   const maybe = formData as Record<string, unknown>;
   const value = maybe[key];
   if (typeof value === "string" && value.trim().length > 0) return value;
@@ -212,10 +220,16 @@ export async function listDepartmentHeadApprovalQueue(): Promise<DepartmentHeadA
     id: row.id,
     applicationNumber: row.applicationNumber,
     applicationType: row.applicationType,
+    closureType: row.closureType ?? null,
+    closureTypeOtherReason: row.closureTypeOtherReason ?? null,
     ownerName: getTextField(row.formData, "ownerName", row.applicant?.name ?? "-"),
     businessName: getTextField(row.formData, "businessName", row.businessRecord?.businessName ?? "-"),
     businessType: getTextField(row.formData, "businessType"),
-    lineOfBusiness: getTextField(row.formData, "lineOfBusiness"),
+    lineOfBusiness: getTextField(
+      row.formData,
+      "closureLineOfBusiness",
+      getTextField(row.formData, "lineOfBusiness")
+    ),
     businessAddress: getTextField(row.formData, "businessAddress"),
     submittedDate: toDateTime(row.submittedAt),
     updatedDate: toDateTime(row.updatedAt),
@@ -888,43 +902,62 @@ export async function listDepartmentHeadCompliantList(): Promise<DepartmentHeadC
 }
 
 export async function listDepartmentHeadRevokedPermitList(): Promise<DepartmentHeadRevokedPermitRow[]> {
-  const rows = await prisma.inspection.findMany({
-    where: {
-      revocationDecision: "APPROVED",
-      status: "REVOKED",
-      application: {
-        status: "REVOKED",
-      },
-      businessRecord: {
-        businessStatus: "INACTIVE",
-      },
-    },
-    include: {
-      inspector: { select: { name: true } },
-      decidedBy: { select: { name: true } },
-      application: {
-        select: {
-          id: true,
-          applicationNumber: true,
-          status: true,
-          permitIssuance: { select: { documentNumber: true } },
-        },
-      },
-      businessRecord: {
-        select: {
-          businessName: true,
-          ownerName: true,
-          businessAddress: true,
-          lineOfBusiness: true,
-          businessStatus: true,
-          applicant: { select: { name: true } },
-        },
-      },
-    },
-    orderBy: [{ decidedAt: "desc" }, { createdAt: "desc" }],
-  });
+  const result = await listDepartmentHeadRevokedPermitListPaginated({ page: 1, pageSize: 50 });
+  return result.records;
+}
 
-  return rows
+export async function listDepartmentHeadRevokedPermitListPaginated(options?: {
+  page?: number | string;
+  pageSize?: number | string;
+}): Promise<PaginatedResult<DepartmentHeadRevokedPermitRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(options);
+
+  const where = {
+    revocationDecision: "APPROVED" as const,
+    status: "REVOKED" as const,
+    decidedAt: { not: null },
+    application: {
+      status: "REVOKED" as const,
+    },
+    businessRecord: {
+      businessStatus: "INACTIVE" as const,
+    },
+  };
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.inspection.findMany({
+      where,
+      include: {
+        inspector: { select: { name: true } },
+        decidedBy: { select: { name: true } },
+        revocationSettledBy: { select: { name: true } },
+        application: {
+          select: {
+            id: true,
+            applicationNumber: true,
+            status: true,
+            permitIssuance: { select: { documentNumber: true } },
+          },
+        },
+        businessRecord: {
+          select: {
+            businessName: true,
+            ownerName: true,
+            businessAddress: true,
+            lineOfBusiness: true,
+            businessStatus: true,
+            applicant: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ decidedAt: "desc" }, { createdAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.inspection.count({ where }),
+  ]);
+
+  const records = rows
     .filter((row: any) => Boolean(row.application) && Boolean(row.decidedAt))
     .map((row: any) => ({
       inspectionId: row.id,
@@ -954,6 +987,8 @@ export async function listDepartmentHeadRevokedPermitList(): Promise<DepartmentH
       revocationSettlementRemarks: row.revocationSettlementRemarks?.trim() || null,
       isSettled: Boolean(row.revocationSettledAt),
     }));
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
 export async function applyDepartmentHeadRevocationDecision(

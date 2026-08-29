@@ -64,7 +64,7 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
 
       <InfoBanner
         title="Audit View Only"
-        description="SuperAdmin can view this application but cannot approve, reject, assess fees, verify payments, or release permits."
+        description="IT Administrator can view this application but cannot approve, reject, assess fees, verify payments, or release permits."
         variant="readOnly"
       />
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, ClipboardCheck, LayoutDashboard, MapPin, PackageCheck, ReceiptText, ShieldCheck, UserCircle2, Wallet } from "lucide-react";
+import { BarChart3, ClipboardCheck, LayoutDashboard, MapPin, PackageCheck, ReceiptText, UserCircle2, Wallet } from "lucide-react";
 import {
   PortalSidebarBrand,
   PortalSidebarFooter,
@@ -36,7 +36,6 @@ const BPLO_SIDEBAR_ITEMS: SidebarGroup[] = [
       { label: "Permit Issuance", href: "/bplo/permit-issuance" },
     ],
   },
-  { label: "Inspection Review", href: "/bplo/inspection-review" },
   { label: "Business Map", href: "/bplo/business-map" },
   { label: "Profile", href: "/bplo/profile" },
 ];
@@ -49,7 +48,6 @@ const SIDEBAR_ICONS = {
   "Permit Issuance": PackageCheck,
   "Business Map": MapPin,
   Reports: BarChart3,
-  "Inspection Review": ShieldCheck,
   Profile: UserCircle2,
 } as const;
 

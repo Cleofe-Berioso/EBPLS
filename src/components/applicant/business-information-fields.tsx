@@ -22,6 +22,7 @@ import {
   EB_MAGALONA_COUNTRY,
   EB_MAGALONA_COUNTRY_CODE,
   EB_MAGALONA_PROVINCE,
+  EB_MAGALONA_ZIP_CODE,
 } from "@/lib/address-options";
 import type { AddressOption } from "@/lib/address-types";
 import { loadBarangays, loadCities, loadCountries, loadStates } from "@/lib/address-client";
@@ -459,7 +460,7 @@ export function BusinessInformationFields({
 
       <FormField
         label="TIN"
-        hint="Enter the registered taxpayer identification number."
+        hint="Enter 9–15 digits (hyphens optional; stored as digits only)."
         required
         error={fieldErrors.tin}
       >
@@ -477,8 +478,8 @@ export function BusinessInformationFields({
             value={value.tin}
             disabled={fieldLocked(lockedFields, "tin")}
             inputMode="numeric"
-            maxLength={9}
-            pattern="[0-9]{9}"
+            maxLength={15}
+            pattern="[0-9]{9,15}"
             onChange={(event) => onChange({ ...value, tin: event.target.value })}
           />
           <LockedHint visible={fieldLocked(lockedFields, "tin")} />
@@ -934,6 +935,26 @@ export function BusinessInformationFields({
             </FormField>
           ) : null}
 
+          <FormField
+            label="Main Office Zip Code"
+            hint="Postal / ZIP code of the main office address (optional)."
+            error={fieldErrors.mainOfficeZipCode}
+          >
+            <input
+              data-field-key="mainOfficeZipCode"
+              aria-label="Main Office Zip Code"
+              inputMode="numeric"
+              maxLength={10}
+              className={fieldClasses(fieldLocked(lockedFields, "mainOfficeZipCode"))}
+              value={value.mainOfficeZipCode ?? ""}
+              disabled={fieldLocked(lockedFields, "mainOfficeZipCode")}
+              placeholder="e.g., 6118"
+              onChange={(event) =>
+                onChange({ ...value, mainOfficeZipCode: event.target.value.replace(/[^0-9A-Za-z-]/g, "") })
+              }
+            />
+          </FormField>
+
           <div className="md:col-span-2">
             <FormField
               label="Main Office Address (Auto-generated)"
@@ -1013,7 +1034,7 @@ export function BusinessInformationFields({
 
         <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--muted-surface)] p-3.5 sm:p-4 md:col-span-2">
           <p className="text-sm font-semibold text-[var(--foreground)]">Fixed Business Location</p>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <FormField
               label="Country"
               hint="Business location country."
@@ -1041,6 +1062,16 @@ export function BusinessInformationFields({
             >
               <div className={fieldClasses(true)}>
                 {EB_MAGALONA_CITY}
+              </div>
+            </FormField>
+
+            <FormField
+              label="Zip Code"
+              hint="Fixed postal code for EB Magalona."
+              required
+            >
+              <div className={fieldClasses(true)} data-field-key="businessZipCode">
+                {value.businessZipCode || EB_MAGALONA_ZIP_CODE}
               </div>
             </FormField>
           </div>
@@ -1167,26 +1198,6 @@ export function BusinessInformationFields({
         />
       </FormField>
 
-      <div className="md:col-span-2">
-        <FormField
-          label="Liquor/Tobacco Business"
-          hint="If selected, BPLO will automatically apply the required 25% surcharge during assessment."
-        >
-          <label className="flex items-center gap-2 text-sm text-[var(--foreground)]">
-            <input
-              data-field-key="isLiquorOrTobacco"
-              type="checkbox"
-              checked={Boolean(value.isLiquorOrTobacco)}
-              disabled={fieldLocked(lockedFields, "isLiquorOrTobacco")}
-              onChange={(event) =>
-                onChange({ ...value, isLiquorOrTobacco: event.target.checked })
-              }
-            />
-            Liquor/Tobacco Business
-          </label>
-          <LockedHint visible={fieldLocked(lockedFields, "isLiquorOrTobacco")} />
-        </FormField>
-      </div>
     </div>
   );
 }

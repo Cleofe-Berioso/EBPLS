@@ -30,6 +30,7 @@ interface TopSummary {
   businessName: string;
   applicationType: string;
   status: string;
+  hasTaxIncentives?: boolean;
   topNumber: string | null;
   assessmentStatus: "DRAFT" | "GENERATED" | null;
   reassessmentRequestedAt?: string | null;
@@ -207,11 +208,11 @@ export default function TaxOrderOfPaymentPage() {
     ? null
     : paymentRefStatus === "REJECTED"
       ? {
-          title: "Payment reference rejected",
+          title: "Payment returned for correction",
           description: paymentRef?.reviewerRemarks
             ? `BPLO remarks: ${paymentRef.reviewerRemarks}`
-            : "Please submit a corrected payment reference.",
-          variant: "danger" as const,
+            : "Please submit a corrected payment reference (OR number and proof).",
+          variant: "warning" as const,
         }
       : paymentRefStatus === "VERIFIED"
         ? {
@@ -296,6 +297,14 @@ export default function TaxOrderOfPaymentPage() {
               title={paymentBanner.title}
               description={paymentBanner.description}
               variant={paymentBanner.variant}
+            />
+          ) : null}
+
+          {summary.hasTaxIncentives ? (
+            <InfoBanner
+              title="This applicant has a tax incentive"
+              description="A government-granted tax incentive was declared for this application. Refer to your submitted Tax Incentive Certificate/Proof if you have questions about how it applies to your assessment."
+              variant="info"
             />
           ) : null}
 
@@ -443,14 +452,14 @@ export default function TaxOrderOfPaymentPage() {
                   paymentRefStatus === "VERIFIED"
                     ? "border-[var(--success)] bg-[var(--success-soft)] text-[var(--foreground)]"
                     : paymentRefStatus === "REJECTED"
-                    ? "border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--foreground)]"
+                    ? "border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--foreground)]"
                     : "border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--foreground)]"
                 }`}>
                   <p className="font-semibold">
                     {paymentRefStatus === "VERIFIED"
                       ? "✅ Payment Verified"
                       : paymentRefStatus === "REJECTED"
-                      ? "❌ Payment Rejected — please resubmit with a corrected OR"
+                      ? "↩ Payment returned for correction — please resubmit with a corrected OR"
                       : "⏳ OR Submitted — Awaiting BPLO Verification"}
                   </p>
                   <p className="mt-1">

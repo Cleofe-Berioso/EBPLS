@@ -25,6 +25,11 @@ import {
   resolveBusinessBarangayFromFormState,
   isRecognizedEbMagalonaBarangay as isRecognizedEbMagalonaBarangayFromRules,
   normalizeBusinessInfo,
+  normalizeRegistrationNumber,
+  normalizeTin,
+  optionalDecimalFromDb,
+  optionalIntFromDb,
+  tinFromDb,
   validateBusinessIdentityFormats,
   requiresCorporationNationality,
   isValidCorporationNationality,
@@ -277,59 +282,76 @@ export class ApplicantEligibilityError extends Error {
   }
 }
 
+export const DUPLICATE_BUSINESS_IDENTITY_MESSAGE = "This already exist";
+
 export class DuplicateBusinessIdentityError extends Error {
   field: "registrationNumber" | "tin";
 
   constructor(field: "registrationNumber" | "tin") {
-    super("This already exist");
+    super(DUPLICATE_BUSINESS_IDENTITY_MESSAGE);
     this.name = "DuplicateBusinessIdentityError";
     this.field = field;
   }
 }
 
+function readFormDataIdentity(formData: unknown): { registrationNumber: string; tin: string } {
+  const data = (formData ?? {}) as Record<string, unknown>;
+  return {
+    registrationNumber:
+      typeof data.registrationNumber === "string" ? normalizeRegistrationNumber(data.registrationNumber) : "",
+    tin: typeof data.tin === "string" ? normalizeTin(data.tin) : "",
+  };
+}
+
+/**
+ * Blocks save/submit when registration number or TIN exactly matches an existing
+ * business record or active application (case/spacing-insensitive for registration,
+ * digits-only for TIN). Blank values are ignored so partial drafts can be saved.
+ */
 async function assertUniqueBusinessIdentity(params: {
   registrationNumber: string;
   tin: string;
   excludeBusinessRecordId?: string | null;
   excludeApplicationId?: string | null;
 }): Promise<void> {
-  const { registrationNumber, tin } = params;
+  const registrationNumber = normalizeRegistrationNumber(params.registrationNumber);
+  const tin = normalizeTin(params.tin);
   const excludeRecordId = params.excludeBusinessRecordId ?? "";
   const excludeAppId = params.excludeApplicationId ?? "";
 
-  // Check BusinessRecord for duplicate registrationNumber
-  const dupRecord = await prisma.businessRecord.findFirst({
-    where: {
-      registrationNumber,
-      ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
-    },
-    select: { id: true },
-  });
-  if (dupRecord) {
-    throw new DuplicateBusinessIdentityError("registrationNumber");
+  if (!registrationNumber && !tin) {
+    return;
   }
 
-  // Check BusinessRecord for duplicate TIN
-  const dupTinRecord = await prisma.businessRecord.findFirst({
-    where: {
-      tin,
-      ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
-    },
-    select: { id: true },
-  });
-  if (dupTinRecord) {
-    throw new DuplicateBusinessIdentityError("tin");
-  }
-
-  // Check BusinessApplication formData JSON for duplicate registrationNumber.
-  // Exclude REJECTED/REVOKED statuses and the current application being edited.
-  // For renewals/closures, also exclude applications linked to same business record.
-  const regNumDup = await prisma.businessApplication.findFirst({
-    where: {
-      formData: {
-        path: ["registrationNumber"],
-        equals: registrationNumber,
+  if (registrationNumber) {
+    const dupRecord = await prisma.businessRecord.findFirst({
+      where: {
+        registrationNumber: { equals: registrationNumber, mode: "insensitive" },
+        ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
       },
+      select: { id: true },
+    });
+    if (dupRecord) {
+      throw new DuplicateBusinessIdentityError("registrationNumber");
+    }
+  }
+
+  if (tin) {
+    const tinValue = BigInt(tin);
+    const tinRecords = await prisma.businessRecord.findMany({
+      where: {
+        tin: tinValue,
+        ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (tinRecords.length > 0) {
+      throw new DuplicateBusinessIdentityError("tin");
+    }
+  }
+
+  const activeApplications = await prisma.businessApplication.findMany({
+    where: {
       status: { notIn: ["REJECTED", "REVOKED"] },
       ...(excludeAppId ? { id: { not: excludeAppId } } : {}),
       ...(excludeRecordId
@@ -338,31 +360,20 @@ async function assertUniqueBusinessIdentity(params: {
           }
         : {}),
     },
-    select: { id: true },
-  });
-  if (regNumDup) {
-    throw new DuplicateBusinessIdentityError("registrationNumber");
-  }
-
-  // Check BusinessApplication formData JSON for duplicate TIN.
-  const tinDup = await prisma.businessApplication.findFirst({
-    where: {
-      formData: {
-        path: ["tin"],
-        equals: tin,
-      },
-      status: { notIn: ["REJECTED", "REVOKED"] },
-      ...(excludeAppId ? { id: { not: excludeAppId } } : {}),
-      ...(excludeRecordId
-        ? {
-            OR: [{ businessRecordId: null }, { businessRecordId: { not: excludeRecordId } }],
-          }
-        : {}),
+    select: {
+      id: true,
+      formData: true,
     },
-    select: { id: true },
   });
-  if (tinDup) {
-    throw new DuplicateBusinessIdentityError("tin");
+
+  for (const application of activeApplications) {
+    const identity = readFormDataIdentity(application.formData);
+    if (registrationNumber && identity.registrationNumber === registrationNumber) {
+      throw new DuplicateBusinessIdentityError("registrationNumber");
+    }
+    if (tin && identity.tin === tin) {
+      throw new DuplicateBusinessIdentityError("tin");
+    }
   }
 }
 
@@ -640,7 +651,7 @@ function buildBusinessInfoFromRecord(record: any): BusinessInfo {
     businessType: record.businessType as BusinessInfo["businessType"],
     registrationNumber: record.registrationNumber,
     paymentFrequency: "ANNUAL",
-    tin: record.tin,
+    tin: tinFromDb(record.tin),
     businessName: record.businessName,
     tradeName: record.tradeName,
     ownerName: record.ownerName,
@@ -653,20 +664,20 @@ function buildBusinessInfoFromRecord(record: any): BusinessInfo {
     businessLatitude: record.location?.latitude ?? null,
     businessLongitude: record.location?.longitude ?? null,
     sameAsMainOffice: record.sameAsMainOffice,
-    businessArea: record.businessArea ?? "",
-    totalFloorArea: record.totalFloorArea ?? "",
-    totalEmployees: record.totalEmployees ?? "",
-    maleEmployees: record.maleEmployees ?? "",
-    femaleEmployees: record.femaleEmployees ?? "",
-    employeesWithinMunicipality: record.employeesWithinMunicipality ?? "",
-    deliveryVehicles: record.deliveryVehicles ?? "",
+    businessArea: optionalDecimalFromDb(record.businessArea),
+    totalFloorArea: optionalDecimalFromDb(record.totalFloorArea),
+    totalEmployees: optionalIntFromDb(record.totalEmployees),
+    maleEmployees: optionalIntFromDb(record.maleEmployees),
+    femaleEmployees: optionalIntFromDb(record.femaleEmployees),
+    employeesWithinMunicipality: optionalIntFromDb(record.employeesWithinMunicipality),
+    deliveryVehicles: optionalIntFromDb(record.deliveryVehicles),
     propertyOwnership: (record.propertyOwnership as BusinessInfo["propertyOwnership"]) ?? "Owned",
     taxDeclarationNumber: record.taxDeclarationNumber ?? "",
     propertyIdentificationNumber: record.propertyIdentificationNumber ?? "",
     taxIncentives: record.taxIncentives ?? "",
     businessActivity: record.businessActivity ?? "",
     lineOfBusiness: record.lineOfBusiness ?? "",
-    assetSize: record.assetSize ?? "",
+    assetSize: optionalDecimalFromDb(record.assetSize),
     isMarket: Boolean(record.isMarket),
     isAgriculture: Boolean(record.isAgriculture),
     isLiquorOrTobacco: Boolean(record.isLiquorOrTobacco),
@@ -883,6 +894,15 @@ function validateSubmitPayload(
       if (!Number.isFinite(employees) || employees < 0 || !Number.isInteger(employees)) {
         missingFields.push("totalEmployees (must be a non-negative integer)");
       }
+    }
+
+    if (normalizedFormData.hasTaxIncentives !== "YES" && normalizedFormData.hasTaxIncentives !== "NO") {
+      missingFields.push("hasTaxIncentives");
+    } else if (
+      normalizedFormData.hasTaxIncentives === "YES" &&
+      !normalizedFormData.taxIncentives.trim()
+    ) {
+      missingFields.push("taxIncentives");
     }
   }
 
@@ -1231,6 +1251,23 @@ export async function saveApplicantApplication(
     );
   }
 
+  if (input.applicationType === "CLOSURE") {
+    const closureLine = normalizedFormData.closureLineOfBusiness?.trim() ?? "";
+    const closureActivity = normalizedFormData.closureBusinessActivity?.trim() ?? "";
+    if (closureLine) {
+      normalizedFormData.lineOfBusiness = closureLine;
+    }
+    if (closureActivity) {
+      normalizedFormData.businessActivity = closureActivity;
+    }
+    if (
+      !normalizedFormData.businessAddress.trim() &&
+      sourceBusinessInfo?.businessAddress?.trim()
+    ) {
+      normalizedFormData.businessAddress = sourceBusinessInfo.businessAddress.trim();
+    }
+  }
+
   const normalizedRegNum = normalizedFormData.registrationNumber.trim();
   const normalizedTin = normalizedFormData.tin.trim();
   if (normalizedRegNum || normalizedTin || input.mode === "SUBMIT") {
@@ -1290,7 +1327,7 @@ export async function saveApplicantApplication(
         });
       }
 
-      if (input.mode === "SUBMIT") {
+      if (input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0) {
         for (const entry of normalizedSubmitFiles) {
           const stored = await storeApplicantDocument(entry.file, {
             applicationId,
@@ -1336,7 +1373,9 @@ export async function saveApplicantApplication(
           },
         });
 
-        if (input.mode === "SUBMIT") {
+        // Persist newly uploaded files on draft save as well as final submit so
+        // reopening a draft does not force the applicant to re-upload documents.
+        if (input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0) {
           const newDocumentsByName = await buildNewDocumentsByName(existing.id);
 
           for (const doc of newDocumentsByName.values()) {
@@ -1459,7 +1498,7 @@ export async function saveApplicantApplication(
         },
       });
 
-      if (input.mode === "SUBMIT") {
+      if (input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0) {
           const newDocumentsByName = await buildNewDocumentsByName(row.id);
 
         for (const doc of newDocumentsByName.values()) {
@@ -2002,6 +2041,7 @@ export async function getApplicantTopSummary(applicantId: string) {
       applicationType: application.applicationType as string,
       status: mapDbStatusToUi(application.status),
       rawStatus: application.status,
+      hasTaxIncentives: (application.formData as Partial<BusinessInfo> | null)?.hasTaxIncentives === "YES",
       topNumber: fa?.assessmentNumber ?? null,
       assessmentStatus: (fa?.status ?? null) as "DRAFT" | "GENERATED" | null,
       paymentFrequency: (fa?.paymentFrequency ?? null) as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null,
@@ -2211,7 +2251,7 @@ export async function listApplicantBusinessRecords(applicantId: string) {
       businessType: row.businessType as BusinessInfo["businessType"],
       registrationNumber: row.registrationNumber,
       paymentFrequency: "ANNUAL",
-      tin: row.tin,
+      tin: tinFromDb(row.tin),
       businessName: row.businessName,
       tradeName: row.tradeName,
       ownerName: row.ownerName,
@@ -2223,20 +2263,20 @@ export async function listApplicantBusinessRecords(applicantId: string) {
       businessLatitude: row.location?.latitude ?? null,
       businessLongitude: row.location?.longitude ?? null,
       sameAsMainOffice: row.sameAsMainOffice,
-      businessArea: row.businessArea ?? "",
-      totalFloorArea: row.totalFloorArea ?? "",
-      totalEmployees: row.totalEmployees ?? "",
-      maleEmployees: row.maleEmployees ?? "",
-      femaleEmployees: row.femaleEmployees ?? "",
-      employeesWithinMunicipality: row.employeesWithinMunicipality ?? "",
-      deliveryVehicles: row.deliveryVehicles ?? "",
+      businessArea: optionalDecimalFromDb(row.businessArea),
+      totalFloorArea: optionalDecimalFromDb(row.totalFloorArea),
+      totalEmployees: optionalIntFromDb(row.totalEmployees),
+      maleEmployees: optionalIntFromDb(row.maleEmployees),
+      femaleEmployees: optionalIntFromDb(row.femaleEmployees),
+      employeesWithinMunicipality: optionalIntFromDb(row.employeesWithinMunicipality),
+      deliveryVehicles: optionalIntFromDb(row.deliveryVehicles),
       propertyOwnership: (row.propertyOwnership as BusinessInfo["propertyOwnership"]) ?? "Owned",
       taxDeclarationNumber: row.taxDeclarationNumber ?? "",
       propertyIdentificationNumber: row.propertyIdentificationNumber ?? "",
       taxIncentives: row.taxIncentives ?? "",
       businessActivity: row.businessActivity ?? "",
       lineOfBusiness: row.lineOfBusiness ?? "",
-      assetSize: row.assetSize ?? "",
+      assetSize: optionalDecimalFromDb(row.assetSize),
       isMarket: Boolean(row.isMarket),
       isAgriculture: Boolean(row.isAgriculture),
       isLiquorOrTobacco: Boolean(row.isLiquorOrTobacco),

@@ -23,12 +23,13 @@ export type FeeCategoryKey =
   | "GENERAL";
 
 export type FeeCategoryOption = {
-  key: FeeCategoryKey;
+  key: FeeCategoryKey | string;
   label: string;
   classifications: string[];
+  isCustom?: boolean;
 };
 
-const CONFIGURABLE_FEE_CATEGORY_KEYS = new Set<FeeCategoryKey>();
+const CONFIGURABLE_FEE_CATEGORY_KEYS = new Set<string>();
 
 export const FIXED_FEE_CLASSIFICATION = "Fixed Fee";
 
@@ -334,15 +335,26 @@ export type SystemFeeSettingDto = {
 
 export type RenewalExtensionDto = {
   id: string;
-  title: string;
   startDate: string;
   endDate: string;
   isActive: boolean;
   waiveSurcharge: boolean;
   waiveInterest: boolean;
-  remarks: string | null;
   updatedAt: string;
 };
+
+export function formatRenewalExtensionPeriod(
+  startDate: Date | string,
+  endDate: Date | string
+): string {
+  const start = typeof startDate === "string" ? new Date(startDate) : startDate;
+  const end = typeof endDate === "string" ? new Date(endDate) : endDate;
+  return `${start.toLocaleDateString("en-PH")} - ${end.toLocaleDateString("en-PH")}`;
+}
+
+function buildRenewalExtensionTitle(startDate: Date, endDate: Date): string {
+  return `Renewal Extension (${formatRenewalExtensionPeriod(startDate, endDate)})`;
+}
 
 export type RuntimeFeeSettings = {
   penalties: {
@@ -413,37 +425,151 @@ function isConfigurableFeeCategory(category: FeeCategoryKey): boolean {
   return CONFIGURABLE_FEE_CATEGORY_KEYS.has(category);
 }
 
-export async function listFeeConfigurationItems(): Promise<FeeConfigurationItemDto[]> {
-  const items = await prisma.feeConfigurationItem.findMany({
-    orderBy: [{ category: "asc" }, { classification: "asc" }],
+function parseClassificationsJson(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+export function slugifyFeeCategoryKey(label: string): string {
+  const normalized = label
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!normalized) return "CUSTOM_CATEGORY";
+  return normalized.startsWith("CUSTOM_") ? normalized : `CUSTOM_${normalized}`;
+}
+
+export async function listCustomFeeCategories(): Promise<FeeCategoryOption[]> {
+  const rows = await prisma.feeConfigurationCategory.findMany({
+    where: { isActive: true },
+    orderBy: { label: "asc" },
   });
 
-  return items
-    .filter((item) => isConfigurableFeeCategory(item.category as FeeCategoryKey))
-    .map((item) => ({
-    id: item.id,
-    category: item.category as FeeCategoryKey,
-    classification: item.classification,
-    amount: toMoneyNumber(item.amount),
-    isActive: item.isActive,
-    updatedAt: item.updatedAt.toISOString(),
+  return rows.map((row) => ({
+    key: row.key,
+    label: row.label,
+    classifications: parseClassificationsJson(row.classifications),
+    isCustom: true,
   }));
 }
 
+export async function getAllFeeCategoryOptions(): Promise<FeeCategoryOption[]> {
+  const custom = await listCustomFeeCategories();
+  return [...FEE_CATEGORY_OPTIONS, ...custom];
+}
+
+async function getConfigurableCategoryKeySet(): Promise<Set<string>> {
+  const custom = await prisma.feeConfigurationCategory.findMany({
+    where: { isActive: true },
+    select: { key: true },
+  });
+
+  return new Set([...CONFIGURABLE_FEE_CATEGORY_KEYS, ...custom.map((row) => row.key)]);
+}
+
+async function isConfigurableFeeCategoryKey(category: string): Promise<boolean> {
+  const keys = await getConfigurableCategoryKeySet();
+  return keys.has(category);
+}
+
+export function isValidClassificationForOptions(
+  category: string,
+  classification: string,
+  options: FeeCategoryOption[]
+): boolean {
+  const option = options.find((item) => item.key === category);
+  if (!option) return false;
+  return option.classifications.includes(classification.trim());
+}
+
+export async function createFeeConfigurationCategory(input: {
+  label: string;
+  key?: string;
+  classifications: string[];
+  updatedById: string;
+}): Promise<FeeCategoryOption> {
+  const label = input.label.trim();
+  if (!label) {
+    throw new Error("Category label is required.");
+  }
+
+  const classifications = input.classifications.map((item) => item.trim()).filter(Boolean);
+  if (classifications.length === 0) {
+    throw new Error("At least one size classification is required.");
+  }
+
+  let key = (input.key?.trim() || slugifyFeeCategoryKey(label)).toUpperCase();
+  if (!/^CUSTOM_[A-Z0-9_]+$/.test(key)) {
+    key = slugifyFeeCategoryKey(label);
+  }
+
+  if (FEE_CATEGORY_OPTIONS.some((item) => item.key === key)) {
+    throw new Error("This category key conflicts with a built-in category.");
+  }
+
+  const existing = await prisma.feeConfigurationCategory.findUnique({ where: { key } });
+  if (existing) {
+    throw new Error("A custom category with this key already exists.");
+  }
+
+  const row = await prisma.feeConfigurationCategory.create({
+    data: {
+      key,
+      label,
+      classifications,
+      isActive: true,
+      updatedById: input.updatedById,
+    },
+  });
+
+  return {
+    key: row.key,
+    label: row.label,
+    classifications: parseClassificationsJson(row.classifications),
+    isCustom: true,
+  };
+}
+
+export async function listFeeConfigurationItems(): Promise<FeeConfigurationItemDto[]> {
+  const [items, configurableKeys] = await Promise.all([
+    prisma.feeConfigurationItem.findMany({
+      orderBy: [{ category: "asc" }, { classification: "asc" }],
+    }),
+    getConfigurableCategoryKeySet(),
+  ]);
+
+  return items
+    .filter((item) => configurableKeys.has(item.category))
+    .map((item) => ({
+      id: item.id,
+      category: item.category as FeeCategoryKey,
+      classification: item.classification,
+      amount: toMoneyNumber(item.amount),
+      isActive: item.isActive,
+      updatedAt: item.updatedAt.toISOString(),
+    }));
+}
+
 export async function upsertFeeConfigurationItem(input: {
-  category: FeeCategoryKey;
+  category: string;
   classification: string;
   amount: number;
   isActive: boolean;
   updatedById: string;
 }): Promise<FeeConfigurationItemDto> {
-  if (!isConfigurableFeeCategory(input.category)) {
+  if (!(await isConfigurableFeeCategoryKey(input.category))) {
     throw new Error("Invalid fee category.");
   }
 
+  const options = await getAllFeeCategoryOptions();
   const classification = input.classification.trim();
   if (!classification) {
     throw new Error("Size classification is required.");
+  }
+
+  if (!isValidClassificationForOptions(input.category, classification, options)) {
+    throw new Error("Invalid size classification for the selected business category.");
   }
 
   const amount = clampNonNegative(input.amount);
@@ -595,13 +721,11 @@ export async function listRenewalExtensions(): Promise<RenewalExtensionDto[]> {
 
   return rows.map((row) => ({
     id: row.id,
-    title: row.title,
     startDate: row.startDate.toISOString(),
     endDate: row.endDate.toISOString(),
     isActive: row.isActive,
     waiveSurcharge: row.waiveSurcharge,
     waiveInterest: row.waiveInterest,
-    remarks: row.remarks,
     updatedAt: row.updatedAt.toISOString(),
   }));
 }
@@ -614,26 +738,24 @@ async function ensureNoActiveOverlap(startDate: Date, endDate: Date, ignoreId?: 
       startDate: { lte: endDate },
       endDate: { gte: startDate },
     },
-    select: { id: true, title: true },
+    select: { id: true, startDate: true, endDate: true },
   });
 
   if (overlap) {
-    throw new Error(`Active extension overlaps with existing extension: ${overlap.title}.`);
+    throw new Error(
+      `Active extension overlaps with existing extension (${formatRenewalExtensionPeriod(overlap.startDate, overlap.endDate)}).`
+    );
   }
 }
 
 export async function createRenewalExtension(input: {
-  title: string;
   startDate: Date;
   endDate: Date;
   isActive: boolean;
   waiveSurcharge: boolean;
   waiveInterest: boolean;
-  remarks?: string;
   updatedById: string;
 }): Promise<RenewalExtensionDto> {
-  const title = input.title.trim();
-  if (!title) throw new Error("Extension title is required.");
   if (input.endDate < input.startDate) {
     throw new Error("End date cannot be before start date.");
   }
@@ -644,26 +766,24 @@ export async function createRenewalExtension(input: {
 
   const row = await prisma.renewalExtension.create({
     data: {
-      title,
+      title: buildRenewalExtensionTitle(input.startDate, input.endDate),
       startDate: input.startDate,
       endDate: input.endDate,
       isActive: input.isActive,
       waiveSurcharge: input.waiveSurcharge,
       waiveInterest: input.waiveInterest,
-      remarks: input.remarks?.trim() || null,
+      remarks: null,
       updatedById: input.updatedById,
     },
   });
 
   return {
     id: row.id,
-    title: row.title,
     startDate: row.startDate.toISOString(),
     endDate: row.endDate.toISOString(),
     isActive: row.isActive,
     waiveSurcharge: row.waiveSurcharge,
     waiveInterest: row.waiveInterest,
-    remarks: row.remarks,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -695,19 +815,17 @@ export async function toggleRenewalExtension(input: {
 
   return {
     id: row.id,
-    title: row.title,
     startDate: row.startDate.toISOString(),
     endDate: row.endDate.toISOString(),
     isActive: row.isActive,
     waiveSurcharge: row.waiveSurcharge,
     waiveInterest: row.waiveInterest,
-    remarks: row.remarks,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
 export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFeeSettings> {
-  const [penalties, feeOverrides, activeExtension] = await Promise.all([
+  const [penalties, feeOverrides, activeExtension, configurableKeys] = await Promise.all([
     getOrCreateSystemFeeSetting(),
     prisma.feeConfigurationItem.findMany({
       where: { isActive: true },
@@ -729,14 +847,17 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
         endDate: true,
       },
     }),
+    getConfigurableCategoryKeySet(),
   ]);
 
-  const feeOverrideRows = feeOverrides.map((row) => ({
-    category: row.category as FeeCategoryKey,
-    classification: row.classification,
-    amount: toMoneyNumber(row.amount),
-    updatedAt: row.updatedAt,
-  })).filter((row) => isConfigurableFeeCategory(row.category));
+  const feeOverrideRows = feeOverrides
+    .map((row) => ({
+      category: row.category as FeeCategoryKey,
+      classification: row.classification,
+      amount: toMoneyNumber(row.amount),
+      updatedAt: row.updatedAt,
+    }))
+    .filter((row) => configurableKeys.has(row.category));
   const penaltiesUpdatedAt = new Date(penalties.updatedAt);
   const powerCompanyOverride = findFixedFeeOverride(feeOverrideRows, "POWER_COMPANY");
   const powerGenDistOverride = findFixedFeeOverride(feeOverrideRows, "POWER_GEN_DIST");

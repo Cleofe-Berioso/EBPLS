@@ -1,3 +1,4 @@
+import "./ebpls-env";
 import { readFile } from "node:fs/promises";
 import { checkSmsProviderEnvConfiguration } from "../src/lib/sms-config";
 import { prisma } from "../src/lib/prisma";

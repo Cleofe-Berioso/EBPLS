@@ -181,7 +181,7 @@ export function ProfilePictureSetupClient() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="Applicant"
         title="Complete Profile Picture"

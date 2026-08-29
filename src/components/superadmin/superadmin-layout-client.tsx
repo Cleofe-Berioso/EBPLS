@@ -45,7 +45,7 @@ export function SuperAdminLayoutClient({
               onMobileToggle={() => setMobileOpen((value) => !value)}
             />
             <PortalHeaderBrand
-              eyebrow="Super Admin Portal"
+              eyebrow="IT Administrator Portal"
               title={`Welcome, ${userName}`}
               subtitle="Audit, reports, users, and settings oversight"
             />
@@ -53,7 +53,7 @@ export function SuperAdminLayoutClient({
 
           <PortalHeaderActions
             name={userName}
-            roleLabel="Super Admin"
+            roleLabel="IT Administrator"
             profileHref="/superadmin/profile"
             signOutAction={signOutAction}
           />

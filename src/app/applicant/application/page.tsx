@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 
 export default function ApplicantApplicationPage() {
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="Applicant"
         title="Application Filing"

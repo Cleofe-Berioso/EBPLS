@@ -6,6 +6,7 @@ import { getAuditLogs } from "@/lib/audit-log";
 import { getPaymentReferencesFromFormData } from "@/lib/payment-reference";
 import { toMoneyNumber } from "@/lib/money";
 import { buildPaginatedResult, clampPage, clampPageSize, resolvePagination, type PaginatedResult } from "@/lib/pagination";
+import { formatMonthYearLabel, monthYearToDateRange } from "@/lib/printable-reports";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -1101,92 +1102,7 @@ export async function getApplicationSummaryReport(
   }));
 }
 
-// ── Report 2: Revenue Collection ─────────────────────────────────────────────
-
-export interface RevenueCollectionReportRow {
-  applicationNumber: string;
-  businessName: string;
-  officialReceiptNumber: string;
-  amountAssessed: string;
-  amountPaid: string;
-  paymentStatus: string;
-  verifiedDate: string;
-}
-
-export interface RevenueCollectionReportFilters {
-  from?: string;
-  to?: string;
-}
-
-export async function getRevenueCollectionReport(
-  filters: RevenueCollectionReportFilters = {}
-): Promise<RevenueCollectionReportRow[]> {
-  const startDate = parseDateAtStartOfDay(filters.from);
-  const endDate = parseDateAtEndOfDay(filters.to);
-
-  const rows = await prisma.businessApplication.findMany({
-    where: {
-      feeAssessment: { isNot: null },
-      ...((startDate ?? endDate)
-        ? {
-            submittedAt: {
-              ...(startDate ? { gte: startDate } : {}),
-              ...(endDate ? { lte: endDate } : {}),
-            },
-          }
-        : {}),
-    },
-    include: {
-      businessRecord: { select: { businessName: true } },
-      feeAssessment: {
-        select: {
-          totalAmount: true,
-          amountPaid: true,
-          paymentStatus: true,
-        },
-      },
-      paymentReferences: {
-        where: { status: "VERIFIED" },
-        orderBy: { reviewedAt: "desc" },
-        take: 1,
-        select: {
-          transactionNumber: true,
-          amountPaid: true,
-          reviewedAt: true,
-        },
-      },
-    },
-    orderBy: { submittedAt: "desc" },
-  });
-
-  function formatPeso(n: Parameters<typeof toMoneyNumber>[0]): string {
-    const v = toMoneyNumber(n);
-    return `₱${v.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-
-  function humanizePaymentStatus(s: string): string {
-    if (s === "UNPAID") return "Unpaid";
-    if (s === "PARTIALLY_PAID") return "Partially Paid";
-    if (s === "PAID") return "Paid";
-    return s;
-  }
-
-  return rows.map((row) => {
-    const verifiedRef = row.paymentReferences[0] ?? null;
-    const payStatus = row.feeAssessment?.paymentStatus ?? "UNPAID";
-    return {
-      applicationNumber: row.applicationNumber,
-      businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
-      officialReceiptNumber: verifiedRef?.transactionNumber ?? "-",
-      amountAssessed: formatPeso(row.feeAssessment?.totalAmount),
-      amountPaid: formatPeso(row.feeAssessment?.amountPaid),
-      paymentStatus: humanizePaymentStatus(payStatus),
-      verifiedDate: verifiedRef?.reviewedAt ? toDateOnly(verifiedRef.reviewedAt) : "-",
-    };
-  });
-}
-
-// ── Report 3: Business Registry ───────────────────────────────────────────────
+// ── Report 2: Business Registry ───────────────────────────────────────────────
 
 export interface BusinessRegistryReportRow {
   businessName: string;
@@ -1492,7 +1408,7 @@ function humanizeActorRole(role: string | null): string {
   const map: Record<string, string> = {
     APPLICANT: "Applicant",
     BPLO: "BPLO",
-    SUPER_ADMIN: "Super Admin",
+    SUPER_ADMIN: "IT Administrator",
     DEPARTMENT_HEAD: "Department Head",
     JIT: "JIT Inspector",
   };
@@ -1607,4 +1523,147 @@ export async function getSmsDeliveryReport(
         ? `${row.messageBody.slice(0, 117)}...`
         : row.messageBody,
   }));
+}
+
+// ── Report 8: Monthly Executive Summary ───────────────────────────────────────
+
+export interface MonthlySummaryReportData {
+  periodLabel: string;
+  month: number;
+  year: number;
+  applicationsSubmitted: number;
+  applicationsByType: Array<{ type: string; count: number }>;
+  applicationsByStatus: Array<{ status: string; count: number }>;
+  releasedApplications: number;
+  returnedForCorrection: number;
+  rejectedApplications: number;
+  permitsReleased: number;
+  closureCertificatesReleased: number;
+  closuresSubmitted: number;
+  inspectionsConducted: number;
+  compliantInspections: number;
+  nonCompliantInspections: number;
+  pendingInspectionReview: number;
+  bploActions: number;
+  auditEvents: number;
+  newUsers: number;
+  verifiedPayments: number;
+  verifiedPaymentAmount: number;
+  smsSent: number;
+  smsFailed: number;
+}
+
+export async function getMonthlySummaryReport(month: number, year: number): Promise<MonthlySummaryReportData> {
+  const { start, end } = monthYearToDateRange(month, year);
+  const submittedWhere = { submittedAt: { gte: start, lte: end } };
+  const createdWhere = { createdAt: { gte: start, lte: end } };
+  const releasedWhere = { releasedAt: { gte: start, lte: end } };
+
+  const [
+    applicationsSubmitted,
+    typeGroups,
+    statusGroups,
+    releasedApplications,
+    returnedForCorrection,
+    rejectedApplications,
+    permitsReleased,
+    closureCertificatesReleased,
+    closuresSubmitted,
+    inspections,
+    bploActions,
+    auditEvents,
+    newUsers,
+    verifiedPayments,
+    smsSent,
+    smsFailed,
+  ] = await Promise.all([
+    prisma.businessApplication.count({ where: submittedWhere }),
+    prisma.businessApplication.groupBy({
+      by: ["applicationType"],
+      where: submittedWhere,
+      _count: { _all: true },
+    }),
+    prisma.businessApplication.groupBy({
+      by: ["status"],
+      where: submittedWhere,
+      _count: { _all: true },
+    }),
+    prisma.businessApplication.count({
+      where: {
+        status: "RELEASED",
+        updatedAt: { gte: start, lte: end },
+      },
+    }),
+    prisma.businessApplication.count({
+      where: { ...submittedWhere, status: "RETURNED_FOR_CORRECTION" },
+    }),
+    prisma.businessApplication.count({
+      where: { ...submittedWhere, status: "REJECTED" },
+    }),
+    prisma.permitIssuance.count({
+      where: { documentType: "BUSINESS_PERMIT", status: "RELEASED", ...releasedWhere },
+    }),
+    prisma.permitIssuance.count({
+      where: { documentType: "CLOSURE_CERTIFICATE", status: "RELEASED", ...releasedWhere },
+    }),
+    prisma.businessApplication.count({
+      where: { applicationType: "CLOSURE", ...submittedWhere },
+    }),
+    prisma.inspection.findMany({
+      where: createdWhere,
+      select: { complianceStatus: true },
+    }),
+    prisma.applicationHistory.count({
+      where: { actorRole: "BPLO", ...createdWhere },
+    }),
+    prisma.auditLog.count({ where: createdWhere }),
+    prisma.user.count({ where: createdWhere }),
+    prisma.paymentReference.findMany({
+      where: { status: "VERIFIED", reviewedAt: { gte: start, lte: end } },
+      select: { amountPaid: true },
+    }),
+    prisma.smsDeliveryLog.count({
+      where: { ...createdWhere, status: "SENT" },
+    }),
+    prisma.smsDeliveryLog.count({
+      where: { ...createdWhere, status: "FAILED" },
+    }),
+  ]);
+
+  let verifiedPaymentAmount = 0;
+  for (const payment of verifiedPayments) {
+    verifiedPaymentAmount += toMoneyNumber(payment.amountPaid);
+  }
+
+  return {
+    periodLabel: formatMonthYearLabel(month, year),
+    month,
+    year,
+    applicationsSubmitted,
+    applicationsByType: typeGroups.map((row) => ({
+      type: row.applicationType,
+      count: row._count._all,
+    })),
+    applicationsByStatus: statusGroups.map((row) => ({
+      status: mapDbStatusToUi(row.status as DbApplicationStatus),
+      count: row._count._all,
+    })),
+    releasedApplications,
+    returnedForCorrection,
+    rejectedApplications,
+    permitsReleased,
+    closureCertificatesReleased,
+    closuresSubmitted,
+    inspectionsConducted: inspections.length,
+    compliantInspections: inspections.filter((row) => row.complianceStatus === "COMPLIANT").length,
+    nonCompliantInspections: inspections.filter((row) => row.complianceStatus === "NON_COMPLIANT").length,
+    pendingInspectionReview: inspections.filter((row) => row.complianceStatus === "PENDING_REVIEW").length,
+    bploActions,
+    auditEvents,
+    newUsers,
+    verifiedPayments: verifiedPayments.length,
+    verifiedPaymentAmount: Math.round(verifiedPaymentAmount * 100) / 100,
+    smsSent,
+    smsFailed,
+  };
 }

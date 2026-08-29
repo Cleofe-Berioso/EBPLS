@@ -12,7 +12,7 @@ import {
 } from "@/components/jit/jit-ui-styles";
 import { LoadingState } from "@/components/ui/loading-state";
 import { SectionCard } from "@/components/ui/section-card";
-import { actionButtonStyles } from "@/components/ui/action-button";
+import { DocumentPreviewButton } from "@/components/ui/document-preview-button";
 
 function ReadOnlyField({ label, value }: { label: string; value: string | number | boolean | null | undefined }) {
   const display =
@@ -155,14 +155,7 @@ export function JitDeclaredInputsPanels({
                       <td className="text-[var(--ink-muted)]">{doc.fileName}</td>
                       <td className="text-[var(--ink-muted)]">{new Date(doc.uploadedAt).toLocaleString("en-PH")}</td>
                       <td>
-                        <a
-                          href={`${previewBase}/${doc.id}/preview`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={actionButtonStyles("secondary", "sm")}
-                        >
-                          View
-                        </a>
+                        <DocumentPreviewButton url={`${previewBase}/${doc.id}/preview`} />
                       </td>
                     </tr>
                   ))}
@@ -225,14 +218,7 @@ export function JitDeclaredInputsPanels({
                       <td className="text-[var(--ink-muted)]">{row.validationRemarks ?? "-"}</td>
                       <td>
                         {row.documentId ? (
-                          <a
-                            href={`${previewBase}/${row.documentId}/preview`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={actionButtonStyles("secondary", "sm")}
-                          >
-                            View
-                          </a>
+                          <DocumentPreviewButton url={`${previewBase}/${row.documentId}/preview`} />
                         ) : (
                           <span className="text-[var(--ink-muted)]">Not uploaded</span>
                         )}

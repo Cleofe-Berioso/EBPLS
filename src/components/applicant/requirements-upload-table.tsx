@@ -5,6 +5,7 @@ import {
   validationStatusBadgeClass,
 } from "@/lib/document-validation";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { DocumentDownloadButton } from "@/components/ui/document-download-button";
 import {
   applicantListCardClass,
   applicantMetaLabelClass,
@@ -142,14 +143,7 @@ function RequirementActions({
         }}
       />
       {fileName && previewUrl ? (
-        <a
-          href={previewUrl}
-          target="_blank"
-          rel="noreferrer"
-          className={actionButtonStyles("secondary", "sm")}
-        >
-          Preview
-        </a>
+        <DocumentDownloadButton url={previewUrl} fileName={fileName} />
       ) : null}
       {fileName ? (
         <button

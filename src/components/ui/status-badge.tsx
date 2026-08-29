@@ -3,6 +3,8 @@ import type { ApplicationStatus } from "@/lib/applicant-types";
 export const DISPLAY_STATUS_FLOW: ApplicationStatus[] = [
   "Submitted",
   "Under Review",
+  "Department Head Review",
+  "Department Head Approved",
   "Assessed",
   "Approved for Payment",
   "Paid",

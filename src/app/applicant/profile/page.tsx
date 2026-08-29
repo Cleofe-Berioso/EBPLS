@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
-import { Mail, UserCircle2 } from "lucide-react";
+import { Fingerprint, Mail, Shield, UserCircle2 } from "lucide-react";
+import { ChangePasswordForm } from "@/components/applicant/change-password-form";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
 import { ProfilePictureCard } from "@/components/applicant/profile-picture-card";
 import { requireApplicantSession } from "@/lib/applicant-api";
+import { AccountDetailsPanel } from "@/components/ui/account-details-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 
@@ -35,12 +37,40 @@ export default async function ApplicantProfilePage() {
       </div>
 
       <SectionCard title="Account Details" description="System-managed applicant identity from the active session.">
-        <div className="space-y-3 text-sm text-[var(--ink-muted)] [&_strong]:text-[var(--foreground)]">
-          <p><strong>Name:</strong> {formatValue(session.user.name)}</p>
-          <p><strong>Email:</strong> {formatValue(session.user.email)}</p>
-          <p><strong>Role:</strong> APPLICANT</p>
-          <p><strong>User ID:</strong> {formatValue(session.user.id)}</p>
-        </div>
+        <AccountDetailsPanel
+          items={[
+            {
+              label: "Name",
+              value: formatValue(session.user.name),
+              icon: <UserCircle2 className="h-4 w-4" />,
+              emphasize: true,
+            },
+            {
+              label: "Email",
+              value: formatValue(session.user.email),
+              icon: <Mail className="h-4 w-4" />,
+              hint: "Login and notification address",
+            },
+            {
+              label: "Role",
+              value: "APPLICANT",
+              icon: <Shield className="h-4 w-4" />,
+            },
+            {
+              label: "User ID",
+              value: formatValue(session.user.id),
+              icon: <Fingerprint className="h-4 w-4" />,
+              hint: "System reference only",
+            },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard
+        title="Change Password"
+        description="Update your login password. You will need your current password to confirm the change."
+      >
+        <ChangePasswordForm />
       </SectionCard>
 
       <SectionCard title="Notes">

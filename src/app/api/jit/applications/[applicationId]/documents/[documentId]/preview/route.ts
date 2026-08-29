@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { safeApiErrorMessage } from "@/lib/api-errors";
-import { createStorageSignedUrl } from "@/lib/document-storage";
+import { createStoredFileDelivery, resolveRequestPublicOrigin } from "@/lib/document-storage";
 import { getJitApplicationDocument } from "@/lib/jit-declared-inputs";
 import { requireJitSession } from "@/lib/jit-api";
 
@@ -17,23 +17,28 @@ export async function GET(req: Request, context: RouteContext) {
   try {
     const { applicationId, documentId } = await context.params;
     const document = await getJitApplicationDocument(applicationId, documentId);
-    const signed = await createStorageSignedUrl({
+    const delivery = await createStoredFileDelivery({
       storagePath: document.storagePath,
       mimeType: document.mimeType,
       expiresIn: 60,
     });
 
-    let redirectUrl = signed.signedUrl;
+    if (delivery.mode === "stream") {
+      return delivery.response;
+    }
+
+    let redirectUrl = delivery.signedUrl;
     if (redirectUrl.startsWith("/") && !redirectUrl.startsWith("//")) {
-      const origin = new URL(req.url).origin;
-      redirectUrl = `${origin}${redirectUrl}`;
+      redirectUrl = `${resolveRequestPublicOrigin(req)}${redirectUrl}`;
     }
 
     return NextResponse.redirect(redirectUrl, { status: 302 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const status =
-      message === "Document not found" || message === "Application not available for JIT review"
+      message === "Document not found" ||
+      message === "Application not available for JIT review" ||
+      message === "Stored file not found"
         ? 404
         : 400;
     return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to preview document") }, { status });

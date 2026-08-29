@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
 import { Timeline } from "@/components/ui/timeline";
+import { DocumentDownloadButton } from "@/components/ui/document-download-button";
 import { actionButtonStyles } from "@/components/ui/action-button";
 
 interface PageProps {
@@ -393,7 +394,9 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           <SectionCard title="Address and Location" description="Filed addresses and pinned map coordinates.">
             <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Main Office Address:</strong> {readText(formData, ["mainOfficeAddress"])}</p>
+              <p><strong>Main Office Zip Code:</strong> {readText(formData, ["mainOfficeZipCode"])}</p>
               <p><strong>Business Address:</strong> {readText(formData, ["businessAddress"])}</p>
+              <p><strong>Business Zip Code:</strong> {readText(formData, ["businessZipCode"], "6118")}</p>
               <p><strong>Barangay:</strong> {readText(formData, ["barangay"])}</p>
               <p><strong>Street:</strong> {readText(formData, ["streetAddress"])}</p>
               <p><strong>Coordinates:</strong> {latitude != null && longitude != null ? `${latitude}, ${longitude}` : "-"}</p>
@@ -470,14 +473,10 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
                   </p>
                 ) : null}
               </div>
-              <a
-                href={`/api/applicant/applications/${application.id}/documents/${doc.id}/download`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={actionButtonStyles("secondary", "sm")}
-              >
-                Preview
-              </a>
+              <DocumentDownloadButton
+                url={`/api/applicant/applications/${application.id}/documents/${doc.id}/download`}
+                fileName={doc.fileName || doc.documentName || "document"}
+              />
             </li>
           );
           })}

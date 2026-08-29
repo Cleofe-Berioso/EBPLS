@@ -137,9 +137,9 @@ function SummaryTile({
   );
 }
 
-function passFailLabel(status: PaymentStatus): "Pass" | "Fail" | "Pending" {
+function passFailLabel(status: PaymentStatus): "Pass" | "Returned" | "Pending" {
   if (status === "VERIFIED") return "Pass";
-  if (status === "REJECTED") return "Fail";
+  if (status === "REJECTED") return "Returned";
   return "Pending";
 }
 
@@ -354,17 +354,20 @@ export default function BploPaymentVerificationPage() {
     setActionBusy(false);
   }
 
-  async function rejectSelected() {
+  async function returnForCorrectionSelected() {
     if (!detail || detail.row.paymentStatus !== "PENDING") return;
     if (!remarks.trim()) {
-      setStatusMessage({ kind: "error", text: "Remarks are required when rejecting a payment." });
+      setStatusMessage({
+        kind: "error",
+        text: "Remarks are required when returning a payment for correction.",
+      });
       return;
     }
 
     setActionBusy(true);
     setStatusMessage(null);
     const response = await fetch(
-      `/api/bplo/payment-verification/${detail.row.paymentReferenceId}/reject`,
+      `/api/bplo/payment-verification/${detail.row.paymentReferenceId}/return`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -373,14 +376,17 @@ export default function BploPaymentVerificationPage() {
     );
     const data = (await response.json()) as { error?: string };
     if (!response.ok) {
-      setStatusMessage({ kind: "error", text: data.error ?? "Unable to reject payment." });
+      setStatusMessage({
+        kind: "error",
+        text: data.error ?? "Unable to return payment for correction.",
+      });
       setActionBusy(false);
       return;
     }
 
     setStatusMessage({
       kind: "ok",
-      text: "Payment rejected. Application remains Approved for Payment and applicant can resubmit.",
+      text: "Payment returned for correction. Application remains Approved for Payment so the applicant can resubmit a corrected OR and proof.",
     });
 
     await loadLists();
@@ -399,7 +405,10 @@ export default function BploPaymentVerificationPage() {
         badge={<RoleBadge roleType="BPLO" />}
       />
 
-      <SectionCard title="Verification Buckets" description="Separate queues for pending, verified, and rejected payment references.">
+      <SectionCard
+        title="Verification Buckets"
+        description="Separate queues for pending, verified, and returned-for-correction payment references."
+      >
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -427,9 +436,9 @@ export default function BploPaymentVerificationPage() {
               setActiveTab("REJECTED");
               setPage(1);
             }}
-            className={activeTab === "REJECTED" ? actionButtonStyles("danger", "sm") : actionButtonStyles("secondary", "sm")}
+            className={activeTab === "REJECTED" ? actionButtonStyles("warning", "sm") : actionButtonStyles("secondary", "sm")}
           >
-            Rejected Payments ({tabCounts.REJECTED})
+            Returned for Correction ({tabCounts.REJECTED})
           </button>
         </div>
       </SectionCard>
@@ -557,20 +566,22 @@ export default function BploPaymentVerificationPage() {
                 subtitle={`${detail.row.applicationNumber} • ${detail.row.transactionNumber}`}
                 badge={
                   <span className={paymentStatusBadgeClass(detail.row.paymentStatus)}>
-                    {detail.row.paymentStatus}
+                    {detail.row.paymentStatus === "REJECTED"
+                      ? "RETURNED FOR CORRECTION"
+                      : detail.row.paymentStatus}
                   </span>
                 }
               />
 
               {detail.row.paymentStatus === "REJECTED" ? (
                 <InfoBanner
-                  title="Rejected payment reference"
+                  title="Returned for correction"
                   description={
                     detail.row.reviewerRemarks
                       ? `Previous BPLO remarks: ${detail.row.reviewerRemarks}`
-                      : "This payment reference was rejected and the applicant may submit a corrected one."
+                      : "This payment reference was returned for correction. The applicant may submit a corrected OR and proof."
                   }
-                  variant="danger"
+                  variant="warning"
                 />
               ) : null}
 
@@ -606,7 +617,7 @@ export default function BploPaymentVerificationPage() {
                 <SummaryTile
                   label="Verification Result"
                   value={passFailLabel(detail.row.paymentStatus)}
-                  helper="Pass for verified, Fail for rejected, Pending when under review"
+                  helper="Pass for verified, Returned for correction, Pending when under review"
                 />
                 <SummaryTile
                   label="Amount Paid"
@@ -697,11 +708,11 @@ export default function BploPaymentVerificationPage() {
               <div className={`${bploSurfacePanelClass} space-y-3`}>
                 <p className="text-sm font-semibold text-[var(--foreground)]">BPLO Review Action</p>
                 <p className="mt-1 text-sm text-[var(--ink-muted)]">
-                  Add remarks for verification notes. Remarks are required when rejecting a payment reference.
+                  Add remarks for verification notes. Remarks are required when returning a payment for correction.
                 </p>
                 <FormField
                   label="BPLO Remarks"
-                  hint="Required when rejecting; optional for approval notes."
+                  hint="Required when returning for correction; optional for approval notes."
                 >
                   <textarea
                     aria-label="BPLO Remarks"
@@ -709,7 +720,7 @@ export default function BploPaymentVerificationPage() {
                     onChange={(event) => setRemarks(event.target.value)}
                     rows={3}
                     className={bploFormControlClass}
-                    placeholder="Add verification notes or rejection reason"
+                    placeholder="Add verification notes or return-for-correction reason"
                     readOnly={detail.row.paymentStatus !== "PENDING" || actionBusy}
                   />
                 </FormField>
@@ -729,17 +740,21 @@ export default function BploPaymentVerificationPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        void rejectSelected();
+                        void returnForCorrectionSelected();
                       }}
                       disabled={actionBusy}
-                      className={actionButtonStyles("danger", "md")}
+                      className={actionButtonStyles("warning", "md")}
                     >
-                      Reject Payment
+                      Return for Correction
                     </button>
                   </div>
                 ) : (
                   <p className="mt-4 text-sm text-[var(--ink-muted)]">
-                    This payment reference is already {detail.row.paymentStatus.toLowerCase()} and is now read-only.
+                    This payment reference is already{" "}
+                    {detail.row.paymentStatus === "REJECTED"
+                      ? "returned for correction"
+                      : detail.row.paymentStatus.toLowerCase()}{" "}
+                    and is now read-only.
                   </p>
                 )}
               </div>

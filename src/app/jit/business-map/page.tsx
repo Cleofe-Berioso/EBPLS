@@ -10,7 +10,7 @@ export default async function JitBusinessMapPage() {
   if (!session) notFound();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="JIT"
         title="Business Map"

@@ -6,6 +6,13 @@ import { sendReleaseStatusSms } from "@/lib/sms";
 import { upsertBusinessLocationForBusinessRecord } from "@/lib/business-location";
 import { finalizeComplianceRelatedClosure } from "@/lib/compliance-closure";
 import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
+import {
+  normalizeTin,
+  parseDeliveryVehicleCountForDb,
+  parseOptionalDecimalForDb,
+  parseOptionalIntForDb,
+  tinToBigInt,
+} from "@/lib/business-rules";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -474,12 +481,17 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any): Promise<string 
   const form = (app.formData ?? {}) as Record<string, unknown>;
   const registrationNumber =
     typeof form.registrationNumber === "string" ? form.registrationNumber.trim() : "";
+  const rawTin = typeof form.tin === "string" ? form.tin : "";
+  const normalizedTinDigits = normalizeTin(rawTin);
+  if (!normalizedTinDigits) {
+    throw new Error("TIN is required to release a business permit.");
+  }
 
   const payload = {
     applicantId: app.applicantId,
     businessType: typeof form.businessType === "string" ? form.businessType : "Sole Proprietorship",
     registrationNumber: registrationNumber || `REG-${app.applicationNumber}`,
-    tin: typeof form.tin === "string" ? form.tin : "-",
+    tin: tinToBigInt(rawTin),
     businessName: typeof form.businessName === "string" ? form.businessName : "-",
     tradeName: typeof form.tradeName === "string" ? form.tradeName : "-",
     ownerName: typeof form.ownerName === "string" ? form.ownerName : "-",
@@ -491,21 +503,29 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any): Promise<string 
     businessAddress: typeof form.businessAddress === "string" ? form.businessAddress : "-",
     sameAsMainOffice:
       typeof form.sameAsMainOffice === "boolean" ? form.sameAsMainOffice : true,
-    businessArea: typeof form.businessArea === "string" ? form.businessArea : null,
-    totalFloorArea:
-      typeof form.totalFloorArea === "string" ? form.totalFloorArea : null,
-    totalEmployees:
-      typeof form.totalEmployees === "string" ? form.totalEmployees : null,
-    maleEmployees:
-      typeof form.maleEmployees === "string" ? form.maleEmployees : null,
-    femaleEmployees:
-      typeof form.femaleEmployees === "string" ? form.femaleEmployees : null,
-    employeesWithinMunicipality:
+    businessArea: parseOptionalDecimalForDb(
+      typeof form.businessArea === "string" ? form.businessArea : null
+    ),
+    totalFloorArea: parseOptionalDecimalForDb(
+      typeof form.totalFloorArea === "string" ? form.totalFloorArea : null
+    ),
+    totalEmployees: parseOptionalIntForDb(
+      typeof form.totalEmployees === "string" ? form.totalEmployees : null
+    ),
+    maleEmployees: parseOptionalIntForDb(
+      typeof form.maleEmployees === "string" ? form.maleEmployees : null
+    ),
+    femaleEmployees: parseOptionalIntForDb(
+      typeof form.femaleEmployees === "string" ? form.femaleEmployees : null
+    ),
+    employeesWithinMunicipality: parseOptionalIntForDb(
       typeof form.employeesWithinMunicipality === "string"
         ? form.employeesWithinMunicipality
-        : null,
-    deliveryVehicles:
-      typeof form.deliveryVehicles === "string" ? form.deliveryVehicles : null,
+        : null
+    ),
+    deliveryVehicles: parseDeliveryVehicleCountForDb(
+      typeof form.deliveryVehicles === "string" ? form.deliveryVehicles : null
+    ),
     propertyOwnership:
       typeof form.propertyOwnership === "string" ? form.propertyOwnership : null,
     taxDeclarationNumber:
@@ -520,7 +540,9 @@ async function upsertBusinessRecordOnRelease(tx: any, app: any): Promise<string 
       typeof form.businessActivity === "string" ? form.businessActivity : null,
     lineOfBusiness:
       typeof form.lineOfBusiness === "string" ? form.lineOfBusiness : null,
-    assetSize: typeof form.assetSize === "string" ? form.assetSize : null,
+    assetSize: parseOptionalDecimalForDb(
+      typeof form.assetSize === "string" ? form.assetSize : null
+    ),
     isMarket: typeof form.isMarket === "boolean" ? form.isMarket : false,
     isAgriculture: typeof form.isAgriculture === "boolean" ? form.isAgriculture : false,
     permitExpirationDate: resolvePermitExpirationDateForRelease(

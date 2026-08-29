@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, UserCircle2 } from "lucide-react";
+import { Fingerprint, Loader2, Mail, Shield, UserCircle2 } from "lucide-react";
+import { AccountDetailsPanel } from "@/components/ui/account-details-panel";
 import { SectionCard } from "@/components/ui/section-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
-import { bploFormControlClass, bploPanelClass } from "@/components/bplo/bplo-ui-styles";
+import { bploFormControlClass } from "@/components/bplo/bplo-ui-styles";
 import {
   PROFILE_IMAGE_FILE_INPUT_ACCEPT,
   validateProfileImageFile,
@@ -223,6 +224,36 @@ export function BploProfileSettingsClient({ initialProfile }: { initialProfile: 
         </div>
       </SectionCard>
 
+      <SectionCard title="Account Details" description="Signed-in BPLO staff identity used across the portal.">
+        <AccountDetailsPanel
+          items={[
+            {
+              label: "Display Name",
+              value: profile.name || "Not set",
+              icon: <UserCircle2 className="h-4 w-4" />,
+              emphasize: true,
+            },
+            {
+              label: "Email",
+              value: profile.email,
+              icon: <Mail className="h-4 w-4" />,
+              hint: "Login address",
+            },
+            {
+              label: "Role",
+              value: profile.role,
+              icon: <Shield className="h-4 w-4" />,
+            },
+            {
+              label: "User ID",
+              value: profile.id,
+              icon: <Fingerprint className="h-4 w-4" />,
+              hint: "System reference only",
+            },
+          ]}
+        />
+      </SectionCard>
+
       <SectionCard title="Name Setup" description="Set your personal BPLO display name.">
         <form className="space-y-3" onSubmit={saveProfileName}>
           <div className="grid gap-3 md:grid-cols-2">
@@ -263,15 +294,6 @@ export function BploProfileSettingsClient({ initialProfile }: { initialProfile: 
                 className={`w-full rounded-xl border border-[var(--border-color)] px-3 py-2 ${bploFormControlClass}`}
               />
             </label>
-          </div>
-
-          <div className="grid gap-2 md:grid-cols-2">
-            <p className={`${bploPanelClass} text-sm text-[var(--ink-muted)]`}>
-              <span className="font-semibold">Email:</span> {profile.email}
-            </p>
-            <p className={`${bploPanelClass} text-sm text-[var(--ink-muted)]`}>
-              <span className="font-semibold">Role:</span> {profile.role}
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

@@ -24,7 +24,7 @@ export default async function BploAssessmentFeesPage() {
   const rows = await listAssessmentFeeApplications();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="BPLO"
         title="Assessment & Fees"

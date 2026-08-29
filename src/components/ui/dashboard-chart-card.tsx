@@ -24,7 +24,7 @@ export function DashboardChartCard({
   return (
     <SectionCard title={title} description={description} contentClassName="pt-3 min-w-0">
       {loading ? (
-        <div className="h-[clamp(200px,30vh,260px)] min-h-[200px] w-full min-w-0 animate-pulse rounded-xl border border-[var(--border-color)] bg-[var(--muted-surface)]" />
+        <div className="h-[clamp(160px,24vh,220px)] min-h-[160px] w-full min-w-0 animate-pulse rounded-xl border border-[var(--border-color)] bg-[var(--muted-surface)]" />
       ) : error ? (
         <EmptyState compact title="Unable to load chart" description={error} />
       ) : isEmpty ? (
@@ -34,7 +34,7 @@ export function DashboardChartCard({
           description={emptyDescription ?? "Charts appear once operational records are available."}
         />
       ) : (
-        <div className="h-[clamp(200px,30vh,260px)] min-h-[200px] w-full min-w-0">{children}</div>
+        <div className="h-[clamp(160px,24vh,220px)] min-h-[160px] w-full min-w-0">{children}</div>
       )}
     </SectionCard>
   );

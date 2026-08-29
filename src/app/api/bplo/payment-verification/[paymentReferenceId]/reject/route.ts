@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireBploSession } from "@/lib/bplo-api";
-import { rejectPaymentReference } from "@/lib/bplo-payment-verification";
+import { returnPaymentReferenceForCorrection } from "@/lib/bplo-payment-verification";
 import { logPaymentAction } from "@/lib/audit-log";
 
+/** Alias of POST .../return — UC-BP-12 soft-return (payment REJECTED, app stays APPROVED_FOR_PAYMENT). */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ paymentReferenceId: string }> }
@@ -24,19 +25,18 @@ export async function POST(
 
   if (!payload.remarks?.trim()) {
     return NextResponse.json(
-      { error: "Remarks are required when rejecting a payment" },
+      { error: "Remarks are required when returning a payment for correction" },
       { status: 400 }
     );
   }
 
   try {
-    const result = await rejectPaymentReference(
+    const result = await returnPaymentReferenceForCorrection(
       paymentReferenceId,
       session.user.id,
       payload.remarks
     );
 
-    // Audit: Payment rejected
     void logPaymentAction(
       session.user.id,
       session.user.name ?? session.user.email ?? null,
@@ -48,14 +48,17 @@ export async function POST(
       "PENDING",
       "REJECTED",
       0,
-      `Payment rejected: ${payload.remarks || "No remarks"}`,
-      { remarks: payload.remarks }
+      `Payment returned for correction: ${payload.remarks || "No remarks"}`,
+      { remarks: payload.remarks, action: "RETURN_FOR_CORRECTION" }
     );
 
     return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const status = message === "Payment reference not found" ? 404 : 422;
-    return NextResponse.json({ error: safeApiErrorMessage(error, "Unable to reject payment reference") }, { status });
+    return NextResponse.json(
+      { error: safeApiErrorMessage(error, "Unable to return payment reference for correction") },
+      { status }
+    );
   }
 }

@@ -7,6 +7,7 @@ import {
   type MapBusinessCategory,
 } from "@/lib/business-map-categories";
 import { getJitMapMarkerStatus, getJitMapMarkerColor } from "@/lib/jit-inspections";
+import { getJitInspectionCycleStartedAt } from "@/lib/jit-settings";
 import { EB_MAGALONA_BOUNDS, EB_MAGALONA_CENTER, isWithinEbMagalona } from "@/lib/eb-magalona";
 
 type ApplicationType = "NEW" | "RENEWAL" | "CLOSURE";
@@ -74,6 +75,7 @@ export interface BusinessMapFilters {
   owner?: string;
   category?: "ALL" | MapBusinessCategory;
   search?: string;
+  barangay?: string;
 }
 
 const ACTIVE_PERMITTED_MAP_APP_STATUSES = ["RELEASED"] as const;
@@ -592,6 +594,13 @@ export async function listActivePermittedBusinessLocations(
     );
   }
 
+  if (filters.barangay?.trim()) {
+    const barangay = filters.barangay.trim().toLowerCase();
+    filtered = filtered.filter(
+      (row: BusinessLocationMapRow) => (row.barangay ?? "").trim().toLowerCase() === barangay
+    );
+  }
+
   return filtered;
 }
 
@@ -601,6 +610,7 @@ export async function listActivePermittedBusinessLocationsPaginated(
 ): Promise<PaginatedResult<BusinessLocationMapRow>> {
   const { page, pageSize, skip, take } = resolvePagination(pagination);
   const search = filters.search?.trim();
+  const barangay = filters.barangay?.trim();
 
   const businessRecordWhere: Record<string, unknown> = {
     businessStatus: "ACTIVE",
@@ -639,7 +649,17 @@ export async function listActivePermittedBusinessLocationsPaginated(
     ];
   }
 
-  const where = { businessRecord: businessRecordWhere };
+  const where: Record<string, unknown> = {
+    businessRecord: businessRecordWhere,
+    ...(barangay
+      ? {
+          barangay: {
+            equals: barangay,
+            mode: "insensitive",
+          },
+        }
+      : {}),
+  };
 
   const [locations, totalCount] = await Promise.all([
     prisma.businessLocation.findMany({
@@ -832,11 +852,14 @@ async function resolveLatestInspectionsByBusinessRecord(
     return new Map();
   }
 
+  const cycleStartedAt = await getJitInspectionCycleStartedAt();
+
   const inspections = await prisma.inspection.findMany({
     where: {
       businessRecordId: {
         in: businessRecordIds,
       },
+      ...(cycleStartedAt ? { createdAt: { gte: cycleStartedAt } } : {}),
     },
     select: {
       businessRecordId: true,

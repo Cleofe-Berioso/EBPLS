@@ -7,6 +7,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { DocumentDownloadButton } from "@/components/ui/document-download-button";
 import { LoadingState } from "@/components/ui/loading-state";
 import {
   dhDocumentListItemClass,
@@ -26,6 +27,8 @@ type ApprovalRow = {
   id: string;
   applicationNumber: string;
   applicationType: "NEW" | "RENEWAL" | "CLOSURE";
+  closureType?: string | null;
+  closureTypeOtherReason?: string | null;
   ownerName: string;
   businessName: string;
   businessType: string;
@@ -108,18 +111,33 @@ export default function DepartmentHeadApplicationApprovalPage() {
 
   const documentValidation = useMemo(() => {
     if (!selected) {
-      return { ready: true, blockers: [] };
+      return { ready: true, blockers: [] as ReturnType<typeof evaluateRequiredDocumentsValidation>["blockers"] };
     }
 
-    return evaluateRequiredDocumentsValidation({
-      applicationType: selected.applicationType,
-      formData: selected.formData as unknown as BusinessInfo,
-      documents: selected.documents.map((doc) => ({
-        documentName: doc.documentName,
-        validationStatus: mapDocumentValidationStatusToDb(doc.validationStatus ?? "Pending Review"),
-        validationRemarks: doc.validationRemarks ?? null,
-      })),
-    });
+    try {
+      return evaluateRequiredDocumentsValidation({
+        applicationType: selected.applicationType,
+        formData: selected.formData as unknown as BusinessInfo,
+        documents: selected.documents.map((doc) => ({
+          documentName: doc.documentName,
+          validationStatus: mapDocumentValidationStatusToDb(doc.validationStatus ?? "Pending Review"),
+          validationRemarks: doc.validationRemarks ?? null,
+        })),
+      });
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Unable to evaluate document validation.";
+      return {
+        ready: false,
+        blockers: [
+          {
+            documentName: "Document validation",
+            validationStatus: "Pending Review" as const,
+            validationRemarks: text,
+            reason: "not_valid" as const,
+          },
+        ],
+      };
+    }
   }, [selected]);
 
   const approvalBlocked = !documentValidation.ready;
@@ -178,33 +196,51 @@ export default function DepartmentHeadApplicationApprovalPage() {
     setPendingAction(action);
     setMessage(null);
 
-    const response = await fetch(
-      `/api/department-head/application-approval/${selected.id}/${action}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remarks }),
+    try {
+      const response = await fetch(
+        `/api/department-head/application-approval/${selected.id}/${action}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
+          credentials: "same-origin",
+          body: JSON.stringify({ remarks }),
+        }
+      );
+
+      let data: {
+        application?: { applicationNumber: string; status: string };
+        error?: string;
+      } = {};
+
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        data = (await response.json()) as typeof data;
+      } else if (!response.ok) {
+        throw new Error(`Action failed (HTTP ${response.status}).`);
       }
-    );
 
-    const data = (await response.json()) as {
-      application?: { applicationNumber: string; status: string };
-      error?: string;
-    };
+      if (!response.ok) {
+        setMessage({ type: "error", text: data.error ?? "Action failed." });
+        return;
+      }
 
-    if (!response.ok) {
-      setMessage({ type: "error", text: data.error ?? "Action failed." });
+      setMessage({
+        type: "success",
+        text: `${data.application?.applicationNumber ?? "Application"} moved to ${data.application?.status ?? "new status"}.`,
+      });
+      setRemarks("");
+      await loadQueue();
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Action failed.",
+      });
+    } finally {
       setPendingAction(null);
-      return;
     }
-
-    setMessage({
-      type: "success",
-      text: `${data.application?.applicationNumber ?? "Application"} moved to ${data.application?.status ?? "new status"}.`,
-    });
-    setRemarks("");
-    setPendingAction(null);
-    await loadQueue();
   }
 
   return (
@@ -227,11 +263,22 @@ export default function DepartmentHeadApplicationApprovalPage() {
           title="Pending Application Approvals"
           description="BPLO-approved applications waiting for Department Head decision."
         >
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => void loadQueue()}
+              disabled={loading}
+              className={actionButtonStyles("secondary", "sm")}
+            >
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
           {loading ? (
             <LoadingState message="Loading application queue…" compact />
           ) : rows.length === 0 ? (
             <div className={dhPanelClass}>
-              No applications are pending approval.
+              No applications are pending approval. Applications appear here only after BPLO uses
+              &quot;Send to Department Head Review&quot; (status: Department Head Review).
             </div>
           ) : (
             <div className="space-y-2">
@@ -408,6 +455,34 @@ export default function DepartmentHeadApplicationApprovalPage() {
                     {selected.applicationType === "RENEWAL" ? (
                       <p><strong>Gross Profit:</strong> {readText(formData, ["grossProfit"])}</p>
                     ) : null}
+                    {selected.applicationType === "CLOSURE" ? (
+                      <>
+                        <p>
+                          <strong>Closure Type:</strong>{" "}
+                          {selected.closureType === "RETIREMENT"
+                            ? "Retirement"
+                            : selected.closureType === "NON_COMPLIANT_RELATED"
+                              ? "Non-compliant Related"
+                              : selected.closureType === "OTHERS"
+                                ? selected.closureTypeOtherReason?.trim()
+                                  ? `Others — ${selected.closureTypeOtherReason.trim()}`
+                                  : "Others"
+                                : "-"}
+                        </p>
+                        <p>
+                          <strong>Line of Business:</strong>{" "}
+                          {readText(formData, ["closureLineOfBusiness", "lineOfBusiness"])}
+                        </p>
+                        <p>
+                          <strong>Business Activity:</strong>{" "}
+                          {readText(formData, ["closureBusinessActivity", "businessActivity"])}
+                        </p>
+                        <p>
+                          <strong>Last Date of Operation:</strong>{" "}
+                          {readText(formData, ["closureLastDateOfOperation"])}
+                        </p>
+                      </>
+                    ) : null}
                   </div>
                 </SectionCard>
               </div>
@@ -438,14 +513,20 @@ export default function DepartmentHeadApplicationApprovalPage() {
                             <span className="font-semibold text-[var(--foreground)]">Validation remarks:</span> {doc.validationRemarks}
                           </p>
                         ) : null}
-                        <a
-                          href={`/api/department-head/application-approval/${selected.id}/documents/${doc.id}/download`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`${actionButtonStyles("secondary", "sm")} mt-2 inline-flex`}
-                        >
-                          Preview
-                        </a>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <a
+                            href={`/api/department-head/application-approval/${selected.id}/documents/${doc.id}/download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`${actionButtonStyles("secondary", "sm")} inline-flex`}
+                          >
+                            Preview
+                          </a>
+                          <DocumentDownloadButton
+                            url={`/api/department-head/application-approval/${selected.id}/documents/${doc.id}/download?download=1`}
+                            fileName={doc.fileName || doc.documentName || "document"}
+                          />
+                        </div>
                       </li>
                     );
                     })}

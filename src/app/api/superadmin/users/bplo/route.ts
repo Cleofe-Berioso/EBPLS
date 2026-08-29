@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     module: "USER_MANAGEMENT",
     entityType: "USER",
     entityId: user.id,
-    description: "Super Admin created new BPLO staff account",
+    description: "IT Administrator created new BPLO staff account",
     metadata: {
       newUserId: user.id,
       newUserEmail: user.email,

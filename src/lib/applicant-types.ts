@@ -128,8 +128,10 @@ export interface BusinessInfo {
   mainOfficeCityMunicipality?: string;
   mainOfficeStreetAddress?: string;
   mainOfficeBarangay?: string;
+  mainOfficeZipCode?: string;
   mainOfficeAddress: string;
   businessAddress: string;
+  businessZipCode?: string;
   businessLatitude: number | null;
   businessLongitude: number | null;
   businessBarangay?: string;
@@ -147,6 +149,7 @@ export interface BusinessInfo {
   propertyOwnership: PropertyOwnership;
   taxDeclarationNumber: string;
   propertyIdentificationNumber: string;
+  hasTaxIncentives?: "YES" | "NO" | "";
   taxIncentives: string;
   businessActivity: string;
   lineOfBusiness: string;

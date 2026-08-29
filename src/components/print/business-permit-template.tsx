@@ -127,7 +127,7 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
 
         <section className="relative z-10 mt-5 space-y-4 text-[14px]">
           <p className="text-[28px] font-black leading-none sm:text-[30px]">This CERTIFIES that</p>
-          <InlineUnderlinedField label="Business Tradename:" value={permit.tradeName || permit.businessName} />
+          <InlineUnderlinedField label="Business Name:" value={permit.businessName || permit.tradeName} />
           <InlineUnderlinedField label="Owner/Applicant Name:" value={permit.ownerOrPresident} />
           <InlineUnderlinedField label="Business Address:" value={permit.businessAddress} />
 

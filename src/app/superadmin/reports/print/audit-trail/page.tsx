@@ -9,7 +9,9 @@ import {
   getAuditTrailReport,
   type AuditTrailReportFilters,
 } from "@/lib/superadmin-data";
+import { buildAuditTrailReportNarrative, REPORT_PURPOSES } from "@/lib/report-narrative-builders";
 import { ReportPageHeader } from "@/components/print/reports/report-page-header";
+import { ReportNarrative, ReportSection } from "@/components/print/reports/report-section";
 import { ReportSummaryCard } from "@/components/print/reports/report-summary-card";
 import { ReportTable } from "@/components/print/reports/report-table";
 import { ReportEmptyState } from "@/components/print/reports/report-empty-state";
@@ -51,7 +53,7 @@ export default async function AuditTrailReportPage({ searchParams }: PageProps) 
 
   const meta = buildReportMetadata({
     title: "Audit Trail Report",
-    generatedBy: session.user.name ?? "Super Admin",
+    generatedBy: session.user.name ?? "IT Administrator",
     dateFrom: params.from,
     dateTo: params.to,
   });
@@ -60,6 +62,10 @@ export default async function AuditTrailReportPage({ searchParams }: PageProps) 
   const uniqueActors = new Set(rows.map((r) => r.actorName).filter((n) => n !== "-")).size;
   const uniqueModules = new Set(rows.map((r) => r.module)).size;
   const uniqueActions = new Set(rows.map((r) => r.action)).size;
+  const narrative = buildAuditTrailReportNarrative({
+    total: totalEntries,
+    dateRange: meta.dateRange,
+  });
 
   const resetHref = "/superadmin/reports/print/audit-trail";
 
@@ -153,17 +159,26 @@ export default async function AuditTrailReportPage({ searchParams }: PageProps) 
         )}
       </div>
 
-      {/* ── Summary cards ─────────────────────────────────────────── */}
+      <ReportSection number={1} title="Report Purpose" description="How to use audit evidence for accountability reviews.">
+        <ReportNarrative paragraphs={[REPORT_PURPOSES.auditTrail]} />
+      </ReportSection>
+
+      <ReportSection number={2} title="Findings & Interpretation" description="Reading audit volume as an oversight signal.">
+        <ReportNarrative paragraphs={narrative.paragraphs} bullets={narrative.bullets} />
+      </ReportSection>
+
+      <ReportSection number={3} title="Summary Statistics" description="Coverage of actors, modules, and actions in this extract.">
       <ReportSummaryCard
         items={[
-          { label: "Total Entries", value: totalEntries },
-          { label: "Unique Actors", value: uniqueActors },
-          { label: "Modules Covered", value: uniqueModules },
-          { label: "Distinct Actions", value: uniqueActions },
+          { label: "Total Entries", value: totalEntries, hint: "Audit events listed" },
+          { label: "Unique Actors", value: uniqueActors, hint: "Distinct user names" },
+          { label: "Modules Covered", value: uniqueModules, hint: "System areas touched" },
+          { label: "Distinct Actions", value: uniqueActions, hint: "Different action types" },
         ]}
       />
+      </ReportSection>
 
-      {/* ── Table ─────────────────────────────────────────────────── */}
+      <ReportSection number={4} title="Detailed Audit Records" description="Chronological accountability evidence.">
       {rows.length === 0 ? (
         <ReportEmptyState
           description="No audit log entries found for the selected filters."
@@ -174,6 +189,7 @@ export default async function AuditTrailReportPage({ searchParams }: PageProps) 
           rows={(rows as unknown) as Record<string, unknown>[]}
         />
       )}
+      </ReportSection>
     </div>
   );
 }

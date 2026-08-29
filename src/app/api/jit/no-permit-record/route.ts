@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "businessName is required" }, { status: 400 });
   }
   if (!personAttended || typeof personAttended !== "string" || personAttended.trim() === "") {
-    return NextResponse.json({ error: "personAttended is required" }, { status: 400 });
+    return NextResponse.json({ error: "Witness is required" }, { status: 400 });
   }
   if (!lineOfBusiness || typeof lineOfBusiness !== "string" || lineOfBusiness.trim() === "") {
     return NextResponse.json({ error: "lineOfBusiness is required" }, { status: 400 });

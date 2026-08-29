@@ -1,0 +1,41 @@
+import type { BusinessInfo } from "@/lib/applicant-types";
+
+/** Minimal valid-shaped BusinessInfo for white-box document/eligibility tests. */
+export function baseBusinessInfo(overrides: Partial<BusinessInfo> = {}): BusinessInfo {
+  return {
+    businessType: "Sole Proprietorship",
+    registrationNumber: "123456789",
+    paymentFrequency: "ANNUAL",
+    tin: "123456789012",
+    businessName: "WB Test Store",
+    tradeName: "WB Test",
+    ownerName: "Juan Dela Cruz",
+    nationality: "Filipino",
+    email: "wb@example.com",
+    phone: "09171234567",
+    mainOfficeAddress: "Poblacion, EB Magalona",
+    businessAddress: "Poblacion, EB Magalona",
+    businessLatitude: 10.9,
+    businessLongitude: 123.0,
+    sameAsMainOffice: true,
+    businessArea: "50",
+    totalFloorArea: "50",
+    totalEmployees: "5",
+    maleEmployees: "3",
+    femaleEmployees: "2",
+    employeesWithinMunicipality: "5",
+    deliveryVehicles: "0",
+    propertyOwnership: "Owned",
+    taxDeclarationNumber: "TD-1",
+    propertyIdentificationNumber: "PIN-1",
+    hasTaxIncentives: "NO",
+    taxIncentives: "",
+    businessActivity: "Retail",
+    lineOfBusiness: "Retail",
+    assetSize: "150000",
+    isMarket: false,
+    isAgriculture: false,
+    isLiquorOrTobacco: false,
+    ...overrides,
+  };
+}

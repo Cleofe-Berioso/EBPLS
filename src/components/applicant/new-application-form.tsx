@@ -14,6 +14,7 @@ import {
   EB_MAGALONA_COUNTRY,
   EB_MAGALONA_COUNTRY_CODE,
   EB_MAGALONA_PROVINCE,
+  EB_MAGALONA_ZIP_CODE,
   isEbMagalonaCity,
   isEbMagalonaProvince,
 } from "@/lib/address-options";
@@ -39,7 +40,9 @@ import {
 } from "@/lib/document-upload-rules";
 import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
 import { resolveBusinessBarangayFromFormState } from "@/lib/business-rules";
+import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/numeric-input";
 import { BusinessInformationFields } from "./business-information-fields";
+import { ApplicationVerificationTemplate } from "@/components/print/application-verification-template";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { RequirementsUploadTable } from "@/components/applicant/requirements-upload-table";
 import {
@@ -99,19 +102,21 @@ const operationFields: Array<{
   label: string;
   key: keyof BusinessInfo;
   helperText?: string;
+  numericKind?: "integer" | "decimal";
 }> = [
-  { label: "Business Area", key: "businessArea", helperText: "Use the declared operating area." },
-  { label: "Total Floor Area", key: "totalFloorArea" },
-  { label: "Total Employees", key: "totalEmployees" },
-  { label: "Male Employees", key: "maleEmployees" },
-  { label: "Female Employees", key: "femaleEmployees" },
+  { label: "Business Area", key: "businessArea", helperText: "Use the declared operating area.", numericKind: "decimal" },
+  { label: "Total Floor Area", key: "totalFloorArea", numericKind: "decimal" },
+  { label: "Total Employees", key: "totalEmployees", numericKind: "integer" },
+  { label: "Male Employees", key: "maleEmployees", numericKind: "integer" },
+  { label: "Female Employees", key: "femaleEmployees", numericKind: "integer" },
   {
     label: "Employees Residing within Municipality",
     key: "employeesWithinMunicipality",
+    numericKind: "integer",
   },
-  { label: "Van / Truck", key: "deliveryVanTruck", helperText: "Number of vans or trucks, if applicable." },
-  { label: "Motorcycle", key: "deliveryMotorcycle", helperText: "Number of motorcycles, if applicable." },
-  { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos." },
+  { label: "Van / Truck", key: "deliveryVanTruck", helperText: "Number of vans or trucks, if applicable.", numericKind: "integer" },
+  { label: "Motorcycle", key: "deliveryMotorcycle", helperText: "Number of motorcycles, if applicable.", numericKind: "integer" },
+  { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos.", numericKind: "decimal" },
 ];
 
 // taxIncentives restored on Business Operation step (field preserved in DB / type for existing records)
@@ -353,10 +358,25 @@ const FIELD_NAVIGATION_MAP: Record<NewApplicationFieldKey, FieldNavigationConfig
     selector: '[data-field-key="propertyIdentificationNumber"]',
   },
   taxIncentives: { step: 1, label: "Tax Incentives", selector: '[data-field-key="taxIncentives"]' },
+  hasTaxIncentives: {
+    step: 1,
+    label: "Tax Incentives from Government Entity",
+    selector: '[data-field-key="hasTaxIncentives"]',
+  },
+  mainOfficeZipCode: {
+    step: 0,
+    label: "Main Office Zip Code",
+    selector: '[data-field-key="mainOfficeZipCode"]',
+  },
+  businessZipCode: {
+    step: 0,
+    label: "Business Zip Code",
+    selector: '[data-field-key="businessZipCode"]',
+  },
   isMarket: { step: 1, label: "Market Business", selector: '[data-field-key="isMarket"]' },
   isAgriculture: { step: 1, label: "Agriculture-related Business", selector: '[data-field-key="isAgriculture"]' },
   isLiquorOrTobacco: {
-    step: 0,
+    step: 1,
     label: "Liquor/Tobacco Business",
     selector: '[data-field-key="isLiquorOrTobacco"]',
   },
@@ -546,6 +566,7 @@ function FieldCard({
   error,
   disabled,
   fieldKey,
+  numericKind,
 }: {
   label: string;
   value: string;
@@ -555,6 +576,7 @@ function FieldCard({
   error?: string;
   disabled?: boolean;
   fieldKey?: keyof BusinessInfo;
+  numericKind?: "integer" | "decimal";
 }) {
   return (
     <FormField label={label} required hint={helperText} error={error}>
@@ -564,8 +586,18 @@ function FieldCard({
         className={applicantFormControlClass}
         value={value}
         disabled={disabled}
+        inputMode={numericKind === "integer" ? "numeric" : numericKind === "decimal" ? "decimal" : undefined}
         onBlur={onBlur}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          const raw = event.target.value;
+          const next =
+            numericKind === "integer"
+              ? sanitizeIntegerInput(raw)
+              : numericKind === "decimal"
+                ? sanitizeDecimalInput(raw)
+                : raw;
+          onChange(next);
+        }}
       />
     </FormField>
   );
@@ -664,6 +696,7 @@ export function NewApplicationForm() {
     text: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showVerificationPrint, setShowVerificationPrint] = useState(false);
   const [missingDocNames, setMissingDocNames] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
   const [errorSummaryItems, setErrorSummaryItems] = useState<string[]>([]);
@@ -1183,6 +1216,12 @@ export function NewApplicationForm() {
         }
       }
 
+      if (normalizedInfo.hasTaxIncentives !== "YES" && normalizedInfo.hasTaxIncentives !== "NO") {
+        submitFieldErrors.hasTaxIncentives = "Please select Yes or No for tax incentives.";
+      } else if (normalizedInfo.hasTaxIncentives === "YES" && !normalizedInfo.taxIncentives.trim()) {
+        submitFieldErrors.taxIncentives = "Please describe the tax incentive.";
+      }
+
       if (Object.keys(submitFieldErrors).length > 0 || missingDocuments.length > 0) {
         const missingFieldKeys = Object.keys(submitFieldErrors);
         const summaryLabels = [
@@ -1233,27 +1272,28 @@ export function NewApplicationForm() {
     const hasPendingFiles = Object.keys(pendingDocuments).length > 0;
     const draftTargetUrl = applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications";
     const draftTargetMethod = applicationId ? "PATCH" : "POST";
+    const saveUrl = mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl;
+    const saveMethod = mode === "SUBMIT" ? "POST" : draftTargetMethod;
 
-    const response =
-      mode === "SUBMIT" && hasPendingFiles
-        ? await (async () => {
-            const formData = new FormData();
-            formData.append("payload", JSON.stringify(payload));
-            for (const [documentName, file] of Object.entries(pendingDocuments)) {
-              formData.append("documentNames", documentName);
-              formData.append("documentFiles", file, file.name);
-            }
+    const response = hasPendingFiles
+      ? await (async () => {
+          const formData = new FormData();
+          formData.append("payload", JSON.stringify(payload));
+          for (const [documentName, file] of Object.entries(pendingDocuments)) {
+            formData.append("documentNames", documentName);
+            formData.append("documentFiles", file, file.name);
+          }
 
-            return fetch("/api/applicant/applications", {
-              method: "POST",
-              body: formData,
-            });
-          })()
-        : await fetch(mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl, {
-          method: mode === "SUBMIT" ? "POST" : draftTargetMethod,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+          return fetch(saveUrl, {
+            method: saveMethod,
+            body: formData,
           });
+        })()
+      : await fetch(saveUrl, {
+          method: saveMethod,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
     const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
@@ -1331,9 +1371,18 @@ export function NewApplicationForm() {
           ? ` (${data.rawResponse})`
           : "";
 
+      const duplicateMessage =
+        data.duplicateField === "registrationNumber" || data.duplicateField === "tin"
+          ? data.message ??
+            `An application with this ${
+              data.duplicateField === "registrationNumber" ? "Registration Number" : "TIN"
+            } already exists. Do not proceed with submission.`
+          : null;
+
       setStatusMessage({
         kind: "error",
         text:
+          duplicateMessage ??
           backendValidationMessage ??
           data.error ??
           data.message ??
@@ -1358,10 +1407,37 @@ export function NewApplicationForm() {
       return data.application.id;
     }
 
+    // Draft save: keep uploaded documents from the server so reopen doesn't require re-upload.
+    if (hasPendingFiles || Object.keys(uploadedDocuments).length > 0) {
+      try {
+        const docsResponse = await fetch(`/api/applicant/applications/${data.application.id}/documents`, {
+          cache: "no-store",
+        });
+        const docsData = (await parseApiResponseSafely(docsResponse)) as {
+          documents?: ApplicationDocumentInput[];
+        };
+        if (docsResponse.ok && Array.isArray(docsData.documents)) {
+          setUploadedDocuments(
+            docsData.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
+              acc[doc.documentName] = doc;
+              return acc;
+            }, {})
+          );
+        }
+      } catch {
+        // Keep local metadata if refresh fails; files are already persisted server-side.
+      }
+    }
+
+    for (const previewUrl of Object.values(pendingDocumentPreviews)) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPendingDocuments({});
+    setPendingDocumentPreviews({});
     setSubmitting(false);
     setStatusMessage({
       kind: "success",
-      text: `Draft ${data.application.applicationNumber} saved successfully.`,
+      text: `Draft ${data.application.applicationNumber} saved successfully. Uploaded documents are kept with this draft.`,
     });
     return data.application.id;
   }
@@ -1414,7 +1490,10 @@ export function NewApplicationForm() {
         (m) => normalizeDocumentName(m) !== normalizeDocumentName(documentName)
       )
     );
-    setStatusMessage({ kind: "success", text: `${documentName} selected. File will be saved on final submit.` });
+    setStatusMessage({
+      kind: "success",
+      text: `${documentName} selected. It will be saved with your draft or on final submit.`,
+    });
   }
 
   async function handleDocumentDelete(documentName: string) {
@@ -1486,6 +1565,15 @@ export function NewApplicationForm() {
               <li key={item}>{item}</li>
             ))}
           </ul>
+          {step === steps.length - 1 ? (
+            <button
+              type="button"
+              onClick={back}
+              className={`${actionButtonStyles("secondary", "sm")} mt-3`}
+            >
+              Back
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -1552,6 +1640,7 @@ export function NewApplicationForm() {
                   value={info[field.key] as string}
                   fieldKey={field.key}
                   helperText={field.helperText}
+                  numericKind={field.numericKind}
                   error={fieldErrors[field.key]}
                   disabled={isReadOnly}
                   onBlur={() => validateFieldOnBlur(field.key)}
@@ -1566,6 +1655,7 @@ export function NewApplicationForm() {
                 value={info.capitalInvestment ?? ""}
                 fieldKey="capitalInvestment"
                 helperText="Enter the declared capital investment amount in pesos."
+                numericKind="decimal"
                 error={fieldErrors.capitalInvestment}
                 disabled={isReadOnly}
                 onBlur={() => validateFieldOnBlur("capitalInvestment")}
@@ -1728,6 +1818,25 @@ export function NewApplicationForm() {
                   Mark this if the business requires Department of Agriculture clearance.
                 </span>
               </label>
+
+              <label className={`${applicantCheckboxCardClass} md:col-span-2`}>
+                <input
+                  data-field-key="isLiquorOrTobacco"
+                  type="checkbox"
+                  className="mt-1"
+                  checked={Boolean(info.isLiquorOrTobacco)}
+                  disabled={isReadOnly}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isLiquorOrTobacco: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-[var(--foreground)]">Liquor/Tobacco business</span>
+                  If selected, BPLO will automatically apply the required 25% surcharge during assessment.
+                </span>
+              </label>
             </div>
           </SectionCard>
 
@@ -1794,18 +1903,74 @@ export function NewApplicationForm() {
                 </>
               ) : null}
 
-              <FieldCard
-                label="Tax Incentives from Government Entity"
-                value={info.taxIncentives}
-                fieldKey="taxIncentives"
-                helperText="Optional. Indicate any applicable tax incentives, if any."
-                error={fieldErrors.taxIncentives}
-                disabled={isReadOnly}
-                onBlur={() => validateFieldOnBlur("taxIncentives")}
-                onChange={(value) =>
-                  setInfo((current) => normalizeBusinessInfo({ ...current, taxIncentives: value }))
-                }
-              />
+              <div className="md:col-span-2">
+                <FormField
+                  label="Tax Incentives from Government Entity"
+                  hint="Select whether this business currently holds any government-granted tax incentive."
+                  error={fieldErrors.hasTaxIncentives}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2" data-field-key="hasTaxIncentives">
+                    <label className={applicantRadioLabelClass}>
+                      <input
+                        type="radio"
+                        name="hasTaxIncentives"
+                        value="YES"
+                        checked={info.hasTaxIncentives === "YES"}
+                        disabled={isReadOnly}
+                        onChange={() => {
+                          setInfo((current) =>
+                            normalizeBusinessInfo({ ...current, hasTaxIncentives: "YES" })
+                          );
+                          setFieldErrors((current) => {
+                            const next = { ...current };
+                            delete next.hasTaxIncentives;
+                            return next;
+                          });
+                        }}
+                      />
+                      Yes
+                    </label>
+                    <label className={applicantRadioLabelClass}>
+                      <input
+                        type="radio"
+                        name="hasTaxIncentives"
+                        value="NO"
+                        checked={info.hasTaxIncentives === "NO"}
+                        disabled={isReadOnly}
+                        onChange={() => {
+                          setInfo((current) =>
+                            normalizeBusinessInfo({ ...current, hasTaxIncentives: "NO", taxIncentives: "" })
+                          );
+                          setFieldErrors((current) => {
+                            const next = { ...current };
+                            delete next.hasTaxIncentives;
+                            delete next.taxIncentives;
+                            return next;
+                          });
+                        }}
+                      />
+                      No
+                    </label>
+                  </div>
+                </FormField>
+
+                {info.hasTaxIncentives === "YES" ? (
+                  <div className="mt-3">
+                    <FieldCard
+                      label="Tax Incentive Details"
+                      value={info.taxIncentives}
+                      fieldKey="taxIncentives"
+                      helperText="Describe the tax incentive granted (e.g., program name, granting agency)."
+                      error={fieldErrors.taxIncentives}
+                      disabled={isReadOnly}
+                      onBlur={() => validateFieldOnBlur("taxIncentives")}
+                      onChange={(value) =>
+                        setInfo((current) => normalizeBusinessInfo({ ...current, taxIncentives: value }))
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
           </SectionCard>
         </div>
@@ -1816,7 +1981,7 @@ export function NewApplicationForm() {
           <div data-field-key="requiredDocuments" />
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredDocs.length}`}
-            description="Upload each required document now. Final submit sends only document metadata references."
+            description="Upload each required document now. Saving a draft keeps these files so you do not need to re-upload them later."
             variant="info"
           />
           <SectionCard
@@ -1927,6 +2092,21 @@ export function NewApplicationForm() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
+                  disabled={isReadOnly}
+                  onClick={back}
+                  className={actionButtonStyles("ghost", "md")}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowVerificationPrint(true)}
+                  className={actionButtonStyles("secondary", "md")}
+                >
+                  Print Verification Form
+                </button>
+                <button
+                  type="button"
                   disabled={submitting || isReadOnly}
                   onClick={() => {
                     void persist("DRAFT");
@@ -1988,6 +2168,7 @@ export function NewApplicationForm() {
             <div className={`mt-4 ${applicantPanelClass}`}>
               <p className="font-semibold text-[var(--foreground)]">Main Office Address</p>
               <p className="mt-1">{info.mainOfficeAddress || "-"}</p>
+              <p className="mt-1 ui-caption">Zip Code: {info.mainOfficeZipCode?.trim() || "-"}</p>
             </div>
 
             <div className={`mt-4 ${applicantPanelClass}`}>
@@ -1998,6 +2179,7 @@ export function NewApplicationForm() {
                   : "Business location not pinned"}
               </p>
               <p className="mt-1">{info.businessAddress || "-"}</p>
+              <p className="mt-1 ui-caption">Zip Code: {info.businessZipCode?.trim() || EB_MAGALONA_ZIP_CODE}</p>
             </div>
 
             <div className={`mt-4 ${applicantPanelClass}`}>
@@ -2007,6 +2189,17 @@ export function NewApplicationForm() {
                 <li>• Confirm each required document is uploaded with a clear file copy.</li>
                 <li>• Use Save Draft if you still need to continue later.</li>
               </ul>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border-color)] pt-4">
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={back}
+                className={actionButtonStyles("secondary", "md")}
+              >
+                Back
+              </button>
             </div>
           </SectionCard>
 
@@ -2022,15 +2215,27 @@ export function NewApplicationForm() {
         >
           Back
         </button>
-        <button
-          type="button"
-          disabled={step === steps.length - 1 || isReadOnly}
-          onClick={next}
-          className={actionButtonStyles("primary", "md")}
-        >
-          Next
-        </button>
+        {step < steps.length - 1 ? (
+          <button
+            type="button"
+            disabled={isReadOnly}
+            onClick={next}
+            className={actionButtonStyles("primary", "md")}
+          >
+            Next
+          </button>
+        ) : null}
       </div>
+
+      {showVerificationPrint ? (
+        <ApplicationVerificationTemplate
+          info={info}
+          applicationTypeLabel="New Business Permit Application"
+          requiredDocuments={requiredDocs}
+          uploadedDocumentNames={Object.values(uploadedDocuments).map((doc) => doc.documentName)}
+          onClose={() => setShowVerificationPrint(false)}
+        />
+      ) : null}
     </div>
   );
 }

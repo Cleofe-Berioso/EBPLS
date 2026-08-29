@@ -249,6 +249,14 @@ export function AssessmentFeeForm({ detail }: Props) {
         </div>
       </SectionCard>
 
+      {detail.hasTaxIncentives ? (
+        <InfoBanner
+          title="Applicant has a declared tax incentive"
+          description="This applicant declared a government-granted tax incentive during application. Verify the uploaded Tax Incentive Certificate/Proof before finalizing the assessment."
+          variant="warning"
+        />
+      ) : null}
+
       <SectionCard title="System Guidance" description="Assessment basis from the current application and automatic penalty rules.">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <SummaryTile label="Line of Business" value={detail.lineOfBusiness} />
@@ -272,7 +280,7 @@ export function AssessmentFeeForm({ detail }: Props) {
               description={
                 detail.suggestedFees.renewalCompliancePenalty > 0
                   ? `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). A system-generated penalty of ₱\u00a0${detail.suggestedFees.renewalCompliancePenalty.toLocaleString("en-PH", { minimumFractionDigits: 2 })} will be added to the fee line items.`
-                  : `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). No penalty amount is configured — contact the Super Admin to set the compliance penalty amounts.`
+                  : `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). No penalty amount is configured — contact the IT Administrator to set the compliance penalty amounts.`
               }
               variant="warning"
             />

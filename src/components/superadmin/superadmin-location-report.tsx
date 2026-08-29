@@ -189,7 +189,7 @@ export function SuperAdminLocationReport({ rows }: { rows: SuperAdminLocationRow
               <div className="space-y-4 self-start">
                 <InfoBanner
                   title="Read-only location monitoring"
-                  description="Super Admin can inspect map points, statuses, and summary counts here, but cannot verify, edit, or return any Business Location record."
+                  description="IT Administrator can inspect map points, statuses, and summary counts here, but cannot verify, edit, or return any Business Location record."
                   variant="readOnly"
                 />
 
@@ -202,45 +202,52 @@ export function SuperAdminLocationReport({ rows }: { rows: SuperAdminLocationRow
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {rows.map((row) => (
                 <div key={row.locationId} className={superadminMobileRecordCardClass}>
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
-                    <div className="space-y-4 text-sm text-[var(--ink-muted)]">
-                      <div className="space-y-1.5">
-                        <p className="text-base font-semibold tracking-tight text-[var(--foreground)]">{row.businessName}</p>
-                        <p className={superadminSummaryLabelClass}>
-                          {row.applicationNumber} • {row.applicationType}
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_200px] xl:items-start">
+                    <div className="min-w-0 space-y-3">
+                      <div>
+                        <p className="text-base font-semibold tracking-tight text-[var(--foreground)]">
+                          {row.businessName}
+                        </p>
+                        <p className="mt-0.5 ui-caption">
+                          {row.applicationNumber} · {row.applicationType}
                         </p>
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--surface)] px-3.5 py-3">
+                      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                        <div>
                           <p className={superadminSummaryLabelClass}>Coordinates</p>
-                          <p className="mt-2 font-mono text-sm font-semibold text-[var(--foreground)]">
+                          <p className="mt-1 font-mono text-sm font-semibold text-[var(--foreground)]">
                             {row.latitude.toFixed(6)}, {row.longitude.toFixed(6)}
                           </p>
-                          <p className="mt-1 ui-caption">Saved map point from the applicant submission.</p>
+                          <p className="mt-0.5 ui-caption">Saved map point from the applicant submission.</p>
                         </div>
-                        <div className="rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--surface)] px-3.5 py-3">
+                        <div>
                           <p className={superadminSummaryLabelClass}>Permit / Certificate</p>
-                          <p className="mt-2 font-semibold text-[var(--foreground)]">{row.permitOrCertificateNumber ?? "No number recorded"}</p>
-                          <p className="mt-1 ui-caption">Barangay: {row.barangay ?? "Not specified"}</p>
+                          <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">
+                            {row.permitOrCertificateNumber ?? "No number recorded"}
+                          </p>
+                          <p className="mt-0.5 ui-caption">Barangay: {row.barangay ?? "Not specified"}</p>
                         </div>
-                      </div>
-
-                      <div className="rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--surface)] px-3.5 py-3">
-                        <p className={superadminSummaryLabelClass}>Address and Remarks</p>
-                        <p className="mt-2 font-medium text-[var(--foreground)]">{row.address ?? "No address provided"}</p>
-                        <p className="mt-2 ui-caption">Remarks: {row.remarks ?? "No remarks recorded"}</p>
-                        <p className="mt-1 ui-caption">Updated at {new Date(row.updatedAt).toLocaleString("en-PH")}</p>
+                        <div className="sm:col-span-2">
+                          <p className={superadminSummaryLabelClass}>Address and Remarks</p>
+                          <p className="mt-1 text-sm font-medium text-[var(--foreground)]">
+                            {row.address ?? "No address provided"}
+                          </p>
+                          <p className="mt-1 ui-caption">Remarks: {row.remarks ?? "No remarks recorded"}</p>
+                          <p className="mt-0.5 ui-caption">
+                            Updated at {new Date(row.updatedAt).toLocaleString("en-PH")}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--surface)] px-3.5 py-4">
+                    <div className="space-y-2 border-t border-[var(--border-color)] pt-3 xl:border-l xl:border-t-0 xl:pl-4 xl:pt-0">
                       <p className="text-sm font-semibold text-[var(--foreground)]">Record Status</p>
                       <span className={statusClass(row.status)}>{row.status}</span>
-                      <p className="text-sm leading-6 text-[var(--ink-muted)]">
+                      <p className="ui-caption leading-5">
                         View-only monitoring of the current Business Location status.
                       </p>
                     </div>

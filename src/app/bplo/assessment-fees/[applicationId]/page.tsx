@@ -33,7 +33,7 @@ export default async function BploAssessmentDetailPage({
 
     if (application?.feeAssessment?.status === "GENERATED" && !application.feeAssessment.reassessmentRequestedAt) {
       return (
-        <section className="space-y-6">
+        <section className="ui-page-stack">
           <PageHeader
             eyebrow="BPLO"
             title="Assessment & Fees"
@@ -76,7 +76,7 @@ export default async function BploAssessmentDetailPage({
   }
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="BPLO"
         title="Assessment & Fees"

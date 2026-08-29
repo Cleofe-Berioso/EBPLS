@@ -42,6 +42,8 @@ export function BploReviewActions({
   const actions = ACTIONS_BY_STATUS[currentStatus] ?? [];
 
   async function runAction(action: string, requiresRemarks: boolean) {
+    if (pendingAction) return;
+
     if (action === "approve-assessment" && approvalBlocked) {
       setMessage(approvalBlockMessage ?? "All required documents must be marked Valid before approval.");
       return;
@@ -55,24 +57,50 @@ export function BploReviewActions({
     setPendingAction(action);
     setMessage("");
 
-    const response = await fetch(`/api/bplo/applications/${applicationId}/${action}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remarks }),
-    });
+    try {
+      const response = await fetch(`/api/bplo/applications/${applicationId}/${action}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ remarks }),
+      });
 
-    const data = (await response.json()) as { error?: string; application?: { applicationNumber: string } };
+      let data: {
+        error?: string;
+        application?: { applicationNumber: string; status?: string };
+      } = {};
 
-    if (!response.ok) {
-      setMessage(data.error ?? "Unable to perform action.");
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        data = (await response.json()) as typeof data;
+      } else if (!response.ok) {
+        throw new Error(`Unable to perform action (HTTP ${response.status}).`);
+      }
+
+      if (!response.ok) {
+        setMessage(data.error ?? "Unable to perform action.");
+        return;
+      }
+
+      const applicationNumber = data.application?.applicationNumber ?? "application";
+      const nextStatus = data.application?.status;
+      setMessage(
+        action === "approve-assessment"
+          ? `${applicationNumber} sent to Department Head Review${nextStatus ? ` (${nextStatus})` : ""}. Open Department Head → Application Approvals to continue.`
+          : nextStatus
+            ? `${applicationNumber} moved to ${nextStatus}.`
+            : `Action applied to ${applicationNumber}.`
+      );
+      setRemarks("");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to perform action.");
+    } finally {
       setPendingAction(null);
-      return;
     }
-
-    setMessage(`Action applied to ${data.application?.applicationNumber ?? "application"}.`);
-    setPendingAction(null);
-    setRemarks("");
-    router.refresh();
   }
 
   if (actions.length === 0) {
@@ -90,6 +118,27 @@ export function BploReviewActions({
   return (
     <SectionCard title="Review Actions" description="Operational actions below follow the existing BPLO review workflow only.">
       <div className="space-y-4">
+        <div className={`relative z-10 ${bploPanelClass}`}>
+          <div className="flex flex-wrap gap-2">
+            {actions.map((item) => {
+              const blockedByDocuments = item.action === "approve-assessment" && approvalBlocked;
+              const isBusy = pendingAction !== null && pendingAction !== item.action;
+              return (
+                <button
+                  key={item.action}
+                  type="button"
+                  disabled={isBusy || blockedByDocuments}
+                  aria-busy={pendingAction === item.action}
+                  onClick={() => void runAction(item.action, item.requiresRemarks)}
+                  className={actionButtonStyles(item.variant, "sm")}
+                >
+                  {pendingAction === item.action ? "Processing..." : item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <FormField
           label="Remarks"
           hint="Required for return and reject actions; stored in application history."
@@ -104,12 +153,6 @@ export function BploReviewActions({
           />
         </FormField>
 
-        <InfoBanner
-          title="Action guardrails"
-          description="Available buttons are status-based. This panel does not introduce new statuses or workflow transitions."
-          variant="readOnly"
-        />
-
         {approvalBlocked ? (
           <InfoBanner
             title="Approval blocked by document validation"
@@ -120,25 +163,6 @@ export function BploReviewActions({
             variant="danger"
           />
         ) : null}
-
-        <div className={bploPanelClass}>
-          <div className="flex flex-wrap gap-2">
-          {actions.map((item) => {
-            const blockedByDocuments = item.action === "approve-assessment" && approvalBlocked;
-            return (
-            <button
-              key={item.action}
-              type="button"
-              disabled={pendingAction !== null || blockedByDocuments}
-              onClick={() => runAction(item.action, item.requiresRemarks)}
-              className={actionButtonStyles(item.variant, "sm")}
-            >
-              {pendingAction === item.action ? "Processing..." : item.label}
-            </button>
-          );
-          })}
-          </div>
-        </div>
 
         {message ? (
           <InfoBanner

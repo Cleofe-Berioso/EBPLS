@@ -229,14 +229,14 @@ export function JitNoPermitRecordClient() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[var(--foreground)]">Person Attended *</label>
+              <label className="block text-sm font-medium text-[var(--foreground)]">Witness *</label>
               <input
                 type="text"
                 required
                 value={formData.personAttended}
                 onChange={(e) => setFormData((prev) => ({ ...prev, personAttended: e.target.value }))}
                 className={`mt-1 ${jitFormControlClass}`}
-                placeholder="Name of person attended during inspection"
+                placeholder="Name of witness during inspection"
               />
             </div>
 
@@ -364,7 +364,7 @@ export function JitNoPermitRecordClient() {
                 <tr>
                   <th>Ticket No.</th>
                   <th>Business Name</th>
-                  <th>Person Attended</th>
+                  <th>Witness</th>
                   <th>Line of Business</th>
                   <th>Status</th>
                   <th>Created Date</th>

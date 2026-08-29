@@ -48,9 +48,12 @@ export function mapDocumentValidationStatusToUi(
 export function mapDocumentValidationStatusToDb(
   status: DocumentValidationUiStatus | string
 ): PrismaDocumentValidationStatus {
-  const normalized = status.trim() as DocumentValidationUiStatus;
-  if (UI_TO_DB[normalized]) {
-    return UI_TO_DB[normalized];
+  const normalized = status.trim();
+  if (UI_TO_DB[normalized as DocumentValidationUiStatus]) {
+    return UI_TO_DB[normalized as DocumentValidationUiStatus];
+  }
+  if (DB_TO_UI[normalized as PrismaDocumentValidationStatus]) {
+    return normalized as PrismaDocumentValidationStatus;
   }
   throw new Error("Invalid document validation status");
 }
@@ -68,6 +71,8 @@ export function remarksRequiredForValidationStatus(
 export function isDocumentApprovalReady(
   status: PrismaDocumentValidationStatus | DocumentValidationUiStatus | null | undefined
 ): boolean {
+  if (!status) return false;
+  if (status === "Valid" || status === "VALID") return true;
   const ui =
     typeof status === "string" && status.includes(" ")
       ? (status as DocumentValidationUiStatus)

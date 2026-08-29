@@ -28,7 +28,7 @@ export function buildNoPermitSmsMessage(input: {
 }): string {
   const support = input.supportEmail ?? DEFAULT_SUPPORT_EMAIL;
   return (
-    `eBPPS Notice (${input.ticketNumber}): No valid business permit record for ${input.businessName}. ` +
+    `BPOS Notice (${input.ticketNumber}): No valid business permit record for ${input.businessName}. ` +
     `Please apply at BPLO. Reference: ${input.ticketNumber}. Contact: ${support}`
   ).replace(/\s+/g, " ").trim();
 }
@@ -50,7 +50,7 @@ export function buildNoPermitEmailPlainText(input: {
     "",
     `Reference: ${input.ticketNumber}`,
     `Establishment: ${input.businessName}`,
-    `Person attended: ${input.personAttended}`,
+    `Witness: ${input.personAttended}`,
     "",
     input.requiredAction,
     "",

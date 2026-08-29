@@ -46,7 +46,7 @@ export function NoPermitNoticeTemplate({ notice }: NoPermitNoticeTemplateProps) 
 
         <div className="mt-4 space-y-0">
           <NoticeField label="Establishment Name" value={notice.establishmentName} />
-          <NoticeField label="Owner / Responsible Person" value={notice.responsiblePerson} />
+          <NoticeField label="Witness" value={notice.witness} />
           <NoticeField label="Business Address / Location" value={notice.locationLabel} />
           <NoticeField label="Date and Time Recorded" value={notice.recordedAtLabel} />
           <NoticeField label="Inspecting Office" value={notice.inspectingOfficeLabel} />

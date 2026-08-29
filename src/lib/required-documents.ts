@@ -63,6 +63,10 @@ function getConditionalDocuments(formData: BusinessInfo): string[] {
     conditional.push("Agriculture Clearance");
   }
 
+  if (formData.hasTaxIncentives === "YES") {
+    conditional.push("Tax Incentive Certificate/Proof");
+  }
+
   return conditional;
 }
 
@@ -73,8 +77,8 @@ export function resolveRequiredDocuments(context: RequiredDocumentContext): stri
   if (applicationType === "NEW") {
     return uniqueDocuments([
       ...NEW_BASE_DOCUMENTS,
-      ...BUSINESS_TYPE_DOCUMENTS[formData.businessType],
-      ...OWNERSHIP_DOCUMENTS[formData.propertyOwnership],
+      ...(BUSINESS_TYPE_DOCUMENTS[formData.businessType] ?? []),
+      ...(OWNERSHIP_DOCUMENTS[formData.propertyOwnership] ?? []),
       ...conditionalDocuments,
     ]);
   }
@@ -156,6 +160,8 @@ const DOCUMENT_DESCRIPTIONS: Record<string, string> = {
     "Clearance for businesses operating inside a public market or market stall.",
   "agriculture clearance":
     "Department of Agriculture clearance for agriculture-related businesses.",
+  "tax incentive certificate/proof":
+    "Certificate or proof of the government-granted tax incentive declared by the applicant.",
   "audited financial statement or unaudited afs if not required by bir":
     "Latest financial statement required for renewal assessment.",
   "sworn declaration of gross sales / income tax return":

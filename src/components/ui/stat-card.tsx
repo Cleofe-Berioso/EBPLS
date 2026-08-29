@@ -41,15 +41,15 @@ export function StatCard({
   const palette = TONE_STYLES[tone];
 
   return (
-    <div className={`ui-stat-card app-surface relative h-full p-3.5 transition-shadow hover:shadow-[var(--card-shadow-hover)] sm:p-4 ${palette.container}`}>
-      <div className="flex items-start justify-between gap-3">
+    <div className={`ui-stat-card app-surface relative h-full p-3 transition-shadow hover:shadow-[var(--card-shadow-hover)] sm:p-3.5 ${palette.container}`}>
+      <div className="flex items-start justify-between gap-2.5">
         <div className="min-w-0">
           <p className="ui-caption font-semibold uppercase tracking-wide">{title}</p>
-          <p className="ui-stat-value mt-1.5 tabular-nums">{value}</p>
-          {subtitle ? <p className="ui-caption mt-1.5 line-clamp-2">{subtitle}</p> : null}
+          <p className="ui-stat-value mt-1 tabular-nums">{value}</p>
+          {subtitle ? <p className="ui-caption mt-1 line-clamp-2">{subtitle}</p> : null}
         </div>
         {icon ? (
-          <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] ${palette.icon}`}>
+          <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] ${palette.icon}`}>
             {icon}
           </div>
         ) : null}

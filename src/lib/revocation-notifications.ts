@@ -192,6 +192,7 @@ export async function sendRevocationEmailNotification(
       to: context.applicantEmail,
       subject,
       html,
+      text: plainText,
     });
 
     await prisma.revocationNotificationLog.upsert({

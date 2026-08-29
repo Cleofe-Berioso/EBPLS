@@ -1,5 +1,5 @@
 /**
- * Empty state for Super Admin printable reports when no data matches the filters.
+ * Empty state for IT Administrator printable reports when no data matches the filters.
  * Server component.
  */
 

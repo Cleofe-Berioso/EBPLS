@@ -127,7 +127,7 @@ export function PortalSidebarBrand({
     return (
       <div className="flex justify-center">
         <div className="app-sidebar-brand-icon" title={portalTitle}>
-          <Image src="/images/logo.png" alt="" width={26} height={26} className="h-6 w-6 object-contain" />
+          <Image src="/images/logo.png" alt="" width={34} height={34} className="h-full w-full object-cover" />
         </div>
       </div>
     );
@@ -137,7 +137,7 @@ export function PortalSidebarBrand({
     <div className="space-y-2">
       <div className="flex items-start gap-3">
         <div className="app-sidebar-brand-icon">
-          <Image src="/images/logo.png" alt="" width={26} height={26} className="h-6 w-6 object-contain" />
+          <Image src="/images/logo.png" alt="" width={34} height={34} className="h-full w-full object-cover" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--sidebar-active-text)]">

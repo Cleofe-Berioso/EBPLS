@@ -1,5 +1,7 @@
 "use client";
 
+import { DocumentDownloadButton } from "@/components/ui/document-download-button";
+
 interface UploadSlotProps {
   label: string;
   required?: boolean;
@@ -103,14 +105,13 @@ export function UploadSlot({
         {fileName ? `Selected: ${fileName}` : "No file selected"}
       </p>
         {fileName && previewUrl ? (
-          <a
-            href={previewUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex rounded-md border border-[var(--border-color)] px-2 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--muted-surface)]"
-          >
-            Preview
-          </a>
+          <div className="mt-2">
+            <DocumentDownloadButton
+              url={previewUrl}
+              fileName={fileName}
+              className="inline-flex rounded-md border border-[var(--border-color)] px-2 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--muted-surface)] disabled:opacity-60"
+            />
+          </div>
         ) : null}
       {fileName && !uploadedAt ? <p className="mt-1 text-xs text-[var(--ink-muted)]">Ready to submit</p> : null}
       {uploadedAt && fileName ? (

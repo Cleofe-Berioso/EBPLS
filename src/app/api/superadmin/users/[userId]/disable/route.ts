@@ -44,7 +44,7 @@ export async function POST(
 
     if (activeSuperAdmins <= 1) {
       return NextResponse.json(
-        { error: "Cannot disable the last active Super Admin account." },
+        { error: "Cannot disable the last active IT Administrator account." },
         { status: 400 }
       );
     }
@@ -64,7 +64,7 @@ export async function POST(
       module: "USER_MANAGEMENT",
       entityType: "USER",
       entityId: target.email,
-      description: `Super Admin disabled JIT inspector account${reason ? `: ${reason}` : ""}`,
+      description: `IT Administrator disabled JIT inspector account${reason ? `: ${reason}` : ""}`,
       metadata: {
         targetUserId: target.id,
         targetName: target.name,

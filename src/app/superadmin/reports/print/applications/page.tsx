@@ -10,7 +10,9 @@ import {
   getApplicationSummaryReport,
   type AppSummaryReportFilters,
 } from "@/lib/superadmin-data";
+import { buildApplicationReportNarrative, REPORT_PURPOSES } from "@/lib/report-narrative-builders";
 import { ReportPageHeader } from "@/components/print/reports/report-page-header";
+import { ReportNarrative, ReportSection } from "@/components/print/reports/report-section";
 import { ReportSummaryCard } from "@/components/print/reports/report-summary-card";
 import { ReportTable } from "@/components/print/reports/report-table";
 import { ReportEmptyState } from "@/components/print/reports/report-empty-state";
@@ -50,7 +52,7 @@ export default async function ApplicationSummaryReportPage({ searchParams }: Pag
 
   const meta = buildReportMetadata({
     title: "Application Summary Report",
-    generatedBy: session.user.name ?? "Super Admin",
+    generatedBy: session.user.name ?? "IT Administrator",
     dateFrom: params.from,
     dateTo: params.to,
   });
@@ -59,6 +61,14 @@ export default async function ApplicationSummaryReportPage({ searchParams }: Pag
   const totalRenewal = rows.filter((r) => r.applicationType === "RENEWAL").length;
   const totalClosure = rows.filter((r) => r.applicationType === "CLOSURE").length;
   const totalReleased = rows.filter((r) => r.status === "Released").length;
+  const narrative = buildApplicationReportNarrative({
+    total: rows.length,
+    totalNew,
+    totalRenewal,
+    totalClosure,
+    totalReleased,
+    dateRange: meta.dateRange,
+  });
 
   const tableRows = rows.map((r) => ({
     ...r,
@@ -158,19 +168,39 @@ export default async function ApplicationSummaryReportPage({ searchParams }: Pag
         </form>
       </div>
 
-      {/* ── Summary ──────────────────────────────────────────────────── */}
-      <ReportSummaryCard
-        title="Summary"
-        items={[
-          { label: "Total Records", value: rows.length, tone: "slate" },
-          { label: "New", value: totalNew, tone: "blue" },
-          { label: "Renewal", value: totalRenewal, tone: "amber" },
-          { label: "Closure", value: totalClosure, tone: "slate" },
-          { label: "Released", value: totalReleased, tone: "green" },
-        ]}
-      />
+      <ReportSection number={1} title="Report Purpose" description="What this report explains and when to use it.">
+        <ReportNarrative paragraphs={[REPORT_PURPOSES.applications]} />
+      </ReportSection>
 
-      {/* ── Detail table ─────────────────────────────────────────────── */}
+      <ReportSection
+        number={2}
+        title="Findings & Interpretation"
+        description="Turning the filtered record set into actionable information."
+      >
+        <ReportNarrative paragraphs={narrative.paragraphs} bullets={narrative.bullets} />
+      </ReportSection>
+
+      <ReportSection
+        number={3}
+        title="Summary Statistics"
+        description="Headline counts for the filtered application population."
+      >
+        <ReportSummaryCard
+          items={[
+            { label: "Total Records", value: rows.length, hint: "Applications in scope" },
+            { label: "New", value: totalNew, hint: "First-time business filings" },
+            { label: "Renewal", value: totalRenewal, hint: "Continuing business filings" },
+            { label: "Closure", value: totalClosure, hint: "Exit / retirement filings" },
+            { label: "Released", value: totalReleased, hint: "Completed through release" },
+          ]}
+        />
+      </ReportSection>
+
+      <ReportSection
+        number={4}
+        title="Detailed Application Records"
+        description="Line-level evidence for audit sampling, backlog review, and applicant follow-up."
+      >
       {rows.length === 0 ? (
         <ReportEmptyState description="No applications match the selected filters. Adjust the date range, status, or application type and try again." />
       ) : (
@@ -180,6 +210,7 @@ export default async function ApplicationSummaryReportPage({ searchParams }: Pag
           rows={(tableRows as unknown) as Record<string, unknown>[]}
         />
       )}
+      </ReportSection>
     </div>
   );
 }

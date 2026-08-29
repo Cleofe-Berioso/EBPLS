@@ -13,17 +13,50 @@ export interface EmailOptions {
   to: string;
   subject: string;
   html: string;
+  /** Plain-text alternative improves deliverability (HTML-only mail is spam-prone). */
+  text?: string;
 }
 
 export function isEmailConfigured(): boolean {
   return Boolean(process.env.GMAIL_USER?.trim() && process.env.GMAIL_APP_PASSWORD?.trim());
 }
 
+function resolveFromAddress(): string {
+  const address = process.env.GMAIL_USER?.trim();
+  if (!address) {
+    throw new Error("GMAIL_USER is not configured");
+  }
+
+  // Display name must match the authenticated mailbox to avoid From spoofing flags.
+  const displayName =
+    process.env.MAIL_FROM_NAME?.trim() || "Municipality of Enrique B. Magalona BPLO";
+  return `"${displayName.replace(/"/g, "")}" <${address}>`;
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /**
  * Send an email using Gmail SMTP
  * Requires GMAIL_USER and GMAIL_APP_PASSWORD environment variables
  */
-export async function sendEmail({ to, subject, html }: EmailOptions): Promise<{ messageId?: string }> {
+export async function sendEmail({ to, subject, html, text }: EmailOptions): Promise<{ messageId?: string }> {
   // Validate environment variables
   if (!isEmailConfigured()) {
     throw new Error(
@@ -33,10 +66,13 @@ export async function sendEmail({ to, subject, html }: EmailOptions): Promise<{ 
 
   try {
     const info = await transporter.sendMail({
-      from: process.env.GMAIL_USER,
+      from: resolveFromAddress(),
       to,
       subject,
+      text: text?.trim() || htmlToPlainText(html),
       html,
+      // Helps some clients; keep aligned with the authenticated Gmail user.
+      replyTo: process.env.MAIL_REPLY_TO?.trim() || process.env.GMAIL_USER?.trim(),
     });
 
     console.log("Email sent successfully:", info.messageId);

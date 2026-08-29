@@ -22,11 +22,11 @@ export function InfoBanner({
   action?: ReactNode;
 }) {
   return (
-    <div className={`rounded-[var(--radius-card)] border px-3.5 py-3 sm:px-4 sm:py-3.5 ${BANNER_STYLES[variant]}`}>
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-3">
+    <div className={`rounded-[var(--radius-card)] border px-3 py-2.5 sm:px-3.5 sm:py-3 ${BANNER_STYLES[variant]}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-2.5">
         <div className="min-w-0">
           <p className="text-sm font-semibold tracking-tight">{title}</p>
-          {description ? <p className="mt-1 text-sm leading-6 opacity-90">{description}</p> : null}
+          {description ? <p className="mt-0.5 text-sm leading-5 opacity-90">{description}</p> : null}
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </div>

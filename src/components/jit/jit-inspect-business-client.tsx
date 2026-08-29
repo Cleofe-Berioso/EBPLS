@@ -30,6 +30,7 @@ import type { JitDeclaredInputsPayload } from "@/lib/jit-declared-inputs";
 import { JIT_POST_AUDIT_CHECKLIST_ITEMS } from "@/lib/jit-post-audit-checklist";
 import type { PaginationPageSize } from "@/lib/pagination";
 import type { MapBusinessCategory } from "@/lib/business-map-categories";
+import { EB_MAGALONA_BARANGAYS } from "@/lib/business-rules";
 
 interface InspectableBusinessRow {
   locationId: string;
@@ -79,15 +80,6 @@ interface InspectableBusinessRow {
   } | null;
 }
 
-const REFERRAL_REASON_OPTIONS = [
-  { value: "MAJOR_SAFETY_CONCERN", label: "Major safety concern" },
-  { value: "FALSE_DECLARED_INFORMATION", label: "False declared information" },
-  { value: "UNAPPROVED_BUSINESS_ACTIVITY", label: "Unapproved business activity" },
-  { value: "MISSING_REQUIRED_PERMIT", label: "Missing required permit or clearance" },
-  { value: "SERIOUS_INSPECTION_VIOLATION", label: "Serious inspection violation" },
-  { value: "OTHER", label: "Other" },
-];
-
 function formatInspectionStatus(status: string | undefined | null): string {
   if (!status) return "No Inspection";
   switch (status) {
@@ -124,11 +116,9 @@ export function JitInspectBusinessClient() {
   const [selectedBusinessRecordId, setSelectedBusinessRecordId] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
-  const [referToBplo, setReferToBplo] = useState(false);
-  const [referralReason, setReferralReason] = useState("");
-  const [referralRemarks, setReferralRemarks] = useState("");
   const [searchText, setSearchText] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
+  const [barangayFilter, setBarangayFilter] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PaginationPageSize>(25);
   const [totalCount, setTotalCount] = useState(0);
@@ -146,9 +136,6 @@ export function JitInspectBusinessClient() {
     setChecklistDraft(createEmptyChecklistDraft());
     setComment("");
     setEvidenceFile(null);
-    setReferToBplo(false);
-    setReferralReason("");
-    setReferralRemarks("");
     setFormError(null);
     setDeclaredInputs(null);
     setDeclaredInputsLoading(false);
@@ -176,8 +163,14 @@ export function JitInspectBusinessClient() {
     };
   }, [rows, totalCount]);
 
-  async function loadRows(next?: { search?: string; page?: number; pageSize?: PaginationPageSize }) {
+  async function loadRows(next?: {
+    search?: string;
+    barangay?: string;
+    page?: number;
+    pageSize?: PaginationPageSize;
+  }) {
     const nextSearch = next?.search ?? searchApplied;
+    const nextBarangay = next?.barangay ?? barangayFilter;
     const nextPage = next?.page ?? page;
     const nextPageSize = next?.pageSize ?? pageSize;
 
@@ -187,6 +180,7 @@ export function JitInspectBusinessClient() {
       pageSize: String(nextPageSize),
     });
     if (nextSearch) params.set("search", nextSearch);
+    if (nextBarangay) params.set("barangay", nextBarangay);
 
     const response = await fetch(`/api/jit/inspect-a-business?${params.toString()}`, { cache: "no-store" });
     const data = (await response.json()) as {
@@ -238,7 +232,7 @@ export function JitInspectBusinessClient() {
   useEffect(() => {
     void loadRows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchApplied, page, pageSize]);
+  }, [searchApplied, barangayFilter, page, pageSize]);
 
   useEffect(() => {
     if (rows.length === 0) {
@@ -314,10 +308,6 @@ export function JitInspectBusinessClient() {
       return "General inspection remarks are required.";
     }
 
-    if (referToBplo) {
-      if (!referralReason) return "A referral reason is required when referring to BPLO.";
-    }
-
     return null;
   }
 
@@ -336,11 +326,6 @@ export function JitInspectBusinessClient() {
 
     const payload = new FormData();
     payload.set("comment", comment);
-    if (referToBplo) {
-      payload.set("referToBplo", "1");
-      payload.set("referralReason", referralReason);
-      payload.set("referralRemarks", referralRemarks);
-    }
     if (evidenceFile) {
       payload.set("evidencePhoto", evidenceFile);
     }
@@ -378,9 +363,7 @@ export function JitInspectBusinessClient() {
     resetInspectionDraftState();
     setStatusMessage({
       kind: "success",
-      text: referToBplo
-        ? "Inspection submitted with referral to BPLO for further action."
-        : "Inspection submitted. BPLO will review and determine compliance status.",
+      text: "Inspection submitted. BPLO will review and determine compliance status.",
     });
 
     await loadRows();
@@ -399,14 +382,14 @@ export function JitInspectBusinessClient() {
 
       <SectionCard
         title="Inspectable Released Businesses"
-        description="Search by business name, owner, or permit number."
+        description="Search by business name, owner, or permit number. Filter by barangay."
         action={
           <Link href="/jit/dashboard" className={actionButtonStyles("secondary", "sm")}>
             Back to Dashboard
           </Link>
         }
       >
-        {/* Compact stats strip + search */}
+        {/* Compact stats strip + search / barangay filter */}
         <div className="space-y-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
             <div className="relative min-w-0 flex-1">
@@ -419,6 +402,28 @@ export function JitInspectBusinessClient() {
                 placeholder="Business, trade name, owner/applicant, permit number"
                 className={`${jitFormControlClass} py-2.5 pl-9 pr-3`}
               />
+            </div>
+            <div className="w-full xl:w-64">
+              <label htmlFor="jit-inspection-barangay" className="sr-only">
+                Filter by barangay
+              </label>
+              <select
+                id="jit-inspection-barangay"
+                aria-label="Filter by barangay"
+                value={barangayFilter}
+                onChange={(event) => {
+                  setBarangayFilter(event.target.value);
+                  setPage(1);
+                }}
+                className={`${jitFormControlClass} py-2.5`}
+              >
+                <option value="">All barangays</option>
+                {EB_MAGALONA_BARANGAYS.map((barangay) => (
+                  <option key={barangay} value={barangay}>
+                    {barangay}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-1.5 font-semibold text-[var(--foreground)]">
@@ -484,7 +489,11 @@ export function JitInspectBusinessClient() {
                     </div>
                     <div>
                       <p className={jitSummaryLabelClass}>Business Address</p>
-                      <p className={`${jitSummaryValueClass} truncate`}>{row.address ?? "N/A"}</p>
+                      <p className={`${jitSummaryValueClass} truncate`}>
+                        {row.barangay ? `Brgy. ${row.barangay}` : null}
+                        {row.barangay && row.address ? " · " : null}
+                        {row.address ?? (row.barangay ? null : "N/A")}
+                      </p>
                     </div>
                     <div>
                       <p className={jitSummaryLabelClass}>Line of Business</p>
@@ -505,15 +514,18 @@ export function JitInspectBusinessClient() {
             })
           ) : (
             <EmptyState
-              title="No businesses match the search"
-              description="Try a different search term."
+              title="No businesses match the filters"
+              description="Try a different search term or barangay."
             />
           )}
         </div>
 
         <PaginationControls
           basePath="/jit/inspect-a-business"
-          queryParams={{}}
+          queryParams={{
+            search: searchApplied || undefined,
+            barangay: barangayFilter || undefined,
+          }}
           mode="client"
           isLoading={isLoading}
           page={page}
@@ -533,15 +545,19 @@ export function JitInspectBusinessClient() {
         <LoadingState message="Loading inspection details…" compact />
       ) : totalCount === 0 ? (
         <EmptyState
-          title={searchApplied ? "No businesses match the search" : "No released businesses available"}
+          title={
+            searchApplied || barangayFilter
+              ? "No businesses match the filters"
+              : "No released businesses available"
+          }
           description={
-            searchApplied
-              ? "Try a different search term."
+            searchApplied || barangayFilter
+              ? "Try a different search term or barangay."
               : "Inspection queue will populate once permits are released with active business records."
           }
         />
       ) : rows.length === 0 ? (
-        <EmptyState title="No businesses on this page" description="Try another page or adjust your search." />
+        <EmptyState title="No businesses on this page" description="Try another page or adjust your filters." />
       ) : selectedRow ? (
         <>
           <JitDeclaredInputsPanels declaredInputs={declaredInputs} isLoading={declaredInputsLoading} />
@@ -603,49 +619,6 @@ export function JitInspectBusinessClient() {
                   className={jitFormControlClass}
                 />
               </FormField>
-
-              {/* Refer to BPLO section */}
-              <div className="space-y-2 rounded-xl border border-[var(--border-color)] bg-[var(--muted-surface)] p-4">
-                <label className="inline-flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={referToBplo}
-                    onChange={(e) => setReferToBplo(e.target.checked)}
-                    className="h-4 w-4 rounded border-[var(--border-color)] accent-[var(--warning)]"
-                  />
-                  <span className="text-sm font-medium text-[var(--foreground)]">
-                    Refer to BPLO for Further Action
-                  </span>
-                </label>
-
-                {referToBplo && (
-                  <div className="mt-3 space-y-3">
-                    <FormField label="Referral Reason" required>
-                      <select
-                        value={referralReason}
-                        onChange={(e) => setReferralReason(e.target.value)}
-                        className={jitFormControlClass}
-                      >
-                        <option value="">Select a reason</option>
-                        {REFERRAL_REASON_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField label="Referral Remarks" hint="Optional. Explain the referral.">
-                      <textarea
-                        rows={2}
-                        value={referralRemarks}
-                        onChange={(e) => setReferralRemarks(e.target.value)}
-                        className={jitFormControlClass}
-                        placeholder="Additional details about the referral"
-                      />
-                    </FormField>
-                  </div>
-                )}
-              </div>
 
               {formError && !formError.includes("remarks") && !formError.includes("Photo evidence") ? (
                 <p className="text-sm font-medium text-[var(--danger)]">{formError}</p>

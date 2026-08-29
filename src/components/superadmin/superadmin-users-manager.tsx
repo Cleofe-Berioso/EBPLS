@@ -13,12 +13,12 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import {
   superadminFormControlClass,
-  superadminPanelClass,
   superadminTableClass,
 } from "@/components/superadmin/superadmin-ui-styles";
 
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Modal } from "@/components/ui/modal";
+import { UserAccountIdCard } from "@/components/superadmin/user-account-id-card";
 import type { PaginationPageSize } from "@/lib/pagination";
 
 type RoleFilter = "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
@@ -342,8 +342,8 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       />
 
       <InfoBanner
-        title="Super Admin scope"
-        description="User account management is available here, while BPLO application workflow actions remain unavailable for Super Admin."
+        title="IT Administrator scope"
+        description="User account management is available here, while BPLO application workflow actions remain unavailable for IT Administrator."
         variant="readOnly"
       />
 
@@ -353,7 +353,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         <StatCard title="Total Users" value={summary.totalUsers.toLocaleString("en-PH")} subtitle="All registered accounts" tone="slate" />
         <StatCard title="Applicants" value={summary.applicants.toLocaleString("en-PH")} subtitle="Public applicant accounts" tone="green" />
         <StatCard title="BPLO Accounts" value={summary.bploAccounts.toLocaleString("en-PH")} subtitle="Controlled operations users" tone="blue" />
-        <StatCard title="Super Admins" value={summary.superAdmins.toLocaleString("en-PH")} subtitle="Controlled oversight users" tone="slate" />
+        <StatCard title="IT Administrators" value={summary.superAdmins.toLocaleString("en-PH")} subtitle="Controlled oversight users" tone="slate" />
         <StatCard
           title="Active / Disabled"
           value={`${summary.activeUsers.toLocaleString("en-PH")} / ${summary.disabledUsers.toLocaleString("en-PH")}`}
@@ -383,7 +383,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
           <option value="ALL">All Roles</option>
           <option value="APPLICANT">Applicant</option>
           <option value="BPLO">BPLO</option>
-          <option value="SUPER_ADMIN">Super Admin</option>
+          <option value="SUPER_ADMIN">IT Administrator</option>
           <option value="DEPARTMENT_HEAD">Department Head</option>
           <option value="JIT">JIT Inspector</option>
         </select>
@@ -798,7 +798,9 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
 
       <Modal
         open={Boolean(viewedUser)}
-        title="User Details"
+        title="Account ID Card"
+        description="Official read-only account identification for this user."
+        size="md"
         onClose={() => setViewedUser(null)}
         footer={
           <div className="flex justify-end gap-2">
@@ -814,17 +816,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
           </div>
         }
       >
-        {viewedUser ? (
-          <div className={`space-y-2 ${superadminPanelClass}`}>
-            <p><span className="font-semibold">Name:</span> {viewedUser.name}</p>
-            <p><span className="font-semibold">Email:</span> {viewedUser.email}</p>
-            <p><span className="font-semibold">Role:</span> {viewedUser.role}</p>
-            <p><span className="font-semibold">Status:</span> {viewedUser.status}</p>
-            <p><span className="font-semibold">Created:</span> {formatDate(viewedUser.createdAt)}</p>
-            <p><span className="font-semibold">Updated:</span> {formatDate(viewedUser.updatedAt)}</p>
-            <p><span className="font-semibold">Last Login:</span> -</p>
-          </div>
-        ) : null}
+        {viewedUser ? <UserAccountIdCard user={viewedUser} /> : null}
       </Modal>
 
       <Modal

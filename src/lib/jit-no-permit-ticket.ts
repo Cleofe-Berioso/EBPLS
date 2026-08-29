@@ -29,7 +29,7 @@ export interface JitNoPermitNoticePrintData {
   noticeTitle: string;
   ticketNumber: string;
   establishmentName: string;
-  responsiblePerson: string;
+  witness: string;
   locationLabel: string;
   recordedAtLabel: string;
   inspectingOfficeLabel: string;
@@ -206,7 +206,7 @@ export function buildNoPermitNoticePrintData(record: {
     noticeTitle: NO_PERMIT_NOTICE_TITLE,
     ticketNumber: record.ticketNumber,
     establishmentName: record.businessName,
-    responsiblePerson: record.personAttended,
+    witness: record.personAttended,
     locationLabel: formatLocationLabel(record),
     recordedAtLabel: formatRecordedAtLabel(record.createdAt),
     inspectingOfficeLabel: inspectingOffice,

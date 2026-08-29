@@ -454,6 +454,7 @@ async function processCandidate(
       to: recipientEmail,
       subject,
       html,
+      text: plainText,
     });
 
     await createRenewalEmailLog({

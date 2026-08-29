@@ -18,7 +18,7 @@ export function SectionCard({
   return (
     <section className={`ui-section-card app-surface relative overflow-hidden ${className}`}>
       {title || description || action ? (
-        <div className="flex flex-col gap-2 border-b border-[var(--border-color)] bg-[var(--surface)] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:px-5 lg:gap-3 lg:px-6">
+        <div className="flex flex-col gap-1.5 border-b border-[var(--border-color)] bg-[var(--surface)] px-3.5 py-2.5 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:px-4 lg:gap-2.5 lg:px-5">
           <div className="min-w-0">
             {title ? (
               <h3
@@ -32,17 +32,17 @@ export function SectionCard({
               </h3>
             ) : null}
             {description ? (
-              <p className="ui-caption mt-1">{description}</p>
+              <p className="ui-caption mt-0.5">{description}</p>
             ) : null}
           </div>
           {action ? (
-            <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 sm:w-auto">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {action}
             </div>
           ) : null}
         </div>
       ) : null}
-      <div className={`px-4 py-3.5 sm:px-5 sm:py-4 lg:px-6 ${contentClassName}`}>{children}</div>
+      <div className={`px-3.5 py-3 sm:px-4 sm:py-3.5 lg:px-5 ${contentClassName}`}>{children}</div>
     </section>
   );
 }

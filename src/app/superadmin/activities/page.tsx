@@ -34,7 +34,7 @@ interface PageProps {
 
 function actorRoleLabel(role: string): string {
   if (role === "DEPARTMENT_HEAD") return "Department Head";
-  if (role === "SUPER_ADMIN") return "Super Admin";
+  if (role === "SUPER_ADMIN") return "IT Administrator";
   if (role === "JIT") return "Joint Inspection Team";
   if (role === "BPLO") return "BPLO";
   if (role === "APPLICANT") return "Applicant";
@@ -202,7 +202,7 @@ export default async function SuperAdminActivitiesPage({ searchParams }: PagePro
       />
 
       <InfoBanner
-        title="Super Admin access only"
+        title="IT Administrator access only"
         description="This page is read-only. Sensitive metadata, private document URLs, passwords, tokens, secrets, IP addresses, and user-agent strings are not shown in the audit viewer output."
         variant="readOnly"
       />
@@ -232,7 +232,7 @@ export default async function SuperAdminActivitiesPage({ searchParams }: PagePro
             <option value="BPLO">BPLO</option>
             <option value="DEPARTMENT_HEAD">Department Head</option>
             <option value="JIT">Joint Inspection Team</option>
-            <option value="SUPER_ADMIN">Super Admin</option>
+            <option value="SUPER_ADMIN">IT Administrator</option>
             <option value="SYSTEM">System</option>
           </select>
           <select
