@@ -1,0 +1,67 @@
+# EBPLS — Render Blueprint (Web Service + external Supabase DB/Storage)
+# Deploy: Render Dashboard → New → Blueprint → connect GitHub repo → apply
+# Set secret env vars marked sync: false in the Dashboard after first sync.
+
+services:
+  - type: web
+    name: ebpls
+    runtime: node
+    region: singapore
+    plan: free
+    branch: FINAL-5/3/2026
+    buildCommand: npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: npm run start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_TRUST_HOST
+        value: "true"
+      - key: STORAGE_DRIVER
+        value: supabase
+      - key: S3_PDF_BUCKET
+        value: ebpls-pdfs
+      - key: S3_IMAGE_BUCKET
+        value: ebpls-images
+      - key: SMS_ENABLED
+        value: "false"
+      - key: SMS_PROVIDER
+        value: semaphore
+      - key: PASSWORD_RESET_OTP_EXPIRES_MINUTES
+        value: "10"
+      - key: MAIL_FROM_NAME
+        value: Municipality of Enrique B. Magalona BPLO
+      - key: NEXTAUTH_URL
+        value: https://ebpls.onrender.com
+      - key: AUTH_URL
+        value: https://ebpls.onrender.com
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://ebpls.onrender.com
+      - key: AUTH_SECRET
+        sync: false
+      - key: NEXTAUTH_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: COUNTRY_STATE_CITY_API_KEY
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: SEMAPHORE_API_KEY
+        sync: false
+      - key: SEMAPHORE_SENDER_NAME
+        sync: false
