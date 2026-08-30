@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { LoadingState } from "@/components/ui/loading-state";
+import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { SectionCard } from "@/components/ui/section-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import {
@@ -17,6 +19,7 @@ import {
   applicantSummaryValueClass,
   applicantWarningPanelClass,
 } from "@/components/applicant/applicant-ui-styles";
+import type { PaginationPageSize } from "@/lib/pagination";
 
 const PAYMENT_FREQ_LABELS: Record<string, string> = {
   ANNUAL: "Annual",
@@ -72,16 +75,34 @@ interface TopSummary {
 interface TopPageData {
   activeSummary: TopSummary | null;
   records: TopSummary[];
+  totalCount: number;
+  page: number;
+  pageSize: PaginationPageSize;
+  totalPages: number;
 }
 
 export default function TaxOrderOfPaymentPage() {
-  const [topData, setTopData] = useState<TopPageData>({ activeSummary: null, records: [] });
+  const [topData, setTopData] = useState<TopPageData>({
+    activeSummary: null,
+    records: [],
+    totalCount: 0,
+    page: 1,
+    pageSize: 25,
+    totalPages: 1,
+  });
+  const [viewedSummary, setViewedSummary] = useState<TopSummary | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<TopSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(25);
   const [loading, setLoading] = useState(true);
   const [transactionNumber, setTransactionNumber] = useState("");
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [message, setMessage] = useState("");
+  const summarySectionRef = useRef<HTMLDivElement>(null);
 
-  const summary = topData.activeSummary;
+  const summary = viewedSummary ?? topData.activeSummary;
   const paymentRef = summary?.paymentReference ?? null;
   const paymentRefStatus = paymentRef?.status ?? null;
   const isReassessmentPending = Boolean(summary?.reassessmentRequestedAt);
@@ -104,44 +125,72 @@ export default function TaxOrderOfPaymentPage() {
     !summary.paymentReference &&
     !["FOR_RELEASE", "RELEASED", "PAID"].includes(summary.rawStatus ?? "");
 
-  // DEBUG — remove after confirming correct values in browser console
-  if (typeof window !== "undefined" && summary) {
-    console.log("[TOP DEBUG]", {
-      applicationId: summary.applicationId,
-      applicationNumber: summary.applicationNumber,
-      applicationType: summary.applicationType,
-      rawStatus: summary.rawStatus,
-      status: summary.status,
-      assessmentStatus: summary.assessmentStatus,
-      totalAmount: summary.totalAmount,
-      paymentReference: summary.paymentReference,
-      paymentRefStatus,
-      isPaymentPending,
-      isPaymentVerified,
-      isPaidStatus,
-      isReassessmentPending,
-      canSubmitPaymentReference,
+  const loadTopData = useCallback(async (nextPage: number, nextPageSize: PaginationPageSize) => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      page: String(nextPage),
+      pageSize: String(nextPageSize),
     });
+    const response = await fetch(`/api/applicant/top?${params.toString()}`, { cache: "no-store" });
+    const data = (await response.json()) as { summary?: TopPageData | null };
+
+    if (response.ok && data.summary) {
+      setTopData(data.summary);
+      setPage(data.summary.page);
+      setPageSize(data.summary.pageSize);
+      setViewedSummary((current) => {
+        if (current) {
+          const refreshed = data.summary!.records.find((r) => r.applicationId === current.applicationId);
+          if (refreshed) return refreshed;
+          if (data.summary!.activeSummary?.applicationId === current.applicationId) {
+            return data.summary!.activeSummary;
+          }
+        }
+        return data.summary!.activeSummary;
+      });
+    } else {
+      setTopData({
+        activeSummary: null,
+        records: [],
+        totalCount: 0,
+        page: nextPage,
+        pageSize: nextPageSize,
+        totalPages: 1,
+      });
+      setViewedSummary(null);
+    }
+
+    setLoading(false);
+  }, []);
+
+  async function openTopHistory(record: TopSummary) {
+    setViewedSummary(record);
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+
+    const params = new URLSearchParams({ page: "1", pageSize: "50" });
+    const response = await fetch(`/api/applicant/top?${params.toString()}`, { cache: "no-store" });
+    const data = (await response.json()) as { summary?: TopPageData | null };
+
+    if (response.ok && data.summary) {
+      setHistoryRecords(data.summary.records);
+    } else {
+      setHistoryRecords([]);
+    }
+
+    setHistoryLoading(false);
+    summarySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function selectHistoryRecord(record: TopSummary) {
+    setViewedSummary(record);
+    setHistoryOpen(false);
+    summarySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   useEffect(() => {
-    let active = true;
-
-    async function loadSummary() {
-      setLoading(true);
-      const response = await fetch("/api/applicant/top", { cache: "no-store" });
-      const data = (await response.json()) as { summary?: TopPageData | null };
-      if (active) {
-        setTopData(data.summary ?? { activeSummary: null, records: [] });
-        setLoading(false);
-      }
-    }
-
-    void loadSummary();
-    return () => {
-      active = false;
-    };
-  }, []);
+    void loadTopData(page, pageSize);
+  }, [loadTopData, page, pageSize]);
 
   async function submitReference() {
     if (!summary) return;
@@ -188,18 +237,40 @@ export default function TaxOrderOfPaymentPage() {
         proofFileName: paymentProof.name,
       };
 
+      const updateRecord = (record: TopSummary) =>
+        record.applicationId === summary.applicationId
+          ? { ...record, paymentReference: nextPaymentReference }
+          : record;
+
+      const nextActiveSummary =
+        current.activeSummary.applicationId === summary.applicationId
+          ? { ...current.activeSummary, paymentReference: nextPaymentReference }
+          : current.activeSummary;
+
       return {
-        activeSummary: {
-          ...current.activeSummary,
-          paymentReference: nextPaymentReference,
-        },
-        records: current.records.map((record) =>
-          record.applicationId === current.activeSummary?.applicationId
-            ? { ...record, paymentReference: nextPaymentReference }
-            : record
-        ),
+        ...current,
+        activeSummary: nextActiveSummary,
+        records: current.records.map(updateRecord),
       };
     });
+    setViewedSummary((current) =>
+      current && current.applicationId === summary.applicationId
+        ? {
+            ...current,
+            paymentReference: {
+              id: current.paymentReference?.id,
+              transactionNumber: transactionNumber.trim(),
+              amountPaid: current.totalAmount,
+              paymentDate: new Date().toISOString().slice(0, 10),
+              submittedAt: new Date().toISOString(),
+              status: "PENDING" as const,
+              reviewerRemarks: null,
+              reviewedAt: null,
+              proofFileName: paymentProof.name,
+            },
+          }
+        : current
+    );
     setTransactionNumber("");
     setPaymentProof(null);
   }
@@ -232,7 +303,7 @@ export default function TaxOrderOfPaymentPage() {
               variant: "info" as const,
             };
 
-  if (loading) {
+  if (loading && topData.records.length === 0 && !topData.activeSummary) {
     return (
       <section className="ui-page-stack" aria-busy={loading}>
         <PageHeader
@@ -259,39 +330,140 @@ export default function TaxOrderOfPaymentPage() {
           description="This page becomes available only after BPLO completes assessment and generates the Tax Order of Payment."
         />
       ) : (
-        <div className="space-y-4">
+        <div className={`space-y-4 ${loading ? "opacity-60" : ""}`}>
           <SectionCard
-            title={`TOP Records (${topData.records.length})`}
+            title={`TOP Records (${topData.totalCount})`}
             description="Review generated TOP records and the total amount to pay for permit release."
           >
             <div className="space-y-3">
-              {topData.records.map((record) => (
-                <div key={record.applicationId} className={applicantListCardClass}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-mono text-xs text-[var(--ink-muted)]">{record.applicationNumber}</p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{record.businessName}</p>
-                      <p className="ui-caption">TOP: {record.topNumber ?? "Pending TOP Number"}</p>
-                      <p className="ui-caption">
-                        Total Amount to Pay: ₱ {record.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{record.applicationType}</p>
-                      <p className="ui-caption">Status: {record.status}</p>
+              {topData.records.map((record) => {
+                const isViewing = summary.applicationId === record.applicationId;
+                return (
+                  <div
+                    key={record.applicationId}
+                    className={`${applicantListCardClass} ${isViewing ? "border-[var(--primary)] ring-1 ring-[var(--primary)]" : ""}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-mono text-xs text-[var(--ink-muted)]">{record.applicationNumber}</p>
+                        <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{record.businessName}</p>
+                        <p className="ui-caption">TOP: {record.topNumber ?? "Pending TOP Number"}</p>
+                        <p className="ui-caption">
+                          Total Amount to Pay: ₱ {record.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{record.applicationType}</p>
+                        <p className="ui-caption">Status: {record.status}</p>
+                        {record.generatedAt ? (
+                          <p className="ui-caption">
+                            Generated: {new Date(record.generatedAt).toLocaleDateString("en-PH")}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className="ui-badge border-[var(--border-color)] bg-[var(--surface)] text-[var(--ink-muted)]">
+                          {record.applicationType === "CLOSURE"
+                            ? "Full Payment Required"
+                            : record.paymentFrequency
+                              ? PAYMENT_FREQ_LABELS[record.paymentFrequency] ?? record.paymentFrequency
+                              : "No Frequency"}
+                        </span>
+                        <button
+                          type="button"
+                          className={actionButtonStyles("secondary", "sm")}
+                          onClick={() => {
+                            void openTopHistory(record);
+                          }}
+                        >
+                          View
+                        </button>
+                      </div>
                     </div>
-                      <span className="ui-badge border-[var(--border-color)] bg-[var(--surface)] text-[var(--ink-muted)]">
-                      {record.applicationType === "CLOSURE"
-                        ? "Full Payment Required"
-                        : record.paymentFrequency
-                          ? PAYMENT_FREQ_LABELS[record.paymentFrequency] ?? record.paymentFrequency
-                          : "No Frequency"}
-                    </span>
                   </div>
-
-                </div>
-              ))}
+                );
+              })}
+              {topData.records.length === 0 && !loading ? (
+                <EmptyState
+                  title="No TOP records on this page"
+                  description="Try another page or adjust the page size."
+                />
+              ) : null}
             </div>
           </SectionCard>
 
+          <PaginationControls
+            basePath="/applicant/top"
+            queryParams={{}}
+            mode="client"
+            isLoading={loading}
+            page={page}
+            pageSize={pageSize}
+            totalCount={topData.totalCount}
+            totalPages={topData.totalPages}
+            recordLabel="TOP records"
+            sortHint="Most recently updated TOP records appear first."
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+
+          <Modal
+            open={historyOpen}
+            title="TOP History"
+            description="Browse your other Tax Order of Payment records. Select one to view its full details."
+            onClose={() => setHistoryOpen(false)}
+            size="md"
+          >
+            {historyLoading ? (
+              <LoadingState message="Loading TOP history…" compact />
+            ) : historyRecords.length === 0 ? (
+              <EmptyState
+                title="No other TOP records"
+                description="Only the selected TOP is available right now."
+              />
+            ) : (
+              <div className="space-y-2">
+                {historyRecords.map((record) => {
+                  const isSelected = summary.applicationId === record.applicationId;
+                  return (
+                    <button
+                      key={record.applicationId}
+                      type="button"
+                      onClick={() => selectHistoryRecord(record)}
+                      className={`w-full rounded-[var(--radius-card)] border p-3 text-left transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-soft)] ${
+                        isSelected
+                          ? "border-[var(--primary)] bg-[var(--primary-soft)]"
+                          : "border-[var(--border-color)] bg-[var(--surface)]"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-mono text-xs text-[var(--ink-muted)]">{record.applicationNumber}</p>
+                          <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{record.businessName}</p>
+                          <p className="ui-caption">{record.topNumber ?? "Pending TOP Number"}</p>
+                        </div>
+                        <span className="ui-badge border-[var(--border-color)] bg-white text-[var(--ink-muted)]">
+                          {record.applicationType}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 ui-caption">
+                        <span>Status: {record.status}</span>
+                        <span>
+                          Amount: ₱ {record.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </span>
+                        {record.generatedAt ? (
+                          <span>Generated: {new Date(record.generatedAt).toLocaleDateString("en-PH")}</span>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Modal>
+
+          <div ref={summarySectionRef}>
           {paymentBanner ? (
             <InfoBanner
               title={paymentBanner.title}
@@ -337,6 +509,11 @@ export default function TaxOrderOfPaymentPage() {
                       activeSummary: curr.activeSummary ? { ...curr.activeSummary, reassessmentRequestedAt: new Date().toISOString() } : curr.activeSummary,
                       records: curr.records.map((r) => (r.applicationId === summary.applicationId ? { ...r, reassessmentRequestedAt: new Date().toISOString() } : r)),
                     }));
+                    setViewedSummary((current) =>
+                      current && current.applicationId === summary.applicationId
+                        ? { ...current, reassessmentRequestedAt: new Date().toISOString() }
+                        : current
+                    );
                   }}
                 >
                   Request Re-assessment
@@ -533,6 +710,7 @@ export default function TaxOrderOfPaymentPage() {
           {message ? (
             <InfoBanner title="Submission update" description={message} variant="success" />
           ) : null}
+          </div>
         </div>
       )}
     </section>

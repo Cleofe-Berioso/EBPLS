@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
+import { canSuperAdminResetPassword } from "@/lib/superadmin-password-reset";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit-log";
 
@@ -46,9 +47,12 @@ export async function POST(
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
 
-  if (target.role === "SUPER_ADMIN") {
+  if (!canSuperAdminResetPassword(target.role)) {
     return NextResponse.json(
-      { error: "IT Administrator password resets are restricted from this screen." },
+      {
+        error:
+          "Password reset from this screen is limited to JIT and Department Head accounts.",
+      },
       { status: 403 }
     );
   }

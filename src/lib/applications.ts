@@ -1941,173 +1941,216 @@ export async function listApplicantNotifications(
   return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
-export async function getApplicantTopSummary(applicantId: string) {
-  // Fetch ALL applications for this applicant that have a GENERATED TOP (feeAssessment.status === "GENERATED").
-  // This covers NEW, RENEWAL, and CLOSURE application types.
-  // We do NOT filter on application status here so that the applicant can still see their TOP
-  // after payment is verified and application moves to PAID / FOR_RELEASE / RELEASED.
-  const applications = await prisma.businessApplication.findMany({
-    where: {
-      applicantId,
-      feeAssessment: {
-        is: {
-          status: "GENERATED",
-        },
+const applicantTopInclude = {
+  businessRecord: {
+    select: {
+      businessName: true,
+    },
+  },
+  feeAssessment: {
+    select: {
+      id: true,
+      assessmentNumber: true,
+      status: true,
+      paymentFrequency: true,
+      annualAssessedAmount: true,
+      releasePaymentAmount: true,
+      amountPaid: true,
+      remainingBalance: true,
+      paymentStatus: true,
+      mayorsPermitFee: true,
+      regulatoryFees: true,
+      additionalCharges: true,
+      penalties: true,
+      surcharge: true,
+      interest: true,
+      closureCertificateFee: true,
+      arrears: true,
+      otherCharges: true,
+      closurePaymentDues: true,
+      totalAmount: true,
+      remarks: true,
+      generatedAt: true,
+      reassessmentRequestedAt: true,
+      lineItems: {
+        orderBy: { sortOrder: "asc" as const },
       },
     },
-    include: {
-      businessRecord: {
-        select: {
-          businessName: true,
-        },
-      },
-      feeAssessment: {
-        select: {
-          id: true,
-          assessmentNumber: true,
-          status: true,
-          paymentFrequency: true,
-          annualAssessedAmount: true,
-          releasePaymentAmount: true,
-          amountPaid: true,
-          remainingBalance: true,
-          paymentStatus: true,
-          mayorsPermitFee: true,
-          regulatoryFees: true,
-          additionalCharges: true,
-          penalties: true,
-          surcharge: true,
-          interest: true,
-          closureCertificateFee: true,
-          arrears: true,
-          otherCharges: true,
-          closurePaymentDues: true,
-          totalAmount: true,
-          remarks: true,
-          generatedAt: true,
-          reassessmentRequestedAt: true,
-          lineItems: {
-            orderBy: { sortOrder: "asc" },
-          },
-        },
-      },
-      paymentReferences: {
-        orderBy: { submittedAt: "desc" },
-        take: 1,
-      },
+  },
+  paymentReferences: {
+    orderBy: { submittedAt: "desc" as const },
+    take: 1,
+  },
+} as const;
+
+const applicantTopWhere = {
+  feeAssessment: {
+    is: {
+      status: "GENERATED" as const,
     },
-    orderBy: [{ updatedAt: "desc" }],
-  });
+  },
+};
 
-  if (applications.length === 0) return null;
-
-  const summaries = applications.map((application: any) => {
-    const payment = application.paymentReferences[0] ?? null;
-    const fa = application.feeAssessment as {
-      assessmentNumber: string;
-      status: string;
-      paymentFrequency: string;
-      annualAssessedAmount: any;
-      releasePaymentAmount: any;
-      amountPaid: any;
-      remainingBalance: any;
-      paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
-      mayorsPermitFee: any;
-      regulatoryFees: any;
-      additionalCharges: any;
-      penalties: any;
-      surcharge: any;
-      interest: any;
-      closureCertificateFee: any;
-      arrears: any;
-      otherCharges: any;
-      closurePaymentDues: any;
-      totalAmount: any;
-      remarks: string | null;
-      generatedAt: Date | null;
-      reassessmentRequestedAt: Date | null;
-      lineItems: Array<{
-        id: string;
-        description: string;
-        amount: any;
-        isSystemGenerated: boolean;
-      }>;
-    } | null;
-
-    return {
-      applicationId: application.id,
-      applicationNumber: application.applicationNumber,
-      businessName: resolveBusinessName(application.formData, application.businessRecord?.businessName ?? null),
-      applicationType: application.applicationType as string,
-      status: mapDbStatusToUi(application.status),
-      rawStatus: application.status,
-      hasTaxIncentives: (application.formData as Partial<BusinessInfo> | null)?.hasTaxIncentives === "YES",
-      topNumber: fa?.assessmentNumber ?? null,
-      assessmentStatus: (fa?.status ?? null) as "DRAFT" | "GENERATED" | null,
-      paymentFrequency: (fa?.paymentFrequency ?? null) as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null,
-      annualAssessedAmount: toMoneyNumber(fa?.annualAssessedAmount),
-      releasePaymentAmount: toMoneyNumber(fa?.releasePaymentAmount),
-      amountPaid: toMoneyNumber(fa?.amountPaid),
-      remainingBalance: toMoneyNumber(fa?.remainingBalance),
-      paymentStatus: fa?.paymentStatus ?? "UNPAID",
-      mayorsPermitFee: toMoneyNumber(fa?.mayorsPermitFee),
-      regulatoryFees: toMoneyNumber(fa?.regulatoryFees),
-      additionalCharges: toMoneyNumber(fa?.additionalCharges),
-      penalties: toMoneyNumber(fa?.penalties),
-      surcharge: toMoneyNumber(fa?.surcharge),
-      interest: toMoneyNumber(fa?.interest),
-      closurePaymentDues: toMoneyNumber(fa?.closurePaymentDues),
-      closureCertificateFee: toMoneyNumber(fa?.closureCertificateFee),
-      arrears: toMoneyNumber(fa?.arrears),
-      otherCharges: toMoneyNumber(fa?.otherCharges),
-      totalAmount: toMoneyNumber(fa?.totalAmount),
-      remarks: fa?.remarks ?? null,
-      generatedAt: fa?.generatedAt ? fa.generatedAt.toISOString() : null,
-      reassessmentRequestedAt: fa?.reassessmentRequestedAt ? fa.reassessmentRequestedAt.toISOString() : null,
-      lineItems: (fa?.lineItems ?? []).map((item) => ({
-        id: item.id,
-        description: item.description,
-        amount: toMoneyNumber(item.amount),
-        isSystemGenerated: item.isSystemGenerated,
-      })),
-      paymentReference: payment
-        ? {
-            id: payment.id,
-            transactionNumber: payment.transactionNumber,
-            officialReceiptNumber: payment.transactionNumber,
-            amountPaid: toMoneyNumber(payment.amountPaid),
-            paymentDate: payment.paymentDate.toISOString(),
-            submittedAt: payment.submittedAt.toISOString(),
-            status: payment.status,
-            reviewerRemarks: payment.reviewerRemarks,
-            reviewedAt: payment.reviewedAt ? payment.reviewedAt.toISOString() : null,
-            proofFileName: payment.proofFileName,
-          }
-        : null,
-    };
-  });
-
-  // Priority for bestActiveSummary:
-  // 1. APPROVED_FOR_PAYMENT app with no payment ref yet (applicant hasn't submitted OR)
-  // 2. APPROVED_FOR_PAYMENT app with a REJECTED payment ref (needs resubmission)
-  // 3. APPROVED_FOR_PAYMENT app with a PENDING payment ref (awaiting BPLO review)
-  // 4. Any APPROVED_FOR_PAYMENT app (fallback)
-  // 5. Any summary with the most recent activity (for post-payment visibility)
-  //
-  // This logic applies to ALL application types (NEW, RENEWAL, CLOSURE) equally.
-  // CLOSURE apps that have a GENERATED TOP and are in APPROVED_FOR_PAYMENT will
-  // match the same priority buckets as NEW/RENEWAL apps.
-  const approvedSummaries = summaries.filter((s: { rawStatus: string }) => s.rawStatus === "APPROVED_FOR_PAYMENT");
-  const bestActiveSummary =
-    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => !s.paymentReference) ??
-    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => s.paymentReference?.status === "REJECTED") ??
-    approvedSummaries.find((s: { paymentReference: { status?: string } | null }) => s.paymentReference?.status === "PENDING") ??
-    approvedSummaries[0] ??
-    summaries[0];
+function mapApplicationToTopSummary(application: {
+  id: string;
+  applicationNumber: string;
+  applicationType: string;
+  status: string;
+  formData: unknown;
+  businessRecord: { businessName: string } | null;
+  feeAssessment: {
+    assessmentNumber: string;
+    status: string;
+    paymentFrequency: string;
+    annualAssessedAmount: unknown;
+    releasePaymentAmount: unknown;
+    amountPaid: unknown;
+    remainingBalance: unknown;
+    paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
+    mayorsPermitFee: unknown;
+    regulatoryFees: unknown;
+    additionalCharges: unknown;
+    penalties: unknown;
+    surcharge: unknown;
+    interest: unknown;
+    closureCertificateFee: unknown;
+    arrears: unknown;
+    otherCharges: unknown;
+    closurePaymentDues: unknown;
+    totalAmount: unknown;
+    remarks: string | null;
+    generatedAt: Date | null;
+    reassessmentRequestedAt: Date | null;
+    lineItems: Array<{
+      id: string;
+      description: string;
+      amount: unknown;
+      isSystemGenerated: boolean;
+    }>;
+  } | null;
+  paymentReferences: Array<{
+    id: string;
+    transactionNumber: string;
+    amountPaid: unknown;
+    paymentDate: Date;
+    submittedAt: Date;
+    status: "PENDING" | "VERIFIED" | "REJECTED";
+    reviewerRemarks: string | null;
+    reviewedAt: Date | null;
+    proofFileName: string;
+  }>;
+}) {
+  const payment = application.paymentReferences[0] ?? null;
+  const fa = application.feeAssessment;
 
   return {
-    activeSummary: bestActiveSummary,
-    records: summaries,
+    applicationId: application.id,
+    applicationNumber: application.applicationNumber,
+    businessName: resolveBusinessName(application.formData, application.businessRecord?.businessName ?? null),
+    applicationType: application.applicationType as string,
+    status: mapDbStatusToUi(application.status),
+    rawStatus: application.status,
+    hasTaxIncentives: (application.formData as Partial<BusinessInfo> | null)?.hasTaxIncentives === "YES",
+    topNumber: fa?.assessmentNumber ?? null,
+    assessmentStatus: (fa?.status ?? null) as "DRAFT" | "GENERATED" | null,
+    paymentFrequency: (fa?.paymentFrequency ?? null) as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null,
+    annualAssessedAmount: toMoneyNumber(fa?.annualAssessedAmount),
+    releasePaymentAmount: toMoneyNumber(fa?.releasePaymentAmount),
+    amountPaid: toMoneyNumber(fa?.amountPaid),
+    remainingBalance: toMoneyNumber(fa?.remainingBalance),
+    paymentStatus: fa?.paymentStatus ?? "UNPAID",
+    mayorsPermitFee: toMoneyNumber(fa?.mayorsPermitFee),
+    regulatoryFees: toMoneyNumber(fa?.regulatoryFees),
+    additionalCharges: toMoneyNumber(fa?.additionalCharges),
+    penalties: toMoneyNumber(fa?.penalties),
+    surcharge: toMoneyNumber(fa?.surcharge),
+    interest: toMoneyNumber(fa?.interest),
+    closurePaymentDues: toMoneyNumber(fa?.closurePaymentDues),
+    closureCertificateFee: toMoneyNumber(fa?.closureCertificateFee),
+    arrears: toMoneyNumber(fa?.arrears),
+    otherCharges: toMoneyNumber(fa?.otherCharges),
+    totalAmount: toMoneyNumber(fa?.totalAmount),
+    remarks: fa?.remarks ?? null,
+    generatedAt: fa?.generatedAt ? fa.generatedAt.toISOString() : null,
+    reassessmentRequestedAt: fa?.reassessmentRequestedAt ? fa.reassessmentRequestedAt.toISOString() : null,
+    lineItems: (fa?.lineItems ?? []).map((item) => ({
+      id: item.id,
+      description: item.description,
+      amount: toMoneyNumber(item.amount),
+      isSystemGenerated: item.isSystemGenerated,
+    })),
+    paymentReference: payment
+      ? {
+          id: payment.id,
+          transactionNumber: payment.transactionNumber,
+          officialReceiptNumber: payment.transactionNumber,
+          amountPaid: toMoneyNumber(payment.amountPaid),
+          paymentDate: payment.paymentDate.toISOString(),
+          submittedAt: payment.submittedAt.toISOString(),
+          status: payment.status,
+          reviewerRemarks: payment.reviewerRemarks,
+          reviewedAt: payment.reviewedAt ? payment.reviewedAt.toISOString() : null,
+          proofFileName: payment.proofFileName,
+        }
+      : null,
+  };
+}
+
+function resolveBestActiveTopSummary(
+  summaries: ReturnType<typeof mapApplicationToTopSummary>[]
+) {
+  const approvedSummaries = summaries.filter((s) => s.rawStatus === "APPROVED_FOR_PAYMENT");
+  return (
+    approvedSummaries.find((s) => !s.paymentReference) ??
+    approvedSummaries.find((s) => s.paymentReference?.status === "REJECTED") ??
+    approvedSummaries.find((s) => s.paymentReference?.status === "PENDING") ??
+    approvedSummaries[0] ??
+    summaries[0] ??
+    null
+  );
+}
+
+export type ApplicantTopSummary = ReturnType<typeof mapApplicationToTopSummary>;
+
+export type ApplicantTopPageData = {
+  activeSummary: ApplicantTopSummary | null;
+} & PaginatedResult<ApplicantTopSummary>;
+
+export async function getApplicantTopSummary(
+  applicantId: string,
+  pagination?: { page?: number | string | null; pageSize?: number | string | null }
+): Promise<ApplicantTopPageData | null> {
+  const where = {
+    applicantId,
+    ...applicantTopWhere,
+  };
+
+  const totalCount = await prisma.businessApplication.count({ where });
+  if (totalCount === 0) return null;
+
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+
+  const [paginatedApplications, allApplications] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where,
+      include: applicantTopInclude,
+      orderBy: [{ updatedAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.businessApplication.findMany({
+      where,
+      include: applicantTopInclude,
+      orderBy: [{ updatedAt: "desc" }],
+    }),
+  ]);
+
+  const allSummaries = allApplications.map(mapApplicationToTopSummary);
+  const paginatedSummaries = paginatedApplications.map(mapApplicationToTopSummary);
+
+  return {
+    activeSummary: resolveBestActiveTopSummary(allSummaries),
+    ...buildPaginatedResult(paginatedSummaries, totalCount, page, pageSize),
   };
 }
 

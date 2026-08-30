@@ -19,6 +19,7 @@ import {
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Modal } from "@/components/ui/modal";
 import { UserAccountIdCard } from "@/components/superadmin/user-account-id-card";
+import { canSuperAdminResetPassword } from "@/lib/superadmin-password-reset";
 import type { PaginationPageSize } from "@/lib/pagination";
 
 type RoleFilter = "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
@@ -343,7 +344,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
 
       <InfoBanner
         title="IT Administrator scope"
-        description="User account management is available here, while BPLO application workflow actions remain unavailable for IT Administrator."
+        description="Password reset is limited to JIT and Department Head accounts. Applicant, BPLO, and IT Administrator passwords cannot be changed from this screen."
         variant="readOnly"
       />
 
@@ -458,7 +459,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
               <tbody>
                 {users.map((user) => {
                   const canToggleStatus = user.role !== "SUPER_ADMIN" && user.id !== currentUserId;
-                  const canResetPassword = user.role === "BPLO";
+                  const canResetPassword = canSuperAdminResetPassword(user.role);
 
                   return (
                     <tr key={user.id} className="align-top">
@@ -554,7 +555,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
             <div className="space-y-3 p-4">
               {users.map((user) => {
                 const canToggleStatus = user.role !== "SUPER_ADMIN" && user.id !== currentUserId;
-                const canResetPassword = user.role === "BPLO";
+                const canResetPassword = canSuperAdminResetPassword(user.role);
 
                 return (
                   <article key={user.id} className="app-surface p-4">
@@ -822,7 +823,11 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       <Modal
         open={showResetPassword && Boolean(resetUser)}
         title="Reset Temporary Password"
-        description={resetUser ? `Set a temporary password for ${resetUser.email}.` : undefined}
+        description={
+          resetUser
+            ? `Set a temporary password for ${resetUser.email}. This action is allowed only for JIT and Department Head accounts.`
+            : undefined
+        }
         onClose={() => {
           setShowResetPassword(false);
           setResetUser(null);

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardCheck, ShieldAlert, ShieldCheck, ShieldX, Scale } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, ShieldAlert, ShieldCheck, ShieldX, Scale, UserCircle2 } from "lucide-react";
 import {
   PortalSidebarBrand,
   PortalSidebarFooter,
@@ -48,6 +48,7 @@ const DEPARTMENT_HEAD_SIDEBAR_ITEMS: SidebarGroup[] = [
       { label: "Restrictions List", href: "/department-head/revoke-permit-list" },
     ],
   },
+  { label: "Profile", href: "/department-head/profile" },
 ];
 
 const SIDEBAR_ICONS = {
@@ -58,6 +59,7 @@ const SIDEBAR_ICONS = {
   "Settlement Management": Scale,
   "Compliant List": ShieldCheck,
   "Restrictions List": ShieldX,
+  Profile: UserCircle2,
 } as const;
 
 function renderSidebarLink(

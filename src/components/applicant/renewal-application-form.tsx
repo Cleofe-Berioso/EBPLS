@@ -285,16 +285,20 @@ function validateRenewalBusinessOperations(info: BusinessInfo): Partial<Record<k
     nextErrors.grossProfit = "Gross Profit / Gross Receipts must be a non-negative amount.";
   }
 
-  if (!["ANNUAL", "BI_ANNUAL", "QUARTERLY"].includes(info.paymentFrequency)) {
-    nextErrors.paymentFrequency = "Mode of Payment is required.";
-  }
-
   if (info.hasTaxIncentives !== "YES" && info.hasTaxIncentives !== "NO") {
     nextErrors.hasTaxIncentives = "Please select Yes or No for tax incentives.";
   } else if (info.hasTaxIncentives === "YES" && !info.taxIncentives?.trim()) {
     nextErrors.taxIncentives = "Please describe the tax incentive.";
   }
 
+  return nextErrors;
+}
+
+function validateRenewalPaymentFrequency(info: BusinessInfo): Partial<Record<keyof BusinessInfo, string>> {
+  const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+  if (!["ANNUAL", "BI_ANNUAL", "QUARTERLY"].includes(info.paymentFrequency)) {
+    nextErrors.paymentFrequency = "Mode of Payment is required.";
+  }
   return nextErrors;
 }
 
@@ -793,6 +797,15 @@ export function RenewalApplicationForm() {
       }
     }
 
+    if (step === 4) {
+      const paymentErrors = validateRenewalPaymentFrequency(normalizeBusinessInfo(info));
+      if (Object.keys(paymentErrors).length > 0) {
+        setFieldErrors(paymentErrors);
+        setStatusMessage({ kind: "error", text: "Select a mode of payment before proceeding." });
+        return;
+      }
+    }
+
     setFieldErrors({});
     setStatusMessage(null);
     setStep((current) => Math.min(current + 1, steps.length - 1));
@@ -886,7 +899,10 @@ export function RenewalApplicationForm() {
         return null;
       }
 
-      const operationErrors = validateRenewalBusinessOperations(info);
+      const operationErrors = {
+        ...validateRenewalBusinessOperations(info),
+        ...validateRenewalPaymentFrequency(info),
+      };
       if (Object.keys(operationErrors).length > 0) {
         setFieldErrors(operationErrors);
         setStatusMessage({ kind: "error", text: "Complete Business Operations fields before submitting." });
@@ -1299,42 +1315,6 @@ export function RenewalApplicationForm() {
               fieldErrors={fieldErrors}
               enableCascadingAddress
             />
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className={applicantCheckboxCardClass}>
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={info.isMarket}
-                  onChange={(event) =>
-                    setInfo((current) =>
-                      normalizeBusinessInfo({ ...current, isMarket: event.target.checked })
-                    )
-                  }
-                />
-                <span>
-                  <span className="block font-semibold text-[var(--foreground)]">Market business</span>
-                  Keep this checked when the registered business still operates inside a public market or market stall.
-                </span>
-              </label>
-
-              <label className={applicantCheckboxCardClass}>
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={info.isAgriculture}
-                  onChange={(event) =>
-                    setInfo((current) =>
-                      normalizeBusinessInfo({ ...current, isAgriculture: event.target.checked })
-                    )
-                  }
-                />
-                <span>
-                  <span className="block font-semibold text-[var(--foreground)]">Agriculture-related business</span>
-                  Keep this checked when Department of Agriculture clearance is still required for this renewal.
-                </span>
-              </label>
-            </div>
           </SectionCard>
         </div>
       ) : null}
@@ -1455,73 +1435,6 @@ export function RenewalApplicationForm() {
               ) : null}
 
               <FormField
-                label="Mode of Payment"
-                hint="Applicant-selected payment preference for renewal assessment."
-                required
-                error={fieldErrors.paymentFrequency}
-              >
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className={applicantRadioLabelClass}>
-                    <input
-                      type="radio"
-                      name="renewalPaymentFrequency"
-                      value="ANNUAL"
-                      checked={info.paymentFrequency === "ANNUAL"}
-                      disabled={isReadOnly}
-                      onChange={() => {
-                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "ANNUAL" }));
-                        setFieldErrors((curr) => {
-                          const next = { ...curr };
-                          delete next.paymentFrequency;
-                          return next;
-                        });
-                      }
-                      }
-                    />
-                    Annual
-                  </label>
-                  <label className={applicantRadioLabelClass}>
-                    <input
-                      type="radio"
-                      name="renewalPaymentFrequency"
-                      value="BI_ANNUAL"
-                      checked={info.paymentFrequency === "BI_ANNUAL"}
-                      disabled={isReadOnly}
-                      onChange={() => {
-                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "BI_ANNUAL" }));
-                        setFieldErrors((curr) => {
-                          const next = { ...curr };
-                          delete next.paymentFrequency;
-                          return next;
-                        });
-                      }
-                      }
-                    />
-                    Bi-Annual
-                  </label>
-                  <label className={applicantRadioLabelClass}>
-                    <input
-                      type="radio"
-                      name="renewalPaymentFrequency"
-                      value="QUARTERLY"
-                      checked={info.paymentFrequency === "QUARTERLY"}
-                      disabled={isReadOnly}
-                      onChange={() => {
-                        setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "QUARTERLY" }));
-                        setFieldErrors((curr) => {
-                          const next = { ...curr };
-                          delete next.paymentFrequency;
-                          return next;
-                        });
-                      }
-                      }
-                    />
-                    Quarterly
-                  </label>
-                </div>
-              </FormField>
-
-              <FormField
                 label="Line of Business"
                 hint={
                   hasLockedRecordLineOfBusiness
@@ -1554,6 +1467,44 @@ export function RenewalApplicationForm() {
                   <p className="mt-1 text-xs font-medium text-[var(--danger)]">{fieldErrors.lineOfBusiness}</p>
                 ) : null}
               </FormField>
+
+              <label className={applicantCheckboxCardClass}>
+                <input
+                  data-field-key="isMarket"
+                  type="checkbox"
+                  className="mt-1"
+                  checked={info.isMarket}
+                  disabled={isReadOnly}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isMarket: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-[var(--foreground)]">Market business</span>
+                  Keep this checked when the registered business still operates inside a public market or market stall.
+                </span>
+              </label>
+
+              <label className={applicantCheckboxCardClass}>
+                <input
+                  data-field-key="isAgriculture"
+                  type="checkbox"
+                  className="mt-1"
+                  checked={info.isAgriculture}
+                  disabled={isReadOnly}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isAgriculture: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-[var(--foreground)]">Agriculture-related business</span>
+                  Keep this checked when Department of Agriculture clearance is still required for this renewal.
+                </span>
+              </label>
 
               <label className={`${applicantCheckboxCardClass} md:col-span-2`}>
                 <input
@@ -1764,18 +1715,80 @@ export function RenewalApplicationForm() {
 
       {step === 4 ? (
         <div className={`space-y-4 ${lockInteractivityClass}`}>
+          <SectionCard
+            title="Preferred Mode of Payment"
+            description="Choose how you prefer to pay the assessed fees. Final payment details are confirmed after BPLO assessment."
+          >
+            <FormField
+              label="Mode of Payment"
+              hint="Applicant-selected payment preference for renewal assessment."
+              required
+              error={fieldErrors.paymentFrequency}
+            >
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className={applicantRadioLabelClass}>
+                  <input
+                    type="radio"
+                    name="renewalPaymentFrequency"
+                    value="ANNUAL"
+                    checked={info.paymentFrequency === "ANNUAL"}
+                    disabled={isReadOnly}
+                    onChange={() => {
+                      setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "ANNUAL" }));
+                      setFieldErrors((curr) => {
+                        const next = { ...curr };
+                        delete next.paymentFrequency;
+                        return next;
+                      });
+                    }}
+                  />
+                  Annual
+                </label>
+                <label className={applicantRadioLabelClass}>
+                  <input
+                    type="radio"
+                    name="renewalPaymentFrequency"
+                    value="BI_ANNUAL"
+                    checked={info.paymentFrequency === "BI_ANNUAL"}
+                    disabled={isReadOnly}
+                    onChange={() => {
+                      setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "BI_ANNUAL" }));
+                      setFieldErrors((curr) => {
+                        const next = { ...curr };
+                        delete next.paymentFrequency;
+                        return next;
+                      });
+                    }}
+                  />
+                  Bi-Annual
+                </label>
+                <label className={applicantRadioLabelClass}>
+                  <input
+                    type="radio"
+                    name="renewalPaymentFrequency"
+                    value="QUARTERLY"
+                    checked={info.paymentFrequency === "QUARTERLY"}
+                    disabled={isReadOnly}
+                    onChange={() => {
+                      setInfo((current) => normalizeBusinessInfo({ ...current, paymentFrequency: "QUARTERLY" }));
+                      setFieldErrors((curr) => {
+                        const next = { ...curr };
+                        delete next.paymentFrequency;
+                        return next;
+                      });
+                    }}
+                  />
+                  Quarterly
+                </label>
+              </div>
+            </FormField>
+          </SectionCard>
+
           <InfoBanner
             title="BPLO assessment"
             description="Fees will be assessed by BPLO after application review."
             variant="info"
           />
-
-          <SectionCard
-            title="Applicant-selected payment preference"
-            description="This selected mode is included in your renewal submission form data."
-          >
-            <p className="text-sm font-semibold text-[var(--foreground)]">{info.paymentFrequency.replace("_", "-")}</p>
-          </SectionCard>
         </div>
       ) : null}
 

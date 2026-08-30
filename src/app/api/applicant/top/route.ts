@@ -21,13 +21,17 @@ const KNOWN_SUBMISSION_ERRORS = new Set([
   "TOP amount is invalid for payment submission",
 ]);
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await requireApplicantSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const summary = await getApplicantTopSummary(session.user.id);
+  const { searchParams } = new URL(req.url);
+  const summary = await getApplicantTopSummary(session.user.id, {
+    page: searchParams.get("page"),
+    pageSize: searchParams.get("pageSize"),
+  });
   return NextResponse.json({ summary });
 }
 
