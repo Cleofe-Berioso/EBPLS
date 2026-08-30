@@ -56,10 +56,10 @@ export function DashboardStackedBarChart({
       emptyTitle={emptyTitle ?? "No pending queue records yet."}
       emptyDescription={emptyDescription}
     >
-      <div className="w-full min-w-0">
-        <ResponsiveContainer width="100%" height={280}>
+      <div className="h-full w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 12, right: 20, left: 8, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
             <XAxis dataKey={categoryKey} tick={{ fontSize: 12 }} />
             <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
             <Tooltip formatter={(value: number) => value.toLocaleString("en-PH")} />

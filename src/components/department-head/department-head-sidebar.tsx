@@ -2,21 +2,52 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardCheck, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
-import { RoleBadge } from "@/components/ui/role-badge";
+import { LayoutDashboard, ClipboardCheck, ShieldAlert, ShieldCheck, ShieldX, Scale } from "lucide-react";
+import {
+  PortalSidebarBrand,
+  PortalSidebarFooter,
+  sidebarAsideClass,
+  sidebarGroupLabelClass,
+  sidebarHeaderClass,
+  sidebarNavIconClass,
+  sidebarNavLabelClass,
+  sidebarNavLinkClass,
+  sidebarNavPaddingClass,
+} from "@/components/ui/portal-layout-shell";
 
 type SidebarItem = {
   label: string;
   href: string;
 };
 
-const DEPARTMENT_HEAD_SIDEBAR_ITEMS: SidebarItem[] = [
+type SidebarGroup = {
+  group: string;
+  items: SidebarItem[];
+} | SidebarItem;
+
+const DEPARTMENT_HEAD_SIDEBAR_ITEMS: SidebarGroup[] = [
   { label: "Dashboard", href: "/department-head/dashboard" },
-  { label: "Application Approvals", href: "/department-head/application-approval" },
-  { label: "Inspection Verification", href: "/department-head/inspection-verification" },
-  { label: "Flagged Cases", href: "/department-head/permit-to-revoke" },
-  { label: "Compliant List", href: "/department-head/compliant-list" },
-  { label: "Restrictions List", href: "/department-head/revoke-permit-list" },
+  {
+    group: "Approvals",
+    items: [
+      { label: "Application Approvals", href: "/department-head/application-approval" },
+      { label: "Inspection Verification", href: "/department-head/inspection-verification" },
+    ],
+  },
+  {
+    group: "Compliance",
+    items: [
+      { label: "Flagged Cases", href: "/department-head/permit-to-revoke" },
+      { label: "Settlement Management", href: "/department-head/settlement-management" },
+    ],
+  },
+  {
+    group: "Lists",
+    items: [
+      { label: "Compliant List", href: "/department-head/compliant-list" },
+      { label: "Restrictions List", href: "/department-head/revoke-permit-list" },
+    ],
+  },
 ];
 
 const SIDEBAR_ICONS = {
@@ -24,63 +55,84 @@ const SIDEBAR_ICONS = {
   "Application Approvals": ClipboardCheck,
   "Inspection Verification": ShieldCheck,
   "Flagged Cases": ShieldAlert,
+  "Settlement Management": Scale,
   "Compliant List": ShieldCheck,
   "Restrictions List": ShieldX,
 } as const;
+
+function renderSidebarLink(
+  item: SidebarItem,
+  pathname: string,
+  collapsed: boolean,
+  onCloseMobile: () => void
+) {
+  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const Icon = SIDEBAR_ICONS[item.label as keyof typeof SIDEBAR_ICONS];
+
+  return (
+    <Link
+      key={item.href}
+      href={item.href}
+      onClick={onCloseMobile}
+      className={sidebarNavLinkClass(active, collapsed)}
+      title={collapsed ? item.label : undefined}
+    >
+      {Icon ? <Icon className={sidebarNavIconClass(active)} /> : null}
+      <span className={sidebarNavLabelClass(collapsed)}>{item.label}</span>
+    </Link>
+  );
+}
 
 export function DepartmentHeadSidebar({
   mobileOpen,
   collapsed,
   onCloseMobile,
+  userName,
+  onCollapseToggle,
 }: {
   mobileOpen: boolean;
   collapsed: boolean;
   onCloseMobile: () => void;
+  userName: string;
+  onCollapseToggle: () => void;
 }) {
   const pathname = usePathname();
 
   return (
-    <aside
-      className={`app-sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-200 lg:z-30 ${
-        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-      } ${collapsed ? "w-20" : "w-72"}`}
-    >
-      <div className={`border-b border-slate-200 px-5 py-5 ${collapsed ? "lg:px-3" : ""}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Business Permit Online System</p>
-            <h2 className={`mt-2 text-lg font-semibold text-slate-900 ${collapsed ? "lg:hidden" : ""}`}>Department Head</h2>
-            <p className={`mt-1 text-sm text-slate-600 ${collapsed ? "lg:hidden" : ""}`}>Manage application approvals, inspection verification, compliant cases, flagged cases, and restrictions.</p>
-          </div>
-        </div>
-        <div className={`mt-3 flex items-center gap-2 ${collapsed ? "lg:justify-center" : ""}`}>
-          <RoleBadge role="VIEW_ONLY" label="Department Head" />
-        </div>
+    <aside className={sidebarAsideClass(mobileOpen, collapsed)}>
+      <div className={sidebarHeaderClass(collapsed)}>
+        <PortalSidebarBrand
+          portalTitle="Department Head Portal"
+          description="Approve applications and resolve compliance decisions."
+          roleType="DEPARTMENT_HEAD"
+          roleLabel="Department Head"
+          collapsed={collapsed}
+        />
       </div>
 
-      <nav className={`overflow-y-auto py-4 lg:flex-1 ${collapsed ? "px-2" : "px-3"}`}>
-        {DEPARTMENT_HEAD_SIDEBAR_ITEMS.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const Icon = SIDEBAR_ICONS[item.label as keyof typeof SIDEBAR_ICONS];
+      <nav className={`app-sidebar-nav ${sidebarNavPaddingClass(collapsed)}`} aria-label="Department Head navigation">
+        {DEPARTMENT_HEAD_SIDEBAR_ITEMS.map((item, idx) => {
+          if ("href" in item) {
+            return (
+              <div key={item.href} className={idx > 0 ? "mt-1" : ""}>
+                {renderSidebarLink(item, pathname, collapsed, onCloseMobile)}
+              </div>
+            );
+          }
 
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onCloseMobile}
-              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition ${
-                active
-                  ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-100"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              } ${collapsed ? "lg:justify-center" : ""}`}
-              title={collapsed ? item.label : undefined}
-            >
-              {Icon && <Icon className={`h-4 w-4 ${active ? "text-emerald-700" : "text-slate-400"}`} />}
-              <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>
-            </Link>
+            <div key={item.group} className={`${idx > 0 ? "mt-4" : ""}`}>
+              <p className={sidebarGroupLabelClass(collapsed)}>{item.group}</p>
+              {collapsed ? <div className="app-sidebar-group-divider" /> : null}
+              <div className="space-y-0.5">
+                {item.items.map((subitem) => renderSidebarLink(subitem, pathname, collapsed, onCloseMobile))}
+              </div>
+            </div>
           );
         })}
       </nav>
+
+      <PortalSidebarFooter userName={userName} collapsed={collapsed} onCollapseToggle={onCollapseToggle} />
     </aside>
   );
 }

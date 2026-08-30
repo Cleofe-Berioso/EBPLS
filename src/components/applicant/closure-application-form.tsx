@@ -5,6 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { FormStepper } from "@/components/applicant/form-stepper";
 import { UploadSlot } from "@/components/applicant/upload-slot";
+import {
+  applicantErrorPanelClass,
+  applicantFormControlClass,
+  applicantHighlightPanelClass,
+  applicantPanelClass,
+  applicantSummaryLabelClass,
+  applicantSummaryTileClass,
+  applicantSummaryValueClass,
+} from "@/components/applicant/applicant-ui-styles";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
 import {
   buildDocumentMaxSizeError,
@@ -20,14 +29,81 @@ import type {
   SubmitValidationErrorDetail,
 } from "@/lib/applicant-types";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { LoadingState } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
-import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
+import {
+  getApplicationSubmitButtonLabel,
+  getApplicationSubmitSuccessMessage,
+  getResubmissionConfirmMessage,
+  isReturnedCorrectionResubmission,
+} from "@/lib/resubmission-copy";
+import { isValidLineOfBusiness, LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
 import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
 
 const CLOSURE_BUSINESS_ACTIVITY_OPTIONS = [...BUSINESS_ACTIVITY_OPTIONS] as string[];
+const BUSINESS_ACTIVITY_OTHER_OPTION = "Others, please specify";
+
+function todayDateInputValue(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function resolveClosureLineOfBusiness(value: string | undefined | null): string {
+  const trimmed = (value ?? "").trim();
+  return isValidLineOfBusiness(trimmed) ? trimmed : "";
+}
+
+function resolveClosureBusinessActivity(value: string | undefined | null): {
+  selected: string;
+  otherText: string;
+} {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) {
+    return { selected: "", otherText: "" };
+  }
+  if (trimmed.startsWith("Others:")) {
+    return {
+      selected: BUSINESS_ACTIVITY_OTHER_OPTION,
+      otherText: trimmed.slice("Others:".length).trim(),
+    };
+  }
+  if (trimmed === BUSINESS_ACTIVITY_OTHER_OPTION) {
+    return { selected: BUSINESS_ACTIVITY_OTHER_OPTION, otherText: "" };
+  }
+  if (CLOSURE_BUSINESS_ACTIVITY_OPTIONS.includes(trimmed)) {
+    return { selected: trimmed, otherText: "" };
+  }
+  return { selected: BUSINESS_ACTIVITY_OTHER_OPTION, otherText: trimmed };
+}
+
+function applyClosureOperationAutofill(
+  info: BusinessInfo,
+  setters: {
+    setClosureLineOfBusiness: (value: string) => void;
+    setClosureBusinessActivity: (value: string) => void;
+    setClosureBusinessActivityOther: (value: string) => void;
+    setClosureLastDateOfOperation: (value: string) => void;
+  }
+) {
+  const line = resolveClosureLineOfBusiness(info.lineOfBusiness);
+  if (line) {
+    setters.setClosureLineOfBusiness(line);
+  }
+
+  const activity = resolveClosureBusinessActivity(info.businessActivity);
+  if (activity.selected) {
+    setters.setClosureBusinessActivity(activity.selected);
+    setters.setClosureBusinessActivityOther(activity.otherText);
+  }
+
+  setters.setClosureLastDateOfOperation(todayDateInputValue());
+}
 
 const steps = [
   {
@@ -54,21 +130,27 @@ function ReviewStat({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    <div className={applicantSummaryTileClass}>
+      <p className={applicantSummaryLabelClass}>{label}</p>
+      <p className={applicantSummaryValueClass}>{value}</p>
+      {helper ? <p className="mt-1 ui-caption">{helper}</p> : null}
     </div>
   );
 }
 
-function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
+function ValidationPanel({
+  detail,
+  onBack,
+}: {
+  detail: SubmitValidationErrorDetail;
+  onBack?: () => void;
+}) {
   return (
-    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+    <div className={applicantErrorPanelClass}>
       <p className="font-semibold">Submission requirements still missing</p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+          <p className="ui-caption font-semibold uppercase tracking-wide">
             Missing Fields
           </p>
           <ul className="mt-2 space-y-1">
@@ -80,7 +162,7 @@ function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
           </ul>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+          <p className="ui-caption font-semibold uppercase tracking-wide">
             Missing Documents
           </p>
           <ul className="mt-2 space-y-1">
@@ -92,6 +174,11 @@ function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
           </ul>
         </div>
       </div>
+      {onBack ? (
+        <button type="button" onClick={onBack} className={`${actionButtonStyles("secondary", "sm")} mt-3`}>
+          Back
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -100,6 +187,7 @@ type ClosureRecord = {
   id: string;
   registrationNumber: string;
   businessName: string;
+  hasRevokedPermit?: boolean;
   businessInfo: BusinessInfo;
   closureEligibility: {
     eligible: boolean;
@@ -170,6 +258,15 @@ export function ClosureApplicationForm() {
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
+  const [existingApplicationAccess, setExistingApplicationAccess] = useState<{
+    canEdit: boolean;
+    status: string;
+  } | null>(null);
+
+  const isResubmission = isReturnedCorrectionResubmission({
+    editId,
+    applicationStatus: existingApplicationAccess?.status,
+  });
 
   const requiredDocs = useMemo(
     () =>
@@ -210,6 +307,36 @@ export function ClosureApplicationForm() {
     setClosureTypeOtherReason("");
   }, [closureType, isComplianceForcedClosure]);
 
+  // Fill empty operation fields from the selected business once records are available.
+  useEffect(() => {
+    if (!selectedBusinessId || records.length === 0) return;
+    const selected = records.find((item) => item.id === selectedBusinessId);
+    if (!selected) return;
+
+    if (!closureLineOfBusiness) {
+      const line = resolveClosureLineOfBusiness(selected.businessInfo.lineOfBusiness);
+      if (line) setClosureLineOfBusiness(line);
+    }
+
+    if (!closureBusinessActivity) {
+      const activity = resolveClosureBusinessActivity(selected.businessInfo.businessActivity);
+      if (activity.selected) {
+        setClosureBusinessActivity(activity.selected);
+        setClosureBusinessActivityOther(activity.otherText);
+      }
+    }
+
+    if (!closureLastDateOfOperation) {
+      setClosureLastDateOfOperation(todayDateInputValue());
+    }
+  }, [
+    selectedBusinessId,
+    records,
+    closureLineOfBusiness,
+    closureBusinessActivity,
+    closureLastDateOfOperation,
+  ]);
+
   useEffect(() => {
     let active = true;
 
@@ -223,14 +350,24 @@ export function ClosureApplicationForm() {
       if (!active || !response.ok || !data.records) return;
 
       setRecords(data.records);
+      // When editing a draft, business selection comes from the saved application — do not auto-pick.
+      if (editId) return;
+
       if (data.records[0] && !selectedBusinessIdRef.current) {
         selectedBusinessIdRef.current = data.records[0].id;
         setSelectedBusinessId(data.records[0].id);
         setSelectedBusinessName(data.records[0].businessName);
-        setSelectedBusinessInfo({
+        const nextInfo = {
           ...defaultBusinessInfo,
           ...data.records[0].businessInfo,
           paymentFrequency: data.records[0].businessInfo.paymentFrequency ?? "ANNUAL",
+        };
+        setSelectedBusinessInfo(nextInfo);
+        applyClosureOperationAutofill(nextInfo, {
+          setClosureLineOfBusiness,
+          setClosureBusinessActivity,
+          setClosureBusinessActivityOther,
+          setClosureLastDateOfOperation,
         });
         if (data.records[0].closureEligibility.isComplianceForcedClosure) {
           setClosureType("NON_COMPLIANT_RELATED");
@@ -243,7 +380,7 @@ export function ClosureApplicationForm() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [editId]);
 
   useEffect(() => {
     let active = true;
@@ -259,6 +396,8 @@ export function ClosureApplicationForm() {
       const data = (await parseApiResponseSafely(response)) as {
         application?: {
           id: string;
+          status: string;
+          canEdit: boolean;
           businessRecordId?: string;
           formData: BusinessInfo;
           closureType?: ClosureTypeValue;
@@ -273,6 +412,10 @@ export function ClosureApplicationForm() {
       }
 
       setApplicationId(data.application.id);
+      setExistingApplicationAccess({
+        canEdit: Boolean(data.application.canEdit),
+        status: data.application.status,
+      });
       setSelectedBusinessInfo({
         ...defaultBusinessInfo,
         ...data.application.formData,
@@ -281,18 +424,28 @@ export function ClosureApplicationForm() {
       setSelectedBusinessName(data.application.formData.businessName);
       setClosureType(data.application.closureType ?? "");
       setClosureTypeOtherReason(data.application.closureTypeOtherReason ?? "");
-      // Restore closure operation fields from saved formData
+      // Restore closure operation fields from saved formData; fill gaps from business record / today.
       const savedFormData = data.application.formData as unknown as Record<string, string | undefined>;
-      setClosureLineOfBusiness(savedFormData.closureLineOfBusiness ?? "");
-      const savedActivity = savedFormData.closureBusinessActivity ?? "";
-      if (savedActivity.startsWith("Others:")) {
-        setClosureBusinessActivity("Others, please specify");
-        setClosureBusinessActivityOther(savedActivity.substring(7).trim());
+      const savedLine = (savedFormData.closureLineOfBusiness ?? "").trim();
+      const savedActivityRaw = (savedFormData.closureBusinessActivity ?? "").trim();
+      const savedLastDate = (savedFormData.closureLastDateOfOperation ?? "").trim();
+      const restoredActivity = resolveClosureBusinessActivity(savedActivityRaw);
+
+      const lineFromRecord = resolveClosureLineOfBusiness(data.application.formData.lineOfBusiness);
+      const activityFromRecord = resolveClosureBusinessActivity(data.application.formData.businessActivity);
+
+      setClosureLineOfBusiness(savedLine || lineFromRecord);
+      if (savedActivityRaw) {
+        setClosureBusinessActivity(restoredActivity.selected);
+        setClosureBusinessActivityOther(restoredActivity.otherText);
+      } else if (activityFromRecord.selected) {
+        setClosureBusinessActivity(activityFromRecord.selected);
+        setClosureBusinessActivityOther(activityFromRecord.otherText);
       } else {
-        setClosureBusinessActivity(savedActivity);
+        setClosureBusinessActivity("");
         setClosureBusinessActivityOther("");
       }
-      setClosureLastDateOfOperation(savedFormData.closureLastDateOfOperation ?? "");
+      setClosureLastDateOfOperation(savedLastDate || todayDateInputValue());
       if (data.application.businessRecordId) {
         selectedBusinessIdRef.current = data.application.businessRecordId;
         setSelectedBusinessId(data.application.businessRecordId);
@@ -317,10 +470,7 @@ export function ClosureApplicationForm() {
   if (editId && draftLoading) {
     return (
       <SectionCard title="Loading saved draft" description="Restoring your closure draft values.">
-        <EmptyState
-          title="Loading draft"
-          description="Please wait while the saved closure application is loaded into the form."
-        />
+        <LoadingState message="Loading draft…" compact />
       </SectionCard>
     );
   }
@@ -362,6 +512,13 @@ export function ClosureApplicationForm() {
 
   function back() {
     setStep((current) => Math.max(current - 1, 0));
+  }
+
+  function handleFinalSubmit() {
+    if (isResubmission && !window.confirm(getResubmissionConfirmMessage("CLOSURE"))) {
+      return;
+    }
+    void persist("SUBMIT");
   }
 
   async function persist(mode: PersistMode) {
@@ -431,27 +588,28 @@ export function ClosureApplicationForm() {
     const hasPendingFiles = Object.keys(pendingDocuments).length > 0;
     const draftTargetUrl = applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications";
     const draftTargetMethod = applicationId ? "PATCH" : "POST";
+    const saveUrl = mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl;
+    const saveMethod = mode === "SUBMIT" ? "POST" : draftTargetMethod;
 
-    const response =
-      mode === "SUBMIT" && hasPendingFiles
-        ? await (async () => {
-            const formData = new FormData();
-            formData.append("payload", JSON.stringify(payload));
-            for (const [documentName, file] of Object.entries(pendingDocuments)) {
-              formData.append("documentNames", documentName);
-              formData.append("documentFiles", file, file.name);
-            }
+    const response = hasPendingFiles
+      ? await (async () => {
+          const formData = new FormData();
+          formData.append("payload", JSON.stringify(payload));
+          for (const [documentName, file] of Object.entries(pendingDocuments)) {
+            formData.append("documentNames", documentName);
+            formData.append("documentFiles", file, file.name);
+          }
 
-            return fetch("/api/applicant/applications", {
-              method: "POST",
-              body: formData,
-            });
-          })()
-        : await fetch(mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl, {
-          method: mode === "SUBMIT" ? "POST" : draftTargetMethod,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+          return fetch(saveUrl, {
+            method: saveMethod,
+            body: formData,
           });
+        })()
+      : await fetch(saveUrl, {
+          method: saveMethod,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
     const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
@@ -487,14 +645,49 @@ export function ClosureApplicationForm() {
 
       setStatusMessage({
         kind: "success",
-        text: `Closure ${data.application.applicationNumber} submitted successfully.`,
+        text: getApplicationSubmitSuccessMessage("CLOSURE", isResubmission, data.application.applicationNumber),
       });
       return data.application.id;
     }
 
+    if (hasPendingFiles || Object.keys(uploadedDocuments).length > 0) {
+      try {
+        const docsResponse = await fetch(`/api/applicant/applications/${data.application.id}/documents`, {
+          cache: "no-store",
+        });
+        const docsData = (await parseApiResponseSafely(docsResponse)) as {
+          documents?: Array<{
+            id?: string;
+            documentName: string;
+            fileName: string;
+            mimeType?: string;
+            sizeBytes?: number;
+            uploadedAt?: string;
+            validationStatus?: string;
+            validationRemarks?: string | null;
+          }>;
+        };
+        if (docsResponse.ok && Array.isArray(docsData.documents)) {
+          setUploadedDocuments(
+            docsData.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
+              acc[doc.documentName] = doc as ApplicationDocumentInput;
+              return acc;
+            }, {})
+          );
+        }
+      } catch {
+        // Keep local metadata if refresh fails; files are already persisted server-side.
+      }
+    }
+
+    for (const previewUrl of Object.values(pendingDocumentPreviews)) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPendingDocuments({});
+    setPendingDocumentPreviews({});
     setStatusMessage({
       kind: "success",
-      text: `Closure draft ${data.application.applicationNumber} saved successfully.`,
+      text: `Closure draft ${data.application.applicationNumber} saved successfully. Uploaded documents are kept with this draft.`,
     });
     return data.application.id;
   }
@@ -593,7 +786,7 @@ export function ClosureApplicationForm() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page-stack">
       <FormStepper steps={steps} currentStep={step} />
 
       {statusMessage ? (
@@ -622,7 +815,7 @@ export function ClosureApplicationForm() {
                 required
               >
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={selectedBusinessId}
                   disabled={records.length === 0}
                   onChange={(event) => {
@@ -632,10 +825,17 @@ export function ClosureApplicationForm() {
                     const selected = records.find((item) => item.id === selectedId);
                     if (selected) {
                       setSelectedBusinessName(selected.businessName);
-                      setSelectedBusinessInfo({
+                      const nextInfo = {
                         ...defaultBusinessInfo,
                         ...selected.businessInfo,
                         paymentFrequency: selected.businessInfo.paymentFrequency ?? "ANNUAL",
+                      };
+                      setSelectedBusinessInfo(nextInfo);
+                      applyClosureOperationAutofill(nextInfo, {
+                        setClosureLineOfBusiness,
+                        setClosureBusinessActivity,
+                        setClosureBusinessActivityOther,
+                        setClosureLastDateOfOperation,
                       });
                       if (selected.closureEligibility.isComplianceForcedClosure) {
                         setClosureType("NON_COMPLIANT_RELATED");
@@ -650,10 +850,19 @@ export function ClosureApplicationForm() {
                   {records.map((business) => (
                     <option key={business.id} value={business.id}>
                       {business.businessName} ({business.registrationNumber})
+                      {business.hasRevokedPermit ? " — Revoked permit" : ""}
                     </option>
                   ))}
                 </select>
               </FormField>
+
+              {selectedRecord?.hasRevokedPermit ? (
+                <InfoBanner
+                  title="Revoked permit — closure still required"
+                  description="This business permit was revoked and cannot be renewed. You may still file a closure application to complete the business closing process."
+                  variant="warning"
+                />
+              ) : null}
 
               <FormField
                 label="Closure Type"
@@ -665,7 +874,7 @@ export function ClosureApplicationForm() {
                 required
               >
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={closureType}
                   disabled={isComplianceForcedClosure}
                   onChange={(event) => setClosureType(event.target.value as ClosureTypeValue)}
@@ -678,7 +887,7 @@ export function ClosureApplicationForm() {
                   ))}
                 </select>
                 {isComplianceForcedClosure ? (
-                  <p className="mt-2 text-xs font-medium text-amber-700">
+                  <p className="mt-2 text-xs font-medium text-[var(--warning)]">
                     This business requires closure processing because of a compliance-related restriction.
                   </p>
                 ) : null}
@@ -691,7 +900,8 @@ export function ClosureApplicationForm() {
                   required
                 >
                   <textarea
-                    className="min-h-[96px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    aria-label="Please specify"
+                    className={`min-h-[96px] ${applicantFormControlClass}`}
                     value={closureTypeOtherReason}
                     onChange={(event) => setClosureTypeOtherReason(event.target.value)}
                     placeholder="Describe the closure reason"
@@ -700,16 +910,16 @@ export function ClosureApplicationForm() {
                 </FormField>
               ) : null}
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
-                <p className="text-sm font-semibold text-slate-900">Business Operations</p>
+              <div className={`${applicantHighlightPanelClass} space-y-4`}>
+                <p className="text-sm font-semibold text-[var(--foreground)]">Business Operations</p>
 
                 <FormField
                   label="Line of Business"
-                  hint="Indicate the line of business of the entity being closed."
+                  hint="Auto-filled from the selected business record."
                   required
                 >
                   <select
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    className={applicantFormControlClass}
                     value={closureLineOfBusiness}
                     onChange={(event) => setClosureLineOfBusiness(event.target.value)}
                   >
@@ -722,11 +932,11 @@ export function ClosureApplicationForm() {
 
                 <FormField
                   label="Business Activity"
-                  hint="Select the primary activity of the business being closed."
+                  hint="Auto-filled from the selected business record."
                   required
                 >
                   <select
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    className={applicantFormControlClass}
                     value={closureBusinessActivity}
                     onChange={(event) => {
                       setClosureBusinessActivity(event.target.value);
@@ -750,7 +960,8 @@ export function ClosureApplicationForm() {
                   >
                     <input
                       type="text"
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                      aria-label="Please specify business activity"
+                      className={applicantFormControlClass}
                       value={closureBusinessActivityOther}
                       onChange={(event) => setClosureBusinessActivityOther(event.target.value)}
                       placeholder="Enter business activity"
@@ -760,12 +971,13 @@ export function ClosureApplicationForm() {
 
                 <FormField
                   label="Last Date of Operation"
-                  hint="The final day the business operated before cessation."
+                  hint="Defaults to today's date. Change only if the business stopped earlier."
                   required
                 >
                   <input
                     type="date"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    aria-label="Last Date of Operation"
+                    className={applicantFormControlClass}
                     value={closureLastDateOfOperation}
                     max={new Date().toISOString().split("T")[0]}
                     onChange={(event) => setClosureLastDateOfOperation(event.target.value)}
@@ -776,12 +988,12 @@ export function ClosureApplicationForm() {
               </div>
 
               {selectedRecord ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">{selectedRecord.businessName}</p>
+                <div className={applicantPanelClass}>
+                  <p className="font-semibold text-[var(--foreground)]">{selectedRecord.businessName}</p>
                   <p className="mt-1">Registration: {selectedRecord.registrationNumber}</p>
                   <p className="mt-1">Business Type: {selectedRecord.businessInfo.businessType}</p>
                   {humanizeClosureEligibilityReason(selectedRecord) ? (
-                    <p className="mt-1 text-xs text-amber-700">{humanizeClosureEligibilityReason(selectedRecord)}</p>
+                    <p className="mt-1 text-xs text-[var(--warning)]">{humanizeClosureEligibilityReason(selectedRecord)}</p>
                   ) : null}
                 </div>
               ) : null}
@@ -794,7 +1006,7 @@ export function ClosureApplicationForm() {
         <div className="space-y-4">
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredDocs.length}`}
-            description="Select files locally first, then the final submit will save the documents and timestamps."
+            description="Upload required files now. Saving a draft keeps them so you do not need to re-upload later."
             variant="info"
           />
           <SectionCard
@@ -840,6 +1052,13 @@ export function ClosureApplicationForm() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
+                  onClick={back}
+                  className={actionButtonStyles("ghost", "md")}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
                   disabled={submitting || records.length === 0}
                   onClick={() => {
                     void persist("DRAFT");
@@ -851,12 +1070,10 @@ export function ClosureApplicationForm() {
                 <button
                   type="button"
                   disabled={submitting || records.length === 0}
-                  onClick={() => {
-                    void persist("SUBMIT");
-                  }}
+                  onClick={handleFinalSubmit}
                   className={actionButtonStyles("primary", "md")}
                 >
-                  Submit Closure
+                  {getApplicationSubmitButtonLabel("CLOSURE", isResubmission)}
                 </button>
               </div>
             }
@@ -918,8 +1135,8 @@ export function ClosureApplicationForm() {
 
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Before you submit</p>
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Before you submit</p>
               <ul className="mt-2 space-y-1">
                 <li>• Make sure the selected business record is the one being closed.</li>
                 <li>• Confirm the closure type correctly reflects the nature of the business cessation.</li>
@@ -929,7 +1146,7 @@ export function ClosureApplicationForm() {
             </div>
           </SectionCard>
 
-          {validationDetail ? <ValidationPanel detail={validationDetail} /> : null}
+          {validationDetail ? <ValidationPanel detail={validationDetail} onBack={back} /> : null}
         </div>
       ) : null}
 

@@ -6,6 +6,7 @@ import {
   EB_MAGALONA_COUNTRY,
   EB_MAGALONA_COUNTRY_CODE,
   EB_MAGALONA_PROVINCE,
+  EB_MAGALONA_ZIP_CODE,
   isEbMagalonaCity,
   isEbMagalonaProvince,
   normalizeEbMagalonaCityName,
@@ -242,12 +243,13 @@ export function splitOwnerName(ownerName: string): {
 
 const REGISTRATION_NUMBER_REGEX_BY_BUSINESS_TYPE: Record<BusinessType, RegExp> = {
   "Sole Proprietorship": /^DTI-\d{4}-\d{6}$/,
+  "One Person Corporation": /^CS\d{4}-\d{5}$/,
   Partnership: /^CS\d{4}-\d{5}$/,
   Corporation: /^CS\d{4}-\d{5}$/,
   Cooperative: /^CDA-\d{4}-\d{6}$/,
 };
 
-const TIN_REGEX = /^\d{9}$/;
+const TIN_REGEX = /^\d{9,15}$/;
 
 export const REGISTRATION_METADATA: Record<
   BusinessType,
@@ -272,6 +274,11 @@ export const REGISTRATION_METADATA: Record<
     agency: "Securities and Exchange Commission",
     helperText: "Use CSYYYY-NNNNN format (example: CS2026-12345).",
   },
+  "One Person Corporation": {
+    label: "SEC Registration Number",
+    agency: "Securities and Exchange Commission",
+    helperText: "Use CSYYYY-NNNNN format (example: CS2026-12345).",
+  },
   Cooperative: {
     label: "CDA Registration Number",
     agency: "Cooperative Development Authority",
@@ -287,6 +294,29 @@ export const RENEWAL_LOCKED_FIELDS: Array<keyof BusinessInfo> = [
   "ownerName",
   "tradeName",
   "nationality",
+];
+
+/** Fields restored from the business record for CLOSURE so normalize cannot wipe them. */
+export const CLOSURE_LOCKED_FIELDS: Array<keyof BusinessInfo> = [
+  "businessName",
+  "businessType",
+  "registrationNumber",
+  "tin",
+  "ownerName",
+  "tradeName",
+  "nationality",
+  "email",
+  "phone",
+  "businessAddress",
+  "lineOfBusiness",
+  "businessActivity",
+  "mainOfficeAddress",
+  "businessLatitude",
+  "businessLongitude",
+  "propertyOwnership",
+  "isMarket",
+  "isAgriculture",
+  "isLiquorOrTobacco",
 ];
 
 export function getRegistrationLabel(businessType: BusinessType): string {
@@ -305,11 +335,93 @@ export function validateRegistrationNumberFormat(
   businessType: BusinessType,
   registrationNumber: string
 ): boolean {
-  return REGISTRATION_NUMBER_REGEX_BY_BUSINESS_TYPE[businessType].test(registrationNumber.trim());
+  return REGISTRATION_NUMBER_REGEX_BY_BUSINESS_TYPE[businessType].test(
+    normalizeRegistrationNumber(registrationNumber)
+  );
 }
 
 export function validateTinFormat(tin: string): boolean {
-  return TIN_REGEX.test(tin.trim());
+  return TIN_REGEX.test(normalizeTin(tin));
+}
+
+/** Canonical registration identity for uniqueness and format checks. */
+export function normalizeRegistrationNumber(value: string | null | undefined): string {
+  return (value ?? "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
+/** Canonical TIN identity (digits only) for uniqueness and format checks. */
+export function normalizeTin(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\D/g, "");
+}
+
+/** Persist TIN as BigInt at the BusinessRecord write boundary. Never NULL. */
+export function tinToBigInt(value: string | null | undefined): bigint {
+  const digits = normalizeTin(value);
+  if (!digits) {
+    throw new Error("TIN is required.");
+  }
+  if (!TIN_REGEX.test(digits)) {
+    throw new Error("Wrong Format");
+  }
+  return BigInt(digits);
+}
+
+/** Read TIN BigInt back to digit string for formData / BusinessInfo. */
+export function tinFromDb(value: bigint | number | string | null | undefined): string {
+  if (value == null) return "";
+  return String(value);
+}
+
+export function optionalIntFromDb(value: number | null | undefined): string {
+  return value == null ? "" : String(value);
+}
+
+export function optionalDecimalFromDb(
+  value: { toString(): string } | number | string | null | undefined
+): string {
+  if (value == null) return "";
+  return String(value);
+}
+
+export function parseOptionalIntForDb(value: string | null | undefined): number | null {
+  const raw = (value ?? "").trim().replace(/[,\s]/g, "");
+  if (!raw) return null;
+  if (!/^\d+$/.test(raw)) return null;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function parseOptionalDecimalForDb(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim().replace(/[,\s]/g, "");
+  if (!raw) return null;
+  if (!/^\d+(\.\d+)?$/.test(raw)) return null;
+  return raw;
+}
+
+/**
+ * Persist deliveryVehicles as an integer count.
+ * Accepts a plain count, or free-text "Van/Truck: N; Motorcycle: M" and sums extractable counts.
+ */
+export function parseDeliveryVehicleCountForDb(value: string | null | undefined): number | null {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  if (/^\d+$/.test(raw)) {
+    return Number.parseInt(raw, 10);
+  }
+
+  const vanMatch = /van\s*\/?\s*truck\s*:\s*([0-9]+)/i.exec(raw);
+  const motoMatch = /motorcycle\s*:\s*([0-9]+)/i.exec(raw);
+  if (vanMatch || motoMatch) {
+    const total =
+      Number.parseInt(vanMatch?.[1] ?? "0", 10) + Number.parseInt(motoMatch?.[1] ?? "0", 10);
+    return total > 0 ? total : null;
+  }
+
+  const firstNumber = /([0-9]+)/.exec(raw);
+  if (firstNumber) {
+    return Number.parseInt(firstNumber[1], 10);
+  }
+  return null;
 }
 
 export function validateBusinessIdentityFormats(input: Pick<BusinessInfo, "businessType" | "registrationNumber" | "tin">): {
@@ -323,7 +435,51 @@ export function validateBusinessIdentityFormats(input: Pick<BusinessInfo, "busin
 }
 
 export function isCorporation(businessType: BusinessType): boolean {
-  return businessType === "Corporation";
+  return businessType === "Corporation" || businessType === "One Person Corporation";
+}
+
+export const CORPORATION_NATIONALITY_OPTIONS = ["Filipino", "Foreign"] as const;
+
+export function requiresCorporationNationality(businessType: BusinessType): boolean {
+  return isCorporation(businessType);
+}
+
+export function getOwnerRoleLabel(businessType: BusinessType): "Owner" | "President / Officer-in-Charge" {
+  return businessType === "Sole Proprietorship" ? "Owner" : "President / Officer-in-Charge";
+}
+
+export function isValidCorporationNationality(value: string): boolean {
+  return (CORPORATION_NATIONALITY_OPTIONS as readonly string[]).includes(value);
+}
+
+function normalizeDeliveryVehicleFields(
+  input: Pick<BusinessInfo, "deliveryVehicles" | "deliveryVanTruck" | "deliveryMotorcycle">
+): Pick<BusinessInfo, "deliveryVehicles" | "deliveryVanTruck" | "deliveryMotorcycle"> {
+  let vanTruck = input.deliveryVanTruck?.trim() ?? "";
+  let motorcycle = input.deliveryMotorcycle?.trim() ?? "";
+  const legacy = input.deliveryVehicles?.trim() ?? "";
+
+  if (!vanTruck && !motorcycle && legacy) {
+    const vanMatch = /van\s*\/?\s*truck\s*:\s*([^;]+)/i.exec(legacy);
+    const motoMatch = /motorcycle\s*:\s*([^;]+)/i.exec(legacy);
+    if (vanMatch || motoMatch) {
+      vanTruck = (vanMatch?.[1] ?? "").trim();
+      motorcycle = (motoMatch?.[1] ?? "").trim();
+    } else {
+      vanTruck = legacy;
+    }
+  }
+
+  const parts: string[] = [];
+  if (vanTruck) parts.push(`Van/Truck: ${vanTruck}`);
+  if (motorcycle) parts.push(`Motorcycle: ${motorcycle}`);
+  const combined = parts.length > 0 ? parts.join("; ") : legacy;
+
+  return {
+    deliveryVanTruck: vanTruck,
+    deliveryMotorcycle: motorcycle,
+    deliveryVehicles: combined,
+  };
 }
 
 export const CORPORATION_OWNERSHIP_CLASSIFICATIONS = [
@@ -403,7 +559,7 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
           country: mainOfficeCountry,
           countryCode: mainOfficeCountryCode,
         })
-    : input.mainOfficeAddress.trim();
+    : (input.mainOfficeAddress?.trim() ?? "");
 
   const philippines = isPhilippinesCountry(country, countryCode);
 
@@ -412,7 +568,7 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
   let ownerMiddleName = input.ownerMiddleName?.trim() ?? "";
   let ownerSurname = input.ownerSurname?.trim() ?? "";
   let ownerSuffix = input.ownerSuffix?.trim() ?? "";
-  if (!ownerFirstName && !ownerSurname && input.ownerName.trim()) {
+  if (!ownerFirstName && !ownerSurname && input.ownerName?.trim()) {
     const split = splitOwnerName(input.ownerName);
     ownerFirstName = split.ownerFirstName;
     ownerMiddleName = split.ownerMiddleName;
@@ -436,12 +592,17 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     }
   }
 
+  const deliveryFields = normalizeDeliveryVehicleFields(input);
+  const corporationNationality = requiresCorporationNationality(input.businessType)
+    ? (input.corporationNationality?.trim() as BusinessInfo["corporationNationality"]) ?? undefined
+    : undefined;
+
   return {
     ...input,
-    registrationNumber: input.registrationNumber.trim(),
-    tin: input.tin.trim(),
-    businessName: input.businessName.trim(),
-    tradeName: input.tradeName.trim(),
+    registrationNumber: normalizeRegistrationNumber(input.registrationNumber),
+    tin: normalizeTin(input.tin),
+    businessName: input.businessName?.trim() ?? "",
+    tradeName: input.tradeName?.trim() ?? "",
     ownerName: combinedOwnerName,
     ownerFirstName,
     ownerMiddleName,
@@ -451,8 +612,10 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     ownerAge,
     sex: input.sex?.trim(),
     nationality: normalizeNationality(input.businessType, input.nationality),
-    email: input.email.trim(),
-    phone: input.phone.trim(),
+    email: input.email?.trim() ?? "",
+    telephone: input.telephone?.trim() ?? "",
+    phone: input.phone?.trim() ?? "",
+    corporationNationality,
     country,
     countryCode,
     province,
@@ -469,8 +632,15 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
     mainOfficeCityMunicipality,
     mainOfficeStreetAddress,
     mainOfficeBarangay,
+    mainOfficeZipCode: input.mainOfficeZipCode?.trim() ?? "",
     mainOfficeAddress: normalizedMainOfficeAddress,
-    businessAddress: buildEbMagalonaBusinessAddress({ streetAddress, barangay }),
+    businessAddress: (() => {
+      const rebuilt = buildEbMagalonaBusinessAddress({ streetAddress, barangay });
+      if (rebuilt.trim().length > 0) return rebuilt;
+      const legacy = input.businessAddress?.trim() ?? "";
+      return legacy;
+    })(),
+    businessZipCode: EB_MAGALONA_ZIP_CODE,
     businessLatitude:
       typeof input.businessLatitude === "number" && Number.isFinite(input.businessLatitude)
         ? input.businessLatitude
@@ -479,21 +649,27 @@ export function normalizeBusinessInfo(input: BusinessInfo): BusinessInfo {
       typeof input.businessLongitude === "number" && Number.isFinite(input.businessLongitude)
         ? input.businessLongitude
         : null,
-    taxDeclarationNumber: input.taxDeclarationNumber.trim(),
-    propertyIdentificationNumber: input.propertyIdentificationNumber.trim(),
-    taxIncentives: input.taxIncentives.trim(),
-    businessActivity: input.businessActivity.trim(),
-    lineOfBusiness: input.lineOfBusiness.trim(),
-    assetSize: input.assetSize.trim(),
+    taxDeclarationNumber: input.taxDeclarationNumber?.trim() ?? "",
+    propertyIdentificationNumber: input.propertyIdentificationNumber?.trim() ?? "",
+    hasTaxIncentives:
+      input.hasTaxIncentives === "YES" || input.hasTaxIncentives === "NO"
+        ? input.hasTaxIncentives
+        : input.taxIncentives?.trim() && input.taxIncentives.trim().toLowerCase() !== "none"
+          ? "YES"
+          : "",
+    taxIncentives: input.taxIncentives?.trim() ?? "",
+    businessActivity: input.businessActivity?.trim() ?? "",
+    lineOfBusiness: input.lineOfBusiness?.trim() ?? "",
+    assetSize: input.assetSize?.trim() ?? "",
     capitalInvestment: input.capitalInvestment?.trim() ?? "",
     grossProfit: input.grossProfit?.trim() ?? "",
-    businessArea: input.businessArea.trim(),
-    totalFloorArea: input.totalFloorArea.trim(),
-    totalEmployees: input.totalEmployees.trim(),
-    maleEmployees: input.maleEmployees.trim(),
-    femaleEmployees: input.femaleEmployees.trim(),
-    employeesWithinMunicipality: input.employeesWithinMunicipality.trim(),
-    deliveryVehicles: input.deliveryVehicles.trim(),
+    businessArea: input.businessArea?.trim() ?? "",
+    totalFloorArea: input.totalFloorArea?.trim() ?? "",
+    totalEmployees: input.totalEmployees?.trim() ?? "",
+    maleEmployees: input.maleEmployees?.trim() ?? "",
+    femaleEmployees: input.femaleEmployees?.trim() ?? "",
+    employeesWithinMunicipality: input.employeesWithinMunicipality?.trim() ?? "",
+    ...deliveryFields,
     isMarket: Boolean(input.isMarket),
     isAgriculture: Boolean(input.isAgriculture),
     isLiquorOrTobacco: Boolean(input.isLiquorOrTobacco),
@@ -507,15 +683,49 @@ export function applyLockedBusinessFields(
   source?: BusinessInfo | null
 ): BusinessInfo {
   const normalizedCandidate = normalizeBusinessInfo(candidate);
-  if (applicationType !== "RENEWAL" || !source) {
+  if (!source) {
+    return normalizedCandidate;
+  }
+
+  const lockedFields =
+    applicationType === "RENEWAL"
+      ? RENEWAL_LOCKED_FIELDS
+      : applicationType === "CLOSURE"
+        ? CLOSURE_LOCKED_FIELDS
+        : null;
+
+  if (!lockedFields) {
     return normalizedCandidate;
   }
 
   const normalizedSource = normalizeBusinessInfo(source);
   const merged = { ...normalizedCandidate };
 
-  for (const field of RENEWAL_LOCKED_FIELDS) {
-    merged[field] = normalizedSource[field] as never;
+  for (const field of lockedFields) {
+    const sourceValue = normalizedSource[field];
+    if (typeof sourceValue === "string") {
+      if (sourceValue.trim().length > 0) {
+        merged[field] = sourceValue as never;
+      }
+      continue;
+    }
+    if (sourceValue !== null && sourceValue !== undefined) {
+      merged[field] = sourceValue as never;
+    }
+  }
+
+  // Prefer the record's full business address when street/barangay rebuild is empty.
+  if (
+    applicationType === "CLOSURE" &&
+    !(merged.businessAddress ?? "").trim() &&
+    source.businessAddress?.trim()
+  ) {
+    merged.businessAddress = source.businessAddress.trim();
+  }
+
+  // Avoid a second normalize pass wiping restored CLOSURE identity fields.
+  if (applicationType === "CLOSURE") {
+    return merged;
   }
 
   return normalizeBusinessInfo(merged);

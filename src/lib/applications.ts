@@ -1,23 +1,38 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE } from "@/lib/applicant-api";
 import { mapDbStatusToUi, isEditableStatus } from "@/lib/application-mappers";
 import { getMissingRequiredDocuments, resolveRequiredDocuments } from "@/lib/required-documents";
 import { toMoneyNumber } from "@/lib/money";
 import { resolveBucketByMimeType } from "@/lib/document-storage";
 import { removeApplicantDocument, storeApplicantDocument } from "@/lib/document-storage";
+import { mapDocumentValidationStatusToUi } from "@/lib/document-validation";
 import {
   DOCUMENT_UPLOAD_ERROR_MAX_SIZE,
   MAX_DOCUMENT_FILE_SIZE_BYTES,
   validateDocumentFileUpload,
 } from "@/lib/document-upload-rules";
-import { APPLICANT_ACCOUNT_NOT_FOUND_MESSAGE } from "@/lib/applicant-api";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
+import {
+  extractRevocationApplicantMessage,
+  isRevocationHistoryRemarks,
+  resolveRevocationNotificationTitle,
+} from "@/lib/revocation-notification-copy";
+import type { NotificationType } from "@/types/notifications";
 import {
   applyLockedBusinessFields,
   BUSINESS_ACTIVITY_OPTIONS,
   resolveBusinessBarangayFromFormState,
   isRecognizedEbMagalonaBarangay as isRecognizedEbMagalonaBarangayFromRules,
   normalizeBusinessInfo,
+  normalizeRegistrationNumber,
+  normalizeTin,
+  optionalDecimalFromDb,
+  optionalIntFromDb,
+  tinFromDb,
   validateBusinessIdentityFormats,
+  requiresCorporationNationality,
+  isValidCorporationNationality,
 } from "@/lib/business-rules";
 import {
   EB_MAGALONA_CITY,
@@ -81,6 +96,9 @@ interface SafeApplicantDocument {
   mimeType: string;
   sizeBytes: number;
   uploadedAt: Date;
+  validationStatus: string;
+  validationRemarks: string | null;
+  validatedAt: Date | null;
 }
 
 interface SubmitFileInput {
@@ -107,6 +125,9 @@ function toSafeApplicantDocument(doc: {
   mimeType: string;
   sizeBytes: number;
   uploadedAt: Date;
+  validationStatus?: string;
+  validationRemarks?: string | null;
+  validatedAt?: Date | null;
 }): SafeApplicantDocument {
   return {
     id: doc.id,
@@ -115,6 +136,9 @@ function toSafeApplicantDocument(doc: {
     mimeType: doc.mimeType,
     sizeBytes: doc.sizeBytes,
     uploadedAt: doc.uploadedAt,
+    validationStatus: mapDocumentValidationStatusToUi(doc.validationStatus),
+    validationRemarks: doc.validationRemarks ?? null,
+    validatedAt: doc.validatedAt ?? null,
   };
 }
 
@@ -258,59 +282,76 @@ export class ApplicantEligibilityError extends Error {
   }
 }
 
+export const DUPLICATE_BUSINESS_IDENTITY_MESSAGE = "This already exist";
+
 export class DuplicateBusinessIdentityError extends Error {
   field: "registrationNumber" | "tin";
 
   constructor(field: "registrationNumber" | "tin") {
-    super("This already exist");
+    super(DUPLICATE_BUSINESS_IDENTITY_MESSAGE);
     this.name = "DuplicateBusinessIdentityError";
     this.field = field;
   }
 }
 
+function readFormDataIdentity(formData: unknown): { registrationNumber: string; tin: string } {
+  const data = (formData ?? {}) as Record<string, unknown>;
+  return {
+    registrationNumber:
+      typeof data.registrationNumber === "string" ? normalizeRegistrationNumber(data.registrationNumber) : "",
+    tin: typeof data.tin === "string" ? normalizeTin(data.tin) : "",
+  };
+}
+
+/**
+ * Blocks save/submit when registration number or TIN exactly matches an existing
+ * business record or active application (case/spacing-insensitive for registration,
+ * digits-only for TIN). Blank values are ignored so partial drafts can be saved.
+ */
 async function assertUniqueBusinessIdentity(params: {
   registrationNumber: string;
   tin: string;
   excludeBusinessRecordId?: string | null;
   excludeApplicationId?: string | null;
 }): Promise<void> {
-  const { registrationNumber, tin } = params;
+  const registrationNumber = normalizeRegistrationNumber(params.registrationNumber);
+  const tin = normalizeTin(params.tin);
   const excludeRecordId = params.excludeBusinessRecordId ?? "";
   const excludeAppId = params.excludeApplicationId ?? "";
 
-  // Check BusinessRecord for duplicate registrationNumber
-  const dupRecord = await prisma.businessRecord.findFirst({
-    where: {
-      registrationNumber,
-      ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
-    },
-    select: { id: true },
-  });
-  if (dupRecord) {
-    throw new DuplicateBusinessIdentityError("registrationNumber");
+  if (!registrationNumber && !tin) {
+    return;
   }
 
-  // Check BusinessRecord for duplicate TIN
-  const dupTinRecord = await prisma.businessRecord.findFirst({
-    where: {
-      tin,
-      ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
-    },
-    select: { id: true },
-  });
-  if (dupTinRecord) {
-    throw new DuplicateBusinessIdentityError("tin");
-  }
-
-  // Check BusinessApplication formData JSON for duplicate registrationNumber.
-  // Exclude REJECTED/REVOKED statuses and the current application being edited.
-  // For renewals/closures, also exclude applications linked to same business record.
-  const regNumDup = await prisma.businessApplication.findFirst({
-    where: {
-      formData: {
-        path: ["registrationNumber"],
-        equals: registrationNumber,
+  if (registrationNumber) {
+    const dupRecord = await prisma.businessRecord.findFirst({
+      where: {
+        registrationNumber: { equals: registrationNumber, mode: "insensitive" },
+        ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
       },
+      select: { id: true },
+    });
+    if (dupRecord) {
+      throw new DuplicateBusinessIdentityError("registrationNumber");
+    }
+  }
+
+  if (tin) {
+    const tinValue = BigInt(tin);
+    const tinRecords = await prisma.businessRecord.findMany({
+      where: {
+        tin: tinValue,
+        ...(excludeRecordId ? { NOT: { id: excludeRecordId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (tinRecords.length > 0) {
+      throw new DuplicateBusinessIdentityError("tin");
+    }
+  }
+
+  const activeApplications = await prisma.businessApplication.findMany({
+    where: {
       status: { notIn: ["REJECTED", "REVOKED"] },
       ...(excludeAppId ? { id: { not: excludeAppId } } : {}),
       ...(excludeRecordId
@@ -319,31 +360,20 @@ async function assertUniqueBusinessIdentity(params: {
           }
         : {}),
     },
-    select: { id: true },
-  });
-  if (regNumDup) {
-    throw new DuplicateBusinessIdentityError("registrationNumber");
-  }
-
-  // Check BusinessApplication formData JSON for duplicate TIN.
-  const tinDup = await prisma.businessApplication.findFirst({
-    where: {
-      formData: {
-        path: ["tin"],
-        equals: tin,
-      },
-      status: { notIn: ["REJECTED", "REVOKED"] },
-      ...(excludeAppId ? { id: { not: excludeAppId } } : {}),
-      ...(excludeRecordId
-        ? {
-            OR: [{ businessRecordId: null }, { businessRecordId: { not: excludeRecordId } }],
-          }
-        : {}),
+    select: {
+      id: true,
+      formData: true,
     },
-    select: { id: true },
   });
-  if (tinDup) {
-    throw new DuplicateBusinessIdentityError("tin");
+
+  for (const application of activeApplications) {
+    const identity = readFormDataIdentity(application.formData);
+    if (registrationNumber && identity.registrationNumber === registrationNumber) {
+      throw new DuplicateBusinessIdentityError("registrationNumber");
+    }
+    if (tin && identity.tin === tin) {
+      throw new DuplicateBusinessIdentityError("tin");
+    }
   }
 }
 
@@ -621,7 +651,7 @@ function buildBusinessInfoFromRecord(record: any): BusinessInfo {
     businessType: record.businessType as BusinessInfo["businessType"],
     registrationNumber: record.registrationNumber,
     paymentFrequency: "ANNUAL",
-    tin: record.tin,
+    tin: tinFromDb(record.tin),
     businessName: record.businessName,
     tradeName: record.tradeName,
     ownerName: record.ownerName,
@@ -634,20 +664,20 @@ function buildBusinessInfoFromRecord(record: any): BusinessInfo {
     businessLatitude: record.location?.latitude ?? null,
     businessLongitude: record.location?.longitude ?? null,
     sameAsMainOffice: record.sameAsMainOffice,
-    businessArea: record.businessArea ?? "",
-    totalFloorArea: record.totalFloorArea ?? "",
-    totalEmployees: record.totalEmployees ?? "",
-    maleEmployees: record.maleEmployees ?? "",
-    femaleEmployees: record.femaleEmployees ?? "",
-    employeesWithinMunicipality: record.employeesWithinMunicipality ?? "",
-    deliveryVehicles: record.deliveryVehicles ?? "",
+    businessArea: optionalDecimalFromDb(record.businessArea),
+    totalFloorArea: optionalDecimalFromDb(record.totalFloorArea),
+    totalEmployees: optionalIntFromDb(record.totalEmployees),
+    maleEmployees: optionalIntFromDb(record.maleEmployees),
+    femaleEmployees: optionalIntFromDb(record.femaleEmployees),
+    employeesWithinMunicipality: optionalIntFromDb(record.employeesWithinMunicipality),
+    deliveryVehicles: optionalIntFromDb(record.deliveryVehicles),
     propertyOwnership: (record.propertyOwnership as BusinessInfo["propertyOwnership"]) ?? "Owned",
     taxDeclarationNumber: record.taxDeclarationNumber ?? "",
     propertyIdentificationNumber: record.propertyIdentificationNumber ?? "",
     taxIncentives: record.taxIncentives ?? "",
     businessActivity: record.businessActivity ?? "",
     lineOfBusiness: record.lineOfBusiness ?? "",
-    assetSize: record.assetSize ?? "",
+    assetSize: optionalDecimalFromDb(record.assetSize),
     isMarket: Boolean(record.isMarket),
     isAgriculture: Boolean(record.isAgriculture),
     isLiquorOrTobacco: Boolean(record.isLiquorOrTobacco),
@@ -741,6 +771,13 @@ function validateSubmitPayload(
       missingFields.push("nationality");
     }
 
+    if (requiresCorporationNationality(normalizedFormData.businessType)) {
+      const corpNationality = normalizedFormData.corporationNationality?.trim() ?? "";
+      if (!corpNationality || !isValidCorporationNationality(corpNationality)) {
+        missingFields.push("corporationNationality");
+      }
+    }
+
     if (!ALLOWED_PAYMENT_FREQUENCIES.includes(normalizedFormData.paymentFrequency)) {
       missingFields.push("paymentFrequency (must be ANNUAL, BI_ANNUAL, or QUARTERLY)");
     }
@@ -748,6 +785,11 @@ function validateSubmitPayload(
     const normalizedPhone = normalizedFormData.phone.replace(/[\s-]/g, "");
     if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
       missingFields.push("phone (must be a valid Philippine mobile number)");
+    }
+
+    const normalizedTelephone = normalizedFormData.telephone?.replace(/[\s-]/g, "") ?? "";
+    if (normalizedTelephone.length > 0 && !/^(\+63|0)?[\d]{7,12}$/.test(normalizedTelephone)) {
+      missingFields.push("telephone (invalid format)");
     }
 
     const email = normalizedFormData.email.trim();
@@ -853,6 +895,15 @@ function validateSubmitPayload(
         missingFields.push("totalEmployees (must be a non-negative integer)");
       }
     }
+
+    if (normalizedFormData.hasTaxIncentives !== "YES" && normalizedFormData.hasTaxIncentives !== "NO") {
+      missingFields.push("hasTaxIncentives");
+    } else if (
+      normalizedFormData.hasTaxIncentives === "YES" &&
+      !normalizedFormData.taxIncentives.trim()
+    ) {
+      missingFields.push("taxIncentives");
+    }
   }
 
   if ((input.applicationType === "RENEWAL" || input.applicationType === "CLOSURE") && !input.businessRecordId) {
@@ -936,6 +987,50 @@ export async function listApplicantApplications(applicantId: string): Promise<Ap
   return getCachedApplicantApplications(applicantId);
 }
 
+export async function listApplicantApplicationsPaginated(
+  applicantId: string,
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<ApplicantApplicationRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+
+  const [applications, totalCount] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where: { applicantId },
+      include: {
+        documents: true,
+        businessRecord: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip,
+      take,
+    }),
+    prisma.businessApplication.count({ where: { applicantId } }),
+  ]);
+
+  return buildPaginatedResult(
+    (applications as ApplicationWithDocs[]).map(mapApplicationToRow),
+    totalCount,
+    page,
+    pageSize
+  );
+}
+
+export async function getApplicantLatestApplication(applicantId: string): Promise<ApplicantApplicationRow | null> {
+  const application = await prisma.businessApplication.findFirst({
+    where: { applicantId },
+    include: {
+      documents: true,
+      businessRecord: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!application) return null;
+  return mapApplicationToRow(application as ApplicationWithDocs);
+}
+
 export async function getApplicantApplicationDetail(applicantId: string, applicationId: string) {
   const app = await prisma.businessApplication.findFirst({
     where: {
@@ -984,6 +1079,9 @@ export async function getApplicantApplicationDetail(applicantId: string, applica
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
       uploadedAt: doc.uploadedAt.toISOString(),
+      validationStatus: mapDocumentValidationStatusToUi(doc.validationStatus),
+      validationRemarks: doc.validationRemarks ?? null,
+      validatedAt: doc.validatedAt ? doc.validatedAt.toISOString() : null,
     })),
     history: app.history.map((item: any) => ({
       id: item.id,
@@ -1153,6 +1251,23 @@ export async function saveApplicantApplication(
     );
   }
 
+  if (input.applicationType === "CLOSURE") {
+    const closureLine = normalizedFormData.closureLineOfBusiness?.trim() ?? "";
+    const closureActivity = normalizedFormData.closureBusinessActivity?.trim() ?? "";
+    if (closureLine) {
+      normalizedFormData.lineOfBusiness = closureLine;
+    }
+    if (closureActivity) {
+      normalizedFormData.businessActivity = closureActivity;
+    }
+    if (
+      !normalizedFormData.businessAddress.trim() &&
+      sourceBusinessInfo?.businessAddress?.trim()
+    ) {
+      normalizedFormData.businessAddress = sourceBusinessInfo.businessAddress.trim();
+    }
+  }
+
   const normalizedRegNum = normalizedFormData.registrationNumber.trim();
   const normalizedTin = normalizedFormData.tin.trim();
   if (normalizedRegNum || normalizedTin || input.mode === "SUBMIT") {
@@ -1212,7 +1327,7 @@ export async function saveApplicantApplication(
         });
       }
 
-      if (input.mode === "SUBMIT") {
+      if (input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0) {
         for (const entry of normalizedSubmitFiles) {
           const stored = await storeApplicantDocument(entry.file, {
             applicationId,
@@ -1258,7 +1373,9 @@ export async function saveApplicantApplication(
           },
         });
 
-        if (input.mode === "SUBMIT") {
+        // Persist newly uploaded files on draft save as well as final submit so
+        // reopening a draft does not force the applicant to re-upload documents.
+        if (input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0) {
           const newDocumentsByName = await buildNewDocumentsByName(existing.id);
 
           for (const doc of newDocumentsByName.values()) {
@@ -1274,6 +1391,8 @@ export async function saveApplicantApplication(
                 replacedStoragePaths.push(existingDoc.storagePath);
               }
 
+              const storageChanged = existingDoc.storagePath !== doc.storagePath;
+
               await tx.applicationDocument.update({
                 where: { id: existingDoc.id },
                 data: {
@@ -1286,6 +1405,14 @@ export async function saveApplicantApplication(
                   sizeBytes: doc.sizeBytes,
                   fileSize: doc.fileSize,
                   uploadedAt: new Date(),
+                  ...(storageChanged
+                    ? {
+                        validationStatus: "PENDING_REVIEW",
+                        validationRemarks: null,
+                        validatedAt: null,
+                        validatedById: null,
+                      }
+                    : {}),
                 },
               });
             } else {
@@ -1371,7 +1498,7 @@ export async function saveApplicantApplication(
         },
       });
 
-      if (input.mode === "SUBMIT") {
+      if (input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0) {
           const newDocumentsByName = await buildNewDocumentsByName(row.id);
 
         for (const doc of newDocumentsByName.values()) {
@@ -1470,6 +1597,7 @@ export async function createApplicantDocument(
   });
 
   if (existing) {
+    const storageChanged = existing.storagePath !== input.storagePath;
     const updated = await prisma.applicationDocument.update({
       where: { id: existing.id },
       data: {
@@ -1482,6 +1610,14 @@ export async function createApplicantDocument(
         sizeBytes: input.sizeBytes,
         fileSize: input.fileSize ?? input.sizeBytes,
         uploadedAt: new Date(),
+        ...(storageChanged
+          ? {
+              validationStatus: "PENDING_REVIEW",
+              validationRemarks: null,
+              validatedAt: null,
+              validatedById: null,
+            }
+          : {}),
       },
     } as any);
     return updated;
@@ -1567,8 +1703,16 @@ export async function deleteApplicantDocument(applicantId: string, applicationId
 
 // Map a DB application status to a NotificationType for the notification dropdown.
 function dbStatusToNotificationType(
-  dbStatus: string
-): "APPLICATION_SUBMITTED" | "RETURNED_FOR_CORRECTION" | "APPROVED_FOR_PAYMENT" | "REJECTED" | "ASSESSMENT_GENERATED" | "PAYMENT_VERIFIED" | "PERMIT_RELEASED" | "CLOSURE_APPROVED" | "INSPECTION_RELATED" {
+  dbStatus: string,
+  fromStatus?: string | null,
+  remarks?: string | null
+): NotificationType {
+  if (isRevocationHistoryRemarks(remarks)) {
+    if (dbStatus === "REVOCATION_REVIEW") return "REVOCATION_REVIEW";
+    if (dbStatus === "REVOKED") return "REVOCATION_APPROVED";
+    if (dbStatus === "RELEASED" && fromStatus === "REVOCATION_REVIEW") return "REVOCATION_DENIED";
+  }
+
   switch (dbStatus) {
     case "SUBMITTED":
       return "APPLICATION_SUBMITTED";
@@ -1578,8 +1722,11 @@ function dbStatusToNotificationType(
     case "APPROVED_FOR_PAYMENT":
       return "APPROVED_FOR_PAYMENT";
     case "REJECTED":
-    case "REVOKED":
       return "REJECTED";
+    case "REVOKED":
+      return "REVOCATION_APPROVED";
+    case "REVOCATION_REVIEW":
+      return "REVOCATION_REVIEW";
     case "PAID":
     case "FOR_RELEASE":
       return "PAYMENT_VERIFIED";
@@ -1594,9 +1741,33 @@ function dbStatusToNotificationType(
 function buildNotificationContent(
   dbStatus: string,
   applicationNumber: string,
-  remarks: string | null
+  remarks: string | null,
+  fromStatus?: string | null
 ): { title: string; message: string } {
   const appNum = applicationNumber ?? "your application";
+
+  if (isRevocationHistoryRemarks(remarks)) {
+    const extracted = extractRevocationApplicantMessage(remarks);
+    if (dbStatus === "REVOCATION_REVIEW") {
+      return {
+        title: resolveRevocationNotificationTitle("REVOCATION_REVIEW_ENTERED"),
+        message: extracted ?? `Application ${appNum} is under permit revocation review.`,
+      };
+    }
+    if (dbStatus === "REVOKED") {
+      return {
+        title: resolveRevocationNotificationTitle("REVOCATION_APPROVED"),
+        message: extracted ?? `Your business permit for application ${appNum} has been revoked.`,
+      };
+    }
+    if (dbStatus === "RELEASED" && fromStatus === "REVOCATION_REVIEW") {
+      return {
+        title: resolveRevocationNotificationTitle("REVOCATION_DENIED"),
+        message: extracted ?? `The revocation request for application ${appNum} was denied and your permit status was restored.`,
+      };
+    }
+  }
+
   switch (dbStatus) {
     case "SUBMITTED":
       return {
@@ -1642,9 +1813,16 @@ function buildNotificationContent(
           ? `Application ${appNum} was rejected: ${remarks}`
           : `Application ${appNum} has been rejected. Please contact BPLO for details.`,
       };
+    case "REVOCATION_REVIEW":
+      return {
+        title: "Permit Revocation Under Review",
+        message: remarks
+          ? `Application ${appNum} is under permit revocation review: ${remarks}`
+          : `Application ${appNum} is under permit revocation review. Contact BPLO for details.`,
+      };
     case "REVOKED":
       return {
-        title: "Permit Revoked",
+        title: "Business Permit Revoked",
         message: remarks
           ? `Permit for application ${appNum} was revoked: ${remarks}`
           : `Your business permit for application ${appNum} has been revoked.`,
@@ -1652,7 +1830,6 @@ function buildNotificationContent(
     case "UNDER_REVIEW":
     case "DEPARTMENT_HEAD_REVIEW":
     case "DEPARTMENT_HEAD_APPROVED":
-    case "REVOCATION_REVIEW":
       return {
         title: "Application Under Review",
         message: `Application ${appNum} is currently being reviewed by the BPLO.`,
@@ -1687,13 +1864,14 @@ const getCachedApplicantNotifications = cache(async (applicantId: string) => {
       const { title, message } = buildNotificationContent(
         item.toStatus,
         app.applicationNumber,
-        item.remarks ?? null
+        item.remarks ?? null,
+        item.fromStatus ?? null
       );
       return {
         id: item.id,
         applicationId: app.id,
         applicationNumber: app.applicationNumber,
-        type: dbStatusToNotificationType(item.toStatus),
+        type: dbStatusToNotificationType(item.toStatus, item.fromStatus ?? null, item.remarks ?? null),
         title,
         message,
         timestamp: item.createdAt.toISOString(),
@@ -1708,8 +1886,59 @@ const getCachedApplicantNotifications = cache(async (applicantId: string) => {
   );
 });
 
-export async function listApplicantNotifications(applicantId: string) {
-  return getCachedApplicantNotifications(applicantId);
+export async function listApplicantNotifications(
+  applicantId: string,
+  pagination?: { page?: number | string; pageSize?: number | string }
+) {
+  if (!pagination) {
+    return getCachedApplicantNotifications(applicantId);
+  }
+
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+
+  const where = {
+    application: { applicantId },
+  };
+
+  const [historyRows, totalCount] = await Promise.all([
+    prisma.applicationHistory.findMany({
+      where,
+      include: {
+        application: {
+          select: {
+            id: true,
+            applicationNumber: true,
+            applicationType: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+    prisma.applicationHistory.count({ where }),
+  ]);
+
+  const records = historyRows.map((item) => {
+    const { title, message } = buildNotificationContent(
+      item.toStatus,
+      item.application.applicationNumber,
+      item.remarks ?? null,
+      item.fromStatus ?? null
+    );
+    return {
+      id: item.id,
+      applicationId: item.application.id,
+      applicationNumber: item.application.applicationNumber,
+      type: dbStatusToNotificationType(item.toStatus, item.fromStatus ?? null, item.remarks ?? null),
+      title,
+      message,
+      timestamp: item.createdAt.toISOString(),
+      isRead: false,
+    };
+  });
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
 export async function getApplicantTopSummary(applicantId: string) {
@@ -1812,6 +2041,7 @@ export async function getApplicantTopSummary(applicantId: string) {
       applicationType: application.applicationType as string,
       status: mapDbStatusToUi(application.status),
       rawStatus: application.status,
+      hasTaxIncentives: (application.formData as Partial<BusinessInfo> | null)?.hasTaxIncentives === "YES",
       topNumber: fa?.assessmentNumber ?? null,
       assessmentStatus: (fa?.status ?? null) as "DRAFT" | "GENERATED" | null,
       paymentFrequency: (fa?.paymentFrequency ?? null) as "ANNUAL" | "BI_ANNUAL" | "QUARTERLY" | null,
@@ -2021,7 +2251,7 @@ export async function listApplicantBusinessRecords(applicantId: string) {
       businessType: row.businessType as BusinessInfo["businessType"],
       registrationNumber: row.registrationNumber,
       paymentFrequency: "ANNUAL",
-      tin: row.tin,
+      tin: tinFromDb(row.tin),
       businessName: row.businessName,
       tradeName: row.tradeName,
       ownerName: row.ownerName,
@@ -2033,20 +2263,20 @@ export async function listApplicantBusinessRecords(applicantId: string) {
       businessLatitude: row.location?.latitude ?? null,
       businessLongitude: row.location?.longitude ?? null,
       sameAsMainOffice: row.sameAsMainOffice,
-      businessArea: row.businessArea ?? "",
-      totalFloorArea: row.totalFloorArea ?? "",
-      totalEmployees: row.totalEmployees ?? "",
-      maleEmployees: row.maleEmployees ?? "",
-      femaleEmployees: row.femaleEmployees ?? "",
-      employeesWithinMunicipality: row.employeesWithinMunicipality ?? "",
-      deliveryVehicles: row.deliveryVehicles ?? "",
+      businessArea: optionalDecimalFromDb(row.businessArea),
+      totalFloorArea: optionalDecimalFromDb(row.totalFloorArea),
+      totalEmployees: optionalIntFromDb(row.totalEmployees),
+      maleEmployees: optionalIntFromDb(row.maleEmployees),
+      femaleEmployees: optionalIntFromDb(row.femaleEmployees),
+      employeesWithinMunicipality: optionalIntFromDb(row.employeesWithinMunicipality),
+      deliveryVehicles: optionalIntFromDb(row.deliveryVehicles),
       propertyOwnership: (row.propertyOwnership as BusinessInfo["propertyOwnership"]) ?? "Owned",
       taxDeclarationNumber: row.taxDeclarationNumber ?? "",
       propertyIdentificationNumber: row.propertyIdentificationNumber ?? "",
       taxIncentives: row.taxIncentives ?? "",
       businessActivity: row.businessActivity ?? "",
       lineOfBusiness: row.lineOfBusiness ?? "",
-      assetSize: row.assetSize ?? "",
+      assetSize: optionalDecimalFromDb(row.assetSize),
       isMarket: Boolean(row.isMarket),
       isAgriculture: Boolean(row.isAgriculture),
       isLiquorOrTobacco: Boolean(row.isLiquorOrTobacco),

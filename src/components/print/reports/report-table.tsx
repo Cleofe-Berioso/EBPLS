@@ -28,7 +28,7 @@ interface ReportTableProps {
 }
 
 /**
- * Generic printable data table for Super Admin system reports.
+ * Generic printable data table for IT Administrator system reports.
  *
  * - Alternating row background (zebra striping)
  * - `report-table-row` class on each <tr> → prevents row page-break (set by ReportPageHeader CSS)

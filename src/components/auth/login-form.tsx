@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Headphones, Lock, LogIn, Mail, ShieldCheck } from "lucide-react";
 import { googleSignInAction, loginAction } from "@/app/login/actions";
 
 export function LoginForm({
@@ -17,184 +17,240 @@ export function LoginForm({
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div className="relative z-10 w-full max-w-md">
-      <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
-        <div className="bg-[#0b8754] px-8 py-8 text-center text-white">
-          <div className="mb-4 flex justify-center">
-            <div className="rounded-full bg-white p-2 shadow-sm">
-              <Image
-                src="/images/logo.png"
-                alt="Municipality of Enrique B. Magalona Logo"
-                width={64}
-                height={64}
-                className="h-16 w-16 object-contain"
-              />
+    <div className="flex min-h-dvh">
+      {/* Left panel — building photo with light forest overlay */}
+      <div className="relative hidden overflow-hidden lg:flex lg:w-[44%] xl:w-[42%]">
+        <Image
+          src="/images/login-bg.png"
+          alt=""
+          fill
+          priority
+          sizes="(min-width: 1280px) 42vw, 44vw"
+          className="object-cover object-center"
+          aria-hidden="true"
+        />
+
+        <div aria-hidden="true" className="login-hero-overlay absolute inset-0" />
+        <div aria-hidden="true" className="login-hero-vignette pointer-events-none absolute inset-0" />
+
+        <div className="relative z-10 flex min-h-dvh w-full flex-col p-10 xl:p-12">
+          <div className="animate-fade-slide-up" style={{ animationDelay: "0ms" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#e8c078]">
+              Republic of the Philippines
+            </p>
+            <p className="mt-1 text-sm font-medium text-white/90">Province of Negros Occidental</p>
+          </div>
+
+          <div className="flex flex-1 flex-col justify-center py-10">
+            <div className="max-w-md space-y-4 animate-fade-slide-up" style={{ animationDelay: "80ms" }}>
+              <div className="h-px w-12 bg-[#c4852a]/60" aria-hidden="true" />
+              <h1
+                className="font-semibold leading-[1.15] tracking-tight text-white"
+                style={{ fontSize: "clamp(1.75rem, 2.4vw, 2.5rem)" }}
+              >
+                Business Permit Online System
+              </h1>
+              <p className="max-w-[320px] text-[0.9375rem] leading-relaxed text-white/82">
+                Municipality of Enrique B. Magalona — Business Permits and Licensing Office
+              </p>
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#bbf7d0]">Municipality of Enrique B. Magalona</p>
-          <h1 className="mt-2 text-2xl font-bold text-white">Sign In</h1>
-          <p className="mt-2 text-sm text-[#d1fae5]">Business Permit Online System</p>
+
+          <div
+            className="flex max-w-sm items-start gap-3 rounded-xl border border-white/12 bg-[#0b1d11]/35 px-4 py-3.5 backdrop-blur-[2px] animate-fade-slide-up"
+            style={{ animationDelay: "160ms" }}
+          >
+            <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#dfa030]" aria-hidden="true" />
+            <p className="text-[10px] leading-relaxed text-white/78">
+              © 2026 Municipality of Enrique B. Magalona
+              <br />
+              Business Permits &amp; Licensing Office (BPLO)
+              <br />
+              All rights reserved.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel — sign-in card */}
+      <div className="flex flex-1 flex-col items-center justify-center bg-[#f0ebe0] px-5 py-8 sm:px-8">
+        <div className="mb-6 w-full max-w-md text-center animate-fade-slide-up lg:hidden">
+          <div className="relative mx-auto mb-4 h-20 w-full overflow-hidden rounded-xl border border-[var(--border-color)]">
+            <Image
+              src="/images/login-bg.png"
+              alt=""
+              fill
+              className="object-cover object-center"
+              aria-hidden="true"
+            />
+            <div className="login-hero-overlay absolute inset-0" />
+          </div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+            Republic of the Philippines
+          </p>
+          <h1 className="mt-2 text-xl font-semibold text-[var(--foreground)]">Business Permit Online System</h1>
+          <p className="mt-1 text-sm text-[var(--ink-muted)]">Municipality of Enrique B. Magalona</p>
         </div>
 
-        <div className="p-8">
-          <form action={formAction} className="space-y-5">
-            {disabledAccountNotice ? (
-              <div
-                role="alert"
-                className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
-              >
-                Your account has been disabled. Please contact the system administrator.
-              </div>
-            ) : null}
-
-            {state?.error && (
-              <div
-                role="alert"
-                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-              >
-                {state.error}
-              </div>
-            )}
-
-            <div>
-              <label
-                htmlFor="email"
-                className="mb-2 block text-sm font-semibold text-slate-700"
-              >
-                Account Email
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  defaultValue={initialEmail}
-                  required
-                  className="block w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 bg-slate-50/50"
-                  placeholder="your.email@example.com"
-                />
-              </div>
+        <div className="w-full max-w-[26rem] animate-fade-slide-up" style={{ animationDelay: "100ms" }}>
+          <div className="login-card p-7 sm:p-8">
+            <div className="mb-7">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+                Applicant &amp; Staff Access
+              </p>
+              <h2 className="mt-2 text-[1.625rem] font-semibold leading-tight text-[var(--foreground)]">Sign In</h2>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
+                Enter your credentials to access your account.
+              </p>
             </div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="mb-2 block text-sm font-semibold text-slate-700"
-              >
-                Account Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  required
-                  className="block w-full rounded-xl border border-slate-200 py-3 pl-10 pr-10 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[#0b8754] focus:ring-2 focus:ring-[#0b8754]/20 bg-slate-50/50"
-                  placeholder="Enter your password"
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            <form action={formAction} className="space-y-4">
+              {disabledAccountNotice && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-slate-400 hover:text-[#0b8754] transition-colors" />
-                  )}
-                </button>
+                  Your account has been disabled. Please contact the system administrator.
+                </div>
+              )}
+
+              {state?.error && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                >
+                  {state.error}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="block text-sm font-medium text-[var(--foreground)]">
+                  Email address
+                </label>
+                <div className="relative">
+                  <Mail
+                    className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    defaultValue={initialEmail}
+                    required
+                    className="login-field block w-full py-2.5 pl-10 pr-4"
+                    placeholder="Enter your email"
+                  />
+                </div>
               </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="password" className="block text-sm font-medium text-[var(--foreground)]">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock
+                    className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    required
+                    className="login-field block w-full py-2.5 pl-10 pr-11"
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-[#9ca3af] transition-colors hover:text-[#6b7280] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#9ca3af] focus-visible:ring-offset-1 rounded-r-[var(--radius-control)]"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-0.5">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="rememberMe"
+                    className="h-4 w-4 rounded"
+                    style={{ accentColor: "var(--primary)" }}
+                  />
+                  <span className="text-sm text-[var(--ink-muted)]">Remember me</span>
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm font-medium text-[var(--primary)] transition-colors hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isPending}
+                className="login-action inline-flex w-full items-center justify-center gap-2 bg-[var(--primary)] px-4 text-white transition-colors hover:bg-[var(--primary-strong)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ boxShadow: "0 2px 8px rgba(12,92,56,0.16)" }}
+              >
+                <LogIn className="h-4 w-4" aria-hidden="true" />
+                {isPending ? "Signing in…" : "Sign In"}
+              </button>
+            </form>
+
+            <div className="my-5 flex items-center gap-3" aria-hidden="true">
+              <div className="h-px flex-1 bg-[var(--border-color)]" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a09585]">or</span>
+              <div className="h-px flex-1 bg-[var(--border-color)]" />
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="rememberMe"
-                  className="w-4 h-4 text-[#0b8754] border-gray-300 rounded focus:ring-[#0b8754]"
+            <form action={googleSignInAction}>
+              <button
+                type="submit"
+                className="login-action inline-flex w-full items-center justify-center gap-3 border bg-white px-4 font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                style={{ borderColor: "var(--border-color)" }}
+              >
+                <Image
+                  src="/google2.png"
+                  alt=""
+                  aria-hidden="true"
+                  width={18}
+                  height={18}
+                  className="h-[18px] w-[18px] object-contain"
                 />
-                <span className="ml-2 text-sm text-slate-700">Remember me</span>
-              </label>
-              <Link
-                href="/forgot-password"
-                className="text-sm text-[#0b8754] hover:text-[#096a42] font-semibold"
-              >
-                Forgot password?
-              </Link>
-            </div>
+                Continue with Google
+              </button>
+            </form>
 
-            <button
-              type="submit"
-              disabled={isPending}
-              className="w-full rounded-xl border border-[#0b8754] bg-[#0b8754] px-4 py-3 font-semibold text-white transition-all hover:bg-[#096a42] disabled:bg-[#0b8754]/60 shadow-sm"
-            >
-              {isPending ? "Signing in…" : "Sign In"}
-            </button>
-          </form>
-
-          <div className="my-6 flex items-center gap-3" aria-hidden="true">
-            <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">or</span>
-            <div className="h-px flex-1 bg-slate-200" />
-          </div>
-
-          <form action={googleSignInAction}>
-            <button
-              type="submit"
-              className="inline-flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-[15px] font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:shadow"
-            >
-              <Image
-                src="/google2.png"
-                alt=""
-                aria-hidden="true"
-                width={20}
-                height={20}
-                className="h-5 w-5 object-contain"
-              />
-              <span>Sign in with Google</span>
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-600">
+            <p className="mt-6 text-center text-sm text-[var(--ink-muted)]">
               Don&apos;t have an account?{" "}
-              <Link
-                href="/register"
-                className="text-[#0b8754] hover:text-[#096a42] font-semibold"
-              >
+              <Link href="/register" className="font-semibold text-[var(--primary)] transition-colors hover:underline">
                 Register as Applicant
               </Link>
             </p>
           </div>
-        </div>
 
-        <div className="bg-slate-50 px-8 py-4">
-          <p className="text-[10px] sm:text-xs text-center text-slate-500">
-            © 2026 Municipality of Enrique B. Magalona - BPLO. All rights
-            reserved.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-white/40 bg-white/90 px-4 py-3 text-center shadow-lg backdrop-blur-md">
-        <p className="text-sm font-medium text-slate-700">
-          Need account assistance? Contact BPLO at{" "}
-          <a
-            href="mailto:support@bplo.gov.ph"
-            className="text-[#0b8754] hover:text-[#096a42] font-semibold"
+          <div
+            className="mt-4 flex items-center justify-center gap-2.5 rounded-xl border px-4 py-3 text-center"
+            style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(255,255,255,0.8)" }}
           >
-            support@bplo.gov.ph
-          </a>
-        </p>
+            <Headphones className="h-4 w-4 flex-shrink-0 text-[var(--primary)]" aria-hidden="true" />
+            <p className="text-xs leading-relaxed text-[var(--ink-muted)]">
+              Need account assistance?{" "}
+              <a
+                href="mailto:support@bplo.gov.ph"
+                className="font-semibold text-[var(--primary)] transition-colors hover:underline"
+              >
+                support@bplo.gov.ph
+              </a>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

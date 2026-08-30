@@ -13,57 +13,64 @@ export function FormStepper({ steps, currentStep }: FormStepperProps) {
     typeof step === "string" ? { title: step } : step
   );
   const progress = ((currentStep + 1) / normalizedSteps.length) * 100;
+  const nextStep = normalizedSteps[currentStep + 1];
 
   return (
-    <div className="app-surface space-y-4 p-5">
+    <div className="app-surface space-y-4 p-4 sm:p-5">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
               Application Progress
             </p>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-[var(--ink-muted)]">
               Step {currentStep + 1} of {normalizedSteps.length}:{" "}
-              <span className="font-medium text-slate-900">
+              <span className="font-medium text-[var(--foreground)]">
                 {normalizedSteps[currentStep]?.title}
               </span>
             </p>
           </div>
-          <span className="text-sm font-semibold text-slate-700">
+          <span className="text-sm font-semibold text-[var(--ink-muted)]">
             {Math.round(progress)}%
           </span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--muted-surface)]">
           <div
-            className="h-full rounded-full bg-emerald-600 transition-all"
+            className="h-full rounded-full bg-[var(--primary)] transition-[width]"
             style={{ width: `${progress}%` }}
           />
         </div>
       </div>
 
-      <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {nextStep ? (
+        <p className="text-sm text-[var(--ink-muted)] lg:hidden">
+          Next: <span className="font-medium text-[var(--foreground)]">{nextStep.title}</span>
+        </p>
+      ) : null}
+
+      <ol className="hidden gap-3 lg:grid lg:grid-cols-2 xl:grid-cols-3">
         {normalizedSteps.map((step, index) => {
           const isActive = index === currentStep;
           const isDone = index < currentStep;
           return (
             <li
               key={step.title}
-              className={`rounded-2xl border px-4 py-4 text-sm ${
+              className={`rounded-[var(--radius-card)] border px-4 py-4 text-sm ${
                 isActive
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  ? "border-[var(--border-color)] bg-[var(--primary-soft)] text-[var(--primary-strong)]"
                   : isDone
-                    ? "border-emerald-200 bg-emerald-50/70 text-emerald-800"
-                    : "border-slate-200 bg-slate-50 text-slate-700"
+                    ? "border-[var(--border-color)] bg-[var(--success-soft)] text-[var(--success)]"
+                    : "border-[var(--border-color)] bg-[var(--muted-surface)] text-[var(--ink-muted)]"
               }`}
             >
               <div className="flex items-start gap-3">
                 <span
                   className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
                     isActive
-                      ? "bg-emerald-600 text-white"
+                      ? "bg-[var(--primary)] text-white"
                       : isDone
-                        ? "bg-emerald-700 text-white"
-                        : "bg-slate-100 text-slate-700"
+                        ? "bg-[var(--primary-strong)] text-white"
+                        : "bg-[var(--muted-surface)] text-[var(--ink-muted)]"
                   }`}
                 >
                   {index + 1}
@@ -71,7 +78,7 @@ export function FormStepper({ steps, currentStep }: FormStepperProps) {
                 <div className="min-w-0">
                   <p className="font-semibold">{step.title}</p>
                   {step.description ? (
-                    <p className="mt-1 text-xs leading-5 text-slate-500">{step.description}</p>
+                    <p className="mt-1 ui-caption leading-5">{step.description}</p>
                   ) : null}
                 </div>
               </div>

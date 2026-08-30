@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { assertStatusTransition } from "@/lib/application-status";
 import { toMoneyNumber } from "@/lib/money";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -264,6 +265,69 @@ export async function listPaymentVerificationEntries(): Promise<PaymentVerificat
   };
 }
 
+const paymentReferenceApplicationWhere = {
+  applicationType: { in: ["NEW", "RENEWAL", "CLOSURE"] as const },
+  status: { in: BPLO_PAYMENT_VISIBLE_STATUSES },
+  feeAssessment: { isNot: null },
+};
+
+const paymentReferenceInclude = {
+  application: {
+    include: {
+      applicant: { select: { id: true, name: true, email: true } },
+      businessRecord: { select: { businessName: true } },
+      feeAssessment: {
+        select: {
+          assessmentNumber: true,
+          annualAssessedAmount: true,
+          releasePaymentAmount: true,
+          totalAmount: true,
+        },
+      },
+    },
+  },
+} as const;
+
+export async function listPaymentVerificationEntriesPaginated(
+  tab: "PENDING" | "VERIFIED" | "REJECTED",
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<PaymentVerificationRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+  const where = {
+    status: tab,
+    application: paymentReferenceApplicationWhere,
+  };
+
+  const [refs, totalCount] = await Promise.all([
+    (prisma as any).paymentReference.findMany({
+      where,
+      include: paymentReferenceInclude,
+      orderBy: { submittedAt: "desc" },
+      skip,
+      take,
+    }),
+    (prisma as any).paymentReference.count({ where }),
+  ]);
+
+  const records = (refs as any[]).map((ref) =>
+    toRow({
+      app: {
+        id: ref.application.id,
+        applicationNumber: ref.application.applicationNumber,
+        applicationType: ref.application.applicationType,
+        status: ref.application.status,
+        formData: ref.application.formData,
+        applicant: ref.application.applicant,
+        businessRecord: ref.application.businessRecord,
+        feeAssessment: ref.application.feeAssessment,
+      },
+      ref,
+    })
+  );
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
+}
+
 async function findReference(paymentReferenceId: string) {
   return (prisma as any).paymentReference.findUnique({
     where: { id: paymentReferenceId },
@@ -452,13 +516,18 @@ export async function approvePaymentReference(
   };
 }
 
-export async function rejectPaymentReference(
+/**
+ * Return a pending payment reference to the applicant for correction.
+ * Marks PaymentReference REJECTED; application stays APPROVED_FOR_PAYMENT so TOP resubmit remains available.
+ * Does NOT move BusinessApplication to RETURNED_FOR_CORRECTION (that status is for document/application review only).
+ */
+export async function returnPaymentReferenceForCorrection(
   paymentReferenceId: string,
   bploUserId: string,
   remarks: string
 ) {
   const reason = remarks.trim();
-  if (!reason) throw new Error("Remarks are required when rejecting a payment");
+  if (!reason) throw new Error("Remarks are required when returning a payment for correction");
 
   const found = await findReference(paymentReferenceId);
   if (!found) throw new Error("Payment reference not found");
@@ -466,14 +535,14 @@ export async function rejectPaymentReference(
   const app = found.application;
 
   if (found.status !== "PENDING") {
-    throw new Error("Only pending payment references can be rejected");
+    throw new Error("Only pending payment references can be returned for correction");
   }
 
   // All application types (NEW, RENEWAL, CLOSURE) must be in APPROVED_FOR_PAYMENT
-  // before BPLO can reject the payment reference.
+  // before BPLO can return the payment reference for correction.
   if (app.status !== BPLO_PAYMENT_ACTIONABLE_STATUS) {
     throw new Error(
-      `Application is not eligible for payment rejection. Expected status: ${BPLO_PAYMENT_ACTIONABLE_STATUS}, current: ${app.status}`
+      `Application is not eligible for payment return. Expected status: ${BPLO_PAYMENT_ACTIONABLE_STATUS}, current: ${app.status}`
     );
   }
 
@@ -497,7 +566,7 @@ export async function rejectPaymentReference(
         actorRole: "BPLO",
         fromStatus: "APPROVED_FOR_PAYMENT",
         toStatus: "APPROVED_FOR_PAYMENT",
-        remarks: `BPLO rejected OR number ${found.transactionNumber}. Reason: ${reason}`,
+        remarks: `BPLO returned payment for correction (OR ${found.transactionNumber}). Reason: ${reason}`,
       },
     });
   });
@@ -509,4 +578,13 @@ export async function rejectPaymentReference(
     status: "APPROVED_FOR_PAYMENT" as const,
     rejectionRemarks: reason,
   };
+}
+
+/** @deprecated Prefer returnPaymentReferenceForCorrection — same soft-return semantics (UC-BP-12). */
+export async function rejectPaymentReference(
+  paymentReferenceId: string,
+  bploUserId: string,
+  remarks: string
+) {
+  return returnPaymentReferenceForCorrection(paymentReferenceId, bploUserId, remarks);
 }

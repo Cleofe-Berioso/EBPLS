@@ -12,7 +12,10 @@ export type NotificationType =
   | "PAYMENT_VERIFIED"
   | "PERMIT_RELEASED"
   | "CLOSURE_APPROVED"
-  | "INSPECTION_RELATED";
+  | "INSPECTION_RELATED"
+  | "REVOCATION_REVIEW"
+  | "REVOCATION_APPROVED"
+  | "REVOCATION_DENIED";
 
 export interface Notification {
   id: string;

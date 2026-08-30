@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { buildPrismaPgPoolConfig } from "./pg-pool-config";
 
 // Prevent multiple Prisma Client instances in development (hot-reload)
 const globalForPrisma = globalThis as unknown as {
@@ -12,7 +13,7 @@ function createPrismaClient(): PrismaClient {
     throw new Error("DATABASE_URL is required");
   }
 
-  const adapter = new PrismaPg({ connectionString: dbUrl }, { schema: "ebpls" });
+  const adapter = new PrismaPg(buildPrismaPgPoolConfig(dbUrl), { schema: "ebpls" });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],

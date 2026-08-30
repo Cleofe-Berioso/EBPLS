@@ -117,6 +117,7 @@ export interface AssessmentDetail {
   totalEmployees: string;
   businessType: string;
   businessActivity: string;
+  hasTaxIncentives: boolean;
   applicantPaymentFrequency: PaymentFrequency | null;
   suggestedFees: {
     mayorsPermitFee: number;
@@ -203,6 +204,11 @@ function resolveField(formData: unknown, key: keyof BusinessInfo): string {
 function resolveLiquorOrTobacco(formData: unknown): boolean {
   const maybeForm = formData as Partial<BusinessInfo>;
   return Boolean(maybeForm.isLiquorOrTobacco);
+}
+
+function resolveHasTaxIncentives(formData: unknown): boolean {
+  const maybeForm = formData as Partial<BusinessInfo>;
+  return maybeForm.hasTaxIncentives === "YES";
 }
 
 function toDateOnly(date: Date | null): string {
@@ -677,6 +683,7 @@ export async function getApplicationForAssessment(applicationId: string): Promis
   const overdueMonths = resolveOverdueMonths(row);
   const runtimeSettings = await getRuntimeFeeSettings();
   const isLiquorOrTobacco = resolveLiquorOrTobacco(row.formData);
+  const hasTaxIncentives = resolveHasTaxIncentives(row.formData);
 
   const computed = computeMayorsPermitFee(
     {
@@ -749,6 +756,7 @@ export async function getApplicationForAssessment(applicationId: string): Promis
     totalEmployees,
     businessType,
     businessActivity,
+    hasTaxIncentives,
     applicantPaymentFrequency: resolveApplicantPaymentFrequency(row.formData),
     suggestedFees,
     suggestedLineItems: buildSuggestedLineItems(row.applicationType, suggestedFees),

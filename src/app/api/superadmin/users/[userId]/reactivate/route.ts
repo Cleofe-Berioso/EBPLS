@@ -44,7 +44,7 @@ export async function POST(
       module: "USER_MANAGEMENT",
       entityType: "USER",
       entityId: target.email,
-      description: "Super Admin enabled JIT inspector account",
+      description: "IT Administrator enabled JIT inspector account",
       metadata: {
         targetUserId: target.id,
         targetName: target.name,

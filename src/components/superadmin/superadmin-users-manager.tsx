@@ -1,17 +1,25 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { UserCircle2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingState } from "@/components/ui/loading-state";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import {
+  superadminFormControlClass,
+  superadminTableClass,
+} from "@/components/superadmin/superadmin-ui-styles";
+
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Modal } from "@/components/ui/modal";
+import { UserAccountIdCard } from "@/components/superadmin/user-account-id-card";
+import type { PaginationPageSize } from "@/lib/pagination";
 
 type RoleFilter = "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
 type StatusFilter = "ALL" | "ACTIVE" | "DISABLED";
@@ -64,14 +72,14 @@ function getInitials(name: string): string {
 function statusBadge(status: UserStatus) {
   if (status === "ACTIVE") {
     return (
-      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-800">
+      <span className="inline-flex rounded-full border border-[var(--success)] bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--success)]">
         Active
       </span>
     );
   }
 
   return (
-    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-800">
+    <span className="inline-flex rounded-full border border-[var(--warning)] bg-[var(--warning-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--warning)]">
       Disabled
     </span>
   );
@@ -84,6 +92,10 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
   const [searchApplied, setSearchApplied] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [flash, setFlash] = useState<Flash>(null);
 
@@ -112,10 +124,18 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
   const createBploFormId = useId();
   const resetPasswordFormId = useId();
 
-  async function loadUsers(next?: { search?: string; role?: RoleFilter; status?: StatusFilter }) {
+  async function loadUsers(next?: {
+    search?: string;
+    role?: RoleFilter;
+    status?: StatusFilter;
+    page?: number;
+    pageSize?: PaginationPageSize;
+  }) {
     const search = next?.search ?? searchApplied;
     const role = next?.role ?? roleFilter;
     const status = next?.status ?? statusFilter;
+    const nextPage = next?.page ?? page;
+    const nextPageSize = next?.pageSize ?? pageSize;
 
     setIsLoading(true);
     setFlash(null);
@@ -125,10 +145,18 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       if (search) params.set("search", search);
       if (role !== "ALL") params.set("role", role);
       if (status !== "ALL") params.set("status", status);
+      params.set("page", String(nextPage));
+      params.set("pageSize", String(nextPageSize));
 
       const res = await fetch(`/api/superadmin/users?${params.toString()}`, { cache: "no-store" });
       const json = (await res.json()) as {
         users?: UserRow[];
+        pagination?: {
+          totalCount?: number;
+          page?: number;
+          pageSize?: PaginationPageSize;
+          totalPages?: number;
+        };
         summary?: UserSummary;
         error?: string;
       };
@@ -137,6 +165,8 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         setFlash({ type: "danger", message: json.error ?? "Failed to load users." });
         setUsers([]);
         setSummary(EMPTY_SUMMARY);
+        setTotalCount(0);
+        setTotalPages(1);
         return;
       }
 
@@ -158,23 +188,29 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       );
       setUsers(usersWithPics);
       setSummary(json.summary ?? EMPTY_SUMMARY);
+      setTotalCount(json.pagination?.totalCount ?? usersWithPics.length);
+      setPage(json.pagination?.page ?? nextPage);
+      setPageSize(json.pagination?.pageSize ?? nextPageSize);
+      setTotalPages(json.pagination?.totalPages ?? 1);
     } catch {
       setFlash({ type: "danger", message: "Failed to load users." });
       setUsers([]);
       setSummary(EMPTY_SUMMARY);
+      setTotalCount(0);
+      setTotalPages(1);
     } finally {
       setIsLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadUsers({ search: "", role: "ALL", status: "ALL" });
+    void loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, pageSize, searchApplied, roleFilter, statusFilter]);
 
   const filteredCountLabel = useMemo(() => {
-    return `${users.length} user record${users.length === 1 ? "" : "s"} matched the current filters.`;
-  }, [users.length]);
+    return `${totalCount} user record${totalCount === 1 ? "" : "s"} matched the current filters.`;
+  }, [totalCount]);
 
   async function submitCreateBplo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -286,15 +322,14 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
   const flashVariant = flash?.type === "danger" ? "danger" : flash?.type === "success" ? "success" : "info";
 
   return (
-    <section className="space-y-4" aria-busy={isLoading}>
-      <div role="status" aria-live="polite" className="sr-only">
+    <section className="ui-page-stack" aria-busy={isLoading}>
+      <output aria-live="polite" className="sr-only">
         {isLoading ? "Loading users." : "Users loaded."}
-      </div>
+      </output>
       <PageHeader
-        eyebrowClassName="text-slate-600"
         title="User Management"
         description="Manage controlled system accounts and monitor registered applicants."
-        badge={<RoleBadge role="VIEW_ONLY" label="Controlled Accounts" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Controlled Accounts" />}
         actions={
           <button
             type="button"
@@ -307,8 +342,8 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       />
 
       <InfoBanner
-        title="Super Admin scope"
-        description="User account management is available here, while BPLO application workflow actions remain unavailable for Super Admin."
+        title="IT Administrator scope"
+        description="User account management is available here, while BPLO application workflow actions remain unavailable for IT Administrator."
         variant="readOnly"
       />
 
@@ -318,7 +353,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         <StatCard title="Total Users" value={summary.totalUsers.toLocaleString("en-PH")} subtitle="All registered accounts" tone="slate" />
         <StatCard title="Applicants" value={summary.applicants.toLocaleString("en-PH")} subtitle="Public applicant accounts" tone="green" />
         <StatCard title="BPLO Accounts" value={summary.bploAccounts.toLocaleString("en-PH")} subtitle="Controlled operations users" tone="blue" />
-        <StatCard title="Super Admins" value={summary.superAdmins.toLocaleString("en-PH")} subtitle="Controlled oversight users" tone="slate" />
+        <StatCard title="IT Administrators" value={summary.superAdmins.toLocaleString("en-PH")} subtitle="Controlled oversight users" tone="slate" />
         <StatCard
           title="Active / Disabled"
           value={`${summary.activeUsers.toLocaleString("en-PH")} / ${summary.disabledUsers.toLocaleString("en-PH")}`}
@@ -329,27 +364,37 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
 
       <FilterBar title="Search and Filters" description="Search by name/email and filter by role/status.">
         <input
+          id="superadmin-users-search"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search name or email"
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+          aria-label="Search users by name or email"
+          className={superadminFormControlClass}
         />
         <select
           value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+          onChange={(e) => {
+            setRoleFilter(e.target.value as RoleFilter);
+            setPage(1);
+          }}
+          aria-label="Filter users by role"
+          className={superadminFormControlClass}
         >
           <option value="ALL">All Roles</option>
           <option value="APPLICANT">Applicant</option>
           <option value="BPLO">BPLO</option>
-          <option value="SUPER_ADMIN">Super Admin</option>
+          <option value="SUPER_ADMIN">IT Administrator</option>
           <option value="DEPARTMENT_HEAD">Department Head</option>
           <option value="JIT">JIT Inspector</option>
         </select>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+          onChange={(e) => {
+            setStatusFilter(e.target.value as StatusFilter);
+            setPage(1);
+          }}
+          aria-label="Filter users by status"
+          className={superadminFormControlClass}
         >
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
@@ -359,9 +404,9 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
           <button
             type="button"
             className={actionButtonStyles("readOnly", "sm")}
-            onClick={async () => {
+            onClick={() => {
               setSearchApplied(searchInput.trim());
-              await loadUsers({ search: searchInput.trim(), role: roleFilter, status: statusFilter });
+              setPage(1);
             }}
             disabled={isLoading}
           >
@@ -370,12 +415,12 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
           <button
             type="button"
             className={actionButtonStyles("secondary", "sm")}
-            onClick={async () => {
+            onClick={() => {
               setSearchInput("");
               setSearchApplied("");
               setRoleFilter("ALL");
               setStatusFilter("ALL");
-              await loadUsers({ search: "", role: "ALL", status: "ALL" });
+              setPage(1);
             }}
             disabled={isLoading}
           >
@@ -387,14 +432,19 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       <ResponsiveDataTable
         title="User Directory"
         description={isLoading ? "Loading users..." : filteredCountLabel}
+        switchAt="xl"
         table={
-          users.length === 0 && !isLoading ? (
+          isLoading && users.length === 0 ? (
+            <div className="p-5">
+              <LoadingState message="Loading users…" compact />
+            </div>
+          ) : users.length === 0 ? (
             <div className="p-5">
               <EmptyState title="No user records found" description="Try adjusting the current filters." />
             </div>
           ) : (
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-700">
+            <table className={superadminTableClass}>
+              <thead>
                 <tr>
                   <th className="px-4 py-3.5 font-semibold">Name</th>
                   <th className="px-4 py-3.5 font-semibold">Email</th>
@@ -405,20 +455,20 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
                   <th className="px-4 py-3.5 font-semibold">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {users.map((user) => {
                   const canToggleStatus = user.role !== "SUPER_ADMIN" && user.id !== currentUserId;
                   const canResetPassword = user.role === "BPLO";
 
                   return (
-                    <tr key={user.id} className="align-top hover:bg-slate-50/70">
-                      <td className="px-4 py-3.5 font-medium text-slate-900">
+                    <tr key={user.id} className="align-top">
+                      <td className="px-4 py-3.5 font-medium text-[var(--foreground)]">
                         <div className="flex items-center gap-3">
                           <div
-                            className="h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center overflow-hidden border border-slate-200 text-xs font-semibold"
+                            className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-color)] text-xs font-semibold"
                             style={{
-                              backgroundColor: user.profilePictureUrl ? "transparent" : "#cbd5e1",
-                              color: user.profilePictureUrl ? "transparent" : "#475569",
+                              backgroundColor: user.profilePictureUrl ? "transparent" : "var(--muted-surface)",
+                              color: user.profilePictureUrl ? "transparent" : "var(--ink-muted)",
                             }}
                           >
                             {user.profilePictureUrl ? (
@@ -430,13 +480,13 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
                           <span>{user.name}</span>
                         </div>
                       </td>
-                      <td className="max-w-[16rem] break-all px-4 py-3.5 text-slate-600">{user.email}</td>
+                      <td className="max-w-[16rem] break-all px-4 py-3.5 text-[var(--ink-muted)]">{user.email}</td>
                       <td className="px-4 py-3.5">
-                        <RoleBadge role={user.role} />
+                        <RoleBadge roleType={user.role} />
                       </td>
                       <td className="px-4 py-3.5">{statusBadge(user.status)}</td>
-                      <td className="px-4 py-3.5 text-slate-600">{formatDate(user.createdAt)}</td>
-                      <td className="px-4 py-3.5 text-slate-600">{formatDate(user.updatedAt)}</td>
+                      <td className="px-4 py-3.5 text-[var(--ink-muted)]">{formatDate(user.createdAt)}</td>
+                      <td className="px-4 py-3.5 text-[var(--ink-muted)]">{formatDate(user.updatedAt)}</td>
                       <td className="px-4 py-3.5">
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -492,7 +542,11 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
           )
         }
         mobile={
-          users.length === 0 && !isLoading ? (
+          isLoading && users.length === 0 ? (
+            <div className="p-5">
+              <LoadingState message="Loading users…" compact />
+            </div>
+          ) : users.length === 0 ? (
             <div className="p-5">
               <EmptyState title="No user records found" description="Try adjusting the current filters." />
             </div>
@@ -508,10 +562,10 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <div
-                            className="h-6 w-6 flex-shrink-0 rounded-full flex items-center justify-center overflow-hidden border border-slate-200 text-xs font-semibold"
+                            className="flex h-6 w-6 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-color)] text-xs font-semibold"
                             style={{
-                              backgroundColor: user.profilePictureUrl ? "transparent" : "#cbd5e1",
-                              color: user.profilePictureUrl ? "transparent" : "#475569",
+                              backgroundColor: user.profilePictureUrl ? "transparent" : "var(--muted-surface)",
+                              color: user.profilePictureUrl ? "transparent" : "var(--ink-muted)",
                             }}
                           >
                             {user.profilePictureUrl ? (
@@ -520,19 +574,19 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
                               getInitials(user.name)
                             )}
                           </div>
-                          <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                          <p className="text-sm font-semibold text-[var(--foreground)]">{user.name}</p>
                         </div>
-                        <p className="break-all text-xs text-slate-600">{user.email}</p>
+                        <p className="break-all ui-caption">{user.email}</p>
                       </div>
                       {statusBadge(user.status)}
                     </div>
 
                     <div className="mt-2 flex items-center gap-2">
-                      <RoleBadge role={user.role} />
+                      <RoleBadge roleType={user.role} />
                     </div>
 
-                    <p className="mt-2 text-xs text-slate-500">Created: {formatDate(user.createdAt)}</p>
-                    <p className="text-xs text-slate-500">Updated: {formatDate(user.updatedAt)}</p>
+                    <p className="mt-2 ui-caption">Created: {formatDate(user.createdAt)}</p>
+                    <p className="ui-caption">Updated: {formatDate(user.updatedAt)}</p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
@@ -587,6 +641,23 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         }
       />
 
+      <PaginationControls
+        basePath="/superadmin/users"
+        queryParams={{}}
+        mode="client"
+        isLoading={isLoading}
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        recordLabel="users"
+        onPageChange={setPage}
+        onPageSizeChange={(nextSize) => {
+          setPageSize(nextSize);
+          setPage(1);
+        }}
+      />
+
       <Modal
         open={showCreateBplo}
         title="Create BPLO Account"
@@ -608,83 +679,92 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         <form id={createBploFormId} className="space-y-3" onSubmit={submitCreateBplo}>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">First Name</label>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="create-bplo-first-name">First Name</label>
               <input
+                id="create-bplo-first-name"
                 value={createForm.firstName}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, firstName: e.target.value }))}
                 required
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                className={superadminFormControlClass}
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Last Name</label>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="create-bplo-last-name">Last Name</label>
               <input
+                id="create-bplo-last-name"
                 value={createForm.lastName}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, lastName: e.target.value }))}
                 required
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                className={superadminFormControlClass}
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Middle Name (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="create-bplo-middle-name">Middle Name (optional)</label>
               <input
+                id="create-bplo-middle-name"
                 value={createForm.middleName}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, middleName: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                className={superadminFormControlClass}
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Suffix (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="create-bplo-suffix">Suffix (optional)</label>
               <input
+                id="create-bplo-suffix"
                 value={createForm.suffix}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, suffix: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                className={superadminFormControlClass}
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
+            <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="create-bplo-email">Email</label>
             <input
+              id="create-bplo-email"
               value={createForm.email}
               onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
               required
               type="email"
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+              className={superadminFormControlClass}
             />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Temporary Password</label>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="create-bplo-password">Temporary Password</label>
               <input
+                id="create-bplo-password"
                 value={createForm.password}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, password: e.target.value }))}
                 required
                 minLength={8}
                 type="password"
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                className={superadminFormControlClass}
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Confirm Password</label>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="create-bplo-confirm-password">Confirm Password</label>
               <input
+                id="create-bplo-confirm-password"
                 value={createForm.confirmPassword}
                 onChange={(e) => setCreateForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
                 required
                 minLength={8}
                 type="password"
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                className={superadminFormControlClass}
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Role</label>
+            <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="create-bplo-role">Role</label>
             <input
-              value="BPLO"
+              id="create-bplo-role"
+              defaultValue="BPLO"
               disabled
-              className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm font-semibold text-slate-700"
+              readOnly
+              className="w-full rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-2.5 text-sm font-semibold text-[var(--ink-muted)]"
             />
           </div>
         </form>
@@ -693,7 +773,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       <ConfirmModal
         open={Boolean(disableTarget)}
         title="Disable Account"
-        message={disableTarget ? <><span>Confirm disabling <span className="font-semibold">{disableTarget.email}</span>.</span><p className="mt-1 text-xs text-slate-500">Role: {disableTarget.role}</p></> : undefined}
+        message={disableTarget ? <><span>Confirm disabling <span className="font-semibold">{disableTarget.email}</span>.</span><p className="mt-1 ui-caption">Role: {disableTarget.role}</p></> : undefined}
         confirmLabel="Confirm Disable"
         cancelLabel="Cancel"
         variant="danger"
@@ -704,12 +784,13 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         onConfirm={() => void disableUser(disableTarget as UserRow)}
       >
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Reason (optional)</label>
+          <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="disable-user-reason">Reason (optional)</label>
           <textarea
+            id="disable-user-reason"
             value={disableReason}
             onChange={(e) => setDisableReason(e.target.value)}
             rows={3}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+            className={superadminFormControlClass}
             placeholder="Enter optional reason for disable action"
           />
         </div>
@@ -717,7 +798,9 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
 
       <Modal
         open={Boolean(viewedUser)}
-        title="User Details"
+        title="Account ID Card"
+        description="Official read-only account identification for this user."
+        size="md"
         onClose={() => setViewedUser(null)}
         footer={
           <div className="flex justify-end gap-2">
@@ -733,17 +816,7 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
           </div>
         }
       >
-        {viewedUser ? (
-          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/85 p-3 text-sm text-slate-700">
-            <p><span className="font-semibold">Name:</span> {viewedUser.name}</p>
-            <p><span className="font-semibold">Email:</span> {viewedUser.email}</p>
-            <p><span className="font-semibold">Role:</span> {viewedUser.role}</p>
-            <p><span className="font-semibold">Status:</span> {viewedUser.status}</p>
-            <p><span className="font-semibold">Created:</span> {formatDate(viewedUser.createdAt)}</p>
-            <p><span className="font-semibold">Updated:</span> {formatDate(viewedUser.updatedAt)}</p>
-            <p><span className="font-semibold">Last Login:</span> -</p>
-          </div>
-        ) : null}
+        {viewedUser ? <UserAccountIdCard user={viewedUser} /> : null}
       </Modal>
 
       <Modal
@@ -774,25 +847,27 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
       >
         <form id={resetPasswordFormId} className="space-y-3" onSubmit={submitResetPassword}>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Temporary Password</label>
+            <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="reset-temporary-password">Temporary Password</label>
             <input
+              id="reset-temporary-password"
               value={resetForm.temporaryPassword}
               onChange={(e) => setResetForm((prev) => ({ ...prev, temporaryPassword: e.target.value }))}
               required
               minLength={8}
               type="password"
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+              className={superadminFormControlClass}
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Confirm Password</label>
+            <label className="mb-1 block text-sm font-medium text-[var(--foreground)]" htmlFor="reset-confirm-password">Confirm Password</label>
             <input
+              id="reset-confirm-password"
               value={resetForm.confirmPassword}
               onChange={(e) => setResetForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
               required
               minLength={8}
               type="password"
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-emerald-500 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+              className={superadminFormControlClass}
             />
           </div>
         </form>

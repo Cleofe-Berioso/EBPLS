@@ -10,12 +10,12 @@ export default async function DepartmentHeadCompliantListPage() {
   if (!session) notFound();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="Department Head"
         title="Compliant List"
         description="Read-only list of JIT inspections verified as compliant by Department Head."
-        badge={<RoleBadge role="VIEW_ONLY" label="Department Head" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Department Head" />}
       />
 
       <InfoBanner

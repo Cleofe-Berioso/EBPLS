@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { EB_MAGALONA_BOUNDS } from "@/lib/eb-magalona";
 
 export interface LeafletBusinessMarker {
   id: string;
@@ -87,8 +88,8 @@ function markerColor(marker: LeafletBusinessMarker): string {
 }
 
 function typeTone(applicationType?: string): string {
-  if (applicationType === "RENEWAL") return "border-violet-200 bg-violet-50 text-violet-700";
-  return "border-teal-200 bg-teal-50 text-teal-700";
+  if (applicationType === "RENEWAL") return "border-[var(--border-color)] bg-[var(--accent-soft)] text-[var(--foreground)]";
+  return "border-[var(--border-color)] bg-[var(--info-soft)] text-[var(--info)]";
 }
 
 function typeLabel(applicationType?: string): string | null {
@@ -105,19 +106,27 @@ export function LeafletBusinessMap({
   selectedPosition,
   onSelectPosition,
   selectedLabel = "Selected business location",
-  className = "h-[380px] w-full overflow-hidden rounded-[30px] border border-slate-200/90 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.45)] sm:h-[460px] lg:h-[580px]",
+  className = "h-[clamp(320px,55vh,520px)] w-full overflow-hidden rounded-2xl border border-slate-200/90 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.35)]",
   useEbMagalonaBounds = false,
   markerVariant = "default",
 }: LeafletBusinessMapProps) {
+  const maxBounds: [[number, number], [number, number]] | undefined = useEbMagalonaBounds
+    ? [
+        [EB_MAGALONA_BOUNDS.southWest.latitude, EB_MAGALONA_BOUNDS.southWest.longitude],
+        [EB_MAGALONA_BOUNDS.northEast.latitude, EB_MAGALONA_BOUNDS.northEast.longitude],
+      ]
+    : undefined;
+
   return (
     <div className={`leaflet-map-shell ${className}`}>
     <MapContainer
       center={center}
       zoom={zoom}
       className="h-full w-full"
-      scrollWheelZoom
-      maxBounds={undefined}
-      minZoom={1}
+      scrollWheelZoom={false}
+      maxBounds={maxBounds}
+      maxBoundsViscosity={useEbMagalonaBounds ? 0.85 : 0}
+      minZoom={useEbMagalonaBounds ? 11 : 1}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -157,7 +166,7 @@ export function LeafletBusinessMap({
                     {typeLabel(marker.applicationType)}
                   </span>
                 ) : null}
-                <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-600">
+                <span className="inline-flex rounded-full border border-[var(--border-color)] bg-[var(--muted-surface)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
                   Saved Pin
                 </span>
                 {marker.businessCategoryLabel ? (
@@ -171,8 +180,8 @@ export function LeafletBusinessMap({
               </div>
               <div className="grid gap-2">
                 {(marker.permitOrCertificateNumber || marker.barangay || marker.address) ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
-                    <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-3 text-xs text-[var(--ink-muted)]">
+                    <p className="font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]">
                       Location Summary
                     </p>
                     {marker.permitOrCertificateNumber ? (
@@ -193,8 +202,8 @@ export function LeafletBusinessMap({
                     ) : null}
                   </div>
                 ) : null}
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                  <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">Coordinates</p>
+                <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-2 text-xs text-[var(--ink-muted)]">
+                  <p className="font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]">Coordinates</p>
                   <p className="mt-1 font-medium text-slate-700">
                     {marker.latitude.toFixed(6)}, {marker.longitude.toFixed(6)}
                   </p>
@@ -243,15 +252,15 @@ export function LeafletBusinessMap({
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-800">
+                <span className="inline-flex rounded-full border border-[var(--border-color)] bg-[var(--danger-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--danger)]">
                   Selected Pin
                 </span>
-                <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-600">
+                <span className="inline-flex rounded-full border border-[var(--border-color)] bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-[var(--success)]">
                   Ready to Save
                 </span>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">Coordinates</p>
+              <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-2 text-xs text-[var(--ink-muted)]">
+                <p className="font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]">Coordinates</p>
                 <p className="mt-1 font-medium text-slate-700">
                   {selectedPosition[0].toFixed(6)}, {selectedPosition[1].toFixed(6)}
                 </p>

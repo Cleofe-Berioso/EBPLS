@@ -13,15 +13,52 @@ export interface EmailOptions {
   to: string;
   subject: string;
   html: string;
+  /** Plain-text alternative improves deliverability (HTML-only mail is spam-prone). */
+  text?: string;
+}
+
+export function isEmailConfigured(): boolean {
+  return Boolean(process.env.GMAIL_USER?.trim() && process.env.GMAIL_APP_PASSWORD?.trim());
+}
+
+function resolveFromAddress(): string {
+  const address = process.env.GMAIL_USER?.trim();
+  if (!address) {
+    throw new Error("GMAIL_USER is not configured");
+  }
+
+  // Display name must match the authenticated mailbox to avoid From spoofing flags.
+  const displayName =
+    process.env.MAIL_FROM_NAME?.trim() || "Municipality of Enrique B. Magalona BPLO";
+  return `"${displayName.replace(/"/g, "")}" <${address}>`;
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 /**
  * Send an email using Gmail SMTP
  * Requires GMAIL_USER and GMAIL_APP_PASSWORD environment variables
  */
-export async function sendEmail({ to, subject, html }: EmailOptions): Promise<void> {
+export async function sendEmail({ to, subject, html, text }: EmailOptions): Promise<{ messageId?: string }> {
   // Validate environment variables
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+  if (!isEmailConfigured()) {
     throw new Error(
       "Gmail SMTP is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD environment variables."
     );
@@ -29,13 +66,17 @@ export async function sendEmail({ to, subject, html }: EmailOptions): Promise<vo
 
   try {
     const info = await transporter.sendMail({
-      from: process.env.GMAIL_USER,
+      from: resolveFromAddress(),
       to,
       subject,
+      text: text?.trim() || htmlToPlainText(html),
       html,
+      // Helps some clients; keep aligned with the authenticated Gmail user.
+      replyTo: process.env.MAIL_REPLY_TO?.trim() || process.env.GMAIL_USER?.trim(),
     });
 
     console.log("Email sent successfully:", info.messageId);
+    return { messageId: info.messageId };
   } catch (error) {
     console.error("Error sending email:", error);
     throw new Error("Failed to send email. Please try again later.");
@@ -285,6 +326,130 @@ export function generateRegistrationOtpEmailHtml(
 
             <p style="margin: 20px 0; font-size: 14px; color: #666;">
               For security reasons, do not reply to this email. If you need help, contact Business Permit Online System support directly.
+            </p>
+
+            <div class="footer">
+              <p>&copy; 2026 Municipality of Enrique B. Magalona - BPLO. All rights reserved.</p>
+              <p>This is an automated message - please do not reply to this email.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function generateRenewalEmailHtml(input: {
+  heading: string;
+  intro: string;
+  businessName: string;
+  permitNumber: string | null;
+  expirationDateLabel: string;
+  renewUrl: string;
+  supportEmail: string;
+}): string {
+  const permitDisplay = input.permitNumber ? escapeHtml(input.permitNumber) : "Not available";
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+          }
+          .container {
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+          }
+          .card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #0b8754;
+            padding-bottom: 15px;
+          }
+          .header h1 {
+            margin: 0;
+            color: #0b8754;
+            font-size: 22px;
+          }
+          .details {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 16px;
+            margin: 20px 0;
+          }
+          .details p {
+            margin: 6px 0;
+          }
+          .cta {
+            text-align: center;
+            margin: 24px 0;
+          }
+          .cta a {
+            display: inline-block;
+            background-color: #0b8754;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+          }
+          .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="card">
+            <div class="header">
+              <h1>${escapeHtml(input.heading)}</h1>
+            </div>
+
+            <p>Hello,</p>
+            <p>${escapeHtml(input.intro)}</p>
+
+            <div class="details">
+              <p><strong>Business name:</strong> ${escapeHtml(input.businessName)}</p>
+              <p><strong>Permit number:</strong> ${permitDisplay}</p>
+              <p><strong>Renewal deadline:</strong> ${escapeHtml(input.expirationDateLabel)}</p>
+            </div>
+
+            <p>Sign in to the Business Permit Online System to submit your renewal application.</p>
+
+            <div class="cta">
+              <a href="${escapeHtml(input.renewUrl)}">Open Business Permit Online System</a>
+            </div>
+
+            <p style="font-size: 14px; color: #666;">
+              If you need assistance, contact BPLO at
+              <a href="mailto:${escapeHtml(input.supportEmail)}">${escapeHtml(input.supportEmail)}</a>.
             </p>
 
             <div class="footer">

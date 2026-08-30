@@ -1,10 +1,17 @@
 "use client";
 
-import Link from "next/link";
-import { Bell, PanelLeftClose, PanelLeftOpen, UserCircle2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { SuperAdminSidebar } from "@/components/superadmin/superadmin-sidebar";
-import { actionButtonStyles } from "@/components/ui/action-button";
+import {
+  PortalContentColumn,
+  PortalHeaderActions,
+  PortalHeaderBrand,
+  PortalLayoutRoot,
+  PortalMain,
+  PortalMobileOverlay,
+  PortalNavToggles,
+  PortalTopHeader,
+} from "@/components/ui/portal-layout-shell";
 
 export function SuperAdminLayoutClient({
   userName,
@@ -19,77 +26,41 @@ export function SuperAdminLayoutClient({
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="app-shell bg-transparent text-slate-900">
-      {mobileOpen ? (
-        <div
-          aria-hidden="true"
-          onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-900/30 transition-opacity lg:hidden"
-        />
-      ) : null}
+    <PortalLayoutRoot>
+      <PortalMobileOverlay open={mobileOpen} onClose={() => setMobileOpen(false)} />
 
       <SuperAdminSidebar
         mobileOpen={mobileOpen}
         collapsed={collapsed}
         onCloseMobile={() => setMobileOpen(false)}
+        userName={userName}
+        onCollapseToggle={() => setCollapsed((value) => !value)}
       />
 
-      <div className={`min-w-0 transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-72"}`}>
-        <header className="app-header sticky top-0 z-30">
-          <div className="flex min-h-[76px] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setMobileOpen((value) => !value)}
-                aria-expanded={mobileOpen}
-                aria-label={mobileOpen ? "Close sidebar" : "Open sidebar"}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
-              >
-                {mobileOpen ? <X className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCollapsed((value) => !value)}
-                aria-expanded={!collapsed}
-                aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
-                className="hidden h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:inline-flex"
-              >
-                {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              </button>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-700"></p>
-                <h1 className="truncate text-base font-semibold text-slate-900 sm:text-lg">Welcome</h1>
-                <p className="truncate text-sm text-slate-500"></p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 sm:gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600">
-                <Bell className="h-4 w-4" />
-              </span>
-              <div className="hidden min-w-0 text-right sm:block">
-                <p className="truncate text-sm font-semibold text-slate-900"></p>
-                <p className="truncate text-xs text-slate-500"></p>
-              </div>
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 ring-1 ring-slate-200">
-                <UserCircle2 className="h-5 w-5" />
-              </span>
-              <Link href="/superadmin/profile" className={actionButtonStyles("readOnly", "sm")}>
-                Profile
-              </Link>
-              <form action={signOutAction}>
-                <button className={actionButtonStyles("readOnly", "sm")} type="submit">
-                  Sign Out
-                </button>
-              </form>
-            </div>
+      <PortalContentColumn collapsed={collapsed}>
+        <PortalTopHeader>
+          <div className="flex min-w-0 items-center gap-3">
+            <PortalNavToggles
+              mobileOpen={mobileOpen}
+              onMobileToggle={() => setMobileOpen((value) => !value)}
+            />
+            <PortalHeaderBrand
+              eyebrow="IT Administrator Portal"
+              title={`Welcome, ${userName}`}
+              subtitle="Audit, reports, users, and settings oversight"
+            />
           </div>
-        </header>
 
-        <main className="app-shell-main min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-          <div className="mx-auto w-full max-w-7xl">{children}</div>
-        </main>
-      </div>
-    </div>
+          <PortalHeaderActions
+            name={userName}
+            roleLabel="IT Administrator"
+            profileHref="/superadmin/profile"
+            signOutAction={signOutAction}
+          />
+        </PortalTopHeader>
+
+        <PortalMain>{children}</PortalMain>
+      </PortalContentColumn>
+    </PortalLayoutRoot>
   );
 }

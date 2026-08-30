@@ -1,15 +1,31 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { DetailHeader } from "@/components/ui/detail-header";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { Modal } from "@/components/ui/modal";
+import { LoadingState } from "@/components/ui/loading-state";
+import {
+  bploEmptyStateClass,
+  bploFormControlClass,
+  bploHighlightPanelClass,
+  bploMobileRecordCardClass,
+  bploPanelClass,
+  bploSummaryLabelClass,
+  bploSummaryTileClass,
+  bploSummaryValueClass,
+  bploSurfacePanelClass,
+  bploTableClass,
+  paymentStatusBadgeClass,
+} from "@/components/bplo/bplo-ui-styles";
 import { SectionCard } from "@/components/ui/section-card";
+import type { PaginationPageSize } from "@/lib/pagination";
 
 type PaymentStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
@@ -83,12 +99,6 @@ interface ProofModalState {
   error: string | null;
 }
 
-interface VerificationLists {
-  pending: PaymentVerificationRow[];
-  verified: PaymentVerificationRow[];
-  rejected: PaymentVerificationRow[];
-}
-
 type TabKey = "PENDING" | "VERIFIED" | "REJECTED";
 
 // Hoist Intl formatter to avoid recreating on every render
@@ -119,25 +129,30 @@ function SummaryTile({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    <div className={bploSummaryTileClass}>
+      <p className={bploSummaryLabelClass}>{label}</p>
+      <p className={bploSummaryValueClass}>{value}</p>
+      {helper ? <p className="mt-1 ui-caption">{helper}</p> : null}
     </div>
   );
 }
 
-function passFailLabel(status: PaymentStatus): "Pass" | "Fail" | "Pending" {
+function passFailLabel(status: PaymentStatus): "Pass" | "Returned" | "Pending" {
   if (status === "VERIFIED") return "Pass";
-  if (status === "REJECTED") return "Fail";
+  if (status === "REJECTED") return "Returned";
   return "Pending";
 }
 
 export default function BploPaymentVerificationPage() {
-  const [lists, setLists] = useState<VerificationLists>({
-    pending: [],
-    verified: [],
-    rejected: [],
+  const [rows, setRows] = useState<PaymentVerificationRow[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [tabCounts, setTabCounts] = useState<Record<TabKey, number>>({
+    PENDING: 0,
+    VERIFIED: 0,
+    REJECTED: 0,
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("PENDING");
@@ -238,16 +253,33 @@ export default function BploPaymentVerificationPage() {
     return `/api/bplo/payment-verification/${proofModal.paymentReferenceId}/proof`;
   }
 
-  async function loadLists() {
+  async function loadLists(tab: TabKey = activeTab, nextPage = page, nextPageSize = pageSize) {
     setLoading(true);
-    const response = await fetch("/api/bplo/payment-verification", { cache: "no-store" });
-    const data = (await response.json()) as VerificationLists & { error?: string };
+    const params = new URLSearchParams({
+      tab,
+      page: String(nextPage),
+      pageSize: String(nextPageSize),
+    });
+    const response = await fetch(`/api/bplo/payment-verification?${params.toString()}`, { cache: "no-store" });
+    const data = (await response.json()) as {
+      records?: PaymentVerificationRow[];
+      totalCount?: number;
+      page?: number;
+      pageSize?: PaginationPageSize;
+      totalPages?: number;
+      error?: string;
+    };
     if (!response.ok) {
       setStatusMessage({ kind: "error", text: data.error ?? "Unable to load payments." });
       setLoading(false);
       return;
     }
-    setLists(data);
+    setRows(data.records ?? []);
+    setTotalCount(data.totalCount ?? 0);
+    setPage(data.page ?? nextPage);
+    setPageSize(data.pageSize ?? nextPageSize);
+    setTotalPages(data.totalPages ?? 1);
+    setTabCounts((current) => ({ ...current, [tab]: data.totalCount ?? 0 }));
     setLoading(false);
   }
 
@@ -274,14 +306,9 @@ export default function BploPaymentVerificationPage() {
   }
 
   useEffect(() => {
-    void loadLists();
-  }, []);
-
-  const rows = useMemo(() => {
-    if (activeTab === "PENDING") return lists.pending;
-    if (activeTab === "VERIFIED") return lists.verified;
-    return lists.rejected;
-  }, [activeTab, lists.pending, lists.verified, lists.rejected]);
+    void loadLists(activeTab, page, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, page, pageSize]);
 
   const isUnderpaid =
     detail ? detail.row.amountPaid < detail.top.totalAmount : false;
@@ -327,17 +354,20 @@ export default function BploPaymentVerificationPage() {
     setActionBusy(false);
   }
 
-  async function rejectSelected() {
+  async function returnForCorrectionSelected() {
     if (!detail || detail.row.paymentStatus !== "PENDING") return;
     if (!remarks.trim()) {
-      setStatusMessage({ kind: "error", text: "Remarks are required when rejecting a payment." });
+      setStatusMessage({
+        kind: "error",
+        text: "Remarks are required when returning a payment for correction.",
+      });
       return;
     }
 
     setActionBusy(true);
     setStatusMessage(null);
     const response = await fetch(
-      `/api/bplo/payment-verification/${detail.row.paymentReferenceId}/reject`,
+      `/api/bplo/payment-verification/${detail.row.paymentReferenceId}/return`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -346,14 +376,17 @@ export default function BploPaymentVerificationPage() {
     );
     const data = (await response.json()) as { error?: string };
     if (!response.ok) {
-      setStatusMessage({ kind: "error", text: data.error ?? "Unable to reject payment." });
+      setStatusMessage({
+        kind: "error",
+        text: data.error ?? "Unable to return payment for correction.",
+      });
       setActionBusy(false);
       return;
     }
 
     setStatusMessage({
       kind: "ok",
-      text: "Payment rejected. Application remains Approved for Payment and applicant can resubmit.",
+      text: "Payment returned for correction. Application remains Approved for Payment so the applicant can resubmit a corrected OR and proof.",
     });
 
     await loadLists();
@@ -364,80 +397,88 @@ export default function BploPaymentVerificationPage() {
   }
 
   return (
-    <section className="space-y-6" aria-busy={loading || detailLoading}>
+    <section className="ui-page-stack" aria-busy={loading || detailLoading}>
       <PageHeader
         eyebrow="BPLO"
         title="Payment Verification"
         description="Verify applicant-submitted payment references for applications in Approved for Payment status."
-        badge={<RoleBadge role="BPLO" />}
+        badge={<RoleBadge roleType="BPLO" />}
       />
 
-      <SectionCard title="Verification Buckets" description="Separate queues for pending, verified, and rejected payment references.">
+      <SectionCard
+        title="Verification Buckets"
+        description="Separate queues for pending, verified, and returned-for-correction payment references."
+      >
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab("PENDING")}
+            onClick={() => {
+              setActiveTab("PENDING");
+              setPage(1);
+            }}
             className={activeTab === "PENDING" ? actionButtonStyles("warning", "sm") : actionButtonStyles("secondary", "sm")}
           >
-            Pending Verification ({lists.pending.length})
+            Pending Verification ({tabCounts.PENDING})
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("VERIFIED")}
+            onClick={() => {
+              setActiveTab("VERIFIED");
+              setPage(1);
+            }}
             className={activeTab === "VERIFIED" ? actionButtonStyles("primary", "sm") : actionButtonStyles("secondary", "sm")}
           >
-            Verified Payments ({lists.verified.length})
+            Verified Payments ({tabCounts.VERIFIED})
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("REJECTED")}
-            className={activeTab === "REJECTED" ? actionButtonStyles("danger", "sm") : actionButtonStyles("secondary", "sm")}
+            onClick={() => {
+              setActiveTab("REJECTED");
+              setPage(1);
+            }}
+            className={activeTab === "REJECTED" ? actionButtonStyles("warning", "sm") : actionButtonStyles("secondary", "sm")}
           >
-            Rejected Payments ({lists.rejected.length})
+            Returned for Correction ({tabCounts.REJECTED})
           </button>
         </div>
       </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-[1.25fr_0.95fr]">
+        <div className="space-y-4">
         <ResponsiveDataTable
           title="Payment Queue"
-          description={loading ? "Loading submitted payment references..." : `${rows.length} record${rows.length === 1 ? "" : "s"} in the selected section.`}
+          description={loading ? "Loading submitted payment references..." : `${totalCount} record${totalCount === 1 ? "" : "s"} in the selected section.`}
+          switchAt="xl"
           table={
             loading ? (
-              <div role="status" aria-live="polite" className="px-6 py-8 text-sm text-slate-500">Loading payment references for BPLO review...</div>
+              <div className={bploEmptyStateClass}>
+                <LoadingState message="Loading payment references for BPLO review…" compact />
+              </div>
             ) : rows.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-slate-500">No records available yet in this section. Submitted payment references will appear here when available.</div>
+              <div className={bploEmptyStateClass}>No records available yet in this section. Submitted payment references will appear here when available.</div>
             ) : (
-            <table className="w-full text-sm">
+            <table className={bploTableClass}>
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50 text-left text-slate-700">
-                  <th className="px-3 py-2 font-semibold">Status</th>
-                  <th className="px-3 py-2 font-semibold">Application Number</th>
-                  <th className="px-3 py-2 font-semibold">Official Receipt Number</th>
-                  <th className="px-3 py-2 font-semibold">Remark</th>
-                  <th className="px-3 py-2 font-semibold">Action</th>
+                <tr>
+                  <th>Status</th>
+                  <th>Application Number</th>
+                  <th>Official Receipt Number</th>
+                  <th>Remark</th>
+                  <th>Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {rows.map((row) => (
-                  <tr key={row.paymentReferenceId} className="hover:bg-slate-50/60">
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          row.paymentStatus === "PENDING"
-                            ? "border border-amber-200 bg-amber-50 text-amber-800"
-                            : row.paymentStatus === "VERIFIED"
-                              ? "border border-green-200 bg-green-50 text-green-700"
-                              : "border border-red-200 bg-red-50 text-red-700"
-                        }`}
-                      >
+                  <tr key={row.paymentReferenceId}>
+                    <td>
+                      <span className={paymentStatusBadgeClass(row.paymentStatus)}>
                         {row.paymentStatus}
                       </span>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-slate-700">{row.applicationNumber}</td>
-                    <td className="px-3 py-2 text-slate-700">{row.transactionNumber}</td>
-                    <td className="px-3 py-2 text-slate-700">{passFailLabel(row.paymentStatus)}</td>
-                    <td className="px-3 py-2">
+                    <td className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</td>
+                    <td className="text-[var(--ink-muted)]">{row.transactionNumber}</td>
+                    <td className="text-[var(--ink-muted)]">{passFailLabel(row.paymentStatus)}</td>
+                    <td>
                       <button
                         type="button"
                         onClick={() => {
@@ -456,31 +497,25 @@ export default function BploPaymentVerificationPage() {
           }
           mobile={
             loading ? (
-              <div role="status" aria-live="polite" className="p-4 text-sm text-slate-500">Loading payment references for BPLO review...</div>
+              <div className="p-4">
+                <LoadingState message="Loading payment references for BPLO review…" compact />
+              </div>
             ) : rows.length === 0 ? (
-              <div className="p-4 text-sm text-slate-500">No records available yet in this section.</div>
+              <div className="p-4 text-sm text-[var(--ink-muted)]">No records available yet in this section.</div>
             ) : (
               <div className="space-y-3 p-4">
                 {rows.map((row) => (
-                  <article key={row.paymentReferenceId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <article key={row.paymentReferenceId} className={bploMobileRecordCardClass}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">OR: {row.transactionNumber}</p>
+                        <p className="font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</p>
+                        <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">OR: {row.transactionNumber}</p>
                       </div>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          row.paymentStatus === "PENDING"
-                            ? "border border-amber-200 bg-amber-50 text-amber-800"
-                            : row.paymentStatus === "VERIFIED"
-                              ? "border border-green-200 bg-green-50 text-green-700"
-                              : "border border-red-200 bg-red-50 text-red-700"
-                        }`}
-                      >
+                      <span className={paymentStatusBadgeClass(row.paymentStatus)}>
                         {row.paymentStatus}
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">Remark: {passFailLabel(row.paymentStatus)}</p>
+                    <p className="mt-2 ui-caption">Remark: {passFailLabel(row.paymentStatus)}</p>
                     <div className="mt-3">
                       <button
                         type="button"
@@ -499,42 +534,54 @@ export default function BploPaymentVerificationPage() {
           }
         />
 
+        <PaginationControls
+          basePath="/bplo/payment-verification"
+          queryParams={{}}
+          mode="client"
+          isLoading={loading}
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          totalPages={totalPages}
+          recordLabel="payment references"
+          onPageChange={setPage}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
+        </div>
+
         <SectionCard title="Payment Detail" description="Review payment reference details and apply BPLO verification actions using existing workflow rules.">
           {!selectedRefId ? (
-            <div className="text-sm text-slate-500">Select a payment reference from the queue to review the TOP, applicant details, and BPLO action area.</div>
+            <div className="text-sm text-[var(--ink-muted)]">Select a payment reference from the queue to review the TOP, applicant details, and BPLO action area.</div>
           ) : detailLoading ? (
-            <div role="status" aria-live="polite" className="text-sm text-slate-500">Loading payment reference details...</div>
+            <LoadingState message="Loading payment reference details…" compact />
           ) : !detail ? (
-            <div className="text-sm text-slate-500">Unable to load the selected payment reference details.</div>
+            <div className="text-sm text-[var(--ink-muted)]">Unable to load the selected payment reference details.</div>
           ) : (
             <div className="space-y-4">
               <DetailHeader
                 title="Selected Payment Reference"
                 subtitle={`${detail.row.applicationNumber} • ${detail.row.transactionNumber}`}
                 badge={
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      detail.row.paymentStatus === "PENDING"
-                        ? "border border-amber-200 bg-amber-50 text-amber-800"
-                        : detail.row.paymentStatus === "VERIFIED"
-                          ? "border border-green-200 bg-green-50 text-green-700"
-                          : "border border-red-200 bg-red-50 text-red-700"
-                    }`}
-                  >
-                    {detail.row.paymentStatus}
+                  <span className={paymentStatusBadgeClass(detail.row.paymentStatus)}>
+                    {detail.row.paymentStatus === "REJECTED"
+                      ? "RETURNED FOR CORRECTION"
+                      : detail.row.paymentStatus}
                   </span>
                 }
               />
 
               {detail.row.paymentStatus === "REJECTED" ? (
                 <InfoBanner
-                  title="Rejected payment reference"
+                  title="Returned for correction"
                   description={
                     detail.row.reviewerRemarks
                       ? `Previous BPLO remarks: ${detail.row.reviewerRemarks}`
-                      : "This payment reference was rejected and the applicant may submit a corrected one."
+                      : "This payment reference was returned for correction. The applicant may submit a corrected OR and proof."
                   }
-                  variant="danger"
+                  variant="warning"
                 />
               ) : null}
 
@@ -570,7 +617,7 @@ export default function BploPaymentVerificationPage() {
                 <SummaryTile
                   label="Verification Result"
                   value={passFailLabel(detail.row.paymentStatus)}
-                  helper="Pass for verified, Fail for rejected, Pending when under review"
+                  helper="Pass for verified, Returned for correction, Pending when under review"
                 />
                 <SummaryTile
                   label="Amount Paid"
@@ -616,8 +663,8 @@ export default function BploPaymentVerificationPage() {
 
               {/* CLOSURE-specific fee breakdown */}
               {detail.row.applicationType === "CLOSURE" ? (
-                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                  <p className="mb-3 text-sm font-semibold text-blue-900">Closure Application Fees</p>
+                <div className={`${bploHighlightPanelClass} border-[var(--info)] bg-[var(--info-soft)]`}>
+                  <p className="mb-3 text-sm font-semibold text-[var(--foreground)]">Closure Application Fees</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <SummaryTile
                       label="Closure Certificate Fee"
@@ -633,10 +680,10 @@ export default function BploPaymentVerificationPage() {
                 </div>
               ) : null}
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">Payment Proof</p>
-                <p className="mt-1 text-sm text-slate-600">
-                  Submitted file: <span className="font-medium text-slate-900">{detail.row.proofFileName}</span>
+              <div className={bploPanelClass}>
+                <p className="text-sm font-semibold text-[var(--foreground)]">Payment Proof</p>
+                <p className="mt-1 text-sm text-[var(--ink-muted)]">
+                  Submitted file: <span className="font-medium text-[var(--foreground)]">{detail.row.proofFileName}</span>
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
@@ -644,35 +691,36 @@ export default function BploPaymentVerificationPage() {
                     onClick={() => {
                       void openProofModal(detail.row);
                     }}
-                    className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    className={actionButtonStyles("secondary", "sm")}
                   >
                     Open Payment Proof
                   </button>
                   <a
                     href={`/api/bplo/payment-verification/${detail.row.paymentReferenceId}/proof`}
                     download
-                    className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    className={actionButtonStyles("secondary", "sm")}
                   >
                     Download Payment Proof
                   </a>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-                <p className="text-sm font-semibold text-slate-900">BPLO Review Action</p>
-                <p className="mt-1 text-sm text-slate-600">
-                  Add remarks for verification notes. Remarks are required when rejecting a payment reference.
+              <div className={`${bploSurfacePanelClass} space-y-3`}>
+                <p className="text-sm font-semibold text-[var(--foreground)]">BPLO Review Action</p>
+                <p className="mt-1 text-sm text-[var(--ink-muted)]">
+                  Add remarks for verification notes. Remarks are required when returning a payment for correction.
                 </p>
                 <FormField
                   label="BPLO Remarks"
-                  hint="Required when rejecting; optional for approval notes."
+                  hint="Required when returning for correction; optional for approval notes."
                 >
                   <textarea
+                    aria-label="BPLO Remarks"
                     value={remarks}
                     onChange={(event) => setRemarks(event.target.value)}
                     rows={3}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-green-500 focus:outline-none read-only:border-slate-300 read-only:bg-slate-100 read-only:text-slate-800"
-                    placeholder="Add verification notes or rejection reason"
+                    className={bploFormControlClass}
+                    placeholder="Add verification notes or return-for-correction reason"
                     readOnly={detail.row.paymentStatus !== "PENDING" || actionBusy}
                   />
                 </FormField>
@@ -692,17 +740,21 @@ export default function BploPaymentVerificationPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        void rejectSelected();
+                        void returnForCorrectionSelected();
                       }}
                       disabled={actionBusy}
-                      className={actionButtonStyles("danger", "md")}
+                      className={actionButtonStyles("warning", "md")}
                     >
-                      Reject Payment
+                      Return for Correction
                     </button>
                   </div>
                 ) : (
-                  <p className="mt-4 text-sm text-slate-500">
-                    This payment reference is already {detail.row.paymentStatus.toLowerCase()} and is now read-only.
+                  <p className="mt-4 text-sm text-[var(--ink-muted)]">
+                    This payment reference is already{" "}
+                    {detail.row.paymentStatus === "REJECTED"
+                      ? "returned for correction"
+                      : detail.row.paymentStatus.toLowerCase()}{" "}
+                    and is now read-only.
                   </p>
                 )}
               </div>
@@ -732,9 +784,9 @@ export default function BploPaymentVerificationPage() {
         size="lg"
       >
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-900">Submitted file</p>
-            <p className="mt-1 text-sm text-slate-700">{proofModal.proofFileName || "Not available"}</p>
+          <div className={bploPanelClass}>
+            <p className="text-sm font-semibold text-[var(--foreground)]">Submitted file</p>
+            <p className="mt-1 text-sm text-[var(--ink-muted)]">{proofModal.proofFileName || "Not available"}</p>
           </div>
 
           {proofModal.error ? (
@@ -742,16 +794,16 @@ export default function BploPaymentVerificationPage() {
           ) : null}
 
           {proofModal.previewUrl && proofModal.previewKind === "image" ? (
-            <img src={proofModal.previewUrl} alt="Payment proof preview" className="max-h-[60vh] w-full rounded-2xl border border-slate-200 object-contain" />
+            <img src={proofModal.previewUrl} alt="Payment proof preview" className="max-h-[calc(100dvh-18rem)] w-full rounded-[var(--radius-card)] border border-[var(--border-color)] object-contain" />
           ) : null}
 
           {proofModal.previewUrl && proofModal.previewKind === "pdf" ? (
-            <iframe src={proofModal.previewUrl} title="Payment proof PDF preview" className="h-[60vh] w-full rounded-2xl border border-slate-200" />
+            <iframe src={proofModal.previewUrl} title="Payment proof PDF preview" sandbox="allow-same-origin" className="h-[calc(100dvh-18rem)] min-h-[320px] w-full rounded-[var(--radius-card)] border border-[var(--border-color)]" />
           ) : null}
 
           {!proofModal.previewUrl && !proofModal.error ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-600">
-              Loading payment proof preview...
+            <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--border-color)] p-6 text-sm text-[var(--ink-muted)]">
+              Loading payment proof preview…
             </div>
           ) : null}
 

@@ -1,5 +1,5 @@
 /**
- * Shared helpers for Super Admin printable system reports.
+ * Shared helpers for IT Administrator printable system reports.
  * Used only by /superadmin report pages — not for business permit or closure certificate print.
  */
 
@@ -102,7 +102,75 @@ export function formatReportDate(date: Date | string | null | undefined): string
   });
 }
 
-// ── Metadata builder ──────────────────────────────────────────────────────────
+/** Format a month/year as a human-readable reporting period. */
+export function formatMonthYearLabel(month: number, year: number): string {
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  return date.toLocaleDateString("en-PH", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Inclusive UTC date range for a calendar month (month is 1–12). */
+export function monthYearToDateRange(month: number, year: number): { start: Date; end: Date } {
+  const safeMonth = Math.min(12, Math.max(1, month));
+  const start = new Date(Date.UTC(year, safeMonth - 1, 1, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(year, safeMonth, 0, 23, 59, 59, 999));
+  return { start, end };
+}
+
+export function reportPercentOf(part: number, whole: number): string {
+  if (whole <= 0) return "0%";
+  return `${Math.round((part / whole) * 1000) / 10}%`;
+}
+
+export function resolveReportMonthYear(params?: { month?: string; year?: string }): {
+  month: number;
+  year: number;
+} {
+  const now = new Date();
+  const parsedMonth = Number.parseInt(params?.month ?? "", 10);
+  const parsedYear = Number.parseInt(params?.year ?? "", 10);
+  const month = parsedMonth >= 1 && parsedMonth <= 12 ? parsedMonth : now.getUTCMonth() + 1;
+  const year =
+    parsedYear >= 2020 && parsedYear <= now.getUTCFullYear() + 1
+      ? parsedYear
+      : now.getUTCFullYear();
+  return { month, year };
+}
+
+export const REPORT_MONTH_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 1, label: "January" },
+  { value: 2, label: "February" },
+  { value: 3, label: "March" },
+  { value: 4, label: "April" },
+  { value: 5, label: "May" },
+  { value: 6, label: "June" },
+  { value: 7, label: "July" },
+  { value: 8, label: "August" },
+  { value: 9, label: "September" },
+  { value: 10, label: "October" },
+  { value: 11, label: "November" },
+  { value: 12, label: "December" },
+];
+
+export function buildMonthlyReportMetadata(params: {
+  title: string;
+  generatedBy: string;
+  month: number;
+  year: number;
+}): ReportMetadata {
+  return {
+    title: params.title,
+    generatedBy: params.generatedBy,
+    generatedAt: formatReportTimestamp(new Date()),
+    dateRange: formatMonthYearLabel(params.month, params.year),
+    municipality: EBPLS_REPORT_HEADING.municipality,
+    office: EBPLS_REPORT_HEADING.office,
+  };
+}
+
 
 /**
  * Build a ReportMetadata object for use in ReportPageHeader.
@@ -189,6 +257,7 @@ export const BUSINESS_STATUS_OPTIONS: Array<{ value: string; label: string }> = 
 
 export const INSPECTION_COMPLIANCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "", label: "All Compliance" },
+  { value: "PENDING_REVIEW", label: "Pending Review" },
   { value: "COMPLIANT", label: "Compliant" },
   { value: "NON_COMPLIANT", label: "Non-Compliant" },
 ];
@@ -225,7 +294,7 @@ export const ACTOR_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "", label: "All Roles" },
   { value: "APPLICANT", label: "Applicant" },
   { value: "BPLO", label: "BPLO" },
-  { value: "SUPER_ADMIN", label: "Super Admin" },
+  { value: "SUPER_ADMIN", label: "IT Administrator" },
   { value: "DEPARTMENT_HEAD", label: "Department Head" },
   { value: "JIT", label: "JIT Inspector" },
 ];

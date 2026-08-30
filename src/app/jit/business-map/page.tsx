@@ -10,12 +10,12 @@ export default async function JitBusinessMapPage() {
   if (!session) notFound();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="JIT"
         title="Business Map"
         description="Read-only released business map for Joint Inspection Team planning and monitoring."
-        badge={<RoleBadge role="VIEW_ONLY" label="JIT" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="JIT" />}
       />
 
       <InfoBanner

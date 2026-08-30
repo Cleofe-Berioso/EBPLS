@@ -47,12 +47,12 @@ export function DashboardGaugeCard({
               outerRadius="100%"
             >
               <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-              <RadialBar dataKey="value" fill="#1d4f91" background cornerRadius={8} />
+              <RadialBar dataKey="value" fill="var(--primary)" background cornerRadius={8} />
             </RadialBarChart>
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <p className="text-4xl font-semibold tracking-tight text-slate-900">{safeValue.toLocaleString("en-PH")}</p>
-            <p className="text-sm font-medium uppercase tracking-wide text-slate-500">
+            <p className="ui-gauge-value">{safeValue.toLocaleString("en-PH")}</p>
+            <p className="ui-caption mt-0.5 font-medium uppercase tracking-wide">
               {unit ?? "Value"} / {safeMax.toLocaleString("en-PH")}
             </p>
           </div>

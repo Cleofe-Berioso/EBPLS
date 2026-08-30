@@ -2,6 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { LoadingState } from "@/components/ui/loading-state";
+import {
+  dhPanelClass,
+  dhSelectableCardClass,
+  dhSelectableCardIdleClass,
+  dhSummaryLabelClass,
+  dhSummaryTileClass,
+  dhSummaryValueClass,
+} from "@/components/department-head/department-head-ui-styles";
+
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
@@ -85,9 +95,9 @@ export function SettlementManagementClient() {
     <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
       <SectionCard title="Eligible Cases" description="Cases eligible for Department Head settlement.">
         {loading ? (
-          <div className="text-sm text-slate-500">Loading eligible cases...</div>
+          <LoadingState message="Loading eligible cases…" compact />
         ) : rows.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">No eligible settlement cases found.</div>
+          <div className={dhPanelClass}>No eligible settlement cases found.</div>
         ) : (
           <div className="space-y-2">
             {rows.map((row) => {
@@ -97,16 +107,14 @@ export function SettlementManagementClient() {
                   key={row.inspectionId}
                   type="button"
                   onClick={() => setSelectedId(row.inspectionId)}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                    active ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white hover:bg-slate-50"
-                  }`}
+                  className={`${dhSelectableCardClass} ${active ? "border-[var(--danger)] bg-[var(--danger-soft)]" : dhSelectableCardIdleClass}`}
                 >
-                  <p className="font-mono text-xs text-slate-600">{row.applicationNumber ?? row.inspectionId}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                  <p className="mt-1 text-xs text-slate-600">{row.applicantName}</p>
+                  <p className="font-mono ui-caption">{row.applicationNumber ?? row.inspectionId}</p>
+                  <p className={dhSummaryValueClass}>{row.businessName}</p>
+                  <p className="mt-1 ui-caption">{row.applicantName}</p>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-700`}>Flagged / Unsettled</span>
-                    <span className="text-xs text-slate-500">{row.violationSeverity ? row.violationSeverity : "-"}</span>
+                    <span className="rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--warning)]">Flagged / Unsettled</span>
+                    <span className="ui-caption">{row.violationSeverity ? row.violationSeverity : "-"}</span>
                   </div>
                 </button>
               );
@@ -121,58 +129,58 @@ export function SettlementManagementClient() {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Name</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessName}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Business Name</p>
+                <p className={dhSummaryValueClass}>{selected.businessName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Owner / Applicant</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.ownerName}</p>
-                <p className="text-xs text-slate-600">Applicant: {selected.applicantName}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Owner / Applicant</p>
+                <p className={dhSummaryValueClass}>{selected.ownerName}</p>
+                <p className="ui-caption">Applicant: {selected.applicantName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Application / Permit</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.applicationNumber ?? "N/A"}</p>
-                <p className="text-xs text-slate-600">Permit: {selected.permitOrCertificateNumber ?? "N/A"}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Application / Permit</p>
+                <p className={dhSummaryValueClass}>{selected.applicationNumber ?? "N/A"}</p>
+                <p className="ui-caption">Permit: {selected.permitOrCertificateNumber ?? "N/A"}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Address</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.businessAddress}</p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Severity</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.violationSeverity === "MINOR" ? "Minor" : selected.violationSeverity === "MAJOR" ? "Major" : "-"}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Business Address</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.businessAddress}</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Case Status</p>
-                <p className="mt-1 text-sm text-slate-900">Flagged / Unsettled</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Severity</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.violationSeverity === "MINOR" ? "Minor" : selected.violationSeverity === "MAJOR" ? "Major" : "-"}</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Inspection Remarks</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.inspectionRemarks ?? "No comment provided."}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Case Status</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">Flagged / Unsettled</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Department Head Verification Remarks</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.verificationRemarks ?? "No remarks recorded."}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Inspection Remarks</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.inspectionRemarks ?? "No comment provided."}</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Verified Date</p>
-                <p className="mt-1 text-sm text-slate-900">{formatDateTime(selected.verifiedAt)}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Department Head Verification Remarks</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.verificationRemarks ?? "No remarks recorded."}</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Deadline</p>
-                <p className="mt-1 text-sm text-slate-900">{formatDateTime(selected.deadlineAt)}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Verified Date</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{formatDateTime(selected.verifiedAt)}</p>
+              </div>
+
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Deadline</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{formatDateTime(selected.deadlineAt)}</p>
               </div>
             </div>
 
             <SectionCard title="Actions" description="Settle eligible cases here.">
-              <p className="text-sm text-slate-600">Only Minor or Major government-agency-related cases can be settled. Settlement does not reactivate permits or change payments.</p>
+              <p className="text-sm text-[var(--ink-muted)]">Only Minor or Major government-agency-related cases can be settled. Settlement does not reactivate permits or change payments.</p>
 
               <div className="mt-4 flex items-center gap-3">
                 <button
@@ -226,6 +234,7 @@ export function SettlementManagementClient() {
                 }}
               >
                 <textarea
+                  aria-label="Settlement remarks"
                   value={remarksInput}
                   onChange={(e) => setRemarksInput(e.target.value)}
                   className="w-full rounded-md border p-2 text-sm"

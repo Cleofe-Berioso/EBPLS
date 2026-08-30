@@ -1,19 +1,35 @@
-import { PageHeader } from "@/components/ui/page-header";
+import Link from "next/link";
+import { Activity, ClipboardList, MessageSquareWarning, Users } from "lucide-react";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
+import { DashboardQueueCard } from "@/components/ui/dashboard-queue-card";
 import { DashboardLineChart } from "@/components/ui/dashboard-line-chart";
 import { DashboardStackedBarChart } from "@/components/ui/dashboard-stacked-bar-chart";
 import { DashboardHorizontalBarChart } from "@/components/ui/dashboard-horizontal-bar-chart";
 import { DashboardPieChart } from "@/components/ui/dashboard-pie-chart";
 import { DashboardGaugeCard } from "@/components/ui/dashboard-gauge-card";
+import { DASHBOARD_CHART_COLORS } from "@/components/ui/dashboard-chart-card";
+import { MunicipalDocumentHeader, IT_DEPARTMENT_HEADING } from "@/components/ui/municipal-document-header";
+import { actionButtonStyles } from "@/components/ui/action-button";
 import {
   getSuperAdminDashboardSummary,
   getSuperAdminReportsSummary,
 } from "@/lib/superadmin-data";
 import { getSuperAdminDashboardMetrics } from "@/lib/superadmin-dashboard";
+
+function percentOf(part: number, whole: number): string {
+  if (whole <= 0) return "0%";
+  return `${Math.round((part / whole) * 1000) / 10}%`;
+}
+
+function insightBannerVariant(
+  severity: "info" | "success" | "warning" | "danger"
+): "info" | "success" | "warning" | "danger" {
+  return severity;
+}
 
 export default async function SuperAdminDashboard() {
   const [summary, reports, metrics] = await Promise.all([
@@ -25,160 +41,283 @@ export default async function SuperAdminDashboard() {
   const totalNew = reports.applicationsByType.find((row) => row.type === "NEW")?.count ?? 0;
   const totalRenewal = reports.applicationsByType.find((row) => row.type === "RENEWAL")?.count ?? 0;
   const totalClosure = reports.applicationsByType.find((row) => row.type === "CLOSURE")?.count ?? 0;
+  const totalTyped = totalNew + totalRenewal + totalClosure;
   const dbHealthMax = 1;
   const dbHealthValue = metrics.systemHealth.databaseReachable ? 1 : 0;
   const lastCheckLabel = new Date(metrics.systemHealth.lastSuccessfulDashboardCheck).toLocaleString("en-PH");
+  const snapshot = metrics.operationalSnapshot;
+  const releaseRate = percentOf(reports.releasedPermits, summary.totalApplications);
 
-  const systemTotalsCards = [
-    {
-      title: "New Applications",
-      value: totalNew.toLocaleString("en-PH"),
-      subtitle: "New application records",
-      tone: "blue" as const,
-    },
-    {
-      title: "Renewal Applications",
-      value: totalRenewal.toLocaleString("en-PH"),
-      subtitle: "Renewal application records",
-      tone: "amber" as const,
-    },
-    {
-      title: "Closure Applications",
-      value: totalClosure.toLocaleString("en-PH"),
-      subtitle: "Closure application records",
-      tone: "slate" as const,
-    },
-    {
-      title: "Total Users",
-      value: summary.totalUsers.toLocaleString("en-PH"),
-      subtitle: "Applicant and system role accounts",
-      tone: "slate" as const,
-    },
-    {
-      title: "Total Applications",
-      value: summary.totalApplications.toLocaleString("en-PH"),
-      subtitle: "System-wide application records",
-      tone: "slate" as const,
-    },
-    {
-      title: "Released Permits/Certificates",
-      value: reports.releasedPermits.toLocaleString("en-PH"),
-      subtitle: "Released business permits",
-      tone: "green" as const,
-    },
-  ];
+  const dominantType =
+    totalNew >= totalRenewal && totalNew >= totalClosure
+      ? { label: "New", count: totalNew }
+      : totalRenewal >= totalClosure
+        ? { label: "Renewal", count: totalRenewal }
+        : { label: "Closure", count: totalClosure };
 
   return (
-    <section className="space-y-6">
-      <PageHeader
-        eyebrowClassName="text-slate-600"
-        title="IT ADMINISTRATOR Dashboard"
-        description="Operational analytics for system activity, workflow volume, compliance, and messaging logs."
-        badge={<RoleBadge role="VIEW_ONLY" label="Read-Only Monitoring" />}
+    <section className="ui-page-stack">
+      <MunicipalDocumentHeader
+        heading={{
+          ...IT_DEPARTMENT_HEADING,
+          title: "IT Administrator Dashboard",
+        }}
+        subtitle="Municipal operations intelligence for the Business Permit Online System — backlog meaning, delivery health, and compliance signals for IT oversight."
+        titleTone="official"
+        meta={
+          <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center sm:gap-4">
+            <RoleBadge roleType="VIEW_ONLY" label="Read-Only Monitoring" />
+            <span>
+              Snapshot refreshed: <strong>{lastCheckLabel}</strong>
+            </span>
+          </div>
+        }
+        actions={
+          <Link href="/superadmin/reports" className={actionButtonStyles("secondary", "sm")}>
+            Open Reports Hub
+          </Link>
+        }
       />
 
       <InfoBanner
-        title="Audit View Only"
-        description="This dashboard is view-only. It cannot approve, reject, assess, verify payments, release permits, verify inspections, revoke permits, or mutate records."
+        title="Audit view only"
+        description="This dashboard cannot approve, reject, assess, verify payments, release permits, verify inspections, or mutate records. Use it to understand system load and where offices may need support."
         variant="readOnly"
       />
 
       <SectionCard
-        title="System Totals"
-        description="Core system totals preserved for high-level oversight."
+        title="What needs attention now"
+        description="Plain-language findings derived from live queues, messaging logs, and compliance records — not just raw totals."
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {systemTotalsCards.map((card) => (
-            <StatCard
-              key={card.title}
-              title={card.title}
-              value={card.value}
-              subtitle={card.subtitle}
-              tone={card.tone}
-            />
-          ))}
+        {metrics.insights.length === 0 ? (
+          <EmptyState
+            title="No prioritized findings yet"
+            description="Insights appear once applications, inspections, or SMS logs exist."
+          />
+        ) : (
+          <div className="space-y-3">
+            {metrics.insights.map((insight) => (
+              <InfoBanner
+                key={insight.id}
+                title={insight.title}
+                description={`${insight.meaning} Recommended action: ${insight.recommendation}`}
+                variant={insightBannerVariant(insight.severity)}
+              />
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Operational meaning at a glance"
+        description="Interpret current load: where work is waiting, how messaging is performing, and how permits are completing."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Open Workload"
+            value={snapshot.openWorkloadTotal.toLocaleString("en-PH")}
+            subtitle={
+              snapshot.heaviestStage
+                ? `Largest queue: ${snapshot.heaviestStage.label} (${snapshot.heaviestStage.count.toLocaleString("en-PH")})`
+                : "No open stage backlog detected"
+            }
+            tone={snapshot.openWorkloadTotal > 0 ? "amber" : "green"}
+          />
+          <StatCard
+            title="Permit Release Rate"
+            value={releaseRate}
+            subtitle={`${reports.releasedPermits.toLocaleString("en-PH")} released of ${summary.totalApplications.toLocaleString("en-PH")} applications`}
+            tone="green"
+          />
+          <StatCard
+            title="SMS Reliability"
+            value={snapshot.smsReliabilityPercent == null ? "—" : `${snapshot.smsReliabilityPercent}%`}
+            subtitle={
+              metrics.systemHealth.recentFailedSmsCount > 0
+                ? `${metrics.systemHealth.recentFailedSmsCount.toLocaleString("en-PH")} failures in last 7 days`
+                : "No failures in the last 7 days"
+            }
+            tone={
+              snapshot.smsReliabilityPercent == null
+                ? "slate"
+                : snapshot.smsReliabilityPercent >= 95
+                  ? "green"
+                  : "red"
+            }
+          />
+          <StatCard
+            title="Daily Activity Pace"
+            value={snapshot.recentActivityAveragePerDay.toLocaleString("en-PH")}
+            subtitle="Average workflow history events per day (7-day window)"
+            tone="blue"
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Monitoring shortcuts" description="Jump to the audit modules that explain the numbers above.">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardQueueCard
+            title="Applications Registry"
+            description="Inspect individual filings when a stage backlog grows."
+            count={summary.totalApplications}
+            href="/superadmin/applications"
+            tone="info"
+            icon={<ClipboardList className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="User Accounts"
+            description="Confirm staff and applicant access when activity drops."
+            count={summary.totalUsers}
+            href="/superadmin/users"
+            tone="success"
+            icon={<Users className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Recent Activity"
+            description="Trace who moved applications in the last week."
+            count={metrics.systemHealth.recentActivityVolume}
+            href="/superadmin/activities"
+            tone="warning"
+            icon={<Activity className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Failed SMS"
+            description="Investigate delivery issues affecting applicant notices."
+            count={metrics.systemHealth.recentFailedSmsCount}
+            href="/superadmin/reports/print/sms"
+            tone="danger"
+            icon={<MessageSquareWarning className="h-4 w-4" />}
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Portfolio mix"
+        description={
+          totalTyped > 0
+            ? `Dominant filing type is ${dominantType.label} (${percentOf(dominantType.count, totalTyped)} of typed applications). Use this to anticipate renewal vs. new registration capacity.`
+            : "Application type mix will appear once filings exist."
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <StatCard
+            title="New Applications"
+            value={totalNew.toLocaleString("en-PH")}
+            subtitle={`${percentOf(totalNew, totalTyped)} of typed filings — first-time registrations`}
+            tone="blue"
+          />
+          <StatCard
+            title="Renewal Applications"
+            value={totalRenewal.toLocaleString("en-PH")}
+            subtitle={`${percentOf(totalRenewal, totalTyped)} of typed filings — continuing businesses`}
+            tone="amber"
+          />
+          <StatCard
+            title="Closure Applications"
+            value={totalClosure.toLocaleString("en-PH")}
+            subtitle={`${percentOf(totalClosure, totalTyped)} of typed filings — retirement / non-compliant exits`}
+            tone="blue"
+          />
+          <StatCard
+            title="Total Users"
+            value={summary.totalUsers.toLocaleString("en-PH")}
+            subtitle="Applicant and staff accounts in the system"
+            tone="blue"
+          />
+          <StatCard
+            title="Total Applications"
+            value={summary.totalApplications.toLocaleString("en-PH")}
+            subtitle="All workflow records under IT audit visibility"
+            tone="blue"
+          />
+          <StatCard
+            title="Released Permits / Certificates"
+            value={reports.releasedPermits.toLocaleString("en-PH")}
+            subtitle={`Completion signal: ${releaseRate} of all applications reached release`}
+            tone="green"
+          />
         </div>
       </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <DashboardLineChart
-          title="System-Wide User Activity"
-          description="Daily activity log volume by actor role. Uses application history logs as a proxy for daily active users."
+          title="Who is working the system?"
+          description="Daily workflow history by actor role. Rising BPLO or Department Head lines usually mean review/approval pressure; rising Applicant lines often mean resubmissions or payments."
           data={metrics.userActivityByRole}
           series={[
-            { key: "applicant", label: "Applicant", color: "#2563eb" },
-            { key: "bplo", label: "BPLO", color: "#0f766e" },
-            { key: "departmentHead", label: "Department Head", color: "#ea580c" },
-            { key: "jit", label: "JIT", color: "#7c3aed" },
-            { key: "superAdmin", label: "Super Admin", color: "#334155" },
+            { key: "applicant", label: "Applicant", color: DASHBOARD_CHART_COLORS[2] },
+            { key: "bplo", label: "BPLO", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "departmentHead", label: "Department Head", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "jit", label: "JIT", color: DASHBOARD_CHART_COLORS[6] },
+            { key: "superAdmin", label: "IT Administrator", color: DASHBOARD_CHART_COLORS[5] },
           ]}
           emptyTitle="No user activity logs available yet."
-          emptyDescription="System user activity will appear once workflow history entries are recorded."
+          emptyDescription="System user activity appears once workflow history entries are recorded."
         />
 
         <DashboardStackedBarChart
-          title="Application Volume Across System"
-          description="Current processing workload by role and stage using existing statuses and inspection records."
+          title="Where is work waiting?"
+          description="Open workload by office stage. The tallest segment is the current bottleneck for applicants waiting on a next action."
           data={metrics.applicationVolumeAcrossSystem}
           categoryKey="stage"
           series={[
-            { key: "bploReview", label: "BPLO Review", color: "#2563eb" },
-            { key: "bploAssessment", label: "BPLO Assessment", color: "#0891b2" },
-            { key: "bploPayment", label: "BPLO Payment", color: "#ea580c" },
-            { key: "bploRelease", label: "BPLO Release", color: "#16a34a" },
-            { key: "departmentHeadApproval", label: "Department Head Approval", color: "#7c3aed" },
-            { key: "jitInspection", label: "JIT Inspection", color: "#dc2626" },
+            { key: "bploReview", label: "BPLO Review", color: DASHBOARD_CHART_COLORS[2] },
+            { key: "bploAssessment", label: "BPLO Assessment", color: DASHBOARD_CHART_COLORS[6] },
+            { key: "bploPayment", label: "BPLO Payment", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "bploRelease", label: "BPLO Release", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "departmentHeadApproval", label: "Department Head Approval", color: DASHBOARD_CHART_COLORS[5] },
+            { key: "jitInspection", label: "JIT Inspection", color: DASHBOARD_CHART_COLORS[4] },
           ]}
           emptyTitle="No application volume data available yet."
-          emptyDescription="Stage volume will appear once applications and inspections are available."
+          emptyDescription="Stage volume appears once applications and inspections are available."
         />
 
         <DashboardLineChart
-          title="Transaction / Activity Logs Volume"
-          description="Daily trend for submissions, approvals, returns/rejections, inspections, payment verification, permit releases, and SMS outcomes."
+          title="Daily transaction outcomes"
+          description="Submissions, approvals, returns/rejections, inspections, payment checks, permit releases, and SMS outcomes. Spikes in returns/rejections often predict follow-up applicant traffic."
           data={metrics.transactionVolume}
           series={[
-            { key: "logins", label: "Logins (if tracked)", color: "#64748b" },
-            { key: "submitted", label: "Applications Submitted", color: "#2563eb" },
-            { key: "approvals", label: "Approvals", color: "#16a34a" },
-            { key: "returnsRejections", label: "Returns/Rejections", color: "#dc2626" },
-            { key: "inspections", label: "Inspections", color: "#7c3aed" },
-            { key: "paymentVerification", label: "Payment Verification", color: "#ea580c" },
-            { key: "permitReleases", label: "Permit Releases", color: "#0891b2" },
-            { key: "smsSent", label: "SMS Sent", color: "#22c55e" },
-            { key: "smsFailed", label: "SMS Failed", color: "#ef4444" },
+            { key: "logins", label: "Logins (if tracked)", color: DASHBOARD_CHART_COLORS[5] },
+            { key: "submitted", label: "Applications Submitted", color: DASHBOARD_CHART_COLORS[2] },
+            { key: "approvals", label: "Approvals", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "returnsRejections", label: "Returns/Rejections", color: DASHBOARD_CHART_COLORS[4] },
+            { key: "inspections", label: "Inspections", color: DASHBOARD_CHART_COLORS[6] },
+            { key: "paymentVerification", label: "Payment Verification", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "permitReleases", label: "Permit Releases", color: DASHBOARD_CHART_COLORS[1] },
+            { key: "smsSent", label: "SMS Sent", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "smsFailed", label: "SMS Failed", color: DASHBOARD_CHART_COLORS[4] },
           ]}
           emptyTitle="No transaction activity available yet."
-          emptyDescription="Activity trends will render when history and related logs contain records."
+          emptyDescription="Activity trends render when history and related logs contain records."
         />
 
         <DashboardStackedBarChart
-          title="Compliance & Revocation Trends"
-          description="Released permits, verified non-compliant inspections, revoked businesses, and renewals under revocation-related restriction."
+          title="Compliance and revocation pressure"
+          description="Released permits versus verified non-compliant inspections, revoked businesses, and renewals blocked by revocation-related status."
           data={metrics.complianceRevocationTrends}
           categoryKey="metric"
           series={[
-            { key: "releasedPermits", label: "Approved/Released Permits", color: "#16a34a" },
-            { key: "verifiedNonCompliant", label: "Verified Non-Compliant", color: "#f97316" },
-            { key: "revokedBusinesses", label: "Revoked Businesses", color: "#dc2626" },
-            { key: "restrictedRenewals", label: "Restricted/Disabled Renewals", color: "#7c3aed" },
+            { key: "releasedPermits", label: "Approved/Released Permits", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "verifiedNonCompliant", label: "Verified Non-Compliant", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "revokedBusinesses", label: "Revoked Businesses", color: DASHBOARD_CHART_COLORS[4] },
+            { key: "restrictedRenewals", label: "Restricted/Disabled Renewals", color: DASHBOARD_CHART_COLORS[5] },
           ]}
           emptyTitle="No compliance or revocation records yet."
-          emptyDescription="Compliance and revocation trends will appear once inspection and revocation data exists."
+          emptyDescription="Compliance and revocation trends appear once inspection and revocation data exists."
         />
 
         <DashboardLineChart
-          title="Business Closure Prevalence"
-          description="Monthly closure trend based on closure application timestamps."
+          title="Business closure prevalence"
+          description="Monthly closure filings. An upward curve means more businesses are exiting operations and will need certificate processing."
           data={metrics.closurePrevalenceTrend}
           lineLabel="Closure Applications"
           emptyTitle="No closure application trends yet."
-          emptyDescription="Closure trend will appear once closure applications are filed."
+          emptyDescription="Closure trend appears once closure applications are filed."
         />
 
         <DashboardHorizontalBarChart
-          title="Most Prevalent Business Categories by Area"
-          description="Top area/category combinations, grouped by barangay with fallback to Unspecified Category."
+          title="Where businesses concentrate"
+          description="Top barangay + line-of-business combinations. Useful for planning JIT coverage and anticipating document volume by area."
           data={metrics.prevalentBusinessCategoriesByArea}
           barLabel="Business Records"
           emptyTitle="No business category data available yet."
@@ -186,34 +325,38 @@ export default async function SuperAdminDashboard() {
         />
 
         <DashboardPieChart
-          title="SMS Sent and Failed"
-          description="Distribution of SMS delivery statuses from SmsDeliveryLog."
+          title="SMS delivery health"
+          description="Share of sent, failed, and skipped SMS. High skipped/failed share usually means configuration, credits, or invalid contact data."
           data={metrics.smsDeliveryDistribution}
           emptyTitle="No SMS delivery logs available yet."
-          emptyDescription="SMS status analytics will render once delivery logs are recorded."
+          emptyDescription="SMS status analytics render once delivery logs are recorded."
         />
 
         <SectionCard
-          title="Error & Exception Logs"
-          description="System error tracking from persisted error logs."
+          title="Error & exception logs"
+          description="Persisted system exception tracking for IT root-cause analysis."
         >
           {metrics.errorLogConfigured ? null : (
             <EmptyState
-              title="Error log tracking is not configured yet."
-              description="No error/exception log table is currently available in this deployment."
+              title="Error log tracking is not configured yet"
+              description="No dedicated error/exception log table is available in this deployment. Use Activity Log and SMS Delivery Log as interim diagnostics."
             />
           )}
         </SectionCard>
       </div>
 
       <SectionCard
-        title="System Health Indicators"
-        description="Internal indicators only; this is not full server uptime or infrastructure monitoring."
+        title="System health indicators"
+        description="Internal application health only — not a substitute for infrastructure uptime monitoring."
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <DashboardGaugeCard
             title="Database Reachability"
-            description={metrics.systemHealth.databaseReachable ? "Database ping succeeded." : "Database ping failed."}
+            description={
+              metrics.systemHealth.databaseReachable
+                ? "Database ping succeeded for this dashboard refresh."
+                : "Database ping failed — treat other charts as potentially stale."
+            }
             value={dbHealthValue}
             max={dbHealthMax}
             unit="Reachable"
@@ -221,19 +364,19 @@ export default async function SuperAdminDashboard() {
           <StatCard
             title="Last Successful Dashboard Check"
             value={lastCheckLabel}
-            subtitle="Last aggregation run"
-            tone="slate"
+            subtitle="When this snapshot was aggregated"
+            tone="blue"
           />
           <StatCard
             title="Recent Failed SMS (7 days)"
             value={metrics.systemHealth.recentFailedSmsCount.toLocaleString("en-PH")}
-            subtitle="SmsDeliveryLog status = FAILED"
+            subtitle="From SmsDeliveryLog with FAILED status"
             tone={metrics.systemHealth.recentFailedSmsCount > 0 ? "red" : "green"}
           />
           <StatCard
             title="Recent Activity Volume (7 days)"
             value={metrics.systemHealth.recentActivityVolume.toLocaleString("en-PH")}
-            subtitle="Application history entries"
+            subtitle={`≈ ${snapshot.recentActivityAveragePerDay.toLocaleString("en-PH")} events/day`}
             tone="blue"
           />
         </div>

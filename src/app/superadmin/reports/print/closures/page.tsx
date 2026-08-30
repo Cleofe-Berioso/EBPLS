@@ -5,7 +5,9 @@ import {
   getBusinessClosureReport,
   type BusinessClosureReportFilters,
 } from "@/lib/superadmin-data";
+import { buildClosureReportNarrative, REPORT_PURPOSES } from "@/lib/report-narrative-builders";
 import { ReportPageHeader } from "@/components/print/reports/report-page-header";
+import { ReportNarrative, ReportSection } from "@/components/print/reports/report-section";
 import { ReportSummaryCard } from "@/components/print/reports/report-summary-card";
 import { ReportTable } from "@/components/print/reports/report-table";
 import { ReportEmptyState } from "@/components/print/reports/report-empty-state";
@@ -43,7 +45,7 @@ export default async function BusinessClosureReportPage({ searchParams }: PagePr
 
   const meta = buildReportMetadata({
     title: "Business Closure Report",
-    generatedBy: session.user.name ?? "Super Admin",
+    generatedBy: session.user.name ?? "IT Administrator",
     dateFrom: params.from,
     dateTo: params.to,
   });
@@ -53,6 +55,12 @@ export default async function BusinessClosureReportPage({ searchParams }: PagePr
     !["Released", "Rejected"].includes(r.closureStatus)
   ).length;
   const withCert = rows.filter((r) => r.closureCertStatus !== "Not Issued").length;
+  const narrative = buildClosureReportNarrative({
+    total: rows.length,
+    releasedCount: releasedCerts,
+    pendingCount: pendingClosures,
+    dateRange: meta.dateRange,
+  });
 
   const resetHref = "/superadmin/reports/print/closures";
 
@@ -124,18 +132,26 @@ export default async function BusinessClosureReportPage({ searchParams }: PagePr
         </form>
       </div>
 
-      {/* ── Summary ──────────────────────────────────────────────────── */}
-      <ReportSummaryCard
-        title="Summary"
-        items={[
-          { label: "Total Closures", value: rows.length, tone: "slate" },
-          { label: "Pending", value: pendingClosures, tone: "amber" },
-          { label: "With Certificate", value: withCert, tone: "blue" },
-          { label: "Certificate Released", value: releasedCerts, tone: "green" },
-        ]}
-      />
+      <ReportSection number={1} title="Report Purpose" description="Why closure reporting matters for inventory control.">
+        <ReportNarrative paragraphs={[REPORT_PURPOSES.closures]} />
+      </ReportSection>
 
-      {/* ── Detail table ─────────────────────────────────────────────── */}
+      <ReportSection number={2} title="Findings & Interpretation" description="What the closure cohort indicates.">
+        <ReportNarrative paragraphs={narrative.paragraphs} bullets={narrative.bullets} />
+      </ReportSection>
+
+      <ReportSection number={3} title="Summary Statistics" description="Headline closure and certificate counts.">
+        <ReportSummaryCard
+          items={[
+            { label: "Total Closures", value: rows.length, hint: "Closure applications in scope" },
+            { label: "Pending", value: pendingClosures, hint: "Not yet released or rejected" },
+            { label: "With Certificate", value: withCert, hint: "Certificate record exists" },
+            { label: "Certificate Released", value: releasedCerts, hint: "Exit document completed" },
+          ]}
+        />
+      </ReportSection>
+
+      <ReportSection number={4} title="Detailed Closure Records" description="Line-level closure evidence.">
       {rows.length === 0 ? (
         <ReportEmptyState description="No closure applications found for the selected filters." />
       ) : (
@@ -145,6 +161,7 @@ export default async function BusinessClosureReportPage({ searchParams }: PagePr
           rows={(rows as unknown) as Record<string, unknown>[]}
         />
       )}
+      </ReportSection>
     </div>
   );
 }

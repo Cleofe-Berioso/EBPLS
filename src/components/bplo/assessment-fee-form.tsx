@@ -4,6 +4,15 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AssessmentDetail, AssessmentLineItem, SavedAssessment } from "@/lib/bplo-assessment";
+import {
+  bploFormControlClass,
+  bploHighlightPanelClass,
+  bploPanelClass,
+  bploSummaryLabelClass,
+  bploSummaryTileClass,
+  bploSummaryValueClass,
+  bploWarningPanelClass,
+} from "@/components/bplo/bplo-ui-styles";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -31,10 +40,10 @@ function SummaryTile({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/85 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    <div className={bploSummaryTileClass}>
+      <p className={bploSummaryLabelClass}>{label}</p>
+      <p className={bploSummaryValueClass}>{value}</p>
+      {helper ? <p className="mt-1 ui-caption">{helper}</p> : null}
     </div>
   );
 }
@@ -199,7 +208,7 @@ export function AssessmentFeeForm({ detail }: Props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page-stack">
       <InfoBanner
         title="Assessment workspace"
         description="Build the Tax Order of Payment using auditable fee line items. System-generated penalties and closure fees stay locked."
@@ -215,30 +224,38 @@ export function AssessmentFeeForm({ detail }: Props) {
       ) : null}
 
       <SectionCard title="Application Summary" description="Current assessment target and applicant record.">
-        <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 text-sm text-[var(--ink-muted)] md:grid-cols-2 xl:grid-cols-4">
           <div>
-            <span className="text-slate-500">Application No.</span>
-            <p className="font-mono font-medium text-slate-900">{detail.applicationNumber}</p>
+            <span className={bploSummaryLabelClass}>Application No.</span>
+            <p className="font-mono font-medium text-[var(--foreground)]">{detail.applicationNumber}</p>
           </div>
           <div>
-            <span className="text-slate-500">Type</span>
-            <p className="font-medium capitalize text-slate-900">{detail.applicationType.toLowerCase()}</p>
+            <span className={bploSummaryLabelClass}>Type</span>
+            <p className="font-medium capitalize text-[var(--foreground)]">{detail.applicationType.toLowerCase()}</p>
           </div>
           <div>
-            <span className="text-slate-500">Status</span>
-            <p className="font-medium text-slate-900">{detail.status}</p>
+            <span className={bploSummaryLabelClass}>Status</span>
+            <p className="font-medium text-[var(--foreground)]">{detail.status}</p>
           </div>
           <div>
-            <span className="text-slate-500">Applicant</span>
-            <p className="font-medium text-slate-900">{detail.applicant.name}</p>
-            <p className="text-xs text-slate-600">{detail.applicant.email}</p>
+            <span className={bploSummaryLabelClass}>Applicant</span>
+            <p className="font-medium text-[var(--foreground)]">{detail.applicant.name}</p>
+            <p className="ui-caption">{detail.applicant.email}</p>
           </div>
           <div className="md:col-span-2 xl:col-span-4">
-            <span className="text-slate-500">Business Name</span>
-            <p className="font-medium text-slate-900">{detail.businessName}</p>
+            <span className={bploSummaryLabelClass}>Business Name</span>
+            <p className="font-medium text-[var(--foreground)]">{detail.businessName}</p>
           </div>
         </div>
       </SectionCard>
+
+      {detail.hasTaxIncentives ? (
+        <InfoBanner
+          title="Applicant has a declared tax incentive"
+          description="This applicant declared a government-granted tax incentive during application. Verify the uploaded Tax Incentive Certificate/Proof before finalizing the assessment."
+          variant="warning"
+        />
+      ) : null}
 
       <SectionCard title="System Guidance" description="Assessment basis from the current application and automatic penalty rules.">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -263,14 +280,14 @@ export function AssessmentFeeForm({ detail }: Props) {
               description={
                 detail.suggestedFees.renewalCompliancePenalty > 0
                   ? `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). A system-generated penalty of ₱\u00a0${detail.suggestedFees.renewalCompliancePenalty.toLocaleString("en-PH", { minimumFractionDigits: 2 })} will be added to the fee line items.`
-                  : `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). No penalty amount is configured — contact the Super Admin to set the compliance penalty amounts.`
+                  : `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). No penalty amount is configured — contact the IT Administrator to set the compliance penalty amounts.`
               }
               variant="warning"
             />
           </div>
         ) : null}
 
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/85 p-4 text-sm text-slate-700">
+        <div className={`mt-4 ${bploPanelClass}`}>
           {detail.suggestedFees.computation}
         </div>
       </SectionCard>
@@ -308,22 +325,24 @@ export function AssessmentFeeForm({ detail }: Props) {
           {editableLineItems.map((item) => {
             const actualIndex = lineItems.findIndex((candidate) => candidate.id === item.id);
             return (
-              <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1fr_180px_auto]">
+              <div key={item.id} className={`grid gap-3 ${bploHighlightPanelClass} md:grid-cols-[1fr_180px_auto]`}>
                 <input
+                  aria-label="Fee description"
                   value={item.description}
                   disabled={!isEditable}
                   onChange={(event) => updateLineItem(actualIndex, { description: event.target.value })}
                   placeholder="Fee description"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                  className={bploFormControlClass}
                 />
                 <input
                   type="number"
                   min="0"
                   step="0.01"
+                  aria-label="Fee amount"
                   value={item.amount}
                   disabled={!isEditable}
                   onChange={(event) => updateLineItem(actualIndex, { amount: Number(event.target.value) || 0 })}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-right text-sm focus:border-emerald-500 focus:outline-none"
+                  className={`${bploFormControlClass} text-right`}
                 />
                 <button
                   type="button"
@@ -338,21 +357,21 @@ export function AssessmentFeeForm({ detail }: Props) {
           })}
 
           {editableLineItems.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+            <div className={`rounded-[var(--radius-card)] border border-dashed border-[var(--border-color)] bg-[var(--muted-surface)] p-4 text-sm text-[var(--ink-muted)]`}>
               No BPLO-entered fee items yet.
             </div>
           ) : null}
 
           {systemLineItems.length > 0 ? (
             <div className="space-y-3 pt-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">System-generated items</p>
+              <p className={bploSummaryLabelClass}>System-generated items</p>
               {systemLineItems.map((item) => (
-                <div key={item.id} className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 md:grid-cols-[1fr_180px]">
+                <div key={item.id} className={`grid gap-3 ${bploWarningPanelClass} md:grid-cols-[1fr_180px]`}>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{item.description}</p>
-                    <p className="text-xs text-slate-600">Automatically computed and not editable.</p>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">{item.description}</p>
+                    <p className="ui-caption">Automatically computed and not editable.</p>
                   </div>
-                  <div className="rounded-xl border border-amber-300 bg-white px-3 py-2 text-right text-sm font-medium text-slate-800">
+                  <div className="rounded-[var(--radius-control)] border border-[var(--border-color)] bg-[var(--surface)] px-3 py-2 text-right text-sm font-medium text-[var(--foreground)]">
                     ₱ {item.amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                   </div>
                 </div>
@@ -372,10 +391,11 @@ export function AssessmentFeeForm({ detail }: Props) {
               type="number"
               min="0"
               step="0.01"
+              aria-label="Settlement / Outstanding Amount"
               value={closurePaymentDues}
               disabled={!isEditable}
               onChange={(event) => setClosurePaymentDues(Number(event.target.value) || 0)}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-right text-sm focus:border-emerald-500 focus:outline-none"
+              className={`${bploFormControlClass} text-right`}
             />
           </FormField>
         </SectionCard>
@@ -396,10 +416,11 @@ export function AssessmentFeeForm({ detail }: Props) {
           <FormField label="Remarks" hint="Explain manual adjustments or special cases for audit review.">
             <textarea
               rows={4}
+              aria-label="Remarks"
               value={remarks}
               disabled={!isEditable}
               onChange={(event) => setRemarks(event.target.value)}
-              className="w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none"
+              className={bploFormControlClass}
             />
           </FormField>
         </div>
@@ -438,7 +459,7 @@ export function AssessmentFeeForm({ detail }: Props) {
           </div>
         }
       >
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-[var(--ink-muted)]">
           Applicant payment submission becomes available only after TOP generation. Payment verification and permit issuance continue in their own modules.
         </p>
       </SectionCard>

@@ -1,0 +1,1218 @@
+React Doctor v0.5.8
+
+  
+
+  ΓÜá Bugs: Missing effect dependencies ├ù9
+    `useEffect` can run with a stale `router.replace` & show
+    your users old data.
+    ΓåÆ Don't blindly add missing dependencies. Read the hook
+    callback first.
+    
+    Bad:
+    useEffect(() => {
+      setCount(count + 1);
+    }, [count]);
+    
+    Better:
+    useEffect(() => {
+      setCount((currentCount) => currentCount + 1);
+    }, []);
+    
+    If the missing value is recreated every render, move it
+    inside the hook or stabilize it before adding it to deps.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/exhaustive-deps
+
+    src/components/applicant/applicant-layout-client.tsx:167
+
+    src/components/applicant/business-information-fields.tsx:361
+    Γå│ oxlint matches plugin rules only by their full name, so `react-hooks/exhaustive-deps` in your eslint-disable comment does not silence `react-doctor/exhaustive-deps` ΓÇö change it to `react-doctor/exhaustive-deps`.
+
+    src/components/applicant/closure-application-form.tsx:193
+
+    src/components/applicant/new-application-form.tsx:745
+
+    src/components/applicant/profile-picture-card.tsx:78
+
+    src/components/applicant/profile-picture-setup-client.tsx:44
+
+    src/components/applicant/renewal-application-form.tsx:422
+
+    src/components/jit/jit-inspect-business-client.tsx:161
+
+    src/components/superadmin/superadmin-users-manager.tsx:172
+    Γå│ oxlint matches plugin rules only by their full name, so `react-hooks/exhaustive-deps` in your eslint-disable comment does not silence `react-doctor/exhaustive-deps` ΓÇö change it to `react-doctor/exhaustive-deps`.
+
+  ΓÜá Bugs: Array index used as a key
+    Your users can see & submit the wrong data when this list
+    reorders or filters, so use a stable id like
+    `key={item.id}`, not the array index "i".
+    ΓåÆ Use a stable id from the item, like `key={item.id}` or
+    `key={item.slug}`. Index keys break when the list reorders
+    or filters.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-array-index-as-key
+
+    src/components/auth/register-form.tsx:369
+
+  ΓÜá Bugs: Time or random value in JSX ├ù3
+    This can cause a hydration mismatch because new Date()
+    reached from JSX gives a different value on the server than
+    in the browser. Move it into useEffect+useState to run only
+    in the browser, or add suppressHydrationWarning to the
+    parent if it's on purpose.
+    ΓåÆ Move time or random values into useEffect+useState so
+    they only run in the browser, or add
+    suppressHydrationWarning to the parent if it's intentional
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/rendering-hydration-mismatch-time
+
+    src/app/applicant/top/page.tsx:319-320
+
+    src/components/applicant/closure-application-form.tsx:770
+
+  ΓÜá Bugs: Sequential independent awaits ├ù4
+    This await doesn't use the previous result, so your users
+    wait twice as long for nothing.
+    ΓåÆ These two awaits don't depend on each other. Wrap them in
+    `Promise.all([...])` so they run at the same time.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/server-sequential-independent-await
+
+    src/app/api/department-head/revoke-permit-list/[inspectionId]/mark-settled/route.ts:16
+
+    src/app/api/department-head/settlement-management/[inspectionId]/settle/route.ts:12
+
+    src/app/api/jit/inspect-a-business/[businessRecordId]/route.ts:18
+
+    src/lib/bplo-assessment.ts:790
+
+  ΓÜá Performance: Independent awaits run sequentially ├ù7
+    These 3 sequential await statements run one after another
+    even though they look independent, so the page waits longer
+    than it needs to. Run them together with Promise.all()
+    instead
+    ΓåÆ Use `const [a, b] = await Promise.all([fetchA(),
+    fetchB()])` so independent calls run at the same time
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/async-parallel
+
+    src/app/api/applicant/applications/[applicationId]/documents/[documentId]/route.ts:18
+
+    src/lib/bplo-payment-verification.ts:401
+
+    src/lib/department-head-api.ts:721
+
+    src/lib/department-head-api.ts:969
+
+    src/lib/department-head-api.ts:1003
+
+    src/lib/jit-inspections.ts:201
+
+    src/lib/password-reset.ts:226
+
+  ΓÜá Bugs: Derived state stored in an effect ├ù4
+    You pay an extra render for state you can derive from other
+    values.
+    ΓåÆ Work out derived values while rendering: `const x =
+    fn(dep)`. To reset a component's state when a prop changes,
+    give it a key prop: `<Component key={prop} />`. See
+    https://react.dev/learn/you-might-not-need-an-effect
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-derived-state-effect
+
+    src/components/bplo/bplo-layout-client.tsx:41
+
+    src/components/department-head/inspection-verification-client.tsx:102
+
+    src/components/department-head/permit-to-revoke-client.tsx:102
+
+    src/components/ui/searchable-select.tsx:65
+
+  ΓÜá Bugs: Prop mirrored into state via effect
+    Your screen shows the old value first because useState
+    "displayName" copies prop "userName" through this effect.
+    ΓåÆ Delete both the `useState` and the `useEffect` and read
+    the prop directly while rendering. Copying a prop into
+    state shows the old value on the first render before the
+    effect catches up.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-mirror-prop-effect
+
+    src/components/bplo/bplo-layout-client.tsx:41
+
+  ΓÜá Performance: await inside a loop ├ù20
+    This makes the while-loop slow because each await runs one
+    after another, so collect the independent calls & run them
+    together with `await Promise.all(items.map(...))`
+    ΓåÆ Collect the items, then use `await
+    Promise.all(items.map(...))` so independent work runs at
+    the same time
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/async-await-in-loop
+
+    prisma/seed.ts:371
+
+    prisma/seed.ts:579
+
+    prisma/seed.ts:602
+
+    prisma/seed.ts:835
+
+    prisma/seed.ts:979
+
+    prisma/seed.ts:1098
+
+    prisma/seed.ts:1297
+
+    prisma/seed.ts:1722
+
+    prisma/seed.ts:1995
+
+    prisma/seed.ts:2117
+
+    prisma/seed.ts:2449
+
+    src/app/api/address/barangays/route.ts:342
+
+    src/app/api/address/barangays/route.ts:465
+
+    src/app/api/address/cities/route.ts:118
+
+    src/lib/applications.ts:1217
+
+    src/lib/applications.ts:1265
+
+    src/lib/applications.ts:1325
+
+    src/lib/applications.ts:1378
+
+    src/lib/applications.ts:1432
+
+    src/lib/bplo-permit-issuance.ts:191
+
+  ΓÜá Bugs: useSearchParams without Suspense ├ù3
+    <ClosureApplicationForm> uses useSearchParams() outside
+    <Suspense>, so this page falls back to client-side
+    rendering.
+    ΓåÆ Wrap the component using `useSearchParams` in
+    `<Suspense>` so the rest of the page can stay statically
+    rendered.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/nextjs-no-use-search-params-without-suspense
+
+    src/app/applicant/application/closure/page.tsx:12
+
+    src/app/applicant/application/new/page.tsx:12
+
+    src/app/applicant/application/renewal/page.tsx:12
+
+  ΓÜá Maintainability: Component rendered by inline function call ├ù5
+    Your users lose state because "renderActorRole()" builds UI
+    from an inline call that React remounts, so pull it into
+    its own component instead.
+    ΓåÆ Make it a named component so React preserves its identity
+    and does not remount its state.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-render-in-render
+
+    src/app/superadmin/activities/page.tsx:329
+
+    src/app/superadmin/activities/page.tsx:333
+
+    src/app/superadmin/activities/page.tsx:352
+
+    src/app/superadmin/activities/page.tsx:367
+
+    src/components/applicant/applicant-sidebar.tsx:143
+
+  ΓÜá Bugs: Client-side redirect for navigation ├ù2
+    router.replace() in useEffect flashes the wrong page before
+    redirecting.
+    ΓåÆ Avoid redirects inside useEffect. Use an event handler,
+    middleware, or server-side redirect (App Router: redirect()
+    from next/navigation; Pages Router: getServerSideProps
+    redirect)
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/nextjs-no-client-side-redirect
+
+    src/components/applicant/applicant-layout-client.tsx:113
+
+    src/components/applicant/applicant-layout-client.tsx:135
+
+  ΓÜá Bugs: Effects chained together
+    Your screen redraws several times from a single action
+    because one useEffect changes "info", which sets off this
+    one.
+    ΓåÆ Compute as much as possible during render (e.g. `const
+    isGameOver = round > 5`) and write all related state inside
+    the event handler that originally fires the chain. Each
+    effect link adds an extra render and makes the code rigid
+    as requirements evolve
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-effect-chain
+
+    src/components/applicant/renewal-application-form.tsx:430
+
+  ΓÜá Bugs: Prop derived into useState
+    Your users see a stale value when prop "userName" changes
+    because useState copies it once.
+    ΓåÆ Compute the value inline so prop changes do not leave
+    `useState` holding a stale copy.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-derived-useState
+
+    src/components/bplo/bplo-layout-client.tsx:37
+
+  ΓÜá Bugs: Unknown DOM property ├ù6
+    React ignores this prop because it doesn't recognize the
+    name.
+    ΓåÆ Use the prop name React expects, like `className`,
+    `htmlFor`, or `tabIndex`, so the attribute is applied
+    correctly.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-unknown-property
+
+    src/components/print/closure-certificate-template.tsx:212
+
+    src/components/print/reports/report-page-header.tsx:86
+
+    src/components/ui/print-page-shell.tsx:52
+
+  ΓÜá Performance: Heavy library loaded eagerly ├ù6
+    "recharts" ships extra code to your users up front & slows
+    page load. Load it on demand with React.lazy() or
+    next/dynamic.
+    ΓåÆ Load it only when needed: `const Component = dynamic(()
+    => import('library'), { ssr: false })` from next/dynamic,
+    or React.lazy().
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/prefer-dynamic-import
+
+    src/components/ui/dashboard-bar-chart.tsx:3
+
+    src/components/ui/dashboard-gauge-card.tsx:3
+
+    src/components/ui/dashboard-horizontal-bar-chart.tsx:3
+
+    src/components/ui/dashboard-line-chart.tsx:3
+
+    src/components/ui/dashboard-pie-chart.tsx:3
+
+    src/components/ui/dashboard-stacked-bar-chart.tsx:3
+
+  ΓÜá Bugs: Data fetching inside an effect ├ù13
+    fetch() inside useEffect can race, double-fire, or leak.
+    Use a data-fetching layer or Server Component instead.
+    ΓåÆ Use a data-fetching layer or Server Component so fetches
+    do not race, double-fire, or leak from `useEffect`.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-fetch-in-effect
+
+    src/app/applicant/notifications/page.tsx:12
+
+    src/app/applicant/top/page.tsx:115
+
+    src/components/applicant/applicant-layout-client.tsx:45
+
+    src/components/applicant/closure-application-form.tsx:213
+
+    src/components/applicant/closure-application-form.tsx:248
+
+    src/components/applicant/new-application-form.tsx:753
+
+    src/components/applicant/profile-picture-card.tsx:42
+
+    src/components/applicant/renewal-application-form.tsx:559
+
+    src/components/applicant/renewal-application-form.tsx:594
+
+    src/components/bplo/bplo-layout-client.tsx:45
+
+    src/components/department-head/department-head-dashboard-client.tsx:19
+
+    src/components/jit/jit-business-map-client.tsx:94
+
+    src/components/jit/jit-no-permit-record-client.tsx:52
+
+  ΓÜá Accessibility: Control missing accessible label ├ù33
+    Blind users can't tell what this control does because
+    screen readers find no label, so add visible text,
+    `aria-label`, or `aria-labelledby`.
+    ΓåÆ Give every interactive control a label screen readers can
+    read.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/control-has-associated-label
+
+    src/components/applicant/business-information-fields.tsx:930
+
+    src/components/applicant/closure-application-form.tsx:693
+
+    src/components/applicant/closure-application-form.tsx:751
+
+    src/components/applicant/closure-application-form.tsx:766
+
+    src/components/applicant/new-application-form.tsx:530
+
+    src/components/applicant/new-application-form.tsx:1589
+
+    src/components/applicant/profile-picture-card.tsx:377
+
+    src/components/applicant/profile-picture-setup-client.tsx:245
+
+    src/components/applicant/renewal-application-form.tsx:1230
+
+    src/components/applicant/renewal-application-form.tsx:1248
+
+    src/components/applicant/renewal-application-form.tsx:1298
+
+    src/components/applicant/renewal-application-form.tsx:1447
+
+    src/components/applicant/renewal-application-form.tsx:1458
+
+    src/components/bplo/assessment-fee-form.tsx:312
+
+    src/components/bplo/assessment-fee-form.tsx:319
+
+    src/components/bplo/assessment-fee-form.tsx:371
+
+    src/components/bplo/assessment-fee-form.tsx:397
+
+    src/components/bplo/bplo-profile-settings-client.tsx:196
+
+    src/components/bplo/bplo-review-actions.tsx:84
+
+    src/components/department-head/revoke-permit-list-client.tsx:302
+
+    src/components/department-head/settlement-management-client.tsx:228
+
+    src/components/jit/jit-inspect-business-client.tsx:267
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:596
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:719
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:730
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:741
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:760
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:770
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:780
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:806
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:814
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:823
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:865
+
+  ΓÜá Bugs: Plain img ships unoptimized images ├ù16
+    Plain <img> ships unoptimized, oversized images.
+    ΓåÆ Use `next/image` so users get optimized formats,
+    responsive srcsets, and lazy loading instead of oversized
+    image downloads.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/nextjs-no-img-element
+
+    src/app/bplo/payment-verification/page.tsx:747
+
+    src/components/applicant/applicant-layout-client.tsx:258
+
+    src/components/applicant/profile-picture-card.tsx:271
+
+    src/components/applicant/profile-picture-card.tsx:391
+
+    src/components/applicant/profile-picture-setup-client.tsx:259
+
+    src/components/bplo/bplo-document-preview-list.tsx:187
+
+    src/components/bplo/bplo-layout-client.tsx:147
+
+    src/components/bplo/bplo-profile-settings-client.tsx:187-189
+
+    src/components/department-head/compliant-list-client.tsx:164
+
+    src/components/department-head/inspection-verification-client.tsx:304
+
+    src/components/department-head/permit-to-revoke-client.tsx:319
+
+    src/components/department-head/revoke-permit-list-client.tsx:230
+
+    src/components/superadmin/superadmin-users-manager.tsx:429
+
+    src/components/superadmin/superadmin-users-manager.tsx:522
+
+    src/components/ui/user-avatar.tsx:52
+
+  ΓÜá Bugs: Effect re-subscribes on a changing callback
+    Your effect re-subscribes whenever "onClose" changes, even
+    though it's only used inside `addEventListener`.
+    ΓåÆ Wrap the callback with `useEffectEvent(callback)` (React
+    19+) and call it inside the sub-handler. An Effect Event
+    always sees the latest props and state but isn't a
+    dependency, so the effect won't re-subscribe every time the
+    parent redraws. See
+    https://react.dev/reference/react/useEffectEvent
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/prefer-use-effect-event
+
+    src/components/ui/modal.tsx:88
+
+  ΓÜá Bugs: Multiple setState calls in one effect ├ù5
+    4 setState calls in one useEffect redraw your screen each
+    time they run together.
+    ΓåÆ Combine related updates in `useReducer` so one effect
+    does not redraw the screen once per `setState` call.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-cascading-set-state
+
+    src/components/applicant/applicant-layout-client.tsx:45
+
+    src/components/applicant/business-information-fields.tsx:192
+
+    src/components/applicant/business-information-fields.tsx:218
+
+    src/components/applicant/business-information-fields.tsx:244
+
+    src/components/department-head/inspection-verification-client.tsx:102
+
+  ΓÜá Bugs: Derived value copied into state ├ù5
+    Storing "fieldErrors" in state when you can derive it from
+    other values costs an extra render.
+    ΓåÆ Work out the value while rendering (or with useMemo if
+    it's expensive) instead of copying it into useState through
+    a useEffect. See
+    https://react.dev/learn/you-might-not-need-an-effect#updating-state-based-on-props-or-state
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-derived-state
+
+    src/components/applicant/new-application-form.tsx:706
+
+    src/components/applicant/renewal-application-form.tsx:434
+
+    src/components/applicant/renewal-application-form.tsx:478
+
+    src/components/bplo/bplo-layout-client.tsx:42
+
+    src/components/jit/jit-inspect-business-client.tsx:169
+
+  ΓÜá Bugs: next/image fill image is missing sizes
+    next/image uses fill without sizes, so your users download
+    the largest image.
+    ΓåÆ Add `sizes` matching your layout so `next/image` does not
+    assume the largest candidate and make users download
+    oversized images.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/nextjs-image-missing-sizes
+
+    src/components/auth/login-form.tsx:79
+
+  ΓÜá Maintainability: deslop/unused-file ├ù4
+    Unused file is not reachable from any entry point, so it
+    adds maintenance surface without shipping any code.
+    ΓåÆ Delete the file if it is truly unreachable, or import it
+    from an entry point.
+
+    find-test-app.js
+
+    src/components/department-head/department-head-dashboard-client.tsx
+
+    src/components/ui/print-page-shell.tsx
+
+    src/lib/jit-compliance-constants.ts
+
+  ΓÜá Bugs: Client fetch for server data ├ù2
+    useEffect + fetch in a page/layout makes your users wait
+    through an extra round trip & loading spinner.
+    ΓåÆ Remove 'use client' and fetch directly in the Server
+    Component. No API round-trip, and secrets stay on the
+    server.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/nextjs-no-client-fetch-for-server-data
+
+    src/app/applicant/notifications/page.tsx:12
+
+    src/app/applicant/top/page.tsx:115
+
+  ΓÜá Accessibility: Role used instead of HTML tag ├ù3
+    Screen reader users get more reliable semantics from
+    `<dialog>` than `role="dialog"`, so use `<dialog>` instead.
+    ΓåÆ Use the matching HTML element when one exists so browsers
+    and assistive tech get native semantics.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/prefer-tag-over-role
+
+    src/components/ui/modal.tsx:104
+
+    src/components/ui/searchable-select.tsx:177
+
+    src/components/ui/searchable-select.tsx:188
+
+  ΓÜá Performance: Array lookup inside a loop ├ù12
+    This scales poorly because `array.includes()` inside a loop
+    scans the whole list every time. Use a Set for
+    constant-time lookups.
+    ΓåÆ Use a `Set` or `Map` when you check for the same items
+    over and over. `Array.includes`/`find` scans the whole list
+    each time
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/js-set-map-lookups
+
+    src/lib/audit-log.ts:72
+
+    src/lib/department-head-dashboard.ts:167-172
+
+    src/lib/fee-computation.ts:379
+
+    src/lib/jit-dashboard.ts:240
+
+    src/lib/jit-dashboard.ts:259
+
+    src/lib/superadmin-data.ts:445
+
+  ΓÜá Performance: State only used in handlers ├ù9
+    Each update to "guardAttempt" redraws your component for
+    nothing because this useState is set but never shown on
+    screen.
+    ΓåÆ Use useRef instead of useState when the value is only set
+    and never shown on screen. `ref.current = ...` updates it
+    without redrawing the component.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/rerender-state-only-in-handlers
+
+    src/components/applicant/applicant-layout-client.tsx:36
+
+    src/components/applicant/closure-application-form.tsx:165
+
+    src/components/applicant/new-application-form.tsx:625
+
+    src/components/applicant/profile-picture-setup-client.tsx:31
+
+    src/components/applicant/renewal-application-form.tsx:394
+
+    src/components/jit/jit-inspect-business-client.tsx:82
+
+    src/components/maps/business-location-picker.tsx:42
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:129
+
+    src/components/superadmin/superadmin-users-manager.tsx:83
+
+  ΓÜá Bugs: Button missing explicit type ├ù6
+    Your users can submit the form by accident because a
+    `<button>` with no `type` defaults to submit.
+    ΓåÆ Set an explicit button `type` so plain buttons do not
+    submit forms by accident: `type="button"`, `"submit"`, or
+    `"reset"`.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/button-has-type
+
+    src/components/applicant/notification-dropdown.tsx:64
+
+    src/components/applicant/notification-dropdown.tsx:96
+
+    src/components/applicant/notification-dropdown.tsx:130
+
+    src/components/applicant/notification-dropdown.tsx:229
+
+    src/components/jit/jit-no-permit-record-client.tsx:140
+
+    src/components/jit/jit-no-permit-record-client.tsx:277
+
+  ΓÜá Maintainability: deslop/circular-dependency
+    Circular import cycle: src/lib/business-location.ts ΓåÆ
+    src/lib/jit-inspections.ts. Modules in the cycle can
+    observe partially initialized exports, causing
+    order-dependent bugs.
+    ΓåÆ Break the cycle by extracting the shared code into a
+    third module that both files import.
+
+    src/lib/business-location.ts
+
+  ΓÜá Bugs: Event logic handled in an effect ├ù7
+    Faking an event handler with a prop plus a useEffect costs
+    an extra render & runs late.
+    ΓåÆ Run the side effect in the event handler that triggers
+    it, instead of watching its state from a useEffect. See
+    https://react.dev/learn/you-might-not-need-an-effect#sharing-logic-between-event-handlers
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-event-handler
+
+    src/components/applicant/business-information-fields.tsx:101-102
+
+    src/components/applicant/business-information-fields.tsx:142
+
+    src/components/applicant/business-information-fields.tsx:346
+
+    src/components/jit/jit-inspect-business-client.tsx:92-94
+
+    src/components/jit/jit-inspect-business-client.tsx:168
+
+  ΓÜá Bugs: State updates chained through effects ├ù9
+    Chaining state updates triggers an extra render each step.
+    ΓåÆ Set all the related state together in the event handler
+    that starts it, instead of having one useEffect react to a
+    state change and set more state. See
+    https://react.dev/learn/you-might-not-need-an-effect#chains-of-computations
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-chain-state-updates
+
+    src/components/applicant/closure-application-form.tsx:209-210
+
+    src/components/department-head/inspection-verification-client.tsx:103-107
+
+    src/components/department-head/permit-to-revoke-client.tsx:103
+
+    src/components/ui/searchable-select.tsx:66
+
+  ΓÜá Performance: Empty default prop breaks memo ├ù2
+    This keeps redrawing children that compare props because
+    default prop value [] makes a brand new array every render,
+    so move it to a constant at the top of the file
+    ΓåÆ Move it to the top of the file: `const EMPTY_ITEMS:
+    Item[] = []`, then use that as the default value
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/rerender-memo-with-default-value
+
+    src/components/applicant/business-information-fields.tsx:87-88
+
+  ΓÜá Bugs: State initialized from a mount effect ├ù4
+    Your users see an extra render with empty "countryLoading"
+    because a useEffect sets its starting value.
+    ΓåÆ Pass the initial value directly to useState() instead of
+    setting it from a mount-only useEffect. For SSR hydration,
+    prefer useSyncExternalStore().
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-initialize-state
+
+    src/components/applicant/business-information-fields.tsx:173
+
+    src/components/applicant/business-information-fields.tsx:286
+
+    src/components/applicant/profile-picture-setup-client.tsx:36
+
+    src/components/ui/modal.tsx:34
+
+  ΓÜá Performance: useEffect setState flashes on mount ├ù2
+    This flashes for your users because useEffect(setState, [])
+    runs after the first paint, so use useSyncExternalStore, or
+    add suppressHydrationWarning
+    ΓåÆ Use `useSyncExternalStore(subscribe, getSnapshot,
+    getServerSnapshot)` or add `suppressHydrationWarning` to
+    the element
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/rendering-hydration-no-flicker
+
+    src/components/applicant/profile-picture-setup-client.tsx:35
+
+    src/components/ui/modal.tsx:33
+
+  ΓÜá Performance: State initializer runs on every render
+    useState(normalizeLineItems()) re-runs normalizeLineItems()
+    on every render & throws the result away.
+    ΓåÆ Wrap expensive initial state in an arrow function so the
+    initializer does not rerun and get thrown away on every
+    render.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/rerender-lazy-state-init
+
+    src/components/bplo/assessment-fee-form.tsx:70
+
+  ΓÜá Maintainability: Static value rebuilt every render
+    `steps` inside `StepIndicator` uses no local state but is
+    rebuilt every render, so it looks new each time & breaks
+    memoized children. Move it to the top of the file, outside
+    the component.
+    ΓåÆ Move the value above the component, at the top of the
+    file. It doesn't use local state, so rebuilding it each
+    update is wasted and makes it look new every time.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/prefer-module-scope-static-value
+
+    src/components/auth/register-form.tsx:77
+
+  ΓÜá Accessibility: Custom modal instead of dialog
+    Keyboard users can tab out of this `role="dialog"` modal
+    because it has no built-in focus trapping, so use the
+    native `<dialog>`, which gives you focus trapping, `Escape`
+    to close, and the backdrop for free.
+    ΓåÆ Replace the wrapper with `<dialog>` and open it with
+    `dialog.showModal()`. For the trigger, prefer `<button
+    commandfor="id" command="show-modal">` (Chrome 135+), or a
+    `useRef` with `dialogRef.current?.showModal()`.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/prefer-html-dialog
+
+    src/components/ui/modal.tsx:104
+
+  ΓÜá Maintainability: deslop/unused-export ├ù65
+    Unused export: `getStatusBadgeClass` is exported but no
+    module imports it, so it expands the public surface and can
+    mislead callers about supported API.
+    ΓåÆ Drop the `export` keyword (or remove the declaration) if
+    no other module uses this symbol.
+
+    src/components/ui/status-badge.tsx:30
+
+    src/lib/address-options.ts:309
+
+    src/lib/address-options.ts:313
+
+    src/lib/address-options.ts:321
+
+    src/lib/address-options.ts:329
+
+    src/lib/address-options.ts:333
+
+    src/lib/address-options.ts:337
+
+    src/lib/applicant-mock.ts:13
+
+    src/lib/applicant-mock.ts:80
+
+    src/lib/applicant-mock.ts:125
+
+    src/lib/applicant-mock.ts:149
+
+    src/lib/applicant-profile-setup-next.ts:1
+
+    src/lib/applicant-types.ts:38
+
+    src/lib/application-mappers.ts:4
+
+    src/lib/application-status.ts:3
+
+    src/lib/application-status.ts:20
+
+    src/lib/applications.ts:1438
+
+    src/lib/audit-log.ts:355
+
+    src/lib/bplo-applications.ts:33
+
+    src/lib/business-location.ts:597
+
+    src/lib/business-rules.ts:202
+
+    src/lib/business-rules.ts:252
+
+    src/lib/business-rules.ts:282
+
+    src/lib/business-rules.ts:296
+
+    src/lib/business-rules.ts:304
+
+    src/lib/business-rules.ts:311
+
+    src/lib/business-rules.ts:325
+
+    src/lib/business-rules.ts:329
+
+    src/lib/business-rules.ts:335
+
+    src/lib/business-rules.ts:347
+
+    src/lib/closure-eligibility.ts:195
+
+    src/lib/closure-eligibility.ts:199
+
+    src/lib/document-storage.ts:164
+
+    src/lib/document-storage.ts:237
+
+    src/lib/document-storage.ts:366
+
+    src/lib/document-storage.ts:416-417
+
+    src/lib/document-upload-rules.ts:2
+
+    src/lib/fee-computation.ts:375
+
+    src/lib/fee-settings.ts:41
+
+    src/lib/fee-settings.ts:301
+
+    src/lib/jit-settings.ts:29
+
+    src/lib/jit-settings.ts:47
+
+    src/lib/mock-notifications.ts:75
+
+    src/lib/mock-notifications.ts:124
+
+    src/lib/mock-notifications.ts:132
+
+    src/lib/password-reset.ts:23
+
+    src/lib/password-reset.ts:256
+
+    src/lib/payment-reference.ts:116
+
+    src/lib/payment-reference.ts:129
+
+    src/lib/printable-documents.ts:507
+
+    src/lib/printable-reports.ts:34
+
+    src/lib/printable-reports.ts:42
+
+    src/lib/printable-reports.ts:55
+
+    src/lib/printable-reports.ts:72
+
+    src/lib/printable-reports.ts:80
+
+    src/lib/printable-reports.ts:94
+
+    src/lib/printable-reports.ts:130
+
+    src/lib/printable-reports.ts:145
+
+    src/lib/printable-reports.ts:153
+
+    src/lib/printable-reports.ts:238
+
+    src/lib/profile-image-upload-rules.ts:1
+
+    src/lib/profile-image-upload-rules.ts:17
+
+    src/lib/renewal-eligibility.ts:132
+
+  ΓÜá Performance: Intl formatter rebuilt each call ├ù15
+    This is slow because new Intl.DateTimeFormat() rebuilds on
+    every call inside a function, so move it to the top of the
+    file, or wrap it in useMemo
+    ΓåÆ Move `new Intl.NumberFormat(...)` to the top of the file
+    or wrap it in `useMemo`. Building one is slow, so don't
+    redo it on every call
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/js-hoist-intl
+
+    src/app/applicant/my-applications/[applicationId]/page.tsx:21
+
+    src/app/applicant/my-applications/[applicationId]/page.tsx:50
+
+    src/app/bplo/applications/[applicationId]/page.tsx:26
+
+    src/app/bplo/applications/[applicationId]/page.tsx:54
+
+    src/app/department-head/application-approval/page.tsx:45
+
+    src/app/department-head/application-approval/page.tsx:74
+
+    src/components/applicant/application-progress-overview.tsx:73
+
+    src/components/applicant/upload-slot.tsx:19
+
+    src/components/bplo/bplo-document-preview-list.tsx:25
+
+    src/components/department-head/compliant-list-client.tsx:34
+
+    src/components/department-head/inspection-verification-client.tsx:34
+
+    src/components/department-head/permit-to-revoke-client.tsx:38
+
+    src/components/department-head/revoke-permit-list-client.tsx:41
+
+    src/components/department-head/settlement-management-client.tsx:33
+
+    src/lib/document-storage.ts:39
+
+  ΓÜá Performance: Spread copy before sort() ├ù2
+    This wastes work because [...array].sort() copies the array
+    just to sort it, so use array.toSorted() to sort without
+    the extra copy (ES2023)
+    ΓåÆ Use `array.toSorted()` (ES2023) instead of
+    `[...array].sort()` so you sort without copying the array
+    first
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/js-tosorted-immutable
+
+    src/lib/address-options.ts:310
+
+    src/lib/address-options.ts:326
+
+  ΓÜá Performance: JSX element passed as a prop ├ù16
+    This child redraws every render because the prop gets brand
+    new JSX each time.
+    ΓåÆ Move the JSX outside the component or wrap it in
+    `useMemo` so memoized children do not redraw every render.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/jsx-no-jsx-as-prop
+
+    src/app/applicant/dashboard/page.tsx:208
+
+    src/app/applicant/my-applications/[applicationId]/page.tsx:527
+
+    src/app/applicant/my-applications/page.tsx:117
+
+    src/app/bplo/applications/[applicationId]/page.tsx:371
+
+    src/app/bplo/assessment-fees/page.tsx:95
+
+    src/app/bplo/payment-verification/page.tsx:458
+
+    src/app/bplo/permit-issuance/page.tsx:84
+
+    src/app/bplo/permit-issuance/page.tsx:162
+
+    src/app/bplo/permit-issuance/page.tsx:226
+
+    src/app/bplo/permit-issuance/page.tsx:292
+
+    src/app/superadmin/activities/page.tsx:342
+
+    src/app/superadmin/applications/[applicationId]/page.tsx:139
+
+    src/app/superadmin/applications/page.tsx:113
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:675
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:928
+
+    src/components/superadmin/superadmin-users-manager.tsx:498
+
+  ΓÜá Maintainability: Pure function rebuilt every render ├ù9
+    `handleSignOut` inside `ApplicantLayout` uses no local
+    state but is rebuilt on every render, so it wastes work &
+    breaks memoized children. Move it to the top of the file,
+    outside the component.
+    ΓåÆ Move the function above the component, at the top of the
+    file. It doesn't use local state, so rebuilding it each
+    update is wasted work.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/prefer-module-scope-pure-function
+
+    src/app/applicant/layout.tsx:10
+
+    src/app/bplo/layout.tsx:10
+
+    src/app/department-head/layout.tsx:10
+
+    src/app/jit/layout.tsx:29
+
+    src/app/jit/portal-disabled/page.tsx:4
+
+    src/app/superadmin/layout.tsx:10
+
+    src/app/superadmin/reports/print/revenue/page.tsx:60
+
+    src/components/applicant/new-application-form.tsx:940
+
+    src/components/jit/jit-no-permit-record-client.tsx:124
+
+  ΓÜá Maintainability: deslop/unused-dev-dependency
+    Unused devDependency: `tsconfig-paths`
+    ΓåÆ An unused devDependency adds install time and
+    supply-chain surface without being used; remove it from
+    package.json if it is genuinely unused.
+
+  ΓÜá Maintainability: Large component is hard to read and change ├ù19
+    Component "ApplicationDetailPage" is 400 lines long, which
+    is hard to read & change. Split it into a few smaller
+    components.
+    ΓåÆ Pull each section into its own component so the parent is
+    easier to read, test, and change.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-giant-component
+
+    src/app/applicant/my-applications/[applicationId]/page.tsx:133
+
+    src/app/applicant/top/page.tsx:65
+
+    src/app/bplo/payment-verification/page.tsx:136
+
+    src/app/department-head/application-approval/page.tsx:80
+
+    src/app/superadmin/applications/[applicationId]/page.tsx:46
+
+    src/components/applicant/business-information-fields.tsx:84
+
+    src/components/applicant/closure-application-form.tsx:144
+
+    src/components/applicant/new-application-form.tsx:618
+
+    src/components/applicant/profile-picture-card.tsx:21
+
+    src/components/applicant/renewal-application-form.tsx:380
+
+    src/components/auth/forgot-password-form.tsx:10
+
+    src/components/auth/register-form.tsx:117
+
+    src/components/bplo/assessment-fee-form.tsx:61
+
+    src/components/bplo/bplo-business-map-client.tsx:64
+
+    src/components/department-head/inspection-verification-client.tsx:57
+
+    src/components/department-head/permit-to-revoke-client.tsx:57
+
+    src/components/jit/jit-inspect-business-client.tsx:77
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:118
+
+    src/components/superadmin/superadmin-users-manager.tsx:79
+
+  ΓÜá Performance: useMemo on a cheap value
+    This costs more than it saves because useMemo is wrapping a
+    value that's already cheap, so remove the useMemo
+    ΓåÆ Remove the useMemo. Property reads, math, and ternaries
+    are already fast, so wrapping them doesn't help
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/no-usememo-simple-expression
+
+    src/components/superadmin/superadmin-users-manager.tsx:174
+
+  ΓÜá Performance: .map().filter(Boolean) loops twice ├ù6
+    This loops over your list twice because
+    .map().filter(Boolean) makes two passes, so use .flatMap()
+    to change & drop items in one pass
+    ΓåÆ Use `.flatMap(item => condition ? [value] : [])` to
+    change and drop items in one pass, instead of building a
+    throwaway array in between
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/js-flatmap-filter
+
+    src/components/applicant/business-information-fields.tsx:294
+
+    src/lib/business-rules.ts:358
+
+    src/lib/business-rules.ts:377
+
+    src/lib/document-storage.ts:99
+
+    src/lib/superadmin-data.ts:864-865
+
+  ΓÜá Performance: Chained array iterations ├ù25
+    This loops over your list twice because .map().filter()
+    makes two passes, so do it in one pass with .reduce() or a
+    for...of loop
+    ΓåÆ Combine `.map().filter()` style chains into one pass with
+    `.reduce()` or a `for...of` loop, so you only loop over the
+    list once
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/js-combine-iterations
+
+    src/app/superadmin/reports/print/audit-trail/page.tsx:60
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:240
+
+    src/lib/applications.ts:570
+
+    src/lib/applications.ts:588
+
+    src/lib/applications.ts:702
+
+    src/lib/applications.ts:872
+
+    src/lib/applications.ts:890
+
+    src/lib/bplo-assessment.ts:400
+
+    src/lib/bplo-permit-issuance.ts:293-302
+
+    src/lib/business-location.ts:254
+
+    src/lib/business-location.ts:679
+
+    src/lib/closure-eligibility.ts:121
+
+    src/lib/compliance-closure.ts:159
+
+    src/lib/department-head-api.ts:328
+
+    src/lib/department-head-api.ts:393
+
+    src/lib/department-head-api.ts:804
+
+    src/lib/department-head-api.ts:867
+
+    src/lib/document-storage.ts:51
+
+    src/lib/fee-settings.ts:421
+
+    src/lib/fee-settings.ts:734
+
+    src/lib/renewal-eligibility.ts:86
+
+  ΓÜá Bugs: Many related useState calls ├ù25
+    5 useState calls in "TaxOrderOfPaymentPage" can each
+    trigger a separate render.
+    ΓåÆ Group related state in `useReducer` so one logical update
+    does not fan out into separate renders.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/prefer-useReducer
+
+    src/app/applicant/top/page.tsx:65
+
+    src/app/bplo/payment-verification/page.tsx:136
+
+    src/app/department-head/application-approval/page.tsx:80
+
+    src/components/applicant/applicant-layout-client.tsx:29
+
+    src/components/applicant/business-information-fields.tsx:91
+
+    src/components/applicant/closure-application-form.tsx:144
+
+    src/components/applicant/new-application-form.tsx:618
+
+    src/components/applicant/profile-picture-card.tsx:21
+
+    src/components/applicant/profile-picture-setup-client.tsx:23
+
+    src/components/applicant/renewal-application-form.tsx:380
+
+    src/components/auth/forgot-password-form.tsx:10
+
+    src/components/auth/register-form.tsx:117
+
+    src/components/bplo/assessment-fee-form.tsx:61
+
+    src/components/bplo/bplo-business-map-client.tsx:64
+
+    src/components/bplo/bplo-layout-client.tsx:34
+
+    src/components/bplo/bplo-profile-settings-client.tsx:36
+
+    src/components/department-head/inspection-verification-client.tsx:57
+
+    src/components/department-head/permit-to-revoke-client.tsx:57
+
+    src/components/department-head/revoke-permit-list-client.tsx:48
+
+    src/components/department-head/settlement-management-client.tsx:40
+
+    src/components/jit/jit-business-map-client.tsx:86
+
+    src/components/jit/jit-inspect-business-client.tsx:77
+
+    src/components/jit/jit-no-permit-record-client.tsx:36
+
+    src/components/superadmin/superadmin-fee-settings-manager.tsx:118
+
+    src/components/superadmin/superadmin-users-manager.tsx:79
+
+  ΓÜá Maintainability: Non-component export in component file ├ù5
+    This file exports non-components, so Fast Refresh can't
+    safely preserve component state.
+    ΓåÆ Move non-component exports out of component files so Fast
+    Refresh can preserve component state instead of
+    full-reloading.
+    Curl with no cache & follow the canonical fix and false positive check recipe before fixing: https://react.doctor/docs/rules/react-doctor/only-export-components
+
+    src/components/ui/dashboard-chart-card.tsx:43
+
+    src/components/ui/status-badge.tsx:3
+
+    src/components/ui/status-badge.tsx:30
+
+    src/components/ui/status-badge.tsx:34
+
+    src/components/ui/status-badge.tsx:42
+
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+  All 400 issues
+
+  Bugs > 129 warnings
+  Performance > 124 warnings
+  Accessibility > 37 warnings
+  Maintainability > 110 warnings
+
+Agent guidance
+  - Treat React Doctor diagnostics as starting hypotheses. Read the relevant code before confirming or suppressing each finding.
+  - For each group, decide true positive, false positive, or needs-human-review, then assign high/medium/low confidence.
+  - Do not suppress a finding without evidence from the file in question. Confidence requires code context.
+  - Understand the root cause before editing. Fix the underlying code instead of changing react-doctor config or suppressing rules unless explicitly asked.
+  - Investigate deeply where relevant: race conditions, security-sensitive flows, state propagation, multi-file refactors, and downstream dependency chains.
+  - Ignore pure style preferences, theoretical issues without real impact, missing features, and unrelated pre-existing code.
+  - Start with high-confidence fixes that preserve behavior. Leave low-confidence or product-dependent changes as notes.
+  - Run `npx react-doctor@latest --verbose --scope changed` before and after changes, plus relevant tests after each focused batch.
+  - When available, spawn subagents or isolated worktrees for independent rule families, then review and merge only the best safe fixes.
+  - Split unrelated, broad, or behavior-changing work into separate PRs/branches instead of one large cleanup.
+  - When one rule spans dozens of files (a migration-scale change), fix a representative sample first, confirm the recipe holds, and get the code owner's sign-off before changing the rest. Don't mass-fix a broad pattern in one unreviewed pass.
+  - For confirmed issues that cannot be fixed now, create GitHub issues with the rule, file/line, confidence, impact, and proposed fix.
+  - If a fix needs an API, UX, or architecture decision, stop and ask before editing.
+
+  ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ  49 / 100 Critical
+  Γöé x x Γöé  ΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæΓûæ
+  Γöé  Γû╜  Γöé  React Doctor (https://react.doctor)
+  ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
+
+  Full diagnostics written to C:\Users\yowwo\AppData\Local\Temp\react-doctor-a77513b7-3dde-4c5f-bfd7-4023a11796d3
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+  Share: https://react.doctor/share?p=ebpls&s=49&w=400&f=113
+  Tell others how you did on socials
+
+  Docs: https://react.doctor/docs
+  Learn more about fixing issues, setting up CI/CD, and
+  configuring rules with a config file
+
+  GitHub: https://github.com/millionco/react-doctor
+  Report issues and star the repository!
+

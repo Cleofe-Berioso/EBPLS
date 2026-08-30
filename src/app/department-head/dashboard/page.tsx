@@ -5,10 +5,12 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { DashboardQueueCard } from "@/components/ui/dashboard-queue-card";
 import { DashboardPieChart } from "@/components/ui/dashboard-pie-chart";
 import { DashboardBarChart } from "@/components/ui/dashboard-bar-chart";
 import { DashboardLineChart } from "@/components/ui/dashboard-line-chart";
 import { DashboardHorizontalBarChart } from "@/components/ui/dashboard-horizontal-bar-chart";
+import { DASHBOARD_CHART_COLORS } from "@/components/ui/dashboard-chart-card";
 import {
   getDepartmentHeadDashboardMetrics,
   getDepartmentHeadDashboardSummary,
@@ -21,17 +23,54 @@ export default async function DepartmentHeadDashboardPage() {
   ]);
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <PageHeader
         eyebrow="Department Head"
         title="Department Head Dashboard"
         description="Operational view of evaluations, compliance decisions, and flagged businesses."
-        badge={<RoleBadge role="VIEW_ONLY" label="Read-only Dashboard" />}
-        eyebrowClassName="text-amber-700"
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Read-only Dashboard" />}
+        showHeroWatermark
       />
 
-      <SectionCard title="Operational Summary" description="Current Department Head decision and review workload.">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <SectionCard title="Action Required Now" description="Priority queues needing Department Head attention.">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardQueueCard
+            title="Application Approvals"
+            description="BPLO-approved applications awaiting decision."
+            count={summary.pendingApplicationApprovals}
+            href="/department-head/application-approval"
+            tone="info"
+            icon={<ClipboardCheck className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Revocation Recommendations"
+            description="Cases ready for Department Head revocation decision."
+            count={summary.revocationRecommendations}
+            href="/department-head/permit-to-revoke"
+            tone="warning"
+            icon={<AlertCircle className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Flagged Cases"
+            description="Non-compliant cases awaiting revocation decision."
+            count={summary.pendingFlaggedCases}
+            href="/department-head/permit-to-revoke"
+            tone="danger"
+            icon={<ShieldAlert className="h-4 w-4" />}
+          />
+          <DashboardQueueCard
+            title="Restrictions List"
+            description="Businesses under active restriction."
+            count={summary.businessesUnderRestriction}
+            href="/department-head/revoke-permit-list"
+            tone="success"
+            icon={<ShieldX className="h-4 w-4" />}
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Key Metrics" description="Current Department Head decision and review workload.">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Link href="/department-head/application-approval" className="block">
             <StatCard
               title="Pending Application Approvals"
@@ -64,7 +103,7 @@ export default async function DepartmentHeadDashboardPage() {
             value={summary.revocationRecommendations.toLocaleString("en-PH")}
             subtitle="Ready for Department Head decision"
             icon={<AlertCircle className="h-5 w-5" />}
-            tone="slate"
+            tone="blue"
           />
         </div>
       </SectionCard>
@@ -90,10 +129,10 @@ export default async function DepartmentHeadDashboardPage() {
           description="Daily Department Head compliance actions (verified compliant/non-compliant and revocation decisions)."
           data={metrics.complianceActionsTrend}
           series={[
-            { key: "verifiedCompliant", label: "Verified Compliant", color: "#0f766e" },
-            { key: "verifiedNonCompliant", label: "Verified Non-Compliant", color: "#dc2626" },
-            { key: "revocationApproved", label: "Revocation Approved", color: "#ea580c" },
-            { key: "revocationDenied", label: "Revocation Denied", color: "#2563eb" },
+            { key: "verifiedCompliant", label: "Verified Compliant", color: DASHBOARD_CHART_COLORS[0] },
+            { key: "verifiedNonCompliant", label: "Verified Non-Compliant", color: DASHBOARD_CHART_COLORS[4] },
+            { key: "revocationApproved", label: "Revocation Approved", color: DASHBOARD_CHART_COLORS[3] },
+            { key: "revocationDenied", label: "Revocation Denied", color: DASHBOARD_CHART_COLORS[2] },
           ]}
           error={null}
           emptyTitle="No compliance action records yet."
@@ -117,7 +156,7 @@ export default async function DepartmentHeadDashboardPage() {
           </Link>
         }
       >
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-[var(--ink-muted)]">
           This dashboard reads existing records only. Actions like approve, return, reject, verify, and revocation decisions
           remain in their dedicated Department Head workflow pages.
         </p>

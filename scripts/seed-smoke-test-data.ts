@@ -1,11 +1,15 @@
 import path from "node:path";
+import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
+import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
-import { prisma } from "../src/lib/prisma";
 
 const scriptFilePath = fileURLToPath(import.meta.url);
 const scriptDirPath = path.dirname(scriptFilePath);
+const ROOT = path.resolve(scriptDirPath, "..");
+
+let prisma!: PrismaClient;
 
 const PASSWORD = "password123";
 const PROOF_FILE_PATH = path.resolve(scriptDirPath, "smoke-test-proof.txt");
@@ -188,12 +192,29 @@ async function ensureUser(input: SmokeUserInput) {
 }
 
 async function ensureBusinessRecord(input: SmokeBusinessRecordInput) {
+  const tin = BigInt(String(input.tin).replace(/\D/g, ""));
+  const assetSize = input.assetSize ? String(input.assetSize).replace(/[,\s]/g, "") : null;
+  const totalEmployees = input.totalEmployees
+    ? Number.parseInt(String(input.totalEmployees).replace(/[,\s]/g, ""), 10)
+    : null;
+
+  const numericFields = {
+    businessArea: 100,
+    totalFloorArea: 120,
+    maleEmployees: 2,
+    femaleEmployees: 2,
+    employeesWithinMunicipality: 3,
+    deliveryVehicles: 1,
+    assetSize,
+    totalEmployees: Number.isFinite(totalEmployees) ? totalEmployees : null,
+  };
+
   return prisma.businessRecord.upsert({
     where: { registrationNumber: input.registrationNumber },
     update: {
       applicantId: input.applicantId,
       businessType: input.businessType,
-      tin: input.tin,
+      tin,
       businessName: input.businessName,
       tradeName: input.tradeName,
       ownerName: input.ownerName,
@@ -205,14 +226,7 @@ async function ensureBusinessRecord(input: SmokeBusinessRecordInput) {
       sameAsMainOffice: input.mainOfficeAddress === input.businessAddress,
       businessActivity: input.businessActivity,
       lineOfBusiness: input.lineOfBusiness,
-      assetSize: input.assetSize,
-      totalEmployees: input.totalEmployees,
-      businessArea: "Commercial",
-      totalFloorArea: "120",
-      maleEmployees: "2",
-      femaleEmployees: "2",
-      employeesWithinMunicipality: "3",
-      deliveryVehicles: "1",
+      ...numericFields,
       propertyOwnership: "Owned",
       taxDeclarationNumber: `TD-${input.registrationNumber}`,
       propertyIdentificationNumber: `PIN-${input.registrationNumber}`,
@@ -222,7 +236,7 @@ async function ensureBusinessRecord(input: SmokeBusinessRecordInput) {
       applicantId: input.applicantId,
       registrationNumber: input.registrationNumber,
       businessType: input.businessType,
-      tin: input.tin,
+      tin,
       businessName: input.businessName,
       tradeName: input.tradeName,
       ownerName: input.ownerName,
@@ -234,14 +248,7 @@ async function ensureBusinessRecord(input: SmokeBusinessRecordInput) {
       sameAsMainOffice: input.mainOfficeAddress === input.businessAddress,
       businessActivity: input.businessActivity,
       lineOfBusiness: input.lineOfBusiness,
-      assetSize: input.assetSize,
-      totalEmployees: input.totalEmployees,
-      businessArea: "Commercial",
-      totalFloorArea: "120",
-      maleEmployees: "2",
-      femaleEmployees: "2",
-      employeesWithinMunicipality: "3",
-      deliveryVehicles: "1",
+      ...numericFields,
       propertyOwnership: "Owned",
       taxDeclarationNumber: `TD-${input.registrationNumber}`,
       propertyIdentificationNumber: `PIN-${input.registrationNumber}`,
@@ -421,6 +428,44 @@ async function ensureBusinessLocation(input: SmokeLocationInput) {
   });
 }
 
+/** Undo revocation/manual QA drift on released smoke rows (status, business record, inspections). */
+async function resetReleasedSmokeRecord(applicationId: string, businessRecordId: string) {
+  await prisma.businessApplication.update({
+    where: { id: applicationId },
+    data: { status: "RELEASED" },
+  });
+
+  await prisma.businessRecord.update({
+    where: { id: businessRecordId },
+    data: {
+      businessStatus: "ACTIVE",
+      closedAt: null,
+      closureApplicationId: null,
+    },
+  });
+
+  await prisma.inspection.updateMany({
+    where: { applicationId, status: "REVOKED" },
+    data: {
+      status: "VERIFIED_COMPLIANT",
+      complianceStatus: "COMPLIANT",
+      revocationDecision: null,
+      revocationRecommendationRemarks: null,
+      revocationRemarks: null,
+      decidedById: null,
+      decidedAt: null,
+      revocationSettledAt: null,
+      revocationSettlementRemarks: null,
+      revocationSettledById: null,
+    },
+  });
+
+  await prisma.permitIssuance.updateMany({
+    where: { applicationId },
+    data: { status: "RELEASED" },
+  });
+}
+
 async function ensureHistory(
   applicationId: string,
   actorId: string,
@@ -458,6 +503,13 @@ async function ensureHistory(
 }
 
 async function main() {
+  try {
+    loadEnvFile(path.join(ROOT, ".env"));
+  } catch {
+    // Optional when DATABASE_URL is already in the environment
+  }
+  prisma = (await import("../src/lib/prisma")).prisma;
+
   console.log("[seed-smoke-test-data] start");
   console.log("[seed-smoke-test-data] no reset/delete operations will be performed");
 
@@ -478,7 +530,7 @@ async function main() {
   });
   const superadmin = await ensureUser({
     email: "superadmin@example.com",
-    name: "Super Admin",
+    name: "IT Administrator",
     role: "SUPER_ADMIN",
   });
 
@@ -651,6 +703,7 @@ async function main() {
     verifiedById: bplo.id,
     remarks: "Smoke verified retail location.",
   });
+  await resetReleasedSmokeRecord(releasedRetail.id, retailRecord.id);
 
   const releasedFood = await ensureApplication({
     applicantId: applicant.id,
@@ -707,6 +760,7 @@ async function main() {
     verifiedById: bplo.id,
     remarks: "Smoke verified food location.",
   });
+  await resetReleasedSmokeRecord(releasedFood.id, foodRecord.id);
 
   const annualPaid = await ensureApplication({
     applicantId: applicant.id,

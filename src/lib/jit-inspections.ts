@@ -1,7 +1,13 @@
-import { listActivePermittedBusinessLocations, type BusinessLocationMapRow } from "@/lib/business-location";
+import { listActivePermittedBusinessLocations, listActivePermittedBusinessLocationsPaginated, type BusinessLocationMapRow } from "@/lib/business-location";
+import {
+  getChecklistQuestionForDepartment,
+  type ChecklistItemInput,
+} from "@/lib/jit-post-audit-checklist";
+import { getJitInspectionCycleStartedAt } from "@/lib/jit-settings";
 import { prisma } from "@/lib/prisma";
+import type { PaginatedResult } from "@/lib/pagination";
 
-type ComplianceStatus = "COMPLIANT" | "NON_COMPLIANT";
+type ComplianceStatus = "PENDING_REVIEW" | "COMPLIANT" | "NON_COMPLIANT";
 type InspectionStatus =
   | "COMPLIANT"
   | "NON_COMPLIANT"
@@ -21,11 +27,12 @@ interface EvidencePayload {
 }
 
 interface CreateInspectionInput {
-  complianceStatus: ComplianceStatus;
   comment?: string;
   evidence?: EvidencePayload;
-  recommendRevocation?: boolean;
-  revocationRemarks?: string;
+  checklist: ChecklistItemInput[];
+  referToBplo?: boolean;
+  referralReason?: string;
+  referralRemarks?: string;
 }
 
 export type JitMapMarkerStatus = "UNINSPECTED" | "PENDING_INSPECTION" | "COMPLIANT" | "REVOKED";
@@ -95,18 +102,24 @@ export function getJitMapMarkerColor(status: JitMapMarkerStatus): string {
 
 export async function listJitInspectableBusinesses(): Promise<JitInspectableBusinessRow[]> {
   const rows = await listActivePermittedBusinessLocations();
+  return attachLatestInspections(rows);
+}
+
+async function attachLatestInspections(rows: BusinessLocationMapRow[]): Promise<JitInspectableBusinessRow[]> {
   const businessRecordIds = rows.map((row) => row.businessRecordId);
 
   if (businessRecordIds.length === 0) {
     return [];
   }
 
+  const cycleStartedAt = await getJitInspectionCycleStartedAt();
   const inspectionModel = (prisma as any).inspection;
   const inspections = await inspectionModel.findMany({
     where: {
       businessRecordId: {
         in: businessRecordIds,
       },
+      ...(cycleStartedAt ? { createdAt: { gte: cycleStartedAt } } : {}),
     },
     orderBy: {
       createdAt: "desc",
@@ -142,27 +155,45 @@ export async function listJitInspectableBusinesses(): Promise<JitInspectableBusi
   });
 }
 
+export async function listJitInspectableBusinessesPaginated(options?: {
+  search?: string;
+  barangay?: string;
+  page?: number | string;
+  pageSize?: number | string;
+}): Promise<PaginatedResult<JitInspectableBusinessRow>> {
+  const locationResult = await listActivePermittedBusinessLocationsPaginated(
+    { search: options?.search, barangay: options?.barangay },
+    options
+  );
+
+  const records = await attachLatestInspections(locationResult.records);
+
+  return {
+    ...locationResult,
+    records,
+  };
+}
+
 export async function createJitInspection(
   businessRecordId: string,
   inspectorId: string,
   input: CreateInspectionInput
 ) {
-  const complianceStatus = input.complianceStatus;
   const trimmedComment = input.comment?.trim() ?? "";
-  const recommendRevocation = Boolean(input.recommendRevocation);
-  const revocationRemarks = input.revocationRemarks?.trim() ?? "";
-
-  if (complianceStatus !== "COMPLIANT" && complianceStatus !== "NON_COMPLIANT") {
-    throw new Error("complianceStatus must be COMPLIANT or NON_COMPLIANT");
-  }
+  const referToBplo = Boolean(input.referToBplo);
+  const referralReason = input.referralReason?.trim() ?? "";
+  const referralRemarks = input.referralRemarks?.trim() ?? "";
 
   if (!trimmedComment) {
-    throw new Error("Comment is required for all inspections");
+    throw new Error("General inspection remarks are required");
   }
-  // Evidence is required only when JIT recommends revocation
-  if (recommendRevocation) {
-    if (!revocationRemarks) throw new Error("Revocation remarks are required when recommending revocation");
-    if (!input.evidence) throw new Error("Photo evidence is required when recommending revocation");
+
+  if (!input.checklist || input.checklist.length !== 8) {
+    throw new Error("All 8 post-audit checklist responses are required");
+  }
+
+  if (referToBplo && !referralReason) {
+    throw new Error("Referral reason is required when referring to BPLO");
   }
 
   const created = await prisma.$transaction(async (tx: any) => {
@@ -203,7 +234,7 @@ export async function createJitInspection(
         businessRecordId,
         applicationId: releasedApplication.id,
         inspectorId,
-        complianceStatus,
+        complianceStatus: "PENDING_REVIEW",
         status: "DH_VERIFICATION_PENDING",
         comment: trimmedComment || null,
         evidenceFileName: input.evidence?.fileName ?? null,
@@ -211,7 +242,22 @@ export async function createJitInspection(
         evidenceBucket: input.evidence?.bucket ?? null,
         evidenceMimeType: input.evidence?.mimeType ?? null,
         evidenceSizeBytes: input.evidence?.sizeBytes ?? null,
-        revocationRemarks: recommendRevocation ? revocationRemarks || null : null,
+        referToBplo,
+        referralReason: referToBplo ? referralReason || null : null,
+        referralRemarks: referToBplo ? referralRemarks || null : null,
+        checklistItems: {
+          create: input.checklist.map((item) => ({
+            departmentKey: item.departmentKey,
+            question: getChecklistQuestionForDepartment(item.departmentKey),
+            response: item.response,
+            remarks: item.remarks ?? null,
+            evidenceFileName: item.evidence?.fileName ?? null,
+            evidenceStoragePath: item.evidence?.storagePath ?? null,
+            evidenceBucket: item.evidence?.bucket ?? null,
+            evidenceMimeType: item.evidence?.mimeType ?? null,
+            evidenceSizeBytes: item.evidence?.sizeBytes ?? null,
+          })),
+        },
       },
       select: {
         id: true,
@@ -222,6 +268,7 @@ export async function createJitInspection(
       },
     });
 
+    const referralNote = referToBplo ? ` Referred to BPLO: ${referralReason}.` : "";
     await tx.applicationHistory.create({
       data: {
         applicationId: releasedApplication.id,
@@ -229,20 +276,22 @@ export async function createJitInspection(
         actorRole: "JIT",
         fromStatus: "RELEASED",
         toStatus: "RELEASED",
-        remarks: `JIT submitted ${complianceStatus} inspection.`,
+        remarks: `JIT submitted inspection with post-audit checklist (pending BPLO compliance review).${referralNote}`,
       },
     });
 
-    await tx.applicationHistory.create({
-      data: {
-        applicationId: releasedApplication.id,
-        actorId: inspectorId,
-        actorRole: "JIT",
-        fromStatus: "RELEASED",
-        toStatus: "RELEASED",
-        remarks: `JIT uploaded inspection evidence (${input.evidence.fileName}).`,
-      },
-    });
+    if (input.evidence) {
+      await tx.applicationHistory.create({
+        data: {
+          applicationId: releasedApplication.id,
+          actorId: inspectorId,
+          actorRole: "JIT",
+          fromStatus: "RELEASED",
+          toStatus: "RELEASED",
+          remarks: `JIT uploaded inspection evidence (${input.evidence.fileName}).`,
+        },
+      });
+    }
 
     return inspection;
   });

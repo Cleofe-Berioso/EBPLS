@@ -14,11 +14,13 @@ export async function GET(req: Request) {
     (searchParams.get("role") as "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT" | null) ??
     "ALL";
   const status = (searchParams.get("status") as "ALL" | "ACTIVE" | "DISABLED" | null) ?? "ALL";
+  const page = searchParams.get("page") ?? undefined;
+  const pageSize = searchParams.get("pageSize") ?? undefined;
 
   const [users, summary] = await Promise.all([
-    listSuperAdminUsers({ search, role, status }),
+    listSuperAdminUsers({ search, role, status, page, pageSize }),
     getSuperAdminUserSummary(),
   ]);
 
-  return NextResponse.json({ users, summary });
+  return NextResponse.json({ users: users.records, pagination: users, summary });
 }

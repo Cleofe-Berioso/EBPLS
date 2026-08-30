@@ -3,6 +3,8 @@ import type { ApplicationStatus } from "@/lib/applicant-types";
 export const DISPLAY_STATUS_FLOW: ApplicationStatus[] = [
   "Submitted",
   "Under Review",
+  "Department Head Review",
+  "Department Head Approved",
   "Assessed",
   "Approved for Payment",
   "Paid",
@@ -11,20 +13,20 @@ export const DISPLAY_STATUS_FLOW: ApplicationStatus[] = [
 ];
 
 const STATUS_STYLES: Record<ApplicationStatus, string> = {
-  Draft: "border-slate-300 bg-slate-100 text-slate-700",
-  Submitted: "border-blue-200 bg-blue-50 text-blue-700",
-  "Under Review": "border-amber-200 bg-amber-50 text-amber-700",
-  "Department Head Review": "border-purple-200 bg-purple-50 text-purple-700",
-  "Department Head Approved": "border-emerald-200 bg-emerald-50 text-emerald-700",
-  Assessed: "border-amber-200 bg-amber-50 text-amber-700",
-  "Approved for Payment": "border-emerald-200 bg-emerald-50 text-emerald-700",
-  Paid: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  "For Release": "border-emerald-200 bg-emerald-50 text-emerald-700",
-  Released: "border-slate-300 bg-slate-100 text-slate-700",
-  "Revocation Review": "border-orange-200 bg-orange-50 text-orange-700",
-  Revoked: "border-rose-200 bg-rose-50 text-rose-700",
-  "Returned for Correction": "border-rose-200 bg-rose-50 text-rose-700",
-  Rejected: "border-rose-200 bg-rose-50 text-rose-700",
+  Draft: "border-[var(--border-color)] bg-[var(--muted-surface)] text-[var(--ink-muted)]",
+  Submitted: "border-[var(--border-color)] bg-[var(--info-soft)] text-[var(--info)]",
+  "Under Review": "border-[var(--border-color)] bg-[var(--warning-soft)] text-[var(--warning)]",
+  "Department Head Review": "border-[var(--border-color)] bg-[var(--accent-soft)] text-[var(--foreground)]",
+  "Department Head Approved": "border-[var(--border-color)] bg-[var(--success-soft)] text-[var(--success)]",
+  Assessed: "border-[var(--border-color)] bg-[var(--warning-soft)] text-[var(--warning)]",
+  "Approved for Payment": "border-[var(--border-color)] bg-[var(--success-soft)] text-[var(--success)]",
+  Paid: "border-[var(--border-color)] bg-[var(--success-soft)] text-[var(--success)]",
+  "For Release": "border-[var(--border-color)] bg-[var(--success-soft)] text-[var(--success)]",
+  Released: "border-[var(--border-color)] bg-[var(--muted-surface)] text-[var(--ink-muted)]",
+  "Revocation Review": "border-[var(--border-color)] bg-[var(--warning-soft)] text-[var(--warning)]",
+  Revoked: "border-[var(--border-color)] bg-[var(--danger-soft)] text-[var(--danger)]",
+  "Returned for Correction": "border-[var(--border-color)] bg-[var(--danger-soft)] text-[var(--danger)]",
+  Rejected: "border-[var(--border-color)] bg-[var(--danger-soft)] text-[var(--danger)]",
 };
 
 export function getStatusBadgeClass(status: ApplicationStatus): string {
@@ -69,9 +71,7 @@ export function getStatusBanner(status: ApplicationStatus) {
 
 export function StatusBadge({ status }: { status: ApplicationStatus }) {
   return (
-    <span
-      className={`ui-status-badge inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.04em] leading-4 ${getStatusBadgeClass(status)}`}
-    >
+    <span className={`ui-badge max-w-full ${getStatusBadgeClass(status)}`}>
       {status}
     </span>
   );

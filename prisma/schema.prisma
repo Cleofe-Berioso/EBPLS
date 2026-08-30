@@ -67,6 +67,14 @@ enum ClosureType {
   OTHERS
 }
 
+enum DocumentValidationStatus {
+  PENDING_REVIEW
+  VALID
+  INVALID
+  INCOMPLETE
+  REQUIRES_RESUBMISSION
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -97,12 +105,17 @@ model User {
   revocationSettlementRecords Inspection[] @relation("InspectionRevocationSettledBy")
   complianceSettlementRecords Inspection[] @relation("InspectionSettledBy")
   forcedClosureRecords Inspection[] @relation("InspectionForcedClosureBy")
+  bploComplianceReviewRecords Inspection[] @relation("InspectionBploComplianceReviewer")
   feeConfigurationUpdates FeeConfigurationItem[] @relation("FeeConfigUpdatedBy")
+  feeConfigurationCategoryUpdates FeeConfigurationCategory[] @relation("FeeConfigCategoryUpdatedBy")
   systemFeeSettingUpdates SystemFeeSetting[] @relation("SystemFeeSettingUpdatedBy")
   renewalExtensionUpdates RenewalExtension[] @relation("RenewalExtensionUpdatedBy")
   smsDeliveryLogs SmsDeliveryLog[] @relation("SmsDeliveryLogApplicant")
+  renewalEmailLogs RenewalEmailLog[] @relation("RenewalEmailLogApplicant")
+  revocationNotificationLogs RevocationNotificationLog[] @relation("RevocationNotificationLogApplicant")
   reassessmentRequests FeeAssessment[] @relation("FeeAssessmentReassessmentRequestedBy")
   jitNoPermitRecords JitNoPermitRecord[] @relation("JitNoPermitRecordCreatedBy")
+  validatedDocuments ApplicationDocument[] @relation("DocumentValidatedBy")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -112,7 +125,7 @@ model BusinessRecord {
   applicantId        String
   businessType       String
   registrationNumber String   @unique
-  tin                String
+  tin                BigInt
   businessName       String
   tradeName          String
   ownerName          String
@@ -127,20 +140,20 @@ model BusinessRecord {
   mainOfficeAddress  String
   businessAddress    String
   sameAsMainOffice   Boolean  @default(true)
-  businessArea       String?
-  totalFloorArea     String?
-  totalEmployees     String?
-  maleEmployees      String?
-  femaleEmployees    String?
-  employeesWithinMunicipality String?
-  deliveryVehicles   String?
+  businessArea       Decimal? @db.Decimal(10, 2)
+  totalFloorArea     Decimal? @db.Decimal(10, 2)
+  totalEmployees     Int?
+  maleEmployees      Int?
+  femaleEmployees    Int?
+  employeesWithinMunicipality Int?
+  deliveryVehicles   Int?
   propertyOwnership  String?
   taxDeclarationNumber String?
   propertyIdentificationNumber String?
   taxIncentives      String?
   businessActivity   String?
   lineOfBusiness     String?
-  assetSize          String?
+  assetSize          Decimal? @db.Decimal(10, 3)
   isMarket           Boolean  @default(false)
   isAgriculture      Boolean  @default(false)
   permitExpirationDate DateTime?
@@ -154,6 +167,7 @@ model BusinessRecord {
   applications BusinessApplication[]
   location     BusinessLocation?
   inspections  Inspection[]
+  renewalEmailLogs RenewalEmailLog[]
 
   @@index([applicantId])
 }
@@ -215,6 +229,8 @@ model BusinessApplication {
   feeAssessment FeeAssessment?
   permitIssuance PermitIssuance?
   smsDeliveryLogs SmsDeliveryLog[]
+  renewalEmailLogs RenewalEmailLog[]
+  revocationNotificationLogs RevocationNotificationLog[]
   inspections   Inspection[]
 
   @@index([applicantId, createdAt])
@@ -227,6 +243,7 @@ enum PermitDocumentType {
 }
 
 enum InspectionComplianceStatus {
+  PENDING_REVIEW
   COMPLIANT
   NON_COMPLIANT
 }
@@ -247,6 +264,25 @@ enum RevocationDecision {
   DENIED
 }
 
+enum JitChecklistResponse {
+  YES
+  NO
+  COMPLIANT
+  NON_COMPLIANT
+  NOT_APPLICABLE
+}
+
+enum JitChecklistDepartment {
+  BPLO
+  ZONING_PLANNING
+  ENGINEERING
+  FIRE_SAFETY
+  HEALTH_SANITARY
+  ENVIRONMENT
+  TREASURER_ASSESSMENT
+  DECLARATION_VERIFICATION
+}
+
 model Inspection {
   id                         String                     @id @default(cuid())
   businessRecordId           String
@@ -261,6 +297,7 @@ model Inspection {
   evidenceMimeType           String?
   evidenceSizeBytes          Int?
   revocationDecision         RevocationDecision?
+  revocationRecommendationRemarks String?
   revocationRemarks          String?
   decidedById                String?
   decidedAt                  DateTime?
@@ -279,6 +316,12 @@ model Inspection {
   forcedClosureAt            DateTime?
   forcedClosureById          String?
   complianceCaseStatus       ComplianceCaseStatus @default(NONE)
+  referToBplo                Boolean            @default(false)
+  referralReason             String?
+  referralRemarks            String?
+  bploComplianceReviewedById String?
+  bploComplianceReviewedAt   DateTime?
+  bploComplianceRemarks      String?
   createdAt                  DateTime                   @default(now())
   updatedAt                  DateTime                   @updatedAt
 
@@ -289,6 +332,9 @@ model Inspection {
   revocationSettledBy User?           @relation("InspectionRevocationSettledBy", fields: [revocationSettledById], references: [id], onDelete: SetNull)
   settledBy      User?                @relation("InspectionSettledBy", fields: [settledById], references: [id], onDelete: SetNull)
   forcedClosureBy User?               @relation("InspectionForcedClosureBy", fields: [forcedClosureById], references: [id], onDelete: SetNull)
+  bploComplianceReviewedBy User?      @relation("InspectionBploComplianceReviewer", fields: [bploComplianceReviewedById], references: [id], onDelete: SetNull)
+  checklistItems InspectionChecklistItem[]
+  revocationNotificationLogs RevocationNotificationLog[]
 
   @@index([businessRecordId, createdAt])
   @@index([applicationId, createdAt])
@@ -299,6 +345,27 @@ model Inspection {
   @@index([complianceCaseStatus, createdAt])
   @@index([settledAt, createdAt])
   @@index([forcedClosureAt, createdAt])
+}
+
+model InspectionChecklistItem {
+  id                   String                 @id @default(cuid())
+  inspectionId         String
+  departmentKey        JitChecklistDepartment
+  question             String
+  response             JitChecklistResponse
+  remarks              String?
+  evidenceFileName     String?
+  evidenceStoragePath  String?
+  evidenceBucket       String?
+  evidenceMimeType     String?
+  evidenceSizeBytes    Int?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@unique([inspectionId, departmentKey])
+  @@index([inspectionId])
 }
 
 enum PermitIssuanceStatus {
@@ -343,8 +410,13 @@ model ApplicationDocument {
   sizeBytes     Int
   fileSize      Int?
   uploadedAt    DateTime @default(now())
+  validationStatus DocumentValidationStatus @default(PENDING_REVIEW)
+  validationRemarks String?
+  validatedAt   DateTime?
+  validatedById String?
 
   application BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  validatedBy User? @relation("DocumentValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
 
   @@index([applicationId])
 }
@@ -411,6 +483,80 @@ model SmsDeliveryLog {
   @@index([applicationId, createdAt])
   @@index([applicantId, createdAt])
   @@index([status, createdAt])
+}
+
+enum RenewalEmailNotificationType {
+  UPCOMING
+  DUE
+  OVERDUE
+}
+
+enum RenewalEmailDeliveryStatus {
+  SKIPPED
+  SENT
+  FAILED
+}
+
+model RenewalEmailLog {
+  id                   String                       @id @default(cuid())
+  businessRecordId     String
+  applicantId          String?
+  applicationId        String?
+  recipientEmail       String
+  notificationType     RenewalEmailNotificationType
+  permitExpirationDate DateTime
+  permitNumber         String?
+  businessName         String
+  status               RenewalEmailDeliveryStatus
+  subject              String
+  messageBody          String
+  skipReason           String?
+  providerResponse     String?
+  createdAt            DateTime                     @default(now())
+
+  businessRecord BusinessRecord       @relation(fields: [businessRecordId], references: [id], onDelete: Cascade)
+  applicant      User?                @relation("RenewalEmailLogApplicant", fields: [applicantId], references: [id], onDelete: SetNull)
+  application    BusinessApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@unique([businessRecordId, permitExpirationDate, notificationType])
+  @@index([status, createdAt])
+  @@index([applicantId, createdAt])
+  @@index([businessRecordId, createdAt])
+}
+
+enum RevocationNotificationEventType {
+  REVOCATION_REVIEW_ENTERED
+  REVOCATION_APPROVED
+  REVOCATION_DENIED
+}
+
+enum RevocationNotificationDeliveryStatus {
+  SKIPPED
+  SENT
+  FAILED
+}
+
+model RevocationNotificationLog {
+  id               String                             @id @default(cuid())
+  applicationId    String
+  applicantId      String?
+  inspectionId     String?
+  eventType        RevocationNotificationEventType
+  recipientEmail   String
+  status           RevocationNotificationDeliveryStatus
+  subject          String
+  messageBody      String
+  skipReason       String?
+  providerResponse String?
+  createdAt        DateTime                           @default(now())
+
+  application BusinessApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicant   User?               @relation("RevocationNotificationLogApplicant", fields: [applicantId], references: [id], onDelete: SetNull)
+  inspection  Inspection?         @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+
+  @@unique([applicationId, eventType])
+  @@index([status, createdAt])
+  @@index([applicantId, createdAt])
 }
 
 model FeeAssessment {
@@ -509,6 +655,21 @@ model FeeConfigurationItem {
   @@index([category, isActive])
 }
 
+model FeeConfigurationCategory {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  label           String
+  classifications Json
+  isActive        Boolean  @default(true)
+  updatedById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  updatedBy User? @relation("FeeConfigCategoryUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([isActive, label])
+}
+
 model SystemFeeSetting {
   id                              String   @id @default(cuid())
   renewalSurchargePercent         Float    @default(25)
@@ -517,6 +678,7 @@ model SystemFeeSetting {
   powerDistributionFixedFee       Decimal  @default(10000)
   privatePortFixedFee             Decimal  @default(50000)
   jitPortalEnabled                Boolean  @default(true)
+  jitInspectionCycleStartedAt     DateTime?
   renewalComplianceMinorPenalty   Decimal  @default(0)
   renewalComplianceMajorPenalty   Decimal  @default(0)
   renewalComplianceSeverePenalty  Decimal  @default(0)
@@ -545,24 +707,41 @@ model RenewalExtension {
   @@index([isActive, startDate, endDate])
 }
 
+enum JitNoPermitTicketStatus {
+  OPEN
+  RESOLVED
+}
+
 model JitNoPermitRecord {
-  id             String   @id @default(cuid())
-  businessName   String
-  personAttended String
-  lineOfBusiness String
-  remarks        String?
-  latitude       Float
-  longitude      Float
-  address        String?
-  createdById    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                  String                  @id @default(cuid())
+  ticketNumber        String                  @unique
+  ticketStatus        JitNoPermitTicketStatus @default(OPEN)
+  businessName        String
+  personAttended      String
+  lineOfBusiness      String
+  findings            String
+  requiredAction      String
+  remarks             String?
+  latitude            Float
+  longitude           Float
+  address             String?
+  contactPhone        String?
+  contactEmail        String?
+  inspectingOffice    String?
+  notifiedAt          DateTime?
+  notificationStatus  String?
+  notificationChannel String?
+  createdById         String
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 
   createdBy User @relation("JitNoPermitRecordCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([createdById, createdAt])
   @@index([businessName])
   @@index([createdAt])
+  @@index([ticketStatus, businessName])
+  @@index([ticketStatus, latitude, longitude])
 }
 
 model AuditLog {

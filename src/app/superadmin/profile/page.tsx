@@ -1,17 +1,10 @@
+import { Eye, Mail, Shield, UserCircle2 } from "lucide-react";
+import { AccountDetailsPanel } from "@/components/ui/account-details-panel";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
-
-function labelValue(label: string, value: string) {
-  return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm text-slate-900">{value}</p>
-    </div>
-  );
-}
 
 export default async function SuperAdminProfilePage() {
   const session = await requireSuperAdminSession();
@@ -19,10 +12,10 @@ export default async function SuperAdminProfilePage() {
   return (
     <section className="space-y-4">
       <PageHeader
-        eyebrowClassName="text-slate-600"
+        eyebrow="IT Administrator"
         title="Profile"
         description="Account overview for the read-only oversight role."
-        badge={<RoleBadge role="SUPER_ADMIN" />}
+        badge={<RoleBadge roleType="SUPER_ADMIN" label="IT Administrator" />}
       />
 
       <InfoBanner
@@ -32,15 +25,36 @@ export default async function SuperAdminProfilePage() {
       />
 
       <SectionCard
-        title="Account Summary"
-        description="Current signed-in Super Admin identity and access level."
+        title="Account Details"
+        description="Current signed-in IT Administrator identity and access level."
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          {labelValue("Name", session?.user.name ?? "Super Admin")}
-          {labelValue("Email", session?.user.email ?? "-")}
-          {labelValue("Role", "SUPER_ADMIN")}
-          {labelValue("Access Level", "View-only oversight")}
-        </div>
+        <AccountDetailsPanel
+          items={[
+            {
+              label: "Name",
+              value: session?.user.name ?? "IT Administrator",
+              icon: <UserCircle2 className="h-4 w-4" />,
+              emphasize: true,
+            },
+            {
+              label: "Email",
+              value: session?.user.email ?? "-",
+              icon: <Mail className="h-4 w-4" />,
+              hint: "Signed-in account address",
+            },
+            {
+              label: "Role",
+              value: "IT Administrator",
+              icon: <Shield className="h-4 w-4" />,
+            },
+            {
+              label: "Access Level",
+              value: "View-only oversight",
+              icon: <Eye className="h-4 w-4" />,
+              hint: "Monitoring and configuration access only",
+            },
+          ]}
+        />
       </SectionCard>
     </section>
   );

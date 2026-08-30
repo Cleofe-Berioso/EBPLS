@@ -8,6 +8,7 @@
 import { loadEnvFile } from "node:process";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { buildPrismaPgPoolConfig } from "../src/lib/pg-pool-config";
 
 // Load .env before doing anything
 loadEnvFile(".env");
@@ -63,7 +64,7 @@ async function main() {
     );
 
     const connectPromise = (async () => {
-      const adapter = new PrismaPg({ connectionString: dbUrl }, { schema: "ebpls" });
+      const adapter = new PrismaPg(buildPrismaPgPoolConfig(dbUrl), { schema: "ebpls" });
       const prisma = new PrismaClient({ adapter });
 
       try {

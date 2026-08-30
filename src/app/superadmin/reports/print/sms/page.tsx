@@ -5,7 +5,9 @@ import {
   getSmsDeliveryReport,
   type SmsDeliveryReportFilters,
 } from "@/lib/superadmin-data";
+import { buildSmsReportNarrative, REPORT_PURPOSES } from "@/lib/report-narrative-builders";
 import { ReportPageHeader } from "@/components/print/reports/report-page-header";
+import { ReportNarrative, ReportSection } from "@/components/print/reports/report-section";
 import { ReportSummaryCard } from "@/components/print/reports/report-summary-card";
 import { ReportTable } from "@/components/print/reports/report-table";
 import { ReportEmptyState } from "@/components/print/reports/report-empty-state";
@@ -42,7 +44,7 @@ export default async function SmsDeliveryReportPage({ searchParams }: PageProps)
 
   const meta = buildReportMetadata({
     title: "SMS Delivery Report",
-    generatedBy: session.user.name ?? "Super Admin",
+    generatedBy: session.user.name ?? "IT Administrator",
     dateFrom: params.from,
     dateTo: params.to,
   });
@@ -50,6 +52,13 @@ export default async function SmsDeliveryReportPage({ searchParams }: PageProps)
   const totalSent = rows.filter((r) => r.status === "SENT").length;
   const totalFailed = rows.filter((r) => r.status === "FAILED").length;
   const totalSkipped = rows.filter((r) => r.status === "SKIPPED").length;
+  const narrative = buildSmsReportNarrative({
+    total: rows.length,
+    sent: totalSent,
+    failed: totalFailed,
+    skipped: totalSkipped,
+    dateRange: meta.dateRange,
+  });
 
   const resetHref = "/superadmin/reports/print/sms";
 
@@ -121,17 +130,26 @@ export default async function SmsDeliveryReportPage({ searchParams }: PageProps)
         </form>
       </div>
 
-      {/* ── Summary cards ─────────────────────────────────────────── */}
+      <ReportSection number={1} title="Report Purpose" description="Why SMS delivery reporting matters for applicant communication.">
+        <ReportNarrative paragraphs={[REPORT_PURPOSES.sms]} />
+      </ReportSection>
+
+      <ReportSection number={2} title="Findings & Interpretation" description="Delivery health for the filtered notification log.">
+        <ReportNarrative paragraphs={narrative.paragraphs} bullets={narrative.bullets} />
+      </ReportSection>
+
+      <ReportSection number={3} title="Summary Statistics" description="Headline SMS delivery outcomes.">
       <ReportSummaryCard
         items={[
-          { label: "Total Records", value: rows.length },
-          { label: "Sent", value: totalSent },
-          { label: "Failed", value: totalFailed },
-          { label: "Skipped", value: totalSkipped },
+          { label: "Total Records", value: rows.length, hint: "SMS attempts logged" },
+          { label: "Sent", value: totalSent, hint: "Successful deliveries" },
+          { label: "Failed", value: totalFailed, hint: "Delivery failures" },
+          { label: "Skipped", value: totalSkipped, hint: "Not sent (disabled / no contact)" },
         ]}
       />
+      </ReportSection>
 
-      {/* ── Table ─────────────────────────────────────────────────── */}
+      <ReportSection number={4} title="Detailed SMS Records" description="Line-level notification evidence with masked phone numbers.">
       {rows.length === 0 ? (
         <ReportEmptyState
           description="No SMS delivery records found for the selected filters."
@@ -142,6 +160,7 @@ export default async function SmsDeliveryReportPage({ searchParams }: PageProps)
           rows={(rows as unknown) as Record<string, unknown>[]}
         />
       )}
+      </ReportSection>
     </div>
   );
 }

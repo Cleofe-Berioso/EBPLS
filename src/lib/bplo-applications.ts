@@ -1,9 +1,16 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import type { DocumentValidationStatus } from "@prisma/client";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { assertStatusTransition } from "@/lib/application-status";
 import type { BusinessInfo } from "@/lib/applicant-types";
 import { formatPersonName } from "@/lib/person-name";
+import {
+  mapDocumentValidationStatusToUi,
+  remarksRequiredForValidationStatus,
+} from "@/lib/document-validation";
+import { assertRequiredDocumentsReadyForApproval } from "@/lib/document-validation-server";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -145,49 +152,31 @@ export async function listRecentBploSubmissions(limit = 5): Promise<BploQueueRow
   return listBploApplications({ status: "SUBMITTED" }, limit);
 }
 
-export async function listBploApplications(filters: BploQueueFilters = {}, limit?: number): Promise<BploQueueRow[]> {
+function buildBploQueueWhere(filters: BploQueueFilters) {
   const normalizedSearch = filters.search?.trim();
   const requestedStatus =
     filters.status && filters.status !== "ALL" && BPLO_QUEUE_REVIEW_STATUSES.includes(filters.status)
       ? filters.status
       : undefined;
-  const rows = await prisma.businessApplication.findMany({
-    where: {
-      status: requestedStatus ? requestedStatus : { in: BPLO_QUEUE_REVIEW_STATUSES },
-      ...(filters.type && filters.type !== "ALL" ? { applicationType: filters.type } : {}),
-      ...(normalizedSearch
-        ? {
-            OR: [
-              { applicationNumber: { contains: normalizedSearch } },
-              { applicant: { name: { contains: normalizedSearch } } },
-              { applicant: { email: { contains: normalizedSearch } } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      applicant: {
-        select: {
-          name: true,
-          email: true,
-          firstName: true,
-          middleName: true,
-          lastName: true,
-          suffix: true,
-          profileImageStoragePath: true,
-        },
-      },
-      businessRecord: {
-        select: {
-          businessName: true,
-        },
-      },
-    },
-    orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
-    ...(limit ? { take: limit } : {}),
-  });
 
-  const mapped = rows.map((row: any) => ({
+  return {
+    status: requestedStatus ? requestedStatus : { in: BPLO_QUEUE_REVIEW_STATUSES },
+    ...(filters.type && filters.type !== "ALL" ? { applicationType: filters.type } : {}),
+    ...(normalizedSearch
+      ? {
+          OR: [
+            { applicationNumber: { contains: normalizedSearch, mode: "insensitive" as const } },
+            { applicant: { name: { contains: normalizedSearch, mode: "insensitive" as const } } },
+            { applicant: { email: { contains: normalizedSearch, mode: "insensitive" as const } } },
+            { businessRecord: { businessName: { contains: normalizedSearch, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+  };
+}
+
+function mapBploQueueRow(row: any): BploQueueRow {
+  return {
     id: row.id,
     applicationNumber: row.applicationNumber,
     businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
@@ -203,18 +192,58 @@ export async function listBploApplications(filters: BploQueueFilters = {}, limit
     status: mapDbStatusToUi(row.status),
     dateSubmitted: toDateOnly(row.submittedAt),
     applicantProfilePicturePath: row.applicant.profileImageStoragePath ?? null,
-  }));
+  };
+}
 
-  if (!normalizedSearch) return mapped;
+const bploQueueInclude = {
+  applicant: {
+    select: {
+      name: true,
+      email: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
+      suffix: true,
+      profileImageStoragePath: true,
+    },
+  },
+  businessRecord: {
+    select: {
+      businessName: true,
+    },
+  },
+} as const;
 
-  const searchLower = normalizedSearch.toLowerCase();
-  return mapped.filter(
-    (row: BploQueueRow) =>
-      row.businessName.toLowerCase().includes(searchLower) ||
-      row.applicantName.toLowerCase().includes(searchLower) ||
-      row.applicantEmail.toLowerCase().includes(searchLower) ||
-      row.applicationNumber.toLowerCase().includes(searchLower)
-  );
+export async function listBploApplications(filters: BploQueueFilters = {}, limit?: number): Promise<BploQueueRow[]> {
+  const rows = await prisma.businessApplication.findMany({
+    where: buildBploQueueWhere(filters),
+    include: bploQueueInclude,
+    orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
+    ...(limit ? { take: limit } : {}),
+  });
+
+  return rows.map(mapBploQueueRow);
+}
+
+export async function listBploApplicationsPaginated(
+  filters: BploQueueFilters = {},
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<BploQueueRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
+  const where = buildBploQueueWhere(filters);
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where,
+      include: bploQueueInclude,
+      orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.businessApplication.count({ where }),
+  ]);
+
+  return buildPaginatedResult(rows.map(mapBploQueueRow), totalCount, page, pageSize);
 }
 
 export async function getBploApplicationDetail(applicationId: string) {
@@ -257,6 +286,8 @@ export async function getBploApplicationDetail(applicationId: string) {
     applicationNumber: row.applicationNumber,
     applicant: row.applicant,
     applicationType: row.applicationType,
+    closureType: row.closureType ?? null,
+    closureTypeOtherReason: row.closureTypeOtherReason ?? null,
     status: mapDbStatusToUi(row.status),
     rawStatus: row.status,
     submittedAt: row.submittedAt ? row.submittedAt.toISOString() : null,
@@ -272,6 +303,9 @@ export async function getBploApplicationDetail(applicationId: string) {
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
       uploadedAt: doc.uploadedAt.toISOString(),
+      validationStatus: mapDocumentValidationStatusToUi(doc.validationStatus),
+      validationRemarks: doc.validationRemarks ?? null,
+      validatedAt: doc.validatedAt ? doc.validatedAt.toISOString() : null,
     })),
     history: row.history.map((item: any) => ({
       id: item.id,
@@ -300,7 +334,9 @@ export async function getBploApplicationDocument(applicationId: string, document
     throw new Error("Application not found");
   }
 
-  if (!BPLO_QUEUE_REVIEW_STATUSES.includes(application.status as DbApplicationStatus)) {
+  // Preview/download must work for any application BPLO can open by ID.
+  // Queue-status gating applies only to validation mutations, not read access.
+  if (application.status === "DRAFT") {
     throw new Error("Application is not available for BPLO review");
   }
 
@@ -319,6 +355,64 @@ export async function getBploApplicationDocument(applicationId: string, document
   }
 
   return document;
+}
+
+export async function updateBploDocumentValidation(
+  applicationId: string,
+  documentId: string,
+  bploUserId: string,
+  input: {
+    status: DocumentValidationStatus;
+    remarks?: string;
+  }
+) {
+  const application = await prisma.businessApplication.findFirst({
+    where: { id: applicationId },
+    select: { id: true, status: true },
+  });
+
+  if (!application) {
+    throw new Error("Application not found");
+  }
+
+  if (!BPLO_QUEUE_REVIEW_STATUSES.includes(application.status as DbApplicationStatus)) {
+    throw new Error("Application is not available for BPLO review");
+  }
+
+  const document = await prisma.applicationDocument.findFirst({
+    where: { id: documentId, applicationId },
+  });
+
+  if (!document) {
+    throw new Error("Document not found");
+  }
+
+  const normalizedRemarks = input.remarks?.trim() ?? "";
+  if (remarksRequiredForValidationStatus(input.status) && !normalizedRemarks) {
+    throw new Error("Remarks are required for this validation status");
+  }
+
+  const updated = await prisma.applicationDocument.update({
+    where: { id: document.id },
+    data: {
+      validationStatus: input.status,
+      validationRemarks: normalizedRemarks || null,
+      validatedAt: new Date(),
+      validatedById: bploUserId,
+    },
+  });
+
+  return {
+    id: updated.id,
+    documentName: updated.documentName,
+    fileName: updated.fileName,
+    mimeType: updated.mimeType,
+    sizeBytes: updated.sizeBytes,
+    uploadedAt: updated.uploadedAt.toISOString(),
+    validationStatus: mapDocumentValidationStatusToUi(updated.validationStatus),
+    validationRemarks: updated.validationRemarks,
+    validatedAt: updated.validatedAt ? updated.validatedAt.toISOString() : null,
+  };
 }
 
 export async function applyBploReviewAction(
@@ -348,6 +442,10 @@ export async function applyBploReviewAction(
 
     if (!canTransition(current.status, action)) {
       throw new Error("Invalid status transition");
+    }
+
+    if (action === "APPROVE_FOR_ASSESSMENT") {
+      await assertRequiredDocumentsReadyForApproval(applicationId);
     }
 
     const nextStatus = getNextStatus(action);

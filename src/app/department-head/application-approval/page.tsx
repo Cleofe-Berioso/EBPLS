@@ -7,11 +7,28 @@ import { SectionCard } from "@/components/ui/section-card";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { DocumentDownloadButton } from "@/components/ui/document-download-button";
+import { LoadingState } from "@/components/ui/loading-state";
+import {
+  dhDocumentListItemClass,
+  dhFormControlClass,
+  dhPanelClass,
+  dhSelectableCardActiveClass,
+  dhSelectableCardClass,
+  dhSelectableCardIdleClass,
+  dhSummaryLabelClass,
+  dhSummaryTileClass,
+  dhSummaryValueClass,
+} from "@/components/department-head/department-head-ui-styles";
+import { validationStatusBadgeClass, evaluateRequiredDocumentsValidation, mapDocumentValidationStatusToDb } from "@/lib/document-validation";
+import type { BusinessInfo } from "@/lib/applicant-types";
 
 type ApprovalRow = {
   id: string;
   applicationNumber: string;
   applicationType: "NEW" | "RENEWAL" | "CLOSURE";
+  closureType?: string | null;
+  closureTypeOtherReason?: string | null;
   ownerName: string;
   businessName: string;
   businessType: string;
@@ -35,6 +52,8 @@ type ApprovalRow = {
     documentName: string;
     fileName: string;
     uploadedAt: string;
+    validationStatus?: string;
+    validationRemarks?: string | null;
   }>;
 };
 
@@ -90,6 +109,48 @@ export default function DepartmentHeadApplicationApprovalPage() {
     [rows, selectedId]
   );
 
+  const documentValidation = useMemo(() => {
+    if (!selected) {
+      return { ready: true, blockers: [] as ReturnType<typeof evaluateRequiredDocumentsValidation>["blockers"] };
+    }
+
+    try {
+      return evaluateRequiredDocumentsValidation({
+        applicationType: selected.applicationType,
+        formData: selected.formData as unknown as BusinessInfo,
+        documents: selected.documents.map((doc) => ({
+          documentName: doc.documentName,
+          validationStatus: mapDocumentValidationStatusToDb(doc.validationStatus ?? "Pending Review"),
+          validationRemarks: doc.validationRemarks ?? null,
+        })),
+      });
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Unable to evaluate document validation.";
+      return {
+        ready: false,
+        blockers: [
+          {
+            documentName: "Document validation",
+            validationStatus: "Pending Review" as const,
+            validationRemarks: text,
+            reason: "not_valid" as const,
+          },
+        ],
+      };
+    }
+  }, [selected]);
+
+  const approvalBlocked = !documentValidation.ready;
+  const approvalBlockMessage = documentValidation.ready
+    ? undefined
+    : `Resolve required document validation first: ${documentValidation.blockers
+        .map((blocker) =>
+          blocker.reason === "missing"
+            ? `${blocker.documentName} (missing upload)`
+            : `${blocker.documentName} (${blocker.validationStatus})`
+        )
+        .join("; ")}`;
+
   async function loadQueue() {
     setLoading(true);
     const response = await fetch("/api/department-head/application-approval", { cache: "no-store" });
@@ -119,6 +180,14 @@ export default function DepartmentHeadApplicationApprovalPage() {
   async function runAction(action: ActionType) {
     if (!selected) return;
 
+    if (action === "approve" && approvalBlocked) {
+      setMessage({
+        type: "error",
+        text: approvalBlockMessage ?? "All required documents must be marked Valid before approval.",
+      });
+      return;
+    }
+
     if ((action === "return" || action === "reject") && !remarks.trim()) {
       setMessage({ type: "error", text: "Remarks are required for return and reject actions." });
       return;
@@ -127,42 +196,60 @@ export default function DepartmentHeadApplicationApprovalPage() {
     setPendingAction(action);
     setMessage(null);
 
-    const response = await fetch(
-      `/api/department-head/application-approval/${selected.id}/${action}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remarks }),
+    try {
+      const response = await fetch(
+        `/api/department-head/application-approval/${selected.id}/${action}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
+          credentials: "same-origin",
+          body: JSON.stringify({ remarks }),
+        }
+      );
+
+      let data: {
+        application?: { applicationNumber: string; status: string };
+        error?: string;
+      } = {};
+
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        data = (await response.json()) as typeof data;
+      } else if (!response.ok) {
+        throw new Error(`Action failed (HTTP ${response.status}).`);
       }
-    );
 
-    const data = (await response.json()) as {
-      application?: { applicationNumber: string; status: string };
-      error?: string;
-    };
+      if (!response.ok) {
+        setMessage({ type: "error", text: data.error ?? "Action failed." });
+        return;
+      }
 
-    if (!response.ok) {
-      setMessage({ type: "error", text: data.error ?? "Action failed." });
+      setMessage({
+        type: "success",
+        text: `${data.application?.applicationNumber ?? "Application"} moved to ${data.application?.status ?? "new status"}.`,
+      });
+      setRemarks("");
+      await loadQueue();
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Action failed.",
+      });
+    } finally {
       setPendingAction(null);
-      return;
     }
-
-    setMessage({
-      type: "success",
-      text: `${data.application?.applicationNumber ?? "Application"} moved to ${data.application?.status ?? "new status"}.`,
-    });
-    setRemarks("");
-    setPendingAction(null);
-    await loadQueue();
   }
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="Department Head"
         title="Application Approvals"
         description="Review BPLO-approved applications before they proceed to Fees & Assessment."
-        badge={<RoleBadge role="VIEW_ONLY" label="Department Head" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Department Head" />}
       />
 
       <InfoBanner
@@ -176,11 +263,22 @@ export default function DepartmentHeadApplicationApprovalPage() {
           title="Pending Application Approvals"
           description="BPLO-approved applications waiting for Department Head decision."
         >
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => void loadQueue()}
+              disabled={loading}
+              className={actionButtonStyles("secondary", "sm")}
+            >
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
           {loading ? (
-            <div className="text-sm text-slate-500">Loading application queue...</div>
+            <LoadingState message="Loading application queue…" compact />
           ) : rows.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
-              No applications are pending approval.
+            <div className={dhPanelClass}>
+              No applications are pending approval. Applications appear here only after BPLO uses
+              &quot;Send to Department Head Review&quot; (status: Department Head Review).
             </div>
           ) : (
             <div className="space-y-2">
@@ -191,15 +289,11 @@ export default function DepartmentHeadApplicationApprovalPage() {
                     key={row.id}
                     type="button"
                     onClick={() => setSelectedId(row.id)}
-                    className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                      active
-                        ? "border-emerald-300 bg-emerald-50"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
-                    }`}
+                    className={`${dhSelectableCardClass} ${active ? dhSelectableCardActiveClass : dhSelectableCardIdleClass}`}
                   >
-                    <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                    <p className="mt-1 text-xs text-slate-600">{row.ownerName} • {row.applicationType}</p>
+                    <p className="font-mono ui-caption">{row.applicationNumber}</p>
+                    <p className={dhSummaryValueClass}>{row.businessName}</p>
+                    <p className="mt-1 ui-caption">{row.ownerName} • {row.applicationType}</p>
                     <div className="mt-2">
                       <StatusBadge status={row.currentStatus as any} />
                     </div>
@@ -215,7 +309,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
           description={selected ? `${selected.applicationNumber} • ${selected.businessName}` : "Select an item from the queue."}
         >
           {!selected ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+            <div className={dhPanelClass}>
               No selected application.
             </div>
           ) : (
@@ -233,53 +327,53 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 return (
                   <>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Application Number</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selected.applicationNumber}</p>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Application Number</p>
+                  <p className={dhSummaryValueClass}>{selected.applicationNumber}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Application Type</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selected.applicationType}</p>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Application Type</p>
+                  <p className={dhSummaryValueClass}>{selected.applicationType}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Current Status</p>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Current Status</p>
                   <div className="mt-1">
                     <StatusBadge status={selected.currentStatus as any} />
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Applicant / Owner Name</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selected.ownerName}</p>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Applicant / Owner Name</p>
+                  <p className={dhSummaryValueClass}>{selected.ownerName}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Business Name</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessName}</p>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Business Name</p>
+                  <p className={dhSummaryValueClass}>{selected.businessName}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Submitted Date</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(selected.submittedDate)}</p>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Submitted Date</p>
+                  <p className={dhSummaryValueClass}>{formatDateTime(selected.submittedDate)}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Last Updated</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(selected.updatedDate)}</p>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Last Updated</p>
+                  <p className={dhSummaryValueClass}>{formatDateTime(selected.updatedDate)}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Business Type</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessType}</p>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Business Type</p>
+                  <p className={dhSummaryValueClass}>{selected.businessType}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-2">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Line of Business</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selected.lineOfBusiness}</p>
+                <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-2`}>
+                  <p className={dhSummaryLabelClass}>Line of Business</p>
+                  <p className={dhSummaryValueClass}>{selected.lineOfBusiness}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Business Address</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessAddress}</p>
+                <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                  <p className={dhSummaryLabelClass}>Business Address</p>
+                  <p className={dhSummaryValueClass}>{selected.businessAddress}</p>
                 </div>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <SectionCard title="Applicant / Owner Information" description="Filed owner identity and contact details.">
-                  <div className="space-y-2 text-sm text-slate-700">
+                  <div className="space-y-2 text-sm text-[var(--ink-muted)]">
                     {ownerFirstName || ownerMiddleName || ownerSurname ? (
                       <>
                         <p><strong>First Name:</strong> {ownerFirstName || "-"}</p>
@@ -299,7 +393,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 </SectionCard>
 
                 <SectionCard title="Business Identity" description="Filed registration and identity details.">
-                  <div className="space-y-2 text-sm text-slate-700">
+                  <div className="space-y-2 text-sm text-[var(--ink-muted)]">
                     <p><strong>Business Name:</strong> {readText(formData, ["businessName"], selected.businessName)}</p>
                     <p><strong>Trade Name:</strong> {readText(formData, ["tradeName"])}</p>
                     <p><strong>Business Type:</strong> {readText(formData, ["businessType"], selected.businessType)}</p>
@@ -313,7 +407,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 </SectionCard>
 
                 <SectionCard title="Address and Location" description="Filed addresses and map pin details.">
-                  <div className="space-y-2 text-sm text-slate-700">
+                  <div className="space-y-2 text-sm text-[var(--ink-muted)]">
                     <p><strong>Main Office Address:</strong> {readText(formData, ["mainOfficeAddress"])}</p>
                     <p><strong>Business Address:</strong> {readText(formData, ["businessAddress"], selected.businessAddress)}</p>
                     <p><strong>Barangay:</strong> {readText(formData, ["barangay"])}</p>
@@ -324,7 +418,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 </SectionCard>
 
                 <SectionCard title="Business Operation Details" description="Operational and property declarations.">
-                  <div className="space-y-2 text-sm text-slate-700">
+                  <div className="space-y-2 text-sm text-[var(--ink-muted)]">
                     <p><strong>Business Area:</strong> {readText(formData, ["businessArea"])}</p>
                     <p><strong>Total Floor Area:</strong> {readText(formData, ["totalFloorArea"])}</p>
                     <p><strong>Asset Size:</strong> {readText(formData, ["assetSize"])}</p>
@@ -339,7 +433,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 </SectionCard>
 
                 <SectionCard title="Employee Counts" description="Submitted staffing and vehicle declarations.">
-                  <div className="space-y-2 text-sm text-slate-700">
+                  <div className="space-y-2 text-sm text-[var(--ink-muted)]">
                     <p><strong>Total Employees:</strong> {readText(formData, ["totalEmployees"])}</p>
                     <p><strong>Male Employees:</strong> {readText(formData, ["maleEmployees"])}</p>
                     <p><strong>Female Employees:</strong> {readText(formData, ["femaleEmployees"])}</p>
@@ -349,7 +443,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 </SectionCard>
 
                 <SectionCard title="Application-specific Notes" description="Renewal and closure-specific declarations.">
-                  <div className="space-y-2 text-sm text-slate-700">
+                  <div className="space-y-2 text-sm text-[var(--ink-muted)]">
                     <p><strong>Application Type:</strong> {selected.applicationType}</p>
 
                     {selected.applicationType === "RENEWAL" ? (
@@ -361,66 +455,129 @@ export default function DepartmentHeadApplicationApprovalPage() {
                     {selected.applicationType === "RENEWAL" ? (
                       <p><strong>Gross Profit:</strong> {readText(formData, ["grossProfit"])}</p>
                     ) : null}
+                    {selected.applicationType === "CLOSURE" ? (
+                      <>
+                        <p>
+                          <strong>Closure Type:</strong>{" "}
+                          {selected.closureType === "RETIREMENT"
+                            ? "Retirement"
+                            : selected.closureType === "NON_COMPLIANT_RELATED"
+                              ? "Non-compliant Related"
+                              : selected.closureType === "OTHERS"
+                                ? selected.closureTypeOtherReason?.trim()
+                                  ? `Others — ${selected.closureTypeOtherReason.trim()}`
+                                  : "Others"
+                                : "-"}
+                        </p>
+                        <p>
+                          <strong>Line of Business:</strong>{" "}
+                          {readText(formData, ["closureLineOfBusiness", "lineOfBusiness"])}
+                        </p>
+                        <p>
+                          <strong>Business Activity:</strong>{" "}
+                          {readText(formData, ["closureBusinessActivity", "businessActivity"])}
+                        </p>
+                        <p>
+                          <strong>Last Date of Operation:</strong>{" "}
+                          {readText(formData, ["closureLastDateOfOperation"])}
+                        </p>
+                      </>
+                    ) : null}
                   </div>
                 </SectionCard>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">BPLO Remarks</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.bploRemarks ?? "No BPLO remarks provided."}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>BPLO Remarks</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.bploRemarks ?? "No BPLO remarks provided."}</p>
               </div>
 
               <SectionCard title="Uploaded Documents" description="Applicant-provided files attached to this application.">
                 {selected.documents.length === 0 ? (
-                  <div className="text-sm text-slate-600">No uploaded documents.</div>
+                  <div className="text-sm text-[var(--ink-muted)]">No uploaded documents.</div>
                 ) : (
                   <ul className="space-y-2 text-sm">
-                    {selected.documents.map((doc) => (
-                      <li key={doc.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                        <p className="font-medium text-slate-900">{doc.documentName}: {doc.fileName}</p>
-                        <p className="text-xs text-slate-500">Uploaded: {formatDateTime(doc.uploadedAt)}</p>
-                        <p className="text-xs text-slate-500">Status: Uploaded</p>
-                        <a
-                          href={`/api/department-head/application-approval/${selected.id}/documents/${doc.id}/download`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`${actionButtonStyles("secondary", "sm")} mt-2 inline-flex`}
-                        >
-                          Preview
-                        </a>
+                    {selected.documents.map((doc) => {
+                      const validationStatus = doc.validationStatus ?? "Pending Review";
+                      return (
+                      <li key={doc.id} className={dhDocumentListItemClass}>
+                        <p className="font-medium text-[var(--foreground)]">{doc.documentName}: {doc.fileName}</p>
+                        <p className="ui-caption">Uploaded: {formatDateTime(doc.uploadedAt)}</p>
+                        <p className="mt-1">
+                          <span className={`ui-badge ${validationStatusBadgeClass(validationStatus as "Pending Review")}`}>
+                            {validationStatus}
+                          </span>
+                        </p>
+                        {doc.validationRemarks ? (
+                          <p className="mt-1 ui-caption">
+                            <span className="font-semibold text-[var(--foreground)]">Validation remarks:</span> {doc.validationRemarks}
+                          </p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <a
+                            href={`/api/department-head/application-approval/${selected.id}/documents/${doc.id}/download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`${actionButtonStyles("secondary", "sm")} inline-flex`}
+                          >
+                            Preview
+                          </a>
+                          <DocumentDownloadButton
+                            url={`/api/department-head/application-approval/${selected.id}/documents/${doc.id}/download?download=1`}
+                            fileName={doc.fileName || doc.documentName || "document"}
+                          />
+                        </div>
                       </li>
-                    ))}
+                    );
+                    })}
                   </ul>
                 )}
               </SectionCard>
 
               <SectionCard title="Timeline / Remarks" description="Status transitions and recorded remarks.">
                 {selected.history.length === 0 ? (
-                  <div className="text-sm text-slate-600">No timeline entries yet.</div>
+                  <div className="text-sm text-[var(--ink-muted)]">No timeline entries yet.</div>
                 ) : (
-                  <ul className="space-y-2 text-sm text-slate-700">
+                  <ul className="space-y-2 text-sm text-[var(--ink-muted)]">
                     {selected.history.map((item) => (
-                      <li key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="font-medium text-slate-900">
+                      <li key={item.id} className={dhDocumentListItemClass}>
+                        <p className="font-medium text-[var(--foreground)]">
                           {item.fromStatus ? `${item.fromStatus} to ` : ""}
                           {item.toStatus}
                         </p>
-                        <p className="text-xs text-slate-600">Actor: {item.actorRole}</p>
-                        <p className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</p>
-                        <p className="mt-1 text-sm text-slate-700">{item.remarks ?? "No remarks provided."}</p>
+                        <p className="ui-caption">Actor: {item.actorRole}</p>
+                        <p className="ui-caption">{formatDateTime(item.createdAt)}</p>
+                        <p className="mt-1 text-sm text-[var(--ink-muted)]">{item.remarks ?? "No remarks provided."}</p>
                       </li>
                     ))}
                   </ul>
                 )}
               </SectionCard>
 
+              {approvalBlocked ? (
+                <InfoBanner
+                  title="Approval blocked by document validation"
+                  description={
+                    approvalBlockMessage ??
+                    "All required documents must be marked Valid before this application can be approved."
+                  }
+                  variant="danger"
+                />
+              ) : (
+                <InfoBanner
+                  title="Documents ready for approval"
+                  description="All required documents are marked Valid. You may approve this application when review is complete."
+                  variant="success"
+                />
+              )}
+
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-700" htmlFor="approval-remarks">
+                <label className="block text-sm font-medium text-[var(--foreground)]" htmlFor="approval-remarks">
                   Remarks (required for Return and Reject)
                 </label>
                 <textarea
                   id="approval-remarks"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+                  className={dhFormControlClass}
                   rows={3}
                   value={remarks}
                   onChange={(event) => setRemarks(event.target.value)}
@@ -432,7 +589,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
                 <button
                   type="button"
                   onClick={() => void runAction("approve")}
-                  disabled={pendingAction !== null}
+                  disabled={pendingAction !== null || approvalBlocked}
                   className={actionButtonStyles("primary", "sm")}
                 >
                   {pendingAction === "approve" ? "Processing..." : "Approve"}

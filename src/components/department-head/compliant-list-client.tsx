@@ -6,6 +6,17 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { LoadingState } from "@/components/ui/loading-state";
+import {
+  dhPanelClass,
+  dhSelectableCardActiveClass,
+  dhSelectableCardClass,
+  dhSelectableCardIdleClass,
+  dhSummaryLabelClass,
+  dhSummaryTileClass,
+  dhSummaryValueClass,
+} from "@/components/department-head/department-head-ui-styles";
+
 
 type CompliantListRow = {
   inspectionId: string;
@@ -76,7 +87,7 @@ export function CompliantListClient() {
     <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
       <SectionCard title="Compliant Inspections" description="Only VERIFIED_COMPLIANT inspections are listed here.">
         {loading ? (
-          <div className="text-sm text-slate-500">Loading compliant list...</div>
+          <LoadingState message="Loading compliant list…" compact />
         ) : rows.length === 0 ? (
           <EmptyState title="No compliant inspections yet" description="Verified compliant inspections will appear here after Department Head verification." />
         ) : (
@@ -88,13 +99,11 @@ export function CompliantListClient() {
                   key={row.inspectionId}
                   type="button"
                   onClick={() => setSelectedId(row.inspectionId)}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                    active ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white hover:bg-slate-50"
-                  }`}
+                  className={`${dhSelectableCardClass} ${active ? dhSelectableCardActiveClass : dhSelectableCardIdleClass}`}
                 >
-                  <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{row.tradeName ? `${row.businessName} / ${row.tradeName}` : row.businessName}</p>
-                  <p className="mt-1 text-xs text-slate-600">Status: {row.inspectionStatus}</p>
+                  <p className="font-mono ui-caption">{row.applicationNumber}</p>
+                  <p className={dhSummaryValueClass}>{row.tradeName ? `${row.businessName} / ${row.tradeName}` : row.businessName}</p>
+                  <p className="mt-1 ui-caption">Status: {row.inspectionStatus}</p>
                 </button>
               );
             })}
@@ -112,59 +121,59 @@ export function CompliantListClient() {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Name / Trade Name</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.tradeName ? `${selected.businessName} / ${selected.tradeName}` : selected.businessName}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Business Name / Trade Name</p>
+                <p className={dhSummaryValueClass}>{selected.tradeName ? `${selected.businessName} / ${selected.tradeName}` : selected.businessName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Permit No.</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.permitOrCertificateNumber ?? "N/A"}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Permit No.</p>
+                <p className={dhSummaryValueClass}>{selected.permitOrCertificateNumber ?? "N/A"}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Type</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessType}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Business Type</p>
+                <p className={dhSummaryValueClass}>{selected.businessType}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Line of Business</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.lineOfBusiness}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Line of Business</p>
+                <p className={dhSummaryValueClass}>{selected.lineOfBusiness}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Owner / Applicant Name</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.ownerName} / {selected.applicantName}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Owner / Applicant Name</p>
+                <p className={dhSummaryValueClass}>{selected.ownerName} / {selected.applicantName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Address</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessAddress}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Business Address</p>
+                <p className={dhSummaryValueClass}>{selected.businessAddress}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">JIT Comment / Remarks</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.jitComment ?? "No comment provided."}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>JIT Comment / Remarks</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.jitComment ?? "No comment provided."}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Date Inspected</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(selected.inspectionDate)}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Date Inspected</p>
+                <p className={dhSummaryValueClass}>{formatDateTime(selected.inspectionDate)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Date Verified</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(selected.verifiedAt)}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Date Verified</p>
+                <p className={dhSummaryValueClass}>{formatDateTime(selected.verifiedAt)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Verified By</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.verifiedBy}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Verified By</p>
+                <p className={dhSummaryValueClass}>{selected.verifiedBy}</p>
               </div>
             </div>
 
             <SectionCard title="Uploaded Evidence / Photo" description="Read-only evidence attached to the compliant inspection.">
               {!selected.hasEvidence ? (
-                <div className="text-sm text-slate-600">No evidence file attached.</div>
+                <div className="text-sm text-[var(--ink-muted)]">No evidence file attached.</div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-700">{selected.evidenceFileName ?? "Evidence file"}</p>
+                  <p className="text-sm font-medium text-[var(--foreground)]">{selected.evidenceFileName ?? "Evidence file"}</p>
                   {selected.evidenceMimeType?.startsWith("image/") ? (
                     <img
                       src={`/api/department-head/inspection-verification/${selected.inspectionId}/evidence`}
                       alt="Compliant inspection evidence"
-                      className="max-h-72 w-full rounded-xl border border-slate-200 object-contain"
+                      className="max-h-72 w-full rounded-[var(--radius-card)] border border-[var(--border-color)] object-contain"
                     />
                   ) : null}
                   <a
@@ -180,7 +189,7 @@ export function CompliantListClient() {
               )}
             </SectionCard>
 
-            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className={`${dhPanelClass} border-dashed px-4 py-3`}>
               Status: <span className="font-semibold">VERIFIED_COMPLIANT</span>
             </div>
           </div>

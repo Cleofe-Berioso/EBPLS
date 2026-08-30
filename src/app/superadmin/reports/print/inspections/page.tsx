@@ -9,7 +9,9 @@ import {
   getInspectionComplianceReport,
   type InspectionComplianceReportFilters,
 } from "@/lib/superadmin-data";
+import { buildInspectionReportNarrative, REPORT_PURPOSES } from "@/lib/report-narrative-builders";
 import { ReportPageHeader } from "@/components/print/reports/report-page-header";
+import { ReportNarrative, ReportSection } from "@/components/print/reports/report-section";
 import { ReportSummaryCard } from "@/components/print/reports/report-summary-card";
 import { ReportTable } from "@/components/print/reports/report-table";
 import { ReportEmptyState } from "@/components/print/reports/report-empty-state";
@@ -50,7 +52,7 @@ export default async function InspectionComplianceReportPage({ searchParams }: P
 
   const meta = buildReportMetadata({
     title: "Inspection Compliance Report",
-    generatedBy: session.user.name ?? "Super Admin",
+    generatedBy: session.user.name ?? "IT Administrator",
     dateFrom: params.from,
     dateTo: params.to,
   });
@@ -62,9 +64,20 @@ export default async function InspectionComplianceReportPage({ searchParams }: P
   const totalNonCompliant = rows.filter((r) =>
     r.complianceStatus === "Non-Compliant"
   ).length;
+  const totalPendingReview = rows.filter((r) =>
+    r.complianceStatus === "Pending Review"
+  ).length;
   const pendingVerification = rows.filter((r) =>
     r.inspectionStatus === "Pending Verification"
   ).length;
+  const narrative = buildInspectionReportNarrative({
+    total: totalInspections,
+    totalCompliant,
+    totalNonCompliant,
+    totalPendingReview,
+    pendingVerification,
+    dateRange: meta.dateRange,
+  });
 
   const resetHref = "/superadmin/reports/print/inspections";
 
@@ -153,17 +166,26 @@ export default async function InspectionComplianceReportPage({ searchParams }: P
         </form>
       </div>
 
-      {/* ── Summary cards ─────────────────────────────────────────── */}
+      <ReportSection number={1} title="Report Purpose" description="How to read JIT inspection compliance information.">
+        <ReportNarrative paragraphs={[REPORT_PURPOSES.inspections]} />
+      </ReportSection>
+
+      <ReportSection number={2} title="Findings & Interpretation" description="Compliance signals from the filtered inspection set.">
+        <ReportNarrative paragraphs={narrative.paragraphs} bullets={narrative.bullets} />
+      </ReportSection>
+
+      <ReportSection number={3} title="Summary Statistics" description="Headline inspection and verification counts.">
       <ReportSummaryCard
         items={[
-          { label: "Total Inspections", value: totalInspections },
-          { label: "Compliant", value: totalCompliant },
-          { label: "Non-Compliant", value: totalNonCompliant },
-          { label: "Pending Verification", value: pendingVerification },
+          { label: "Total Inspections", value: totalInspections, hint: "Records in scope" },
+          { label: "Compliant", value: totalCompliant, hint: "Marked compliant" },
+          { label: "Non-Compliant", value: totalNonCompliant, hint: "Marked non-compliant" },
+          { label: "Pending BPLO Review", value: totalPendingReview, hint: "Awaiting BPLO review" },
+          { label: "Pending Verification", value: pendingVerification, hint: "Awaiting Department Head" },
         ]}
       />
+      </ReportSection>
 
-      {/* ── Note: JIT compliance results pending DH verification ─────── */}
       {pendingVerification > 0 && (
         <div className="no-print rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <strong>Note:</strong> {pendingVerification} inspection
@@ -173,7 +195,7 @@ export default async function InspectionComplianceReportPage({ searchParams }: P
         </div>
       )}
 
-      {/* ── Table ─────────────────────────────────────────────────── */}
+      <ReportSection number={4} title="Detailed Inspection Records" description="Line-level field inspection evidence.">
       {rows.length === 0 ? (
         <ReportEmptyState
           description="No inspection records found for the selected filters."
@@ -184,6 +206,7 @@ export default async function InspectionComplianceReportPage({ searchParams }: P
           rows={(rows as unknown) as Record<string, unknown>[]}
         />
       )}
+      </ReportSection>
     </div>
   );
 }

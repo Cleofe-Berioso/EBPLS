@@ -10,12 +10,12 @@ export default async function DepartmentHeadSettlementManagementPage() {
   if (!session) notFound();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="Department Head"
         title="Settlement Management"
         description="View and settle eligible government-agency-related compliance cases."
-        badge={<RoleBadge role="VIEW_ONLY" label="Department Head" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Department Head" />}
       />
 
       <InfoBanner

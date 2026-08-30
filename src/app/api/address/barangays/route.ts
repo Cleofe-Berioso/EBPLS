@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
 import type { AddressApiErrorResponse, AddressOption, BarangayOption } from "@/lib/address-types";
-import { EB_MAGALONA_CITY, normalizeEbMagalonaCityName } from "@/lib/address-options";
+import { assertAllowedPsgcCloudUrl, fetchTrustedHttpsJson, PSGC_CLOUD_BASE_URL } from "@/lib/address-server";
+import { normalizeEbMagalonaCityName } from "@/lib/address-options";
 import { EB_MAGALONA_BARANGAYS } from "@/lib/business-rules";
 
 export const dynamic = "force-dynamic";
 
-const PSGC_CLOUD_BASE_URL = "https://psgc.cloud/api/v2";
 const EB_MAGALONA_PSGC_CODE = "0604508000";
 const BARANGAY_FETCH_TIMEOUT_MS = 8000;
 
@@ -207,8 +207,8 @@ async function fetchCloudArray<T>(url: string): Promise<T[]> {
   let response: Response;
 
   try {
-    response = await fetch(url, {
-      cache: "no-store",
+    response = await fetchTrustedHttpsJson(assertAllowedPsgcCloudUrl(url), {
+      allowedHostname: "psgc.cloud",
       signal: AbortSignal.timeout(BARANGAY_FETCH_TIMEOUT_MS),
     });
   } catch (error) {

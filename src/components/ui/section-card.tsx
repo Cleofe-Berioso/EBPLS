@@ -16,19 +16,33 @@ export function SectionCard({
   contentClassName?: string;
 }) {
   return (
-    <section
-      className={`ui-section-card app-surface relative overflow-hidden rounded-2xl ${className}`}
-    >
+    <section className={`ui-section-card app-surface relative overflow-hidden ${className}`}>
       {title || description || action ? (
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:px-6 lg:px-8 lg:py-6 lg:gap-4">
+        <div className="flex flex-col gap-1.5 border-b border-[var(--border-color)] bg-[var(--surface)] px-3.5 py-2.5 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:px-4 lg:gap-2.5 lg:px-5">
           <div className="min-w-0">
-            {title ? <h3 className="ui-section-heading text-xl font-semibold tracking-tight text-slate-900">{title}</h3> : null}
-            {description ? <p className="ui-muted-text mt-1 text-sm leading-6 text-slate-600 sm:text-base">{description}</p> : null}
+            {title ? (
+              <h3
+                className="ui-section-heading font-semibold tracking-tight"
+                style={{
+                  fontSize: "var(--text-section-title)",
+                  color: "var(--foreground)",
+                }}
+              >
+                {title}
+              </h3>
+            ) : null}
+            {description ? (
+              <p className="ui-caption mt-0.5">{description}</p>
+            ) : null}
           </div>
-          {action ? <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 sm:w-auto">{action}</div> : null}
+          {action ? (
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              {action}
+            </div>
+          ) : null}
         </div>
       ) : null}
-      <div className={`px-4 py-5 sm:px-6 sm:py-6 lg:px-8 ${contentClassName}`}>{children}</div>
+      <div className={`px-3.5 py-3 sm:px-4 sm:py-3.5 lg:px-5 ${contentClassName}`}>{children}</div>
     </section>
   );
 }

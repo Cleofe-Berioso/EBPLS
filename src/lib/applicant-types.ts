@@ -1,8 +1,11 @@
 export type BusinessType =
   | "Sole Proprietorship"
+  | "One Person Corporation"
   | "Partnership"
   | "Corporation"
   | "Cooperative";
+
+export type CorporationNationality = "Filipino" | "Foreign";
 
 export type PaymentFrequencyOption = "ANNUAL" | "BI_ANNUAL" | "QUARTERLY";
 
@@ -65,6 +68,9 @@ export interface ApplicationDocumentInput {
   sizeBytes?: number;
   fileSize?: number;
   uploadedAt?: Date | string;
+  validationStatus?: string;
+  validationRemarks?: string | null;
+  validatedAt?: Date | string | null;
 }
 
 export interface SubmitValidationErrorDetail {
@@ -106,7 +112,9 @@ export interface BusinessInfo {
   sex?: string;
   nationality: string;
   email: string;
+  telephone?: string;
   phone: string;
+  corporationNationality?: CorporationNationality;
   country?: string;
   countryCode?: string;
   province?: string;
@@ -120,8 +128,10 @@ export interface BusinessInfo {
   mainOfficeCityMunicipality?: string;
   mainOfficeStreetAddress?: string;
   mainOfficeBarangay?: string;
+  mainOfficeZipCode?: string;
   mainOfficeAddress: string;
   businessAddress: string;
+  businessZipCode?: string;
   businessLatitude: number | null;
   businessLongitude: number | null;
   businessBarangay?: string;
@@ -134,9 +144,12 @@ export interface BusinessInfo {
   femaleEmployees: string;
   employeesWithinMunicipality: string;
   deliveryVehicles: string;
+  deliveryVanTruck?: string;
+  deliveryMotorcycle?: string;
   propertyOwnership: PropertyOwnership;
   taxDeclarationNumber: string;
   propertyIdentificationNumber: string;
+  hasTaxIncentives?: "YES" | "NO" | "";
   taxIncentives: string;
   businessActivity: string;
   lineOfBusiness: string;

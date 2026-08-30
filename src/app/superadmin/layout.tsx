@@ -13,7 +13,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   }
 
   return (
-    <SuperAdminLayoutClient userName={session.user.name ?? "Super Admin"} signOutAction={handleSignOut}>
+    <SuperAdminLayoutClient userName={session.user.name ?? "IT Administrator"} signOutAction={handleSignOut}>
       {children}
     </SuperAdminLayoutClient>
   );

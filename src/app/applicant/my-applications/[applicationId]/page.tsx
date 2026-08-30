@@ -2,13 +2,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resolveApplicantSessionContext } from "@/lib/applicant-api";
 import { getApplicantApplicationDetail } from "@/lib/applications";
+import { mapDocumentValidationStatusToUi, validationStatusBadgeClass } from "@/lib/document-validation";
+import { extractRevocationApplicantMessage, isRevocationHistoryRemarks } from "@/lib/revocation-notification-copy";
 import { StatusBadge } from "@/components/applicant/status-badge";
 import { StatusTracker } from "@/components/applicant/status-tracker";
+import {
+  applicantListCardClass,
+  applicantPanelClass,
+  applicantSummaryLabelClass,
+  applicantSummaryTileClass,
+  applicantSummaryValueClass,
+  applicantWarningPanelClass,
+} from "@/components/applicant/applicant-ui-styles";
 import { DetailHeader } from "@/components/ui/detail-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
 import { Timeline } from "@/components/ui/timeline";
+import { DocumentDownloadButton } from "@/components/ui/document-download-button";
 import { actionButtonStyles } from "@/components/ui/action-button";
 
 interface PageProps {
@@ -124,6 +135,20 @@ function getStatusSummary(status: string): { meaning: string; nextStep: string }
     };
   }
 
+  if (status === "Revocation Review") {
+    return {
+      meaning: "Your released permit is under revocation review following a non-compliant inspection.",
+      nextStep: "Review the revocation notice below, contact BPLO immediately, and wait for the Department Head decision.",
+    };
+  }
+
+  if (status === "Revoked") {
+    return {
+      meaning: "Your business permit has been revoked following the revocation review decision.",
+      nextStep: "Review the revocation notice below and contact BPLO for compliance guidance and next steps.",
+    };
+  }
+
   return {
     meaning: "This application has an active workflow record.",
     nextStep: "Track updates in the history section.",
@@ -148,6 +173,12 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
   const latestRemarkEntry = application.history.find(
     (item: any) => typeof item.remarks === "string" && item.remarks.trim().length > 0
   );
+  const latestRevocationEntry = application.history.find(
+    (item: any) => isRevocationHistoryRemarks(item.remarks)
+  );
+  const latestRevocationNotice = latestRevocationEntry?.remarks
+    ? extractRevocationApplicantMessage(latestRevocationEntry.remarks)
+    : null;
   const latestBploRemarks = latestRemarkEntry?.remarks?.trim() ?? null;
 
   const showNextActionSection = [
@@ -166,7 +197,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
   const locationStatus = latitude != null && longitude != null ? "Location pinned" : "Location not pinned";
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <DetailHeader
         title="Application Detail"
         subtitle={application.applicationNumber}
@@ -180,27 +211,27 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
 
       <SectionCard title="Status Summary" description={`Business: ${String(formData.businessName ?? "-")}`}>
         <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className={`space-y-3 ${applicantPanelClass}`}>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-slate-900">Current Status</p>
+              <p className="text-sm font-semibold text-[var(--foreground)]">Current Status</p>
               <StatusBadge status={application.status} />
             </div>
-            <p className="text-sm text-slate-700">{statusSummary.meaning}</p>
-            <p className="text-sm text-slate-600">
-              <span className="font-medium text-slate-800">Expected next step:</span> {statusSummary.nextStep}
+            <p className="text-sm text-[var(--ink-muted)]">{statusSummary.meaning}</p>
+            <p className="text-sm text-[var(--ink-muted)]">
+              <span className="font-medium text-[var(--foreground)]">Expected next step:</span> {statusSummary.nextStep}
             </p>
           </div>
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <div className={`space-y-3 ${applicantPanelClass}`}>
             <p>
-              <span className="font-medium text-slate-800">Submitted:</span>{" "}
+              <span className="font-medium text-[var(--foreground)]">Submitted:</span>{" "}
               {application.submittedAt ? new Date(application.submittedAt).toLocaleString("en-PH") : "-"}
             </p>
             <p>
-              <span className="font-medium text-slate-800">Last updated:</span>{" "}
+              <span className="font-medium text-[var(--foreground)]">Last updated:</span>{" "}
               {new Date(application.updatedAt).toLocaleString("en-PH")}
             </p>
             <p>
-              <span className="font-medium text-slate-800">Application type:</span> {application.applicationType}
+              <span className="font-medium text-[var(--foreground)]">Application type:</span> {application.applicationType}
             </p>
           </div>
         </div>
@@ -209,6 +240,32 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
       <SectionCard title="Status Workflow" description="Track current workflow progression for this application.">
         <StatusTracker status={application.status} />
       </SectionCard>
+
+      {application.status === "Revocation Review" ? (
+        <SectionCard title="Revocation Notice" description="Your permit is under revocation review.">
+          <InfoBanner
+            title="Permit revocation under review"
+            description={
+              latestRevocationNotice ??
+              "Your released permit is under revocation review following a non-compliant inspection. Contact BPLO immediately and review the application history for details."
+            }
+            variant="warning"
+          />
+        </SectionCard>
+      ) : null}
+
+      {application.status === "Revoked" ? (
+        <SectionCard title="Revocation Notice" description="Your business permit has been revoked.">
+          <InfoBanner
+            title="Business permit revoked"
+            description={
+              latestRevocationNotice ??
+              "Your business permit has been revoked. Contact BPLO for guidance on compliance requirements and next steps."
+            }
+            variant="danger"
+          />
+        </SectionCard>
+      ) : null}
 
       {showNextActionSection ? (
         <SectionCard title="Your Next Action" description="Guidance based on your current application status.">
@@ -287,10 +344,10 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
 
       {latestBploRemarks ? (
         <SectionCard title="BPLO Remarks" description="Latest remarks recorded for this application.">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm leading-6 text-amber-900">{latestBploRemarks}</p>
+          <div className={applicantWarningPanelClass}>
+            <p className="text-sm leading-6 text-[var(--foreground)]">{latestBploRemarks}</p>
             {latestRemarkEntry?.createdAt ? (
-              <p className="mt-2 text-xs text-amber-800">
+              <p className="mt-2 ui-caption">
                 Recorded on {new Date(latestRemarkEntry.createdAt).toLocaleString("en-PH")}
               </p>
             ) : null}
@@ -298,137 +355,10 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
         </SectionCard>
       ) : null}
 
-      <SectionCard title="Documents" description="Submitted requirements attached to this application.">
-        <ul className="space-y-2 text-sm text-gray-700">
-          {application.documents.map((doc: any) => (
-            <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-              <div>
-                <p className="font-medium text-slate-900">
-                  {doc.documentName}: {doc.fileName}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Uploaded: {formatUploadTimestamp(doc.uploadedAt)}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">Status: Uploaded</p>
-              </div>
-              <a
-                href={`/api/applicant/applications/${application.id}/documents/${doc.id}/download`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={actionButtonStyles("secondary", "sm")}
-              >
-                Preview
-              </a>
-            </li>
-          ))}
-          {application.documents.length === 0 ? (
-            <li>
-              <EmptyState
-                title="No uploaded documents"
-                description="No records available yet for this application."
-              />
-            </li>
-          ) : null}
-        </ul>
-      </SectionCard>
-
-      <SectionCard title="Application Details" description="Complete application, payment, and release details.">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Application Type</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{application.applicationType}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Current Status</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{application.status}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Submitted At</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">
-              {application.submittedAt ? new Date(application.submittedAt).toLocaleString("en-PH") : "-"}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Last Updated</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">
-              {new Date(application.updatedAt).toLocaleString("en-PH")}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-          <SectionCard title="TOP / Payment" description="Current payment reference details in this application record.">
-            {latestPayment ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Reference Number</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{String(latestPayment.transactionNumber ?? "-")}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Payment Status</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{String(latestPayment.status ?? "-")}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Amount Paid</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {typeof latestPayment.amountPaid === "number"
-                      ? `P ${latestPayment.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
-                      : "-"}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Reviewed At</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {latestPayment.reviewedAt ? new Date(String(latestPayment.reviewedAt)).toLocaleString("en-PH") : "-"}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <EmptyState
-                title="No payment reference yet"
-                description="No action is required right now. TOP and payment reference details appear after BPLO assessment."
-              />
-            )}
-          </SectionCard>
-
-          <SectionCard title="Permit / Release" description="Permit and release information, if issuance has been completed.">
-            {application.permitIssuance ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Document Type</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{application.permitIssuance.documentType}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Document Number</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{application.permitIssuance.documentNumber}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Issued At</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{new Date(application.permitIssuance.issuedAt).toLocaleString("en-PH")}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Released At</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{application.permitIssuance.releasedAt ? new Date(application.permitIssuance.releasedAt).toLocaleString("en-PH") : "-"}</p>
-                </div>
-              </div>
-            ) : (
-              <EmptyState
-                title="No permit record yet"
-                description="Permit or closure certificate metadata appears after BPLO preparation and release stages."
-              />
-            )}
-          </SectionCard>
-        </div>
-
-        <div className="text-sm text-slate-600">
-          Your business location coordinates have been submitted and processed with your application.
-        </div>
-      </SectionCard>
-
       <SectionCard title="Submitted Information Snapshot" description="Read-only view of all filed information grouped for quick review.">
         <div className="grid gap-4 lg:grid-cols-2">
           <SectionCard title="Applicant / Owner Information" description="Filed owner identity and contact information.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               {ownerFirstName || ownerMiddleName || ownerSurname ? (
                 <>
                   <p><strong>First Name:</strong> {ownerFirstName || "-"}</p>
@@ -448,7 +378,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Business Identity" description="Registration and core business identification fields.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Business Name:</strong> {readText(formData, ["businessName"])}</p>
               <p><strong>Trade Name:</strong> {readText(formData, ["tradeName"])}</p>
               <p><strong>Business Type:</strong> {readText(formData, ["businessType"])}</p>
@@ -462,9 +392,11 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Address and Location" description="Filed addresses and pinned map coordinates.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Main Office Address:</strong> {readText(formData, ["mainOfficeAddress"])}</p>
+              <p><strong>Main Office Zip Code:</strong> {readText(formData, ["mainOfficeZipCode"])}</p>
               <p><strong>Business Address:</strong> {readText(formData, ["businessAddress"])}</p>
+              <p><strong>Business Zip Code:</strong> {readText(formData, ["businessZipCode"], "6118")}</p>
               <p><strong>Barangay:</strong> {readText(formData, ["barangay"])}</p>
               <p><strong>Street:</strong> {readText(formData, ["streetAddress"])}</p>
               <p><strong>Coordinates:</strong> {latitude != null && longitude != null ? `${latitude}, ${longitude}` : "-"}</p>
@@ -473,7 +405,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Business Operation Details" description="Operational and property-related declarations.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Business Area:</strong> {readText(formData, ["businessArea"])}</p>
               <p><strong>Total Floor Area:</strong> {readText(formData, ["totalFloorArea"])}</p>
               <p><strong>Asset Size:</strong> {readText(formData, ["assetSize"])}</p>
@@ -488,7 +420,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Employee Counts" description="Declared manpower and delivery headcount.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Total Employees:</strong> {readText(formData, ["totalEmployees"])}</p>
               <p><strong>Male Employees:</strong> {readText(formData, ["maleEmployees"])}</p>
               <p><strong>Female Employees:</strong> {readText(formData, ["femaleEmployees"])}</p>
@@ -498,7 +430,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
 
           <SectionCard title="Application-specific Notes" description="Closure/renewal specific submitted details.">
-            <div className="space-y-2 text-sm text-slate-700">
+            <div className="space-y-2 text-sm text-[var(--ink-muted)]">
               <p><strong>Application Type:</strong> {application.applicationType}</p>
 
               {application.applicationType === "RENEWAL" ? (
@@ -514,6 +446,114 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           </SectionCard>
         </div>
       </SectionCard>
+
+      <SectionCard title="Documents" description="Submitted requirements attached to this application.">
+        <ul className="space-y-2 text-sm text-[var(--ink-muted)]">
+          {application.documents.map((doc: any) => {
+            const validationStatus = mapDocumentValidationStatusToUi(doc.validationStatus);
+            return (
+            <li key={doc.id} className={`flex flex-wrap items-center justify-between gap-2 ${applicantListCardClass} px-3 py-3`}>
+              <div>
+                <p className="font-medium text-[var(--foreground)]">
+                  {doc.documentName}: {doc.fileName}
+                </p>
+                <p className="mt-1 ui-caption">
+                  Uploaded: {formatUploadTimestamp(doc.uploadedAt)}
+                </p>
+                <p className="mt-1">
+                  <span
+                    className={`ui-badge ${validationStatusBadgeClass(validationStatus)}`}
+                  >
+                    {validationStatus}
+                  </span>
+                </p>
+                {doc.validationRemarks ? (
+                  <p className="mt-2 ui-caption">
+                    <span className="font-semibold text-[var(--foreground)]">Reviewer remarks:</span> {doc.validationRemarks}
+                  </p>
+                ) : null}
+              </div>
+              <DocumentDownloadButton
+                url={`/api/applicant/applications/${application.id}/documents/${doc.id}/download`}
+                fileName={doc.fileName || doc.documentName || "document"}
+              />
+            </li>
+          );
+          })}
+          {application.documents.length === 0 ? (
+            <li>
+              <EmptyState
+                title="No uploaded documents"
+                description="No records available yet for this application."
+              />
+            </li>
+          ) : null}
+        </ul>
+      </SectionCard>
+
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <SectionCard title="TOP / Payment" description="Current payment reference details in this application record.">
+          {latestPayment ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className={applicantSummaryTileClass}>
+                <p className={applicantSummaryLabelClass}>Reference Number</p>
+                <p className={applicantSummaryValueClass}>{String(latestPayment.transactionNumber ?? "-")}</p>
+              </div>
+              <div className={applicantSummaryTileClass}>
+                <p className={applicantSummaryLabelClass}>Payment Status</p>
+                <p className={applicantSummaryValueClass}>{String(latestPayment.status ?? "-")}</p>
+              </div>
+              <div className={applicantSummaryTileClass}>
+                <p className={applicantSummaryLabelClass}>Amount Paid</p>
+                <p className={applicantSummaryValueClass}>
+                  {typeof latestPayment.amountPaid === "number"
+                    ? `P ${latestPayment.amountPaid.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                    : "-"}
+                </p>
+              </div>
+              <div className={applicantSummaryTileClass}>
+                <p className={applicantSummaryLabelClass}>Reviewed At</p>
+                <p className={applicantSummaryValueClass}>
+                  {latestPayment.reviewedAt ? new Date(String(latestPayment.reviewedAt)).toLocaleString("en-PH") : "-"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              title="No payment reference yet"
+              description="No action is required right now. TOP and payment reference details appear after BPLO assessment."
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Permit / Release" description="Permit and release information, if issuance has been completed.">
+          {application.permitIssuance ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className={applicantSummaryTileClass}>
+                <p className={applicantSummaryLabelClass}>Document Type</p>
+                <p className={applicantSummaryValueClass}>{application.permitIssuance.documentType}</p>
+              </div>
+              <div className={applicantSummaryTileClass}>
+                <p className={applicantSummaryLabelClass}>Document Number</p>
+                <p className={applicantSummaryValueClass}>{application.permitIssuance.documentNumber}</p>
+              </div>
+              <div className={applicantSummaryTileClass}>
+                <p className={applicantSummaryLabelClass}>Issued At</p>
+                <p className={applicantSummaryValueClass}>{new Date(application.permitIssuance.issuedAt).toLocaleString("en-PH")}</p>
+              </div>
+              <div className={applicantSummaryTileClass}>
+                <p className={applicantSummaryLabelClass}>Released At</p>
+                <p className={applicantSummaryValueClass}>{application.permitIssuance.releasedAt ? new Date(application.permitIssuance.releasedAt).toLocaleString("en-PH") : "-"}</p>
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              title="No permit record yet"
+              description="Permit or closure certificate metadata appears after BPLO preparation and release stages."
+            />
+          )}
+        </SectionCard>
+      </div>
 
       <SectionCard title="Timeline / History" description="Status and remarks recorded as the application moves through workflow.">
         <Timeline

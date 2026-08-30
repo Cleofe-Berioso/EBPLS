@@ -31,19 +31,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const {
-    title,
-    startDate,
-    endDate,
-    isActive,
-    waiveSurcharge,
-    waiveInterest,
-    remarks,
-  } = body as Record<string, unknown>;
-
-  if (typeof title !== "string" || !title.trim()) {
-    return NextResponse.json({ error: "Extension title is required." }, { status: 400 });
-  }
+  const { startDate, endDate, isActive, waiveSurcharge, waiveInterest } = body as Record<string, unknown>;
 
   const parsedStart = parseDate(startDate);
   const parsedEnd = parseDate(endDate);
@@ -67,27 +55,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Waive interest setting is required." }, { status: 400 });
   }
 
-  if (typeof remarks !== "undefined" && typeof remarks !== "string") {
-    return NextResponse.json({ error: "Remarks must be a string." }, { status: 400 });
-  }
-
   try {
     const extension = await createRenewalExtension({
-      title,
       startDate: parsedStart,
       endDate: parsedEnd,
       isActive,
       waiveSurcharge,
       waiveInterest,
-      remarks: typeof remarks === "string" ? remarks : "",
       updatedById: session.user.id,
     });
 
     return NextResponse.json({ success: true, extension }, { status: 201 });
   } catch (error) {
     if (error instanceof Error) {
-      // In production, do not surface raw Prisma error messages — they can
-      // contain constraint names, table/column details, or index identifiers.
       const safeMessage =
         process.env.NODE_ENV !== "production"
           ? error.message

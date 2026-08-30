@@ -14,6 +14,7 @@ import {
   EB_MAGALONA_COUNTRY,
   EB_MAGALONA_COUNTRY_CODE,
   EB_MAGALONA_PROVINCE,
+  EB_MAGALONA_ZIP_CODE,
   isEbMagalonaCity,
   isEbMagalonaProvince,
 } from "@/lib/address-options";
@@ -27,6 +28,7 @@ import type {
 } from "@/lib/applicant-types";
 import {
   getMissingRequiredDocuments,
+  getDocumentRequirementDescription,
   normalizeDocumentName,
   resolveRequiredDocuments,
 } from "@/lib/required-documents";
@@ -38,14 +40,32 @@ import {
 } from "@/lib/document-upload-rules";
 import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
 import { resolveBusinessBarangayFromFormState } from "@/lib/business-rules";
+import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/numeric-input";
 import { BusinessInformationFields } from "./business-information-fields";
+import { ApplicationVerificationTemplate } from "@/components/print/application-verification-template";
 import { FormStepper } from "@/components/applicant/form-stepper";
-import { UploadSlot } from "@/components/applicant/upload-slot";
+import { RequirementsUploadTable } from "@/components/applicant/requirements-upload-table";
+import {
+  applicantCheckboxCardClass,
+  applicantErrorPanelClass,
+  applicantFormControlClass,
+  applicantPanelClass,
+  applicantRadioLabelClass,
+  applicantSummaryLabelClass,
+  applicantSummaryTileClass,
+  applicantSummaryValueClass,
+} from "@/components/applicant/applicant-ui-styles";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import {
+  getApplicationSubmitButtonLabel,
+  getApplicationSubmitSuccessMessage,
+  getResubmissionConfirmMessage,
+  isReturnedCorrectionResubmission,
+} from "@/lib/resubmission-copy";
 
 type NewApplicationFieldKey = keyof BusinessInfo | "requiredDocuments";
 
@@ -82,21 +102,24 @@ const operationFields: Array<{
   label: string;
   key: keyof BusinessInfo;
   helperText?: string;
+  numericKind?: "integer" | "decimal";
 }> = [
-  { label: "Business Area", key: "businessArea", helperText: "Use the declared operating area." },
-  { label: "Total Floor Area", key: "totalFloorArea" },
-  { label: "Total Employees", key: "totalEmployees" },
-  { label: "Male Employees", key: "maleEmployees" },
-  { label: "Female Employees", key: "femaleEmployees" },
+  { label: "Business Area", key: "businessArea", helperText: "Use the declared operating area.", numericKind: "decimal" },
+  { label: "Total Floor Area", key: "totalFloorArea", numericKind: "decimal" },
+  { label: "Total Employees", key: "totalEmployees", numericKind: "integer" },
+  { label: "Male Employees", key: "maleEmployees", numericKind: "integer" },
+  { label: "Female Employees", key: "femaleEmployees", numericKind: "integer" },
   {
     label: "Employees Residing within Municipality",
     key: "employeesWithinMunicipality",
+    numericKind: "integer",
   },
-  { label: "Delivery Vehicles", key: "deliveryVehicles" },
-  { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos." },
+  { label: "Van / Truck", key: "deliveryVanTruck", helperText: "Number of vans or trucks, if applicable.", numericKind: "integer" },
+  { label: "Motorcycle", key: "deliveryMotorcycle", helperText: "Number of motorcycles, if applicable.", numericKind: "integer" },
+  { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos.", numericKind: "decimal" },
 ];
 
-// taxIncentives removed from applicant form (field preserved in DB / type for existing records and BPLO display)
+// taxIncentives restored on Business Operation step (field preserved in DB / type for existing records)
 
 const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   businessType: "Business Type",
@@ -114,7 +137,9 @@ const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   businessOperationType: "Business Office Type",
   nationality: "Nationality",
   email: "Email",
-  phone: "Contact Number",
+  phone: "Mobile Number",
+  telephone: "Telephone Number",
+  corporationNationality: "Corporation Nationality",
   country: "Country",
   countryCode: "Country Code",
   province: "Province",
@@ -140,6 +165,8 @@ const FIELD_LABELS: Partial<Record<keyof BusinessInfo, string>> = {
   maleEmployees: "Male Employees",
   femaleEmployees: "Female Employees",
   employeesWithinMunicipality: "Employees Residing within Municipality",
+  deliveryVanTruck: "Van / Truck",
+  deliveryMotorcycle: "Motorcycle",
   deliveryVehicles: "Delivery Vehicles",
   businessActivity: "Business Activity",
   lineOfBusiness: "Line of Business",
@@ -177,7 +204,8 @@ const STEP_REQUIRED_FIELDS: Record<number, Array<keyof BusinessInfo>> = {
     "maleEmployees",
     "femaleEmployees",
     "employeesWithinMunicipality",
-    "deliveryVehicles",
+    "deliveryVanTruck",
+    "deliveryMotorcycle",
     "businessActivity",
     "lineOfBusiness",
     "assetSize",
@@ -252,7 +280,13 @@ const FIELD_NAVIGATION_MAP: Record<NewApplicationFieldKey, FieldNavigationConfig
   ownerAge: { step: 0, label: "Owner Age", selector: '[data-field-key="ownerFirstName"]' },
   sex: { step: 0, label: "Sex", selector: '[data-field-key="sex"]' },
   nationality: { step: 0, label: "Nationality", selector: '[data-field-key="nationality"]' },
-  phone: { step: 0, label: "Contact Number", selector: '[data-field-key="phone"]' },
+  phone: { step: 0, label: "Mobile Number", selector: '[data-field-key="phone"]' },
+  telephone: { step: 0, label: "Telephone Number", selector: '[data-field-key="telephone"]' },
+  corporationNationality: {
+    step: 0,
+    label: "Corporation Nationality",
+    selector: '[data-field-key="corporationNationality"]',
+  },
   country: { step: 0, label: "Country", selector: '[data-field-key="businessAddress"]' },
   countryCode: { step: 0, label: "Country Code", selector: '[data-field-key="businessAddress"]' },
   province: { step: 0, label: "Province", selector: '[data-field-key="businessAddress"]' },
@@ -309,7 +343,9 @@ const FIELD_NAVIGATION_MAP: Record<NewApplicationFieldKey, FieldNavigationConfig
     label: "Employees Residing within Municipality",
     selector: '[data-field-key="employeesWithinMunicipality"]',
   },
-  deliveryVehicles: { step: 1, label: "Delivery Vehicles", selector: '[data-field-key="deliveryVehicles"]' },
+  deliveryVanTruck: { step: 1, label: "Van / Truck", selector: '[data-field-key="deliveryVanTruck"]' },
+  deliveryMotorcycle: { step: 1, label: "Motorcycle", selector: '[data-field-key="deliveryMotorcycle"]' },
+  deliveryVehicles: { step: 1, label: "Delivery Vehicles", selector: '[data-field-key="deliveryVanTruck"]' },
   propertyOwnership: { step: 1, label: "Property Ownership", selector: '[data-field-key="propertyOwnership"]' },
   taxDeclarationNumber: {
     step: 1,
@@ -322,10 +358,25 @@ const FIELD_NAVIGATION_MAP: Record<NewApplicationFieldKey, FieldNavigationConfig
     selector: '[data-field-key="propertyIdentificationNumber"]',
   },
   taxIncentives: { step: 1, label: "Tax Incentives", selector: '[data-field-key="taxIncentives"]' },
+  hasTaxIncentives: {
+    step: 1,
+    label: "Tax Incentives from Government Entity",
+    selector: '[data-field-key="hasTaxIncentives"]',
+  },
+  mainOfficeZipCode: {
+    step: 0,
+    label: "Main Office Zip Code",
+    selector: '[data-field-key="mainOfficeZipCode"]',
+  },
+  businessZipCode: {
+    step: 0,
+    label: "Business Zip Code",
+    selector: '[data-field-key="businessZipCode"]',
+  },
   isMarket: { step: 1, label: "Market Business", selector: '[data-field-key="isMarket"]' },
   isAgriculture: { step: 1, label: "Agriculture-related Business", selector: '[data-field-key="isAgriculture"]' },
   isLiquorOrTobacco: {
-    step: 0,
+    step: 1,
     label: "Liquor/Tobacco Business",
     selector: '[data-field-key="isLiquorOrTobacco"]',
   },
@@ -498,10 +549,10 @@ function ReviewStat({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    <div className={applicantSummaryTileClass}>
+      <p className={applicantSummaryLabelClass}>{label}</p>
+      <p className={applicantSummaryValueClass}>{value}</p>
+      {helper ? <p className="mt-1 ui-caption">{helper}</p> : null}
     </div>
   );
 }
@@ -515,6 +566,7 @@ function FieldCard({
   error,
   disabled,
   fieldKey,
+  numericKind,
 }: {
   label: string;
   value: string;
@@ -524,16 +576,28 @@ function FieldCard({
   error?: string;
   disabled?: boolean;
   fieldKey?: keyof BusinessInfo;
+  numericKind?: "integer" | "decimal";
 }) {
   return (
     <FormField label={label} required hint={helperText} error={error}>
       <input
         data-field-key={fieldKey}
-        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+        aria-label={label}
+        className={applicantFormControlClass}
         value={value}
         disabled={disabled}
+        inputMode={numericKind === "integer" ? "numeric" : numericKind === "decimal" ? "decimal" : undefined}
         onBlur={onBlur}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          const raw = event.target.value;
+          const next =
+            numericKind === "integer"
+              ? sanitizeIntegerInput(raw)
+              : numericKind === "decimal"
+                ? sanitizeDecimalInput(raw)
+                : raw;
+          onChange(next);
+        }}
       />
     </FormField>
   );
@@ -574,7 +638,8 @@ const READ_ONLY_LOCKED_FIELDS: Array<keyof BusinessInfo> = [
   "maleEmployees",
   "femaleEmployees",
   "employeesWithinMunicipality",
-  "deliveryVehicles",
+  "deliveryVanTruck",
+  "deliveryMotorcycle",
   "businessActivity",
   "lineOfBusiness",
   "assetSize",
@@ -631,6 +696,7 @@ export function NewApplicationForm() {
     text: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showVerificationPrint, setShowVerificationPrint] = useState(false);
   const [missingDocNames, setMissingDocNames] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
   const [errorSummaryItems, setErrorSummaryItems] = useState<string[]>([]);
@@ -697,6 +763,10 @@ export function NewApplicationForm() {
   );
 
   const isReadOnly = Boolean(editId && existingApplicationAccess && !existingApplicationAccess.canEdit);
+  const isResubmission = isReturnedCorrectionResubmission({
+    editId,
+    applicationStatus: existingApplicationAccess?.status,
+  });
   const lockInteractivityClass = isReadOnly ? "pointer-events-none" : "";
 
   useEffect(() => {
@@ -842,10 +912,7 @@ export function NewApplicationForm() {
   if (editId && draftLoading) {
     return (
       <SectionCard title="Loading saved draft" description="Restoring your saved application values.">
-        <EmptyState
-          title="Loading draft"
-          description="Please wait while the saved application is loaded into the form."
-        />
+        <LoadingState message="Loading draft…" compact />
       </SectionCard>
     );
   }
@@ -1064,6 +1131,13 @@ export function NewApplicationForm() {
     setStep((current) => Math.max(current - 1, 0));
   }
 
+  function handleFinalSubmit() {
+    if (isResubmission && !window.confirm(getResubmissionConfirmMessage("NEW"))) {
+      return;
+    }
+    void persist("SUBMIT");
+  }
+
   async function persist(mode: PersistMode) {
     if (isReadOnly) {
       setStatusMessage({
@@ -1142,6 +1216,12 @@ export function NewApplicationForm() {
         }
       }
 
+      if (normalizedInfo.hasTaxIncentives !== "YES" && normalizedInfo.hasTaxIncentives !== "NO") {
+        submitFieldErrors.hasTaxIncentives = "Please select Yes or No for tax incentives.";
+      } else if (normalizedInfo.hasTaxIncentives === "YES" && !normalizedInfo.taxIncentives.trim()) {
+        submitFieldErrors.taxIncentives = "Please describe the tax incentive.";
+      }
+
       if (Object.keys(submitFieldErrors).length > 0 || missingDocuments.length > 0) {
         const missingFieldKeys = Object.keys(submitFieldErrors);
         const summaryLabels = [
@@ -1192,27 +1272,28 @@ export function NewApplicationForm() {
     const hasPendingFiles = Object.keys(pendingDocuments).length > 0;
     const draftTargetUrl = applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications";
     const draftTargetMethod = applicationId ? "PATCH" : "POST";
+    const saveUrl = mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl;
+    const saveMethod = mode === "SUBMIT" ? "POST" : draftTargetMethod;
 
-    const response =
-      mode === "SUBMIT" && hasPendingFiles
-        ? await (async () => {
-            const formData = new FormData();
-            formData.append("payload", JSON.stringify(payload));
-            for (const [documentName, file] of Object.entries(pendingDocuments)) {
-              formData.append("documentNames", documentName);
-              formData.append("documentFiles", file, file.name);
-            }
+    const response = hasPendingFiles
+      ? await (async () => {
+          const formData = new FormData();
+          formData.append("payload", JSON.stringify(payload));
+          for (const [documentName, file] of Object.entries(pendingDocuments)) {
+            formData.append("documentNames", documentName);
+            formData.append("documentFiles", file, file.name);
+          }
 
-            return fetch("/api/applicant/applications", {
-              method: "POST",
-              body: formData,
-            });
-          })()
-        : await fetch(mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl, {
-          method: mode === "SUBMIT" ? "POST" : draftTargetMethod,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+          return fetch(saveUrl, {
+            method: saveMethod,
+            body: formData,
           });
+        })()
+      : await fetch(saveUrl, {
+          method: saveMethod,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
     const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
@@ -1290,9 +1371,18 @@ export function NewApplicationForm() {
           ? ` (${data.rawResponse})`
           : "";
 
+      const duplicateMessage =
+        data.duplicateField === "registrationNumber" || data.duplicateField === "tin"
+          ? data.message ??
+            `An application with this ${
+              data.duplicateField === "registrationNumber" ? "Registration Number" : "TIN"
+            } already exists. Do not proceed with submission.`
+          : null;
+
       setStatusMessage({
         kind: "error",
         text:
+          duplicateMessage ??
           backendValidationMessage ??
           data.error ??
           data.message ??
@@ -1312,15 +1402,42 @@ export function NewApplicationForm() {
       setPendingDocumentPreviews({});
       setStatusMessage({
         kind: "success",
-        text: `Application ${data.application.applicationNumber} submitted successfully.`,
+        text: getApplicationSubmitSuccessMessage("NEW", isResubmission, data.application.applicationNumber),
       });
       return data.application.id;
     }
 
+    // Draft save: keep uploaded documents from the server so reopen doesn't require re-upload.
+    if (hasPendingFiles || Object.keys(uploadedDocuments).length > 0) {
+      try {
+        const docsResponse = await fetch(`/api/applicant/applications/${data.application.id}/documents`, {
+          cache: "no-store",
+        });
+        const docsData = (await parseApiResponseSafely(docsResponse)) as {
+          documents?: ApplicationDocumentInput[];
+        };
+        if (docsResponse.ok && Array.isArray(docsData.documents)) {
+          setUploadedDocuments(
+            docsData.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
+              acc[doc.documentName] = doc;
+              return acc;
+            }, {})
+          );
+        }
+      } catch {
+        // Keep local metadata if refresh fails; files are already persisted server-side.
+      }
+    }
+
+    for (const previewUrl of Object.values(pendingDocumentPreviews)) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPendingDocuments({});
+    setPendingDocumentPreviews({});
     setSubmitting(false);
     setStatusMessage({
       kind: "success",
-      text: `Draft ${data.application.applicationNumber} saved successfully.`,
+      text: `Draft ${data.application.applicationNumber} saved successfully. Uploaded documents are kept with this draft.`,
     });
     return data.application.id;
   }
@@ -1364,6 +1481,8 @@ export function NewApplicationForm() {
         mimeType: file.type,
         sizeBytes: file.size,
         fileSize: file.size,
+        validationStatus: "Pending Review",
+        validationRemarks: null,
       },
     }));
     setMissingDocNames((current) =>
@@ -1371,7 +1490,10 @@ export function NewApplicationForm() {
         (m) => normalizeDocumentName(m) !== normalizeDocumentName(documentName)
       )
     );
-    setStatusMessage({ kind: "success", text: `${documentName} selected. File will be saved on final submit.` });
+    setStatusMessage({
+      kind: "success",
+      text: `${documentName} selected. It will be saved with your draft or on final submit.`,
+    });
   }
 
   async function handleDocumentDelete(documentName: string) {
@@ -1432,17 +1554,26 @@ export function NewApplicationForm() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page-stack">
       <FormStepper steps={steps} currentStep={step} />
 
       {errorSummaryItems.length > 0 ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" data-field-key="errorSummary">
+        <div className={applicantErrorPanelClass} data-field-key="errorSummary">
           <p className="font-semibold">Please complete the following fields:</p>
           <ul className="mt-2 list-disc pl-5">
             {errorSummaryItems.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
+          {step === steps.length - 1 ? (
+            <button
+              type="button"
+              onClick={back}
+              className={`${actionButtonStyles("secondary", "sm")} mt-3`}
+            >
+              Back
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -1509,6 +1640,7 @@ export function NewApplicationForm() {
                   value={info[field.key] as string}
                   fieldKey={field.key}
                   helperText={field.helperText}
+                  numericKind={field.numericKind}
                   error={fieldErrors[field.key]}
                   disabled={isReadOnly}
                   onBlur={() => validateFieldOnBlur(field.key)}
@@ -1523,6 +1655,7 @@ export function NewApplicationForm() {
                 value={info.capitalInvestment ?? ""}
                 fieldKey="capitalInvestment"
                 helperText="Enter the declared capital investment amount in pesos."
+                numericKind="decimal"
                 error={fieldErrors.capitalInvestment}
                 disabled={isReadOnly}
                 onBlur={() => validateFieldOnBlur("capitalInvestment")}
@@ -1541,7 +1674,7 @@ export function NewApplicationForm() {
               >
                 <select
                   data-field-key="businessActivity"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={(() => {
                     // If the value is "Others: <text>", show just "Others, please specify" in the dropdown
                     if (info.businessActivity?.startsWith("Others:")) {
@@ -1589,7 +1722,8 @@ export function NewApplicationForm() {
                     <input
                       data-field-key="businessActivity"
                       type="text"
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                      aria-label="Please specify business activity"
+                      className={applicantFormControlClass}
                       placeholder="Enter your business activity"
                       value={(() => {
                         // Extract the custom text from "Others: <text>" format
@@ -1621,7 +1755,7 @@ export function NewApplicationForm() {
               >
                 <select
                   data-field-key="lineOfBusiness"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={info.lineOfBusiness}
                   disabled={isReadOnly}
                   onChange={(event) => {
@@ -1641,13 +1775,13 @@ export function NewApplicationForm() {
                   ))}
                 </select>
                 {fieldErrors.lineOfBusiness ? (
-                  <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.lineOfBusiness}</p>
+                  <p className="mt-1 text-xs font-medium text-[var(--danger)]">{fieldErrors.lineOfBusiness}</p>
                 ) : null}
               </FormField>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <label className={applicantCheckboxCardClass}>
                 <input
                   data-field-key="isMarket"
                   type="checkbox"
@@ -1661,12 +1795,12 @@ export function NewApplicationForm() {
                   }
                 />
                 <span>
-                  <span className="block font-semibold text-slate-900">Market business</span>
+                  <span className="block font-semibold text-[var(--foreground)]">Market business</span>
                   Mark this if the business operates inside a public market or market stall so Market Clearance becomes required.
                 </span>
               </label>
 
-              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <label className={applicantCheckboxCardClass}>
                 <input
                   data-field-key="isAgriculture"
                   type="checkbox"
@@ -1680,8 +1814,27 @@ export function NewApplicationForm() {
                   }
                 />
                 <span>
-                  <span className="block font-semibold text-slate-900">Agriculture-related business</span>
+                  <span className="block font-semibold text-[var(--foreground)]">Agriculture-related business</span>
                   Mark this if the business requires Department of Agriculture clearance.
+                </span>
+              </label>
+
+              <label className={`${applicantCheckboxCardClass} md:col-span-2`}>
+                <input
+                  data-field-key="isLiquorOrTobacco"
+                  type="checkbox"
+                  className="mt-1"
+                  checked={Boolean(info.isLiquorOrTobacco)}
+                  disabled={isReadOnly}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isLiquorOrTobacco: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-[var(--foreground)]">Liquor/Tobacco business</span>
+                  If selected, BPLO will automatically apply the required 25% surcharge during assessment.
                 </span>
               </label>
             </div>
@@ -1693,12 +1846,12 @@ export function NewApplicationForm() {
           >
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-sm">
-                <span className="mb-1 block font-medium text-slate-700">
-                  Property Ownership <span className="text-red-600">*</span>
+                <span className="mb-1 block font-medium text-[var(--foreground)]">
+                  Property Ownership <span className="text-[var(--danger)]">*</span>
                 </span>
                 <select
                   data-field-key="propertyOwnership"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={info.propertyOwnership}
                   onChange={(event) =>
                     setInfo((current) =>
@@ -1714,7 +1867,7 @@ export function NewApplicationForm() {
                 </select>
               </label>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <div className={applicantPanelClass}>
                 {info.propertyOwnership === "Owned"
                   ? "Provide the tax declaration and property identification details below."
                   : "If the property is not owned, make sure the required lease or consent document is uploaded in the document step."}
@@ -1749,6 +1902,75 @@ export function NewApplicationForm() {
                   />
                 </>
               ) : null}
+
+              <div className="md:col-span-2">
+                <FormField
+                  label="Tax Incentives from Government Entity"
+                  hint="Select whether this business currently holds any government-granted tax incentive."
+                  error={fieldErrors.hasTaxIncentives}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2" data-field-key="hasTaxIncentives">
+                    <label className={applicantRadioLabelClass}>
+                      <input
+                        type="radio"
+                        name="hasTaxIncentives"
+                        value="YES"
+                        checked={info.hasTaxIncentives === "YES"}
+                        disabled={isReadOnly}
+                        onChange={() => {
+                          setInfo((current) =>
+                            normalizeBusinessInfo({ ...current, hasTaxIncentives: "YES" })
+                          );
+                          setFieldErrors((current) => {
+                            const next = { ...current };
+                            delete next.hasTaxIncentives;
+                            return next;
+                          });
+                        }}
+                      />
+                      Yes
+                    </label>
+                    <label className={applicantRadioLabelClass}>
+                      <input
+                        type="radio"
+                        name="hasTaxIncentives"
+                        value="NO"
+                        checked={info.hasTaxIncentives === "NO"}
+                        disabled={isReadOnly}
+                        onChange={() => {
+                          setInfo((current) =>
+                            normalizeBusinessInfo({ ...current, hasTaxIncentives: "NO", taxIncentives: "" })
+                          );
+                          setFieldErrors((current) => {
+                            const next = { ...current };
+                            delete next.hasTaxIncentives;
+                            delete next.taxIncentives;
+                            return next;
+                          });
+                        }}
+                      />
+                      No
+                    </label>
+                  </div>
+                </FormField>
+
+                {info.hasTaxIncentives === "YES" ? (
+                  <div className="mt-3">
+                    <FieldCard
+                      label="Tax Incentive Details"
+                      value={info.taxIncentives}
+                      fieldKey="taxIncentives"
+                      helperText="Describe the tax incentive granted (e.g., program name, granting agency)."
+                      error={fieldErrors.taxIncentives}
+                      disabled={isReadOnly}
+                      onBlur={() => validateFieldOnBlur("taxIncentives")}
+                      onChange={(value) =>
+                        setInfo((current) => normalizeBusinessInfo({ ...current, taxIncentives: value }))
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
           </SectionCard>
         </div>
@@ -1759,49 +1981,47 @@ export function NewApplicationForm() {
           <div data-field-key="requiredDocuments" />
           <InfoBanner
             title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredDocs.length}`}
-            description="Upload each required document now. Final submit sends only document metadata references."
+            description="Upload each required document now. Saving a draft keeps these files so you do not need to re-upload them later."
             variant="info"
           />
           <SectionCard
             title="Document Upload"
             description="Required files may vary based on business type and property ownership."
           >
-            <div className="grid gap-3 md:grid-cols-2">
-              {requiredDocs.map((doc) => {
+            <RequirementsUploadTable
+              accept={DOCUMENT_FILE_INPUT_ACCEPT}
+              rows={requiredDocs.map((doc) => {
                 const uploadedDoc = getUploadedDocumentForRequiredName(doc);
-                return (
-                  <UploadSlot
-                    key={doc}
-                    label={doc}
-                    required
-                    helperText="Prepare a clear file copy before uploading."
-                    disabled={submitting || isReadOnly}
-                    fileName={uploadedDoc?.fileName}
-                    uploadedAt={uploadedDoc?.uploadedAt}
-                    previewUrl={
-                      pendingDocumentPreviews[doc] ??
-                      (uploadedDoc?.id && applicationId
-                        ? `/api/applicant/applications/${applicationId}/documents/${uploadedDoc.id}/download`
-                        : undefined)
-                    }
-                    error={
-                      missingDocNames.some(
-                        (m) => normalizeDocumentName(m) === normalizeDocumentName(doc)
-                      )
-                        ? "This document is required."
-                        : undefined
-                    }
-                    onFileChange={(file) => {
-                      void handleDocumentUpload(doc, file);
-                    }}
-                    accept={DOCUMENT_FILE_INPUT_ACCEPT}
-                    onRemove={() => {
-                      void handleDocumentDelete(uploadedDoc?.documentName ?? doc);
-                    }}
-                  />
+                const isMissing = missingDocNames.some(
+                  (m) => normalizeDocumentName(m) === normalizeDocumentName(doc)
                 );
+                return {
+                  documentName: doc,
+                  description: getDocumentRequirementDescription(doc),
+                  required: true,
+                  fileName: uploadedDoc?.fileName,
+                  uploadedAt: uploadedDoc?.uploadedAt,
+                  previewUrl:
+                    pendingDocumentPreviews[doc] ??
+                    (uploadedDoc?.id && applicationId
+                      ? `/api/applicant/applications/${applicationId}/documents/${uploadedDoc.id}/download`
+                      : undefined),
+                  error: isMissing ? "This document is required." : undefined,
+                  remarks: uploadedDoc?.validationRemarks ?? undefined,
+                  validationStatus: uploadedDoc?.fileName
+                    ? uploadedDoc.validationStatus ?? "Pending Review"
+                    : undefined,
+                  disabled: submitting || isReadOnly,
+                };
               })}
-            </div>
+              onFileChange={(documentName, file) => {
+                void handleDocumentUpload(documentName, file);
+              }}
+              onRemove={(documentName) => {
+                const uploadedDoc = getUploadedDocumentForRequiredName(documentName);
+                void handleDocumentDelete(uploadedDoc?.documentName ?? documentName);
+              }}
+            />
           </SectionCard>
         </div>
       ) : null}
@@ -1813,7 +2033,7 @@ export function NewApplicationForm() {
             description="Choose how you prefer to pay the assessed fees. Final payment details are confirmed after BPLO assessment."
           >
             <div className="grid gap-3 md:grid-cols-3">
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+              <label className={applicantRadioLabelClass}>
                 <input
                   type="radio"
                   name="paymentFrequency"
@@ -1826,7 +2046,7 @@ export function NewApplicationForm() {
                 />
                 Annual
               </label>
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+              <label className={applicantRadioLabelClass}>
                 <input
                   type="radio"
                   name="paymentFrequency"
@@ -1839,7 +2059,7 @@ export function NewApplicationForm() {
                 />
                 Bi-Annual
               </label>
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+              <label className={applicantRadioLabelClass}>
                 <input
                   type="radio"
                   name="paymentFrequency"
@@ -1872,6 +2092,21 @@ export function NewApplicationForm() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
+                  disabled={isReadOnly}
+                  onClick={back}
+                  className={actionButtonStyles("ghost", "md")}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowVerificationPrint(true)}
+                  className={actionButtonStyles("secondary", "md")}
+                >
+                  Print Verification Form
+                </button>
+                <button
+                  type="button"
                   disabled={submitting || isReadOnly}
                   onClick={() => {
                     void persist("DRAFT");
@@ -1883,12 +2118,10 @@ export function NewApplicationForm() {
                 <button
                   type="button"
                   disabled={submitting || isReadOnly}
-                  onClick={() => {
-                    void persist("SUBMIT");
-                  }}
+                  onClick={handleFinalSubmit}
                   className={actionButtonStyles("primary", "md")}
                 >
-                  Submit Application
+                  {getApplicationSubmitButtonLabel("NEW", isResubmission)}
                 </button>
               </div>
             }
@@ -1932,28 +2165,41 @@ export function NewApplicationForm() {
               />
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Main Office Address</p>
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Main Office Address</p>
               <p className="mt-1">{info.mainOfficeAddress || "-"}</p>
+              <p className="mt-1 ui-caption">Zip Code: {info.mainOfficeZipCode?.trim() || "-"}</p>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Business Address</p>
-              <p className="mt-0.5 text-xs text-slate-500">
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Business Address</p>
+              <p className="mt-0.5 ui-caption">
                 {info.businessLatitude != null && info.businessLongitude != null
                   ? "Business location pinned"
                   : "Business location not pinned"}
               </p>
               <p className="mt-1">{info.businessAddress || "-"}</p>
+              <p className="mt-1 ui-caption">Zip Code: {info.businessZipCode?.trim() || EB_MAGALONA_ZIP_CODE}</p>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Before you submit</p>
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Before you submit</p>
               <ul className="mt-2 space-y-1">
                 <li>• Review the business information and operational details for accuracy.</li>
                 <li>• Confirm each required document is uploaded with a clear file copy.</li>
                 <li>• Use Save Draft if you still need to continue later.</li>
               </ul>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border-color)] pt-4">
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={back}
+                className={actionButtonStyles("secondary", "md")}
+              >
+                Back
+              </button>
             </div>
           </SectionCard>
 
@@ -1969,15 +2215,27 @@ export function NewApplicationForm() {
         >
           Back
         </button>
-        <button
-          type="button"
-          disabled={step === steps.length - 1 || isReadOnly}
-          onClick={next}
-          className={actionButtonStyles("primary", "md")}
-        >
-          Next
-        </button>
+        {step < steps.length - 1 ? (
+          <button
+            type="button"
+            disabled={isReadOnly}
+            onClick={next}
+            className={actionButtonStyles("primary", "md")}
+          >
+            Next
+          </button>
+        ) : null}
       </div>
+
+      {showVerificationPrint ? (
+        <ApplicationVerificationTemplate
+          info={info}
+          applicationTypeLabel="New Business Permit Application"
+          requiredDocuments={requiredDocs}
+          uploadedDocumentNames={Object.values(uploadedDocuments).map((doc) => doc.documentName)}
+          onClose={() => setShowVerificationPrint(false)}
+        />
+      ) : null}
     </div>
   );
 }

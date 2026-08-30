@@ -1,13 +1,19 @@
 import Link from "next/link";
-import { AlertCircle } from "lucide-react";
-import { listBploApplications } from "@/lib/bplo-applications";
+import { listBploApplicationsPaginated } from "@/lib/bplo-applications";
 import { resolveApplicantProfileImageUrl } from "@/lib/profile-image-url";
 import { StatusBadge } from "@/components/applicant/status-badge";
 import type { ApplicationStatus } from "@/lib/applicant-types";
+import {
+  bploFormControlClass,
+  bploMobileRecordCardClass,
+  bploTableClass,
+} from "@/components/bplo/bplo-ui-styles";
 import { PageHeader } from "@/components/ui/page-header";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { SectionCard } from "@/components/ui/section-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { UserAvatar } from "@/components/ui/user-avatar";
 
 interface PageProps {
@@ -15,6 +21,8 @@ interface PageProps {
     search?: string;
     type?: "ALL" | "NEW" | "RENEWAL" | "CLOSURE";
     status?: "ALL" | "SUBMITTED" | "UNDER_REVIEW" | "RETURNED_FOR_CORRECTION";
+    page?: string;
+    pageSize?: string;
   }>;
 }
 
@@ -29,15 +37,17 @@ function formatDate(dateString: string): string {
 
 export default async function BploApplicationsQueuePage({ searchParams }: PageProps) {
   const filters = await searchParams;
-  const rows = await listBploApplications({
-    search: filters.search,
-    type: filters.type ?? "ALL",
-    status: filters.status ?? "ALL",
-  });
+  const queueResult = await listBploApplicationsPaginated(
+    {
+      search: filters.search,
+      type: filters.type ?? "ALL",
+      status: filters.status ?? "ALL",
+    },
+    { page: filters.page, pageSize: filters.pageSize }
+  );
 
-  // Resolve applicant profile picture signed URLs in parallel (server-side)
   const rowsWithPics = await Promise.all(
-    rows.map(async (row) => {
+    queueResult.records.map(async (row) => {
       const profilePictureUrl = await resolveApplicantProfileImageUrl(row.applicantProfilePicturePath, {
         expiresInSeconds: 300,
       });
@@ -46,41 +56,50 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
   );
 
   const hasActiveFilters = filters.search || filters.type !== "ALL" || filters.status !== "ALL";
+  const queryParams = {
+    search: filters.search,
+    type: filters.type !== "ALL" ? filters.type : undefined,
+    status: filters.status !== "ALL" ? filters.status : undefined,
+    page: filters.page,
+    pageSize: filters.pageSize,
+  };
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="BPLO"
         title="Applications Queue"
         description="Search, review, and route only review-stage applications. Assessment, payment verification, and release are handled in their own modules."
-        badge={<RoleBadge role="BPLO" />}
+        badge={<RoleBadge roleType="BPLO" />}
       />
 
-      {/* Queue Filters Card */}
       <SectionCard
         title="Queue Filters"
         description="Search by application number, applicant, business name, type, or review-stage workflow status."
       >
         <form method="GET" className="space-y-4">
-          {/* Search Input */}
           <div>
             <input
+              id="bplo-applications-search"
               type="search"
               name="search"
               defaultValue={filters.search ?? ""}
               placeholder="Search business, applicant, or application no."
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              aria-label="Search applications"
+              className={bploFormControlClass}
             />
           </div>
 
-          {/* Dropdowns and Buttons Row */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3">
-            <div className="flex-1 min-w-0 sm:flex-none sm:w-auto">
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Application Type</label>
+            <div className="min-w-0 flex-1 sm:w-auto sm:flex-none">
+              <label className="ui-caption mb-1.5 block font-medium" htmlFor="bplo-applications-type">
+                Application Type
+              </label>
               <select
+                id="bplo-applications-type"
                 name="type"
                 defaultValue={filters.type ?? "ALL"}
-                className="w-full sm:w-48 rounded-xl border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className={`${bploFormControlClass} sm:w-48`}
               >
                 <option value="ALL">All Types</option>
                 <option value="NEW">New</option>
@@ -89,12 +108,15 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
               </select>
             </div>
 
-            <div className="flex-1 min-w-0 sm:flex-none sm:w-auto">
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Workflow Status</label>
+            <div className="min-w-0 flex-1 sm:w-auto sm:flex-none">
+              <label className="ui-caption mb-1.5 block font-medium" htmlFor="bplo-applications-status">
+                Workflow Status
+              </label>
               <select
+                id="bplo-applications-status"
                 name="status"
                 defaultValue={filters.status ?? "ALL"}
-                className="w-full sm:w-48 rounded-xl border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className={`${bploFormControlClass} sm:w-48`}
               >
                 <option value="ALL">All Statuses</option>
                 <option value="SUBMITTED">Submitted</option>
@@ -117,49 +139,46 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
         </form>
       </SectionCard>
 
-      {/* Review Queue Card */}
       <SectionCard
         title="Review Queue"
-        description={`${rowsWithPics.length} application${rowsWithPics.length === 1 ? "" : "s"} match${rowsWithPics.length === 1 ? "es" : ""} your filters.`}
+        description={`${queueResult.totalCount} application${queueResult.totalCount === 1 ? "" : "s"} match your filters.`}
       >
         {rowsWithPics.length === 0 ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-6 py-12 text-center">
-            <AlertCircle className="mx-auto mb-3 h-8 w-8 text-slate-400" />
-            <h3 className="text-sm font-medium text-slate-900">No applications found.</h3>
-            <p className="mt-1 text-sm text-slate-600">Try adjusting the search keyword, application type, or workflow status.</p>
-            {hasActiveFilters && (
-              <div className="mt-4">
+          <EmptyState
+            title="No applications found."
+            description="Try adjusting the search keyword, application type, or workflow status."
+            action={
+              hasActiveFilters ? (
                 <Link href="/bplo/applications" className={actionButtonStyles("secondary", "sm")}>
                   Reset Filters
                 </Link>
-              </div>
-            )}
-          </div>
+              ) : undefined
+            }
+          />
         ) : (
           <>
-            {/* Desktop Table */}
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-slate-700">
+            <div className="hidden overflow-x-auto xl:block">
+              <table className={bploTableClass}>
+                <thead>
                   <tr>
-                    <th className="px-5 py-3 font-semibold text-xs uppercase tracking-wider text-slate-600">Status</th>
-                    <th className="px-5 py-3 font-semibold text-xs uppercase tracking-wider text-slate-600">Application Number</th>
-                    <th className="px-5 py-3 font-semibold text-xs uppercase tracking-wider text-slate-600">Business Name</th>
-                    <th className="px-5 py-3 font-semibold text-xs uppercase tracking-wider text-slate-600">Applicant</th>
-                    <th className="px-5 py-3 font-semibold text-xs uppercase tracking-wider text-slate-600">Type</th>
-                    <th className="px-5 py-3 font-semibold text-xs uppercase tracking-wider text-slate-600">Date Submitted</th>
-                    <th className="px-5 py-3 font-semibold text-xs uppercase tracking-wider text-slate-600">Action</th>
+                    <th>Status</th>
+                    <th>Application Number</th>
+                    <th>Business Name</th>
+                    <th>Applicant</th>
+                    <th>Type</th>
+                    <th>Date Submitted</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {rowsWithPics.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-5 py-4 align-middle">
+                    <tr key={row.id}>
+                      <td className="align-middle">
                         <StatusBadge status={row.status as ApplicationStatus} />
                       </td>
-                      <td className="px-5 py-4 text-slate-900 font-mono text-xs">{row.applicationNumber}</td>
-                      <td className="px-5 py-4 text-slate-900 font-medium">{row.businessName}</td>
-                      <td className="px-5 py-4 text-slate-700">
+                      <td className="font-mono text-xs text-[var(--foreground)]">{row.applicationNumber}</td>
+                      <td className="font-medium text-[var(--foreground)]">{row.businessName}</td>
+                      <td className="text-[var(--ink-muted)]">
                         <div className="flex items-center gap-2">
                           <UserAvatar
                             src={row.profilePictureUrl}
@@ -169,9 +188,9 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
                           <span>{row.applicantName || row.applicantEmail}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-slate-700">{row.applicationType}</td>
-                      <td className="px-5 py-4 text-slate-600">{formatDate(row.dateSubmitted)}</td>
-                      <td className="px-5 py-4">
+                      <td className="text-[var(--ink-muted)]">{row.applicationType}</td>
+                      <td className="text-[var(--ink-muted)]">{formatDate(row.dateSubmitted)}</td>
+                      <td>
                         <Link href={`/bplo/applications/${row.id}`} className={actionButtonStyles("secondary", "sm")}>
                           Review
                         </Link>
@@ -182,20 +201,19 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
               </table>
             </div>
 
-            {/* Mobile Cards */}
-            <div className="space-y-3 lg:hidden">
+            <div className="space-y-3 xl:hidden">
               {rowsWithPics.map((row) => (
-                <article key={row.id} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+                <article key={row.id} className={`${bploMobileRecordCardClass} space-y-3`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-grow">
-                      <p className="font-mono text-xs text-slate-600 truncate">{row.applicationNumber}</p>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-900">{row.businessName}</p>
+                      <p className="truncate font-mono text-xs text-[var(--ink-muted)]">{row.applicationNumber}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-[var(--foreground)]">{row.businessName}</p>
                     </div>
                     <div className="flex-shrink-0">
                       <StatusBadge status={row.status as ApplicationStatus} />
                     </div>
                   </div>
-                  <div className="space-y-1 text-xs text-slate-600">
+                  <div className="space-y-1 text-xs text-[var(--ink-muted)]">
                     <div className="flex items-center gap-1.5">
                       <UserAvatar
                         src={row.profilePictureUrl}
@@ -219,6 +237,17 @@ export default async function BploApplicationsQueuePage({ searchParams }: PagePr
           </>
         )}
       </SectionCard>
+
+      <PaginationControls
+        basePath="/bplo/applications"
+        queryParams={queryParams}
+        page={queueResult.page}
+        pageSize={queueResult.pageSize}
+        totalCount={queueResult.totalCount}
+        totalPages={queueResult.totalPages}
+        recordLabel="applications"
+        sortHint="Newest submissions appear first."
+      />
     </section>
   );
 }

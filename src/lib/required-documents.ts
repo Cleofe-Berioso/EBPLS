@@ -19,6 +19,7 @@ const NEW_BASE_DOCUMENTS = [
 
 const BUSINESS_TYPE_DOCUMENTS: Record<BusinessInfo["businessType"], string[]> = {
   "Sole Proprietorship": ["DTI Certificate"],
+  "One Person Corporation": ["SEC Certificate"],
   Partnership: ["SEC Certificate"],
   Corporation: ["SEC Certificate"],
   Cooperative: ["CDA Certificate"],
@@ -62,6 +63,10 @@ function getConditionalDocuments(formData: BusinessInfo): string[] {
     conditional.push("Agriculture Clearance");
   }
 
+  if (formData.hasTaxIncentives === "YES") {
+    conditional.push("Tax Incentive Certificate/Proof");
+  }
+
   return conditional;
 }
 
@@ -72,8 +77,8 @@ export function resolveRequiredDocuments(context: RequiredDocumentContext): stri
   if (applicationType === "NEW") {
     return uniqueDocuments([
       ...NEW_BASE_DOCUMENTS,
-      ...BUSINESS_TYPE_DOCUMENTS[formData.businessType],
-      ...OWNERSHIP_DOCUMENTS[formData.propertyOwnership],
+      ...(BUSINESS_TYPE_DOCUMENTS[formData.businessType] ?? []),
+      ...(OWNERSHIP_DOCUMENTS[formData.propertyOwnership] ?? []),
       ...conditionalDocuments,
     ]);
   }
@@ -112,4 +117,67 @@ export function normalizeDocumentName(name: string): string {
 export function getMissingRequiredDocuments(required: string[], uploaded: string[]): string[] {
   const uploadedSet = new Set(uploaded.map((item) => normalizeDocumentName(item)));
   return required.filter((doc) => !uploadedSet.has(normalizeDocumentName(doc)));
+}
+
+const DOCUMENT_DESCRIPTIONS: Record<string, string> = {
+  "location plan / sketch":
+    "Sketch or plan showing the business location and site layout for zoning and engineering review.",
+  "zoning clearance":
+    "Certification that the business location complies with local zoning regulations.",
+  "sanitary clearance":
+    "Health and sanitation clearance from the municipal sanitary office.",
+  "sanitary office clearance":
+    "Health and sanitation clearance from the municipal sanitary office.",
+  "environment clearance":
+    "Environmental compliance clearance from the municipal environment office.",
+  "environment office clearance":
+    "Environmental compliance clearance from the municipal environment office.",
+  "engineering clearance":
+    "Structural or building-related clearance from the municipal engineering office.",
+  "engineering office clearance":
+    "Structural or building-related clearance from the municipal engineering office.",
+  "bfp clearance":
+    "Fire safety inspection clearance from the Bureau of Fire Protection.",
+  "real property tax / rpt clearance":
+    "Proof of real property tax compliance for the business premises.",
+  "rpt clearance":
+    "Proof of real property tax compliance for the business premises.",
+  "water bill clearance":
+    "Proof of water utility account or clearance for the business premises.",
+  "assessor's office clearance":
+    "Property assessment clearance from the municipal assessor's office.",
+  "dti certificate":
+    "DTI registration certificate for sole proprietorship businesses.",
+  "sec certificate":
+    "SEC registration certificate for corporations, partnerships, or one person corporations.",
+  "cda certificate":
+    "CDA registration certificate for cooperative businesses.",
+  "transfer certificate of title or tax declaration (certified true copy, 1 copy)":
+    "Proof of property ownership through title or tax declaration.",
+  "contract of lease or moa or written consent (certified true copy, 1 copy)":
+    "Proof of authorization to use the business premises when property is not owned.",
+  "market clearance":
+    "Clearance for businesses operating inside a public market or market stall.",
+  "agriculture clearance":
+    "Department of Agriculture clearance for agriculture-related businesses.",
+  "tax incentive certificate/proof":
+    "Certificate or proof of the government-granted tax incentive declared by the applicant.",
+  "audited financial statement or unaudited afs if not required by bir":
+    "Latest financial statement required for renewal assessment.",
+  "sworn declaration of gross sales / income tax return":
+    "Declared gross sales or income tax return for renewal fee computation.",
+  "closure letter":
+    "Formal letter requesting business closure.",
+  "barangay certification":
+    "Barangay certification supporting the closure request.",
+  "proof of ceased operation":
+    "Evidence that business operations have ceased.",
+};
+
+export function getDocumentRequirementDescription(documentName: string): string {
+  const normalized = normalizeDocumentName(documentName);
+  return (
+    DOCUMENT_DESCRIPTIONS[normalized] ??
+    "Supporting document required for application review. Upload a clear and readable copy."
+  );
 }

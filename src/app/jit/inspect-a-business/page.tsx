@@ -10,12 +10,12 @@ export default async function JitInspectBusinessPage() {
   if (!session) notFound();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="JIT"
         title="Inspection Queue"
         description="Review active released businesses and log compliance findings."
-        badge={<RoleBadge role="VIEW_ONLY" label="JIT" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="JIT" />}
       />
 
       <InfoBanner

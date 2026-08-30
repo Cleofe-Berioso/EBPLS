@@ -2,20 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, CameraOff, CheckCircle2, ImagePlus, Loader2 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import {
+  clearApplicantProfileSetupNextPath,
+  readApplicantProfileSetupNextPath,
+} from "@/lib/applicant-profile-setup-next";
+import {
   PROFILE_IMAGE_FILE_INPUT_ACCEPT,
   validateProfileImageFile,
 } from "@/lib/profile-image-upload-rules";
-
-const SETUP_ROUTE = "/applicant/profile-picture/setup";
-
-function canUseAsNextPath(value: string | null): value is string {
-  return Boolean(value && value.startsWith("/applicant/") && !value.startsWith(SETUP_ROUTE));
-}
 
 function buildCaptureFile(blob: Blob): File {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -24,20 +22,19 @@ function buildCaptureFile(blob: Blob): File {
 
 export function ProfilePictureSetupClient() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
+  const [nextPath, setNextPath] = useState("/applicant/dashboard");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const nextPath = useMemo(() => {
-    const value = searchParams.get("next");
-    return canUseAsNextPath(value) ? value : "/applicant/dashboard";
-  }, [searchParams]);
+  useEffect(() => {
+    setNextPath(readApplicantProfileSetupNextPath());
+  }, []);
 
   const previewUrl = useMemo(() => {
     if (!file) return null;
@@ -171,6 +168,7 @@ export function ProfilePictureSetupClient() {
       }
 
       setMessage("Profile picture saved. Redirecting...");
+      clearApplicantProfileSetupNextPath();
       router.replace(nextPath);
       router.refresh();
     } catch (uploadError) {
@@ -183,7 +181,7 @@ export function ProfilePictureSetupClient() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="Applicant"
         title="Complete Profile Picture"
@@ -232,6 +230,7 @@ export function ProfilePictureSetupClient() {
               <input
                 type="file"
                 accept={PROFILE_IMAGE_FILE_INPUT_ACCEPT}
+                aria-label="Choose profile image"
                 className="sr-only"
                 disabled={submitting}
                 onChange={(event) => {
@@ -243,9 +242,10 @@ export function ProfilePictureSetupClient() {
           </div>
 
           {cameraActive ? (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-black">
+            <div className="overflow-hidden rounded-2xl border border-[var(--border-color)] bg-black">
               <video
                 ref={videoRef}
+                aria-label="Camera preview"
                 className="h-auto w-full max-h-[360px] object-contain"
                 autoPlay
                 playsInline
@@ -256,17 +256,17 @@ export function ProfilePictureSetupClient() {
 
           {previewUrl ? (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</p>
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+              <p className="ui-caption font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]">Preview</p>
+              <div className="overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--muted-surface)]">
                 <img src={previewUrl} alt="Profile preview" className="h-auto w-full max-h-[360px] object-contain" />
               </div>
-              <p className="text-xs text-slate-600">Selected file: {file?.name}</p>
+              <p className="text-xs text-[var(--ink-muted)]">Selected file: {file?.name}</p>
             </div>
           ) : null}
 
-          {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
+          {error ? <p className="text-sm font-medium text-[var(--danger)]">{error}</p> : null}
           {message ? (
-            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--success)]">
               <CheckCircle2 className="h-4 w-4" />
               {message}
             </p>

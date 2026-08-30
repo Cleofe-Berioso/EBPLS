@@ -2,6 +2,8 @@
 
 import { signIn } from "@/lib/auth";
 import { AuthError } from "next-auth";
+import bcrypt from "bcryptjs";
+import { getUserByEmail } from "@/lib/db";
 
 export type LoginState = {
   error?: string;
@@ -17,6 +19,18 @@ export async function loginAction(
 
     if (!email || !password) {
       return { error: "Invalid email or password." };
+    }
+
+    const normalizedEmail = email.toLowerCase();
+    const existing = await getUserByEmail(normalizedEmail);
+    if (existing && !existing.isActive) {
+      const passwordMatch = await bcrypt.compare(password, existing.passwordHash);
+      if (passwordMatch) {
+        return {
+          error:
+            "Your account has been disabled. Please contact the system administrator.",
+        };
+      }
     }
 
     await signIn("credentials", {

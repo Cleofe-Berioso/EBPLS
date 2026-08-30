@@ -2,6 +2,31 @@
 
 const isProduction = process.env.NODE_ENV === "production";
 
+function resolveAllowedDevOrigins() {
+  const origins = new Set([
+    "localhost:3000",
+    "127.0.0.1:3000",
+    "localhost:3001",
+    "127.0.0.1:3001",
+  ]);
+
+  for (const value of [
+    process.env.NEXTAUTH_URL,
+    process.env.AUTH_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+  ]) {
+    if (!value) continue;
+    try {
+      const host = new URL(value).host;
+      if (host) origins.add(host);
+    } catch {
+      // Ignore invalid URL values in env.
+    }
+  }
+
+  return [...origins];
+}
+
 /**
  * HTTP security headers applied to every response.
  * These do not replace a WAF but add browser-level protections.
@@ -35,13 +60,7 @@ const nextConfig = {
   experimental: {
     proxyClientMaxBodySize: "20mb",
   },
-  allowedDevOrigins: isProduction
-    ? ["localhost:3000", "127.0.0.1:3000"]
-    : [
-        "localhost:3000",
-        "127.0.0.1:3000",
-        "supereffectively-mycostatic-lilla.ngrok-free.dev",
-      ],
+  allowedDevOrigins: isProduction ? ["localhost:3000", "127.0.0.1:3000"] : resolveAllowedDevOrigins(),
   async headers() {
     return [
       {

@@ -206,11 +206,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid document upload metadata" }, { status: 400 });
     }
 
-    if (payload.mode !== "SUBMIT" && submitFiles.length > 0) {
-      return NextResponse.json({ error: "Draft save cannot include uploaded files." }, { status: 400 });
-    }
-
     for (const entry of submitFiles) {
+      if (!entry.documentName || !(entry.file instanceof File)) {
+        return NextResponse.json({ error: "Invalid document upload metadata" }, { status: 400 });
+      }
+
       if (entry.file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
         return NextResponse.json({ error: buildDocumentMaxSizeError(entry.file.name) }, { status: 400 });
       }
@@ -395,9 +395,15 @@ export async function POST(req: Request) {
       }
 
       if (error instanceof DuplicateBusinessIdentityError) {
+        const fieldLabel =
+          error.field === "registrationNumber" ? "Registration Number" : "TIN";
         return NextResponse.json(
-          { error: "This already exist", duplicateField: error.field },
-          { status: 400 }
+          {
+            error: "This already exist",
+            duplicateField: error.field,
+            message: `An application with this ${fieldLabel} already exists. Do not proceed with submission.`,
+          },
+          { status: 409 }
         );
       }
 

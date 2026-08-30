@@ -1,30 +1,40 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { Plus, Printer } from "lucide-react";
+import {
+  jitFormControlClass,
+  jitSkeletonClass,
+  jitTableClass,
+} from "@/components/jit/jit-ui-styles";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { SectionCard } from "@/components/ui/section-card";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { EB_MAGALONA_CENTER } from "@/lib/eb-magalona";
 import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
+import type { PaginationPageSize } from "@/lib/pagination";
 
 const LeafletBusinessMap = dynamic(
   () => import("@/components/maps/leaflet-business-map").then((mod) => mod.LeafletBusinessMap),
   {
     ssr: false,
-    loading: () => (
-      <div className="h-[440px] w-full animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />
-    ),
+    loading: () => <div className={`h-[440px] w-full ${jitSkeletonClass}`} />,
   }
 );
 
 interface NoPermitRecord {
   id: string;
+  ticketNumber: string;
+  ticketStatus: "OPEN" | "RESOLVED";
   businessName: string;
   personAttended: string;
   lineOfBusiness: string;
+  findings: string;
   remarks?: string;
   latitude: number;
   longitude: number;
@@ -33,46 +43,76 @@ interface NoPermitRecord {
   createdBy: { name: string };
 }
 
+const emptyFormData = {
+  businessName: "",
+  personAttended: "",
+  lineOfBusiness: "",
+  findings: "",
+  remarks: "",
+  contactPhone: "",
+  contactEmail: "",
+  latitude: Number(EB_MAGALONA_CENTER.latitude),
+  longitude: Number(EB_MAGALONA_CENTER.longitude),
+  address: "",
+};
+
 export function JitNoPermitRecordClient() {
   const [records, setRecords] = useState<NoPermitRecord[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    businessName: "",
-    personAttended: "",
-    lineOfBusiness: "",
-    remarks: "",
-    latitude: Number(EB_MAGALONA_CENTER.latitude),
-    longitude: Number(EB_MAGALONA_CENTER.longitude),
-    address: "",
-  });
+  const [formData, setFormData] = useState(emptyFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastPrintPath, setLastPrintPath] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadRecords() {
-      setIsLoading(true);
-      setError(null);
+  const loadRecords = useCallback(async (nextPage: number, nextPageSize: PaginationPageSize) => {
+    setIsLoading(true);
+    setError(null);
 
-      const response = await fetch("/api/jit/no-permit-record", { cache: "no-store" });
-      const data = (await response.json()) as { records?: NoPermitRecord[]; error?: string };
+    const params = new URLSearchParams({
+      page: String(nextPage),
+      pageSize: String(nextPageSize),
+    });
 
-      if (!response.ok) {
-        setError(data.error ?? "Unable to load no-permit records");
-        setIsLoading(false);
-        return;
-      }
+    const response = await fetch(`/api/jit/no-permit-record?${params.toString()}`, { cache: "no-store" });
+    const data = (await response.json()) as {
+      records?: NoPermitRecord[];
+      totalCount?: number;
+      page?: number;
+      pageSize?: PaginationPageSize;
+      totalPages?: number;
+      error?: string;
+    };
 
-      setRecords(data.records ?? []);
+    if (!response.ok) {
+      setError(data.error ?? "Unable to load no-permit records");
+      setRecords([]);
+      setTotalCount(0);
+      setTotalPages(1);
       setIsLoading(false);
+      return;
     }
 
-    void loadRecords();
+    setRecords(data.records ?? []);
+    setTotalCount(data.totalCount ?? 0);
+    setPage(data.page ?? nextPage);
+    setPageSize(data.pageSize ?? nextPageSize);
+    setTotalPages(data.totalPages ?? 1);
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    void loadRecords(page, pageSize);
+  }, [loadRecords, page, pageSize]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setIsSubmitting(true);
+    setLastPrintPath(null);
 
     const response = await fetch("/api/jit/no-permit-record", {
       method: "POST",
@@ -80,25 +120,36 @@ export function JitNoPermitRecordClient() {
       body: JSON.stringify(formData),
     });
 
+    const data = (await response.json()) as {
+      error?: string;
+      printPath?: string;
+      duplicate?: { id: string; ticketNumber: string };
+    };
+
+    if (response.status === 409 && data.duplicate) {
+      alert(
+        `An open no-permit ticket already exists (${data.duplicate.ticketNumber}). Opening the existing printable notice.`
+      );
+      if (data.printPath) {
+        window.open(data.printPath, "_blank", "noopener,noreferrer");
+      }
+      setIsSubmitting(false);
+      return;
+    }
+
     if (!response.ok) {
-      const data = (await response.json()) as { error?: string };
       alert(data.error ?? "Failed to create record");
       setIsSubmitting(false);
       return;
     }
 
-    const data = (await response.json()) as { record: NoPermitRecord };
-    setRecords([data.record, ...records]);
     setShowForm(false);
-    setFormData({
-      businessName: "",
-      personAttended: "",
-      lineOfBusiness: "",
-      remarks: "",
-      latitude: Number(EB_MAGALONA_CENTER.latitude),
-      longitude: Number(EB_MAGALONA_CENTER.longitude),
-      address: "",
-    });
+    setFormData(emptyFormData);
+    setPage(1);
+    await loadRecords(1, pageSize);
+    if (data.printPath) {
+      setLastPrintPath(data.printPath);
+    }
     setIsSubmitting(false);
   }
 
@@ -110,15 +161,20 @@ export function JitNoPermitRecordClient() {
     }));
   }
 
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
+  if (isLoading && records.length === 0 && totalCount === 0) {
+    return <LoadingState message="Loading no-permit records…" />;
+  }
+
+  if (error && records.length === 0 && totalCount === 0) {
+    return <div className="text-sm text-[var(--danger)]">{error}</div>;
+  }
 
   const markers = records.map((rec) => ({
     id: rec.id,
     latitude: rec.latitude,
     longitude: rec.longitude,
     title: rec.businessName,
-    subtitle: rec.personAttended,
+    subtitle: rec.ticketNumber,
   }));
 
   function toShortDate(iso: string): string {
@@ -128,19 +184,30 @@ export function JitNoPermitRecordClient() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <InfoBanner
         title="No Permit Record"
-        description="Record businesses found during JIT inspections that do not have an existing business permit record. These are for reference and inspection tracking only."
+        description="Record businesses found during JIT inspections that do not have an existing business permit record. A printable notice with a reference ticket number is generated for each new record."
         variant="info"
       />
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">No Permit Records List</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className={actionButtonStyles("primary", "sm")}
-        >
+      {lastPrintPath ? (
+        <InfoBanner
+          title="Notice saved"
+          description="The no-permit notice was saved. Print the official notice for the establishment."
+          variant="success"
+          action={
+            <Link href={lastPrintPath} target="_blank" className={actionButtonStyles("primary", "sm")}>
+              <Printer className="h-4 w-4" />
+              Print Notice
+            </Link>
+          }
+        />
+      ) : null}
+
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-[var(--foreground)]">No Permit Records List</h2>
+        <button onClick={() => setShowForm(!showForm)} className={actionButtonStyles("primary", "sm")}>
           <Plus className="h-4 w-4" />
           Add Record
         </button>
@@ -150,36 +217,36 @@ export function JitNoPermitRecordClient() {
         <SectionCard title="Add New No Permit Record" description="Enter details about the business found without a permit record">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Business Name *</label>
+              <label className="block text-sm font-medium text-[var(--foreground)]">Business Name *</label>
               <input
                 type="text"
                 required
                 value={formData.businessName}
                 onChange={(e) => setFormData((prev) => ({ ...prev, businessName: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className={`mt-1 ${jitFormControlClass}`}
                 placeholder="Enter business name"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Person Attended *</label>
+              <label className="block text-sm font-medium text-[var(--foreground)]">Witness *</label>
               <input
                 type="text"
                 required
                 value={formData.personAttended}
                 onChange={(e) => setFormData((prev) => ({ ...prev, personAttended: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Name of person attended during inspection"
+                className={`mt-1 ${jitFormControlClass}`}
+                placeholder="Name of witness during inspection"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Line of Business *</label>
+              <label className="block text-sm font-medium text-[var(--foreground)]">Line of Business *</label>
               <select
                 required
                 value={formData.lineOfBusiness}
                 onChange={(e) => setFormData((prev) => ({ ...prev, lineOfBusiness: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+                className={`mt-1 ${jitFormControlClass}`}
               >
                 <option value="">-- Select line of business --</option>
                 {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
@@ -191,30 +258,66 @@ export function JitNoPermitRecordClient() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Address (optional)</label>
+              <label className="block text-sm font-medium text-[var(--foreground)]">Findings (optional)</label>
+              <textarea
+                value={formData.findings}
+                onChange={(e) => setFormData((prev) => ({ ...prev, findings: e.target.value }))}
+                className={`mt-1 ${jitFormControlClass}`}
+                rows={3}
+                placeholder="Inspection findings. Leave blank to auto-generate from line of business and remarks."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[var(--foreground)]">Address (optional)</label>
               <input
                 type="text"
                 value={formData.address}
                 onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className={`mt-1 ${jitFormControlClass}`}
                 placeholder="Enter address or description"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Remarks (optional)</label>
+              <label className="block text-sm font-medium text-[var(--foreground)]">Remarks (optional)</label>
               <textarea
                 value={formData.remarks}
                 onChange={(e) => setFormData((prev) => ({ ...prev, remarks: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className={`mt-1 ${jitFormControlClass}`}
                 rows={3}
                 placeholder="Additional notes or observations"
               />
             </div>
 
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-[var(--foreground)]">Contact Phone (optional)</label>
+                <input
+                  type="tel"
+                  value={formData.contactPhone}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, contactPhone: e.target.value }))}
+                  className={`mt-1 ${jitFormControlClass}`}
+                  placeholder="09XXXXXXXXX"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--foreground)]">Contact Email (optional)</label>
+                <input
+                  type="email"
+                  value={formData.contactEmail}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, contactEmail: e.target.value }))}
+                  className={`mt-1 ${jitFormControlClass}`}
+                  placeholder="owner@example.com"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Location Pin on Map *</label>
-              <p className="text-xs text-slate-600 mb-2">Current: Lat {formData.latitude.toFixed(6)}, Lng {formData.longitude.toFixed(6)}</p>
+              <label className="mb-2 block text-sm font-medium text-[var(--foreground)]">Location Pin on Map *</label>
+              <p className="ui-caption mb-2">
+                Current: Lat {formData.latitude.toFixed(6)}, Lng {formData.longitude.toFixed(6)}
+              </p>
               <LeafletBusinessMap
                 markers={[
                   {
@@ -231,18 +334,10 @@ export function JitNoPermitRecordClient() {
             </div>
 
             <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className={actionButtonStyles("primary", "sm")}
-              >
-                {isSubmitting ? "Saving..." : "Save Record"}
+              <button type="submit" disabled={isSubmitting} className={actionButtonStyles("primary", "sm")}>
+                {isSubmitting ? "Saving..." : "Save Record & Generate Notice"}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className={actionButtonStyles("secondary", "sm")}
-              >
+              <button type="button" onClick={() => setShowForm(false)} className={actionButtonStyles("secondary", "sm")}>
                 Cancel
               </button>
             </div>
@@ -250,7 +345,7 @@ export function JitNoPermitRecordClient() {
         </SectionCard>
       )}
 
-      {records.length === 0 ? (
+      {totalCount === 0 && !isLoading ? (
         <EmptyState
           title="No records yet"
           description="Add your first no-permit record from an inspection."
@@ -263,32 +358,62 @@ export function JitNoPermitRecordClient() {
         />
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className={`overflow-x-auto ${isLoading ? "opacity-60" : ""}`}>
+            <table className={jitTableClass}>
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="py-3 px-4 text-left font-medium text-slate-700">Business Name</th>
-                  <th className="py-3 px-4 text-left font-medium text-slate-700">Person Attended</th>
-                  <th className="py-3 px-4 text-left font-medium text-slate-700">Line of Business</th>
-                  <th className="py-3 px-4 text-left font-medium text-slate-700">Created Date</th>
-                  <th className="py-3 px-4 text-left font-medium text-slate-700">Remarks</th>
+                <tr>
+                  <th>Ticket No.</th>
+                  <th>Business Name</th>
+                  <th>Witness</th>
+                  <th>Line of Business</th>
+                  <th>Status</th>
+                  <th>Created Date</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {records.map((rec) => (
-                  <tr key={rec.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4 text-slate-900 font-medium">{rec.businessName}</td>
-                    <td className="py-3 px-4 text-slate-700">{rec.personAttended}</td>
-                    <td className="py-3 px-4 text-slate-700">{rec.lineOfBusiness}</td>
-                    <td className="py-3 px-4 text-slate-600">{toShortDate(rec.createdAt)}</td>
-                    <td className="py-3 px-4 text-slate-600">{rec.remarks || "-"}</td>
+                  <tr key={rec.id}>
+                    <td className="font-medium text-[var(--foreground)]">{rec.ticketNumber}</td>
+                    <td className="font-medium text-[var(--foreground)]">{rec.businessName}</td>
+                    <td className="text-[var(--ink-muted)]">{rec.personAttended}</td>
+                    <td className="text-[var(--ink-muted)]">{rec.lineOfBusiness}</td>
+                    <td className="text-[var(--ink-muted)]">{rec.ticketStatus}</td>
+                    <td className="text-[var(--ink-muted)]">{toShortDate(rec.createdAt)}</td>
+                    <td>
+                      <Link
+                        href={`/jit/no-permit-record/${rec.id}/print`}
+                        target="_blank"
+                        className={actionButtonStyles("secondary", "sm")}
+                      >
+                        <Printer className="h-4 w-4" />
+                        Print
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <SectionCard title="No Permit Records Map" description="Visual reference of all recorded locations">
+          <PaginationControls
+            basePath="/jit/no-permit-record"
+            queryParams={{}}
+            mode="client"
+            isLoading={isLoading}
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            recordLabel="records"
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+
+          <SectionCard title="No Permit Records Map" description="Visual reference of recorded locations on this page">
             <LeafletBusinessMap
               markers={markers}
               center={[EB_MAGALONA_CENTER.latitude, EB_MAGALONA_CENTER.longitude]}

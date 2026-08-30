@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { safeApiErrorMessage } from "@/lib/api-errors";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { logSettingsAction } from "@/lib/audit-log";
-import { toggleRenewalExtension } from "@/lib/fee-settings";
+import { toggleRenewalExtension, formatRenewalExtensionPeriod } from "@/lib/fee-settings";
 
 export async function POST(
   req: Request,
@@ -45,8 +45,8 @@ export async function POST(
       "RENEWAL_EXTENSION",
       extensionId,
       "UPDATED",
-      `Renewal extension ${isActive ? "activated" : "deactivated"}: ${extension.title}`,
-      { title: extension.title, startDate: extension.startDate, endDate: extension.endDate, isActive }
+      `Renewal extension ${isActive ? "activated" : "deactivated"}: ${formatRenewalExtensionPeriod(extension.startDate, extension.endDate)}`,
+      { startDate: extension.startDate, endDate: extension.endDate, isActive }
     );
 
     return NextResponse.json({ success: true, extension });

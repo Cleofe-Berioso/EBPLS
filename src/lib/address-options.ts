@@ -277,6 +277,7 @@ const EB_MAGALONA_CITY_ALIASES = [
 export const EB_MAGALONA_PROVINCE = "Negros Occidental";
 export const EB_MAGALONA_COUNTRY = "Philippines";
 export const EB_MAGALONA_COUNTRY_CODE = "PH";
+export const EB_MAGALONA_ZIP_CODE = "6118";
 
 function normalizeNameToken(value?: string): string {
   return sanitize(value)

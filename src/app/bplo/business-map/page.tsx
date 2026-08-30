@@ -10,12 +10,12 @@ export default async function BploBusinessMapPage() {
   if (!session) notFound();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="BPLO"
         title="Business Map"
         description="Review submitted Business Location records from released applications, confirm map pins, and monitor mapping status."
-        badge={<RoleBadge role="BPLO" />}
+        badge={<RoleBadge roleType="BPLO" />}
       />
 
       <InfoBanner

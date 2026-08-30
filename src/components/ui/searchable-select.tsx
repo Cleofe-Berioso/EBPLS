@@ -15,6 +15,9 @@ interface SearchableSelectProps {
   loading?: boolean;
   error?: string;
   className?: string;
+  id?: string;
+  labelId?: string;
+  ariaLabel?: string;
 }
 
 /**
@@ -36,6 +39,9 @@ export function SearchableSelect({
   loading = false,
   error,
   className = "",
+  id,
+  labelId,
+  ariaLabel,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -43,7 +49,9 @@ export function SearchableSelect({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const errorId = `searchable-select-error-${useId()}`;
+  const generatedId = useId();
+  const controlId = id ?? generatedId;
+  const errorId = `${controlId}-error`;
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -73,9 +81,9 @@ export function SearchableSelect({
 
   // Focus search input when panel opens
   useEffect(() => {
-    if (open) {
-      setTimeout(() => searchRef.current?.focus(), 0);
-    }
+    if (!open) return;
+    const timeoutId = window.setTimeout(() => searchRef.current?.focus(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [open]);
 
   function handleTriggerClick() {
@@ -109,29 +117,32 @@ export function SearchableSelect({
 
   const displayLabel = selectedLabel ?? options.find((option) => option.value === value)?.label ?? "";
   const triggerBase =
-    "w-full rounded-xl border px-3 py-3 text-sm text-left flex items-center justify-between transition-colors";
+    "w-full min-h-[2.75rem] rounded-[var(--radius-control)] border px-3 py-2.5 text-sm text-left flex items-center justify-between transition-colors";
   const triggerEnabled =
-    "border-slate-300 bg-white text-slate-900 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-100 cursor-pointer";
+    "border-[var(--border-color)] bg-[var(--surface)] text-[var(--foreground)] focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_15%,transparent)] cursor-pointer";
   const triggerDisabled =
-    "border-slate-300 bg-slate-100 text-slate-800 shadow-inner cursor-not-allowed";
-  const triggerError = error ? "border-rose-300 focus:border-rose-500 focus:ring-rose-100" : "";
+    "border-[var(--border-color)] bg-[var(--muted-surface)] text-[var(--ink-muted)] cursor-not-allowed";
+  const triggerError = error ? "border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[color-mix(in_srgb,var(--danger)_12%,transparent)]" : "";
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       <button
         type="button"
+        id={controlId}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-labelledby={labelId}
+        aria-label={labelId ? undefined : ariaLabel ?? placeholder}
         aria-describedby={error ? errorId : undefined}
         disabled={disabled || loading}
         className={`${triggerBase} ${disabled || loading ? triggerDisabled : triggerEnabled} ${triggerError}`}
         onClick={handleTriggerClick}
       >
-        <span className={displayLabel ? "text-slate-900" : "text-slate-400"}>
+        <span className={displayLabel ? "text-[var(--foreground)]" : "text-[var(--ink-muted)]"}>
           {loading ? "Loading…" : displayLabel || placeholder}
         </span>
         <svg
-          className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 shrink-0 text-[var(--ink-muted)] transition-transform ${open ? "rotate-180" : ""}`}
           viewBox="0 0 20 20"
           fill="currentColor"
           aria-hidden
@@ -145,8 +156,8 @@ export function SearchableSelect({
       </button>
 
       {open ? (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg">
-          <div className="border-b border-slate-100 p-2">
+        <div className="absolute z-50 mt-1 w-full rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--surface)] shadow-lg">
+          <div className="border-b border-[var(--border-color)] p-2">
             <input
               ref={searchRef}
               type="text"
@@ -154,29 +165,31 @@ export function SearchableSelect({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search…"
+              aria-label="Search options"
               aria-invalid={Boolean(error)}
               aria-describedby={error ? errorId : undefined}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-200"
+              className="w-full rounded-[var(--radius-control)] border border-[var(--border-color)] px-3 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--ink-muted)] focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_15%,transparent)]"
             />
           </div>
 
-          {error ? <div id={errorId} className="px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+          {error ? <div id={errorId} className="ui-inline-error px-3 py-2">{error}</div> : null}
 
-          <ul role="listbox" className="max-h-56 overflow-y-auto py-1">
+          <div role="listbox" className="max-h-56 overflow-y-auto py-1">
             {loading ? (
-              <li className="px-3 py-2 text-sm text-slate-500">Loading…</li>
+              <div className="px-3 py-2 text-sm text-[var(--ink-muted)]">Loading…</div>
             ) : error ? (
-              <li className="px-3 py-2 text-sm text-rose-700">{error}</li>
+              <div className="ui-inline-error px-3 py-2">{error}</div>
             ) : filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm italic text-slate-400">{emptyMessage}</li>
+              <div className="px-3 py-2 text-sm italic text-[var(--ink-muted)]">{emptyMessage}</div>
             ) : (
               filtered.map((option, index) => (
-                <li
+                <div
                   key={option.value}
                   role="option"
+                  tabIndex={index === highlightIndex ? 0 : -1}
                   aria-selected={option.value === value}
                   onMouseDown={(e) => {
-                    e.preventDefault(); // prevent blur before click registers
+                    e.preventDefault();
                     onChange(option);
                     setOpen(false);
                     setQuery("");
@@ -184,17 +197,17 @@ export function SearchableSelect({
                   onMouseEnter={() => setHighlightIndex(index)}
                   className={`cursor-pointer px-3 py-2 text-sm transition-colors ${
                     index === highlightIndex
-                      ? "bg-green-50 text-green-800"
+                      ? "bg-[var(--primary-soft)] text-[var(--primary-strong)]"
                       : option.value === value
-                        ? "bg-slate-50 font-medium text-slate-900"
-                        : "text-slate-800 hover:bg-slate-50"
+                        ? "bg-[var(--muted-surface)] font-medium text-[var(--foreground)]"
+                        : "text-[var(--foreground)] hover:bg-[var(--muted-surface)]"
                   }`}
                 >
                   {option.label}
-                </li>
+                </div>
               ))
             )}
-          </ul>
+          </div>
         </div>
       ) : null}
     </div>

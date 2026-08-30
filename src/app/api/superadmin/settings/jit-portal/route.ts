@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import { getOrCreateSystemFeeSetting } from "@/lib/fee-settings";
-import { updateJitPortalEnabled, type JitPortalEnforcementResult } from "@/lib/jit-settings";
+import {
+  countUninspectedActivePermittedBusinesses,
+  updateJitPortalEnabled,
+  type JitPortalEnforcementResult,
+  type JitUninspectedSummary,
+} from "@/lib/jit-settings";
 
 export interface JitPortalResponse {
   jitPortalEnabled: boolean;
   updatedAt: string;
+  uninspected: JitUninspectedSummary;
   error?: string;
 }
 
@@ -13,6 +19,8 @@ export interface JitPortalUpdateResponse {
   success: boolean;
   jitPortalEnabled: boolean;
   enforcementResult?: JitPortalEnforcementResult;
+  uninspectedAtDisable?: JitUninspectedSummary;
+  inspectionCycleStartedAt?: string;
   error?: string;
 }
 
@@ -23,10 +31,14 @@ export async function GET() {
   }
 
   try {
-    const settings = await getOrCreateSystemFeeSetting();
+    const [settings, uninspected] = await Promise.all([
+      getOrCreateSystemFeeSetting(),
+      countUninspectedActivePermittedBusinesses(),
+    ]);
     return NextResponse.json({
       jitPortalEnabled: settings.jitPortalEnabled,
       updatedAt: settings.updatedAt,
+      uninspected,
     } as JitPortalResponse);
   } catch (error) {
     return NextResponse.json(
@@ -70,6 +82,10 @@ export async function PUT(req: Request) {
       success: result.success,
       jitPortalEnabled: result.newValue,
       ...(result.enforcementResult ? { enforcementResult: result.enforcementResult } : {}),
+      ...(result.uninspectedAtDisable ? { uninspectedAtDisable: result.uninspectedAtDisable } : {}),
+      ...(result.inspectionCycleStartedAt
+        ? { inspectionCycleStartedAt: result.inspectionCycleStartedAt }
+        : {}),
     } as JitPortalUpdateResponse);
   } catch (error) {
     console.error("[JIT Settings API] Error updating JIT portal setting:", error);

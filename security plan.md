@@ -30,7 +30,7 @@ if (STAFF_ROLES.has(role)) {
 }
 ```
 
-A disabled BPLO, SuperAdmin, DepartmentHead, or JIT account retains a valid JWT for up to the default JWT lifetime (30 days). During that window, the disabled account can access **any uploaded document**, including all applicant business documents, payment proofs, and inspection evidence, simply by hitting `/api/uploads/{any-valid-path}`.
+A disabled BPLO, IT Administrator, DepartmentHead, or JIT account retains a valid JWT for up to the default JWT lifetime (30 days). During that window, the disabled account can access **any uploaded document**, including all applicant business documents, payment proofs, and inspection evidence, simply by hitting `/api/uploads/{any-valid-path}`.
 
 This bypasses the `isActive` fixes applied to all `require*Session` helpers in passes 1 and 2, because the uploads route never calls those helpers.
 
@@ -49,7 +49,7 @@ This bypasses the `isActive` fixes applied to all `require*Session` helpers in p
 
 #### H2 — `/api/superadmin/users/bplo` — No audit log for staff account creation
 
-**Root Cause:** When a SuperAdmin creates a new BPLO account, no `AuditLog` entry is written. This is the most sensitive user-management action (granting staff-level access) and should always be traceable. Compare: account disable and reactivate both have audit logs.
+**Root Cause:** When an IT Administrator creates a new BPLO account, no `AuditLog` entry is written. This is the most sensitive user-management action (granting staff-level access) and should always be traceable. Compare: account disable and reactivate both have audit logs.
 
 **File:** `src/app/api/superadmin/users/bplo/route.ts`
 
@@ -85,7 +85,7 @@ Setting `maxAge` to 8 hours (one workday) reduces the window in which a compromi
 |------|--------|
 | JIT `requireJitSession` | ✅ Full DB isActive check already present |
 | All DH routes after pass 2 | ✅ DB isActive added in pass 2 |
-| SuperAdmin reactivate audit log | ✅ Already present |
+| IT Administrator reactivate audit log | ✅ Already present |
 | OTP attempt limit (5 tries per OTP) | ✅ Present in `verifyPasswordResetOtp` |
 | OTP 60-second cooldown | ✅ Present in `requestPasswordResetOtp` |
 | Password reset 15-minute recency gate | ✅ Added in pass 2 |
@@ -151,7 +151,7 @@ void createAuditLog({
   module: "USER_MANAGEMENT",
   entityType: "USER",
   entityId: user.id,
-  description: `Super Admin created new BPLO staff account`,
+  description: `IT Administrator created new BPLO staff account`,
   metadata: {
     newUserId: user.id,
     newUserEmail: user.email,
@@ -223,7 +223,7 @@ npx tsc --noEmit
 Manual: Disable a BPLO user in DB → with their still-valid session, attempt `GET /api/uploads/{any-path}` → expect 403.
 
 ### After Task 2 (High)
-Manual: Create a BPLO account as SuperAdmin → verify `AuditLog` row created with `action: "STAFF_ACCOUNT_CREATED"`.
+Manual: Create a BPLO account as IT Administrator → verify `AuditLog` row created with `action: "STAFF_ACCOUNT_CREATED"`.
 
 ### After Task 3 (High)
 Manual: Trigger an error in the settle route in production mode → verify response is `"Unable to settle case"` not a Prisma error string.

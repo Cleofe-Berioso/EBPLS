@@ -54,7 +54,7 @@ export default async function BploProfilePage() {
         eyebrow="BPLO"
         title="Profile"
         description="Set your BPLO staff display name and profile picture for multi-staff identity."
-        badge={<RoleBadge role="BPLO" />}
+        badge={<RoleBadge roleType="BPLO" />}
       />
 
       <InfoBanner

@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { defaultBusinessInfo } from "@/lib/applicant-mock";
 import { normalizeBusinessInfo as normalizeBusinessInfoRules } from "@/lib/business-rules";
 import { isWithinEbMagalona } from "@/lib/eb-magalona";
+import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/numeric-input";
 import { isPhilippinesCountry, validateBusinessIdentityFormats } from "@/lib/business-rules";
 import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
 import {
@@ -11,15 +12,30 @@ import {
   EB_MAGALONA_COUNTRY,
   EB_MAGALONA_COUNTRY_CODE,
   EB_MAGALONA_PROVINCE,
+  EB_MAGALONA_ZIP_CODE,
   isEbMagalonaCity,
   isEbMagalonaProvince,
 } from "@/lib/address-options";
 
 import { BusinessInformationFields } from "./business-information-fields";
+import { ApplicationVerificationTemplate } from "@/components/print/application-verification-template";
 import { FormStepper } from "@/components/applicant/form-stepper";
-import { UploadSlot } from "@/components/applicant/upload-slot";
+import { RequirementsUploadTable } from "@/components/applicant/requirements-upload-table";
+import {
+  applicantCheckboxCardClass,
+  applicantErrorPanelClass,
+  applicantFormControlClass,
+  applicantHighlightPanelClass,
+  applicantPanelClass,
+  applicantRadioLabelClass,
+  applicantSummaryLabelClass,
+  applicantSummaryTileClass,
+  applicantSummaryValueClass,
+  applicantWarningPanelClass,
+} from "@/components/applicant/applicant-ui-styles";
 import {
   getMissingRequiredDocuments,
+  getDocumentRequirementDescription,
   normalizeDocumentName,
   resolveRequiredDocuments,
 } from "@/lib/required-documents";
@@ -39,10 +55,17 @@ import type {
   SubmitValidationErrorDetail,
 } from "@/lib/applicant-types";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { LoadingState } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
+import {
+  getApplicationSubmitButtonLabel,
+  getApplicationSubmitSuccessMessage,
+  getResubmissionConfirmMessage,
+  isReturnedCorrectionResubmission,
+} from "@/lib/resubmission-copy";
 
 const steps = [
   {
@@ -50,11 +73,15 @@ const steps = [
     description: "Choose the registered business record to renew.",
   },
   {
-    title: "Review Business Information",
-    description: "Check the carried-over record and editable details.",
+    title: "Business Information",
+    description: "Review and update core business identity and contact details.",
   },
   {
-    title: "Upload Renewal Documents",
+    title: "Business Operation",
+    description: "Provide operational, staffing, and property details.",
+  },
+  {
+    title: "Document Upload",
     description: "Attach all current clearances and supporting files.",
   },
   {
@@ -81,15 +108,21 @@ const lockedFields: Array<keyof BusinessInfo> = [
   "nationality",
 ];
 
-const RENEWAL_OPERATION_FIELDS: Array<{ label: string; key: keyof BusinessInfo; helperText?: string }> = [
-  { label: "Business Area", key: "businessArea", helperText: "Use the declared operating area." },
-  { label: "Total Floor Area", key: "totalFloorArea" },
-  { label: "Total Employees", key: "totalEmployees" },
-  { label: "Male Employees", key: "maleEmployees" },
-  { label: "Female Employees", key: "femaleEmployees" },
-  { label: "Employees Residing within Municipality", key: "employeesWithinMunicipality" },
-  { label: "Delivery Vehicles", key: "deliveryVehicles" },
-  { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos." },
+const RENEWAL_OPERATION_FIELDS: Array<{
+  label: string;
+  key: keyof BusinessInfo;
+  helperText?: string;
+  numericKind?: "integer" | "decimal";
+}> = [
+  { label: "Business Area", key: "businessArea", helperText: "Use the declared operating area.", numericKind: "decimal" },
+  { label: "Total Floor Area", key: "totalFloorArea", numericKind: "decimal" },
+  { label: "Total Employees", key: "totalEmployees", numericKind: "integer" },
+  { label: "Male Employees", key: "maleEmployees", numericKind: "integer" },
+  { label: "Female Employees", key: "femaleEmployees", numericKind: "integer" },
+  { label: "Employees Residing within Municipality", key: "employeesWithinMunicipality", numericKind: "integer" },
+  { label: "Van / Truck", key: "deliveryVanTruck", helperText: "Number of vans or trucks, if applicable.", numericKind: "integer" },
+  { label: "Motorcycle", key: "deliveryMotorcycle", helperText: "Number of motorcycles, if applicable.", numericKind: "integer" },
+  { label: "Asset Size", key: "assetSize", helperText: "Use the declared amount in pesos.", numericKind: "decimal" },
 ];
 
 const BUSINESS_ACTIVITY_OTHER_OPTION = "Others, please specify";
@@ -256,6 +289,12 @@ function validateRenewalBusinessOperations(info: BusinessInfo): Partial<Record<k
     nextErrors.paymentFrequency = "Mode of Payment is required.";
   }
 
+  if (info.hasTaxIncentives !== "YES" && info.hasTaxIncentives !== "NO") {
+    nextErrors.hasTaxIncentives = "Please select Yes or No for tax incentives.";
+  } else if (info.hasTaxIncentives === "YES" && !info.taxIncentives?.trim()) {
+    nextErrors.taxIncentives = "Please describe the tax incentive.";
+  }
+
   return nextErrors;
 }
 
@@ -305,21 +344,27 @@ function ReviewStat({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    <div className={applicantSummaryTileClass}>
+      <p className={applicantSummaryLabelClass}>{label}</p>
+      <p className={applicantSummaryValueClass}>{value}</p>
+      {helper ? <p className="mt-1 ui-caption">{helper}</p> : null}
     </div>
   );
 }
 
-function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
+function ValidationPanel({
+  detail,
+  onBack,
+}: {
+  detail: SubmitValidationErrorDetail;
+  onBack?: () => void;
+}) {
   return (
-    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+    <div className={applicantErrorPanelClass}>
       <p className="font-semibold">Submission requirements still missing</p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+          <p className="ui-caption font-semibold uppercase tracking-wide">
             Missing Fields
           </p>
           <ul className="mt-2 space-y-1">
@@ -331,7 +376,7 @@ function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
           </ul>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+          <p className="ui-caption font-semibold uppercase tracking-wide">
             Missing Documents
           </p>
           <ul className="mt-2 space-y-1">
@@ -343,6 +388,11 @@ function ValidationPanel({ detail }: { detail: SubmitValidationErrorDetail }) {
           </ul>
         </div>
       </div>
+      {onBack ? (
+        <button type="button" onClick={onBack} className={`${actionButtonStyles("secondary", "sm")} mt-3`}>
+          Back
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -398,6 +448,7 @@ export function RenewalApplicationForm() {
     text: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showVerificationPrint, setShowVerificationPrint] = useState(false);
   const [validationDetail, setValidationDetail] = useState<SubmitValidationErrorDetail | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof BusinessInfo, string>>>({});
   const [unavailableCount, setUnavailableCount] = useState(0);
@@ -409,6 +460,10 @@ export function RenewalApplicationForm() {
   const pendingDocumentPreviewsRef = useRef<Record<string, string>>({});
 
   const isReadOnly = Boolean(editId && existingApplicationAccess && !existingApplicationAccess.canEdit);
+  const isResubmission = isReturnedCorrectionResubmission({
+    editId,
+    applicationStatus: existingApplicationAccess?.status,
+  });
   const lockInteractivityClass = isReadOnly ? "pointer-events-none" : "";
 
   useEffect(() => {
@@ -654,10 +709,7 @@ export function RenewalApplicationForm() {
   if (editId && draftLoading) {
     return (
       <SectionCard title="Loading saved draft" description="Restoring your renewal draft values.">
-        <EmptyState
-          title="Loading draft"
-          description="Please wait while the saved renewal application is loaded into the form."
-        />
+        <LoadingState message="Loading draft…" compact />
       </SectionCard>
     );
   }
@@ -675,10 +727,7 @@ export function RenewalApplicationForm() {
       const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
       if (!normalizedInfo.email.trim()) nextErrors.email = "Email is required.";
       if (!normalizedInfo.mainOfficeAddress.trim()) nextErrors.mainOfficeAddress = "Main Office Address is required.";
-      if (!normalizedInfo.phone.trim()) nextErrors.phone = "Contact Number is required.";
-      if (!hasLockedRecordLineOfBusiness && !normalizedInfo.lineOfBusiness.trim()) {
-        nextErrors.lineOfBusiness = "Line of Business is required.";
-      }
+      if (!normalizedInfo.phone.trim()) nextErrors.phone = "Mobile Number is required.";
       if (requiresBarangay(normalizedInfo) && !normalizedInfo.mainOfficeBarangay?.trim()) {
         nextErrors.mainOfficeBarangay = "Barangay is required for Philippine main office addresses.";
       }
@@ -691,15 +740,6 @@ export function RenewalApplicationForm() {
 
       Object.assign(nextErrors, validateFixedEbMagalonaAddress(normalizedInfo));
 
-      // Birthdate validation removed from Renewal form per Phase 1.
-
-      const grossRaw = normalizedInfo.grossProfit?.trim() ?? "";
-      if (!grossRaw) {
-        nextErrors.grossProfit = "Gross Profit / Gross Receipts is required.";
-      } else if (parsePositiveAmount(grossRaw) == null) {
-        nextErrors.grossProfit = "Gross Profit / Gross Receipts must be a non-negative amount.";
-      }
-
       const identityFormats = validateBusinessIdentityFormats(normalizedInfo);
       if (normalizedInfo.registrationNumber.trim().length > 0 && !identityFormats.registrationNumber) {
         nextErrors.registrationNumber = "Wrong Format";
@@ -709,7 +749,6 @@ export function RenewalApplicationForm() {
       }
 
       Object.assign(nextErrors, validateBusinessLocation(normalizedInfo));
-      Object.assign(nextErrors, validateRenewalBusinessOperations(normalizedInfo));
 
       logStepValidationDebug({
         step,
@@ -724,6 +763,36 @@ export function RenewalApplicationForm() {
       }
     }
 
+    if (step === 2) {
+      const normalizedInfo = normalizeBusinessInfo(info);
+      const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
+
+      if (!hasLockedRecordLineOfBusiness && !normalizedInfo.lineOfBusiness.trim()) {
+        nextErrors.lineOfBusiness = "Line of Business is required.";
+      }
+
+      const grossRaw = normalizedInfo.grossProfit?.trim() ?? "";
+      if (!grossRaw) {
+        nextErrors.grossProfit = "Gross Profit / Gross Receipts is required.";
+      } else if (parsePositiveAmount(grossRaw) == null) {
+        nextErrors.grossProfit = "Gross Profit / Gross Receipts must be a non-negative amount.";
+      }
+
+      Object.assign(nextErrors, validateRenewalBusinessOperations(normalizedInfo));
+
+      logStepValidationDebug({
+        step,
+        missingKeys: Object.keys(nextErrors),
+        info: normalizedInfo,
+      });
+
+      if (Object.keys(nextErrors).length > 0) {
+        setFieldErrors(nextErrors);
+        setStatusMessage({ kind: "error", text: "Complete Business Operation fields before moving to the next step." });
+        return;
+      }
+    }
+
     setFieldErrors({});
     setStatusMessage(null);
     setStep((current) => Math.min(current + 1, steps.length - 1));
@@ -732,6 +801,13 @@ export function RenewalApplicationForm() {
   function back() {
     if (isReadOnly) return;
     setStep((current) => Math.max(current - 1, 0));
+  }
+
+  function handleFinalSubmit() {
+    if (isResubmission && !window.confirm(getResubmissionConfirmMessage("RENEWAL"))) {
+      return;
+    }
+    void persist("SUBMIT");
   }
 
   async function persist(mode: PersistMode) {
@@ -830,7 +906,7 @@ export function RenewalApplicationForm() {
         ...Object.keys(pendingDocuments),
       ]);
       if (missingDocuments.length > 0) {
-        setStep(2);
+        setStep(3);
         setValidationDetail({ missingFields: [], missingDocuments });
         setStatusMessage({
           kind: "error",
@@ -852,33 +928,35 @@ export function RenewalApplicationForm() {
     const hasPendingFiles = Object.keys(pendingDocuments).length > 0;
     const draftTargetUrl = applicationId ? `/api/applicant/applications/${applicationId}` : "/api/applicant/applications";
     const draftTargetMethod = applicationId ? "PATCH" : "POST";
+    const saveUrl = mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl;
+    const saveMethod = mode === "SUBMIT" ? "POST" : draftTargetMethod;
 
-    const response =
-      mode === "SUBMIT" && hasPendingFiles
-        ? await (async () => {
-            const formData = new FormData();
-            formData.append("payload", JSON.stringify(payload));
-            for (const [documentName, file] of Object.entries(pendingDocuments)) {
-              formData.append("documentNames", documentName);
-              formData.append("documentFiles", file, file.name);
-            }
+    const response = hasPendingFiles
+      ? await (async () => {
+          const formData = new FormData();
+          formData.append("payload", JSON.stringify(payload));
+          for (const [documentName, file] of Object.entries(pendingDocuments)) {
+            formData.append("documentNames", documentName);
+            formData.append("documentFiles", file, file.name);
+          }
 
-            return fetch("/api/applicant/applications", {
-              method: "POST",
-              body: formData,
-            });
-          })()
-        : await fetch(mode === "SUBMIT" ? "/api/applicant/applications" : draftTargetUrl, {
-          method: mode === "SUBMIT" ? "POST" : draftTargetMethod,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+          return fetch(saveUrl, {
+            method: saveMethod,
+            body: formData,
           });
+        })()
+      : await fetch(saveUrl, {
+          method: saveMethod,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
     const data = (await parseApiResponseSafely(response)) as {
       application?: { id: string; applicationNumber: string; status: string };
       error?: string;
       detail?: SubmitValidationErrorDetail;
       duplicateField?: string;
+      message?: string;
       rawResponse?: string;
     };
     setSubmitting(false);
@@ -891,9 +969,17 @@ export function RenewalApplicationForm() {
         typeof data.rawResponse === "string" && data.rawResponse.length > 0
           ? ` (${data.rawResponse})`
           : "";
+      const duplicateMessage =
+        data.duplicateField === "registrationNumber" || data.duplicateField === "tin"
+          ? data.message ??
+            `An application with this ${
+              data.duplicateField === "registrationNumber" ? "Registration Number" : "TIN"
+            } already exists. Do not proceed with submission.`
+          : null;
       setStatusMessage({
         kind: "error",
         text:
+          duplicateMessage ??
           data.error ??
           `Unable to save renewal application (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).${detail}`,
       });
@@ -911,14 +997,40 @@ export function RenewalApplicationForm() {
       setPendingDocumentPreviews({});
       setStatusMessage({
         kind: "success",
-        text: `Renewal ${data.application.applicationNumber} submitted successfully.`,
+        text: getApplicationSubmitSuccessMessage("RENEWAL", isResubmission, data.application.applicationNumber),
       });
       return data.application.id;
     }
 
+    if (hasPendingFiles || Object.keys(uploadedDocuments).length > 0) {
+      try {
+        const docsResponse = await fetch(`/api/applicant/applications/${data.application.id}/documents`, {
+          cache: "no-store",
+        });
+        const docsData = (await parseApiResponseSafely(docsResponse)) as {
+          documents?: ApplicationDocumentInput[];
+        };
+        if (docsResponse.ok && Array.isArray(docsData.documents)) {
+          setUploadedDocuments(
+            docsData.documents.reduce<Record<string, ApplicationDocumentInput>>((acc, doc) => {
+              acc[doc.documentName] = doc;
+              return acc;
+            }, {})
+          );
+        }
+      } catch {
+        // Keep local metadata if refresh fails; files are already persisted server-side.
+      }
+    }
+
+    for (const previewUrl of Object.values(pendingDocumentPreviews)) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPendingDocuments({});
+    setPendingDocumentPreviews({});
     setStatusMessage({
       kind: "success",
-      text: `Renewal draft ${data.application.applicationNumber} saved successfully.`,
+      text: `Renewal draft ${data.application.applicationNumber} saved successfully. Uploaded documents are kept with this draft.`,
     });
     return data.application.id;
   }
@@ -962,9 +1074,14 @@ export function RenewalApplicationForm() {
         mimeType: file.type,
         sizeBytes: file.size,
         fileSize: file.size,
+        validationStatus: "Pending Review",
+        validationRemarks: null,
       },
     }));
-    setStatusMessage({ kind: "success", text: `${documentName} selected. File will be saved on final submit.` });
+    setStatusMessage({
+      kind: "success",
+      text: `${documentName} selected. It will be saved with your draft or on final submit.`,
+    });
   }
 
   async function handleDocumentDelete(documentName: string) {
@@ -1025,7 +1142,7 @@ export function RenewalApplicationForm() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page-stack">
       <FormStepper steps={steps} currentStep={step} />
 
       {statusMessage ? (
@@ -1074,7 +1191,7 @@ export function RenewalApplicationForm() {
                 required
               >
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={selectedBusinessId}
                   disabled={records.length === 0 || isReadOnly}
                   onChange={(event) => {
@@ -1105,29 +1222,29 @@ export function RenewalApplicationForm() {
             )}
 
             {selectedRecord ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                <p className="font-semibold text-slate-900">{selectedRecord.businessName}</p>
+              <div className={applicantPanelClass}>
+                <p className="font-semibold text-[var(--foreground)]">{selectedRecord.businessName}</p>
                 <p className="mt-1">Registration: {selectedRecord.registrationNumber}</p>
                 <p className="mt-1">Email: {selectedRecord.businessInfo.email}</p>
               </div>
             ) : null}
 
             {blockedRecords.length > 0 ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm font-semibold text-amber-900">Unavailable for renewal</p>
+              <div className={applicantWarningPanelClass}>
+                <p className="text-sm font-semibold text-[var(--foreground)]">Unavailable for renewal</p>
                 <div className="mt-3 space-y-3">
                   {blockedRecords.map((record) => (
-                    <div key={record.id} className="rounded-xl border border-amber-200 bg-white p-3 text-sm text-slate-700">
-                      <p className="font-semibold text-slate-900">{record.businessName}</p>
-                      <p className="text-xs text-slate-500">{record.registrationNumber}</p>
-                      <p className="mt-1 text-sm text-slate-700">
+                    <div key={record.id} className={`${applicantHighlightPanelClass} text-sm text-[var(--ink-muted)]`}>
+                      <p className="font-semibold text-[var(--foreground)]">{record.businessName}</p>
+                      <p className="ui-caption">{record.registrationNumber}</p>
+                      <p className="mt-1 text-sm text-[var(--ink-muted)]">
                         {record.renewalEligibility.userFriendlyReason ?? "Unavailable for renewal."}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                        <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
                           {humanizeNonComplianceType(record.renewalEligibility.nonComplianceType)}
                         </span>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                        <span className="ui-badge bg-[var(--muted-surface)] text-[var(--ink-muted)]">
                           {humanizeCaseStatus(record.renewalEligibility.complianceCaseStatus)}
                         </span>
                       </div>
@@ -1148,7 +1265,7 @@ export function RenewalApplicationForm() {
             variant="readOnly"
           />
           <SectionCard
-            title="Review Business Information"
+            title="Business Information"
             description="Required fields are marked clearly. Locked values are visually separated and remain unchanged."
           >
             <BusinessInformationFields
@@ -1184,7 +1301,7 @@ export function RenewalApplicationForm() {
             />
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <label className={applicantCheckboxCardClass}>
                 <input
                   type="checkbox"
                   className="mt-1"
@@ -1196,12 +1313,12 @@ export function RenewalApplicationForm() {
                   }
                 />
                 <span>
-                  <span className="block font-semibold text-slate-900">Market business</span>
+                  <span className="block font-semibold text-[var(--foreground)]">Market business</span>
                   Keep this checked when the registered business still operates inside a public market or market stall.
                 </span>
               </label>
 
-              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <label className={applicantCheckboxCardClass}>
                 <input
                   type="checkbox"
                   className="mt-1"
@@ -1213,13 +1330,22 @@ export function RenewalApplicationForm() {
                   }
                 />
                 <span>
-                  <span className="block font-semibold text-slate-900">Agriculture-related business</span>
+                  <span className="block font-semibold text-[var(--foreground)]">Agriculture-related business</span>
                   Keep this checked when Department of Agriculture clearance is still required for this renewal.
                 </span>
               </label>
             </div>
           </SectionCard>
+        </div>
+      ) : null}
 
+      {step === 2 ? (
+        <div className={`space-y-4 ${lockInteractivityClass}`}>
+          <InfoBanner
+            title="Business operation details"
+            description="Update operational, staffing, and property details for this renewal period."
+            variant="info"
+          />
           <SectionCard
             title="Business Operations"
             description="Update operation details for this renewal period before document upload and review."
@@ -1228,14 +1354,23 @@ export function RenewalApplicationForm() {
               {RENEWAL_OPERATION_FIELDS.map((field) => (
                 <FormField key={field.key} label={field.label} hint={field.helperText}>
                   <input
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    aria-label={field.label}
+                    className={applicantFormControlClass}
                     value={(info[field.key] as string | undefined) ?? ""}
+                    inputMode={field.numericKind === "integer" ? "numeric" : field.numericKind === "decimal" ? "decimal" : undefined}
                     onBlur={() => validateFieldOnBlur(field.key)}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const raw = event.target.value;
+                      const next =
+                        field.numericKind === "integer"
+                          ? sanitizeIntegerInput(raw)
+                          : field.numericKind === "decimal"
+                            ? sanitizeDecimalInput(raw)
+                            : raw;
                       setInfo((current) =>
-                        normalizeBusinessInfo({ ...current, [field.key]: event.target.value })
-                      )
-                    }
+                        normalizeBusinessInfo({ ...current, [field.key]: next })
+                      );
+                    }}
                   />
                 </FormField>
               ))}
@@ -1246,12 +1381,17 @@ export function RenewalApplicationForm() {
                 error={fieldErrors.grossProfit}
               >
                 <input
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  aria-label="Gross Profit / Gross Receipts"
+                  className={applicantFormControlClass}
                   value={info.grossProfit ?? ""}
+                  inputMode="decimal"
                   onBlur={() => validateFieldOnBlur("grossProfit")}
                   onChange={(event) =>
                     setInfo((current) =>
-                      normalizeBusinessInfo({ ...current, grossProfit: event.target.value })
+                      normalizeBusinessInfo({
+                        ...current,
+                        grossProfit: sanitizeDecimalInput(event.target.value),
+                      })
                     )
                   }
                 />
@@ -1264,8 +1404,7 @@ export function RenewalApplicationForm() {
                 error={fieldErrors.businessActivity}
               >
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
-                  value={selectedBusinessActivity.selected}
+                  aria-label="Business Activity"
                   onBlur={() => validateFieldOnBlur("businessActivity")}
                   onChange={(event) => {
                     const value = event.target.value;
@@ -1297,7 +1436,8 @@ export function RenewalApplicationForm() {
                 >
                   <input
                     type="text"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                    aria-label="Other Business Activity / Specify Activity"
+                    className={applicantFormControlClass}
                     placeholder="Enter your business activity"
                     value={selectedBusinessActivity.otherText}
                     onBlur={() => validateFieldOnBlur("businessActivity")}
@@ -1321,7 +1461,7 @@ export function RenewalApplicationForm() {
                 error={fieldErrors.paymentFrequency}
               >
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                  <label className={applicantRadioLabelClass}>
                     <input
                       type="radio"
                       name="renewalPaymentFrequency"
@@ -1340,7 +1480,7 @@ export function RenewalApplicationForm() {
                     />
                     Annual
                   </label>
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                  <label className={applicantRadioLabelClass}>
                     <input
                       type="radio"
                       name="renewalPaymentFrequency"
@@ -1359,7 +1499,7 @@ export function RenewalApplicationForm() {
                     />
                     Bi-Annual
                   </label>
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                  <label className={applicantRadioLabelClass}>
                     <input
                       type="radio"
                       name="renewalPaymentFrequency"
@@ -1391,7 +1531,7 @@ export function RenewalApplicationForm() {
                 error={fieldErrors.lineOfBusiness}
               >
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={info.lineOfBusiness}
                   disabled={renewalLineOfBusinessLocked}
                   onChange={(event) => {
@@ -1411,9 +1551,28 @@ export function RenewalApplicationForm() {
                   ))}
                 </select>
                 {fieldErrors.lineOfBusiness ? (
-                  <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.lineOfBusiness}</p>
+                  <p className="mt-1 text-xs font-medium text-[var(--danger)]">{fieldErrors.lineOfBusiness}</p>
                 ) : null}
               </FormField>
+
+              <label className={`${applicantCheckboxCardClass} md:col-span-2`}>
+                <input
+                  data-field-key="isLiquorOrTobacco"
+                  type="checkbox"
+                  className="mt-1"
+                  checked={Boolean(info.isLiquorOrTobacco)}
+                  disabled={isReadOnly}
+                  onChange={(event) =>
+                    setInfo((current) =>
+                      normalizeBusinessInfo({ ...current, isLiquorOrTobacco: event.target.checked })
+                    )
+                  }
+                />
+                <span>
+                  <span className="block font-semibold text-[var(--foreground)]">Liquor/Tobacco business</span>
+                  If selected, BPLO will automatically apply the required 25% surcharge during assessment.
+                </span>
+              </label>
             </div>
           </SectionCard>
 
@@ -1424,7 +1583,7 @@ export function RenewalApplicationForm() {
             <div className="grid gap-4 md:grid-cols-2">
               <FormField label="Property Ownership">
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                  className={applicantFormControlClass}
                   value={info.propertyOwnership}
                   onChange={(event) =>
                     setInfo((current) =>
@@ -1440,12 +1599,13 @@ export function RenewalApplicationForm() {
                 </select>
               </FormField>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <div className={applicantPanelClass}>
                 {info.propertyOwnership === "Owned" ? (
                   <div className="space-y-3">
                     <FormField label="Tax Declaration Number">
                       <input
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                        aria-label="Tax Declaration Number"
+                        className={applicantFormControlClass}
                         value={info.taxDeclarationNumber ?? ""}
                         onChange={(event) =>
                           setInfo((current) =>
@@ -1456,7 +1616,8 @@ export function RenewalApplicationForm() {
                     </FormField>
                     <FormField label="Property Identification Number">
                       <input
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+                        aria-label="Property Identification Number"
+                        className={applicantFormControlClass}
                         value={info.propertyIdentificationNumber ?? ""}
                         onChange={(event) =>
                           setInfo((current) =>
@@ -1473,56 +1634,135 @@ export function RenewalApplicationForm() {
                   <p>Property is not owned — no tax declaration or property identification required.</p>
                 )}
               </div>
-            </div>
-          </SectionCard>
-        </div>
-      ) : null}
 
-      {step === 2 ? (
-        <div className={`space-y-4 ${lockInteractivityClass}`}>
-          <InfoBanner
-            title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredRenewalDocs.length}`}
-            description="Upload each required document now. Final submit sends only document metadata references."
-            variant="info"
-          />
-          <SectionCard
-            title="Upload Renewal Documents"
-            description="Conditional clearances may appear depending on the line of business and recorded activity."
-          >
-            <div className="grid gap-3 md:grid-cols-2">
-              {requiredRenewalDocs.map((doc) => {
-                const uploadedDoc = getUploadedDocumentForRequiredName(doc);
-                return (
-                  <UploadSlot
-                    key={doc}
-                    label={doc}
-                    required
-                    helperText="Upload the latest valid copy for renewal review."
-                    disabled={submitting || records.length === 0 || isReadOnly}
-                    fileName={uploadedDoc?.fileName}
-                    uploadedAt={uploadedDoc?.uploadedAt}
-                    previewUrl={
-                      pendingDocumentPreviews[doc] ??
-                      (uploadedDoc?.id && applicationId
-                        ? `/api/applicant/applications/${applicationId}/documents/${uploadedDoc.id}/download`
-                        : undefined)
-                    }
-                    onFileChange={(file) => {
-                      void handleDocumentUpload(doc, file);
-                    }}
-                    accept={DOCUMENT_FILE_INPUT_ACCEPT}
-                    onRemove={() => {
-                      void handleDocumentDelete(uploadedDoc?.documentName ?? doc);
-                    }}
-                  />
-                );
-              })}
+              <div className="md:col-span-2">
+                <FormField
+                  label="Tax Incentives from Government Entity"
+                  hint="Select whether this business currently holds any government-granted tax incentive."
+                  error={fieldErrors.hasTaxIncentives}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2" data-field-key="hasTaxIncentives">
+                    <label className={applicantRadioLabelClass}>
+                      <input
+                        type="radio"
+                        name="renewalHasTaxIncentives"
+                        value="YES"
+                        checked={info.hasTaxIncentives === "YES"}
+                        disabled={isReadOnly}
+                        onChange={() => {
+                          setInfo((current) =>
+                            normalizeBusinessInfo({ ...current, hasTaxIncentives: "YES" })
+                          );
+                          setFieldErrors((current) => {
+                            const next = { ...current };
+                            delete next.hasTaxIncentives;
+                            return next;
+                          });
+                        }}
+                      />
+                      Yes
+                    </label>
+                    <label className={applicantRadioLabelClass}>
+                      <input
+                        type="radio"
+                        name="renewalHasTaxIncentives"
+                        value="NO"
+                        checked={info.hasTaxIncentives === "NO"}
+                        disabled={isReadOnly}
+                        onChange={() => {
+                          setInfo((current) =>
+                            normalizeBusinessInfo({ ...current, hasTaxIncentives: "NO", taxIncentives: "" })
+                          );
+                          setFieldErrors((current) => {
+                            const next = { ...current };
+                            delete next.hasTaxIncentives;
+                            delete next.taxIncentives;
+                            return next;
+                          });
+                        }}
+                      />
+                      No
+                    </label>
+                  </div>
+                </FormField>
+
+                {info.hasTaxIncentives === "YES" ? (
+                  <FormField
+                    label="Tax Incentive Details"
+                    hint="Describe the tax incentive granted (e.g., program name, granting agency)."
+                    error={fieldErrors.taxIncentives}
+                  >
+                    <input
+                      data-field-key="taxIncentives"
+                      aria-label="Tax Incentive Details"
+                      className={applicantFormControlClass}
+                      value={info.taxIncentives ?? ""}
+                      disabled={isReadOnly}
+                      onBlur={() => validateFieldOnBlur("taxIncentives")}
+                      onChange={(event) =>
+                        setInfo((current) =>
+                          normalizeBusinessInfo({ ...current, taxIncentives: event.target.value })
+                        )
+                      }
+                    />
+                  </FormField>
+                ) : null}
+              </div>
             </div>
           </SectionCard>
         </div>
       ) : null}
 
       {step === 3 ? (
+        <div className={`space-y-4 ${lockInteractivityClass}`}>
+          <InfoBanner
+            title={`Required documents uploaded: ${uploadedRequiredCount} of ${requiredRenewalDocs.length}`}
+            description="Upload each required document now. Saving a draft keeps these files so you do not need to re-upload them later."
+            variant="info"
+          />
+          <SectionCard
+            title="Document Upload"
+            description="Conditional clearances may appear depending on the line of business and recorded activity."
+          >
+            <RequirementsUploadTable
+              accept={DOCUMENT_FILE_INPUT_ACCEPT}
+              rows={requiredRenewalDocs.map((doc) => {
+                const uploadedDoc = getUploadedDocumentForRequiredName(doc);
+                const isMissing = (validationDetail?.missingDocuments ?? []).some(
+                  (m) => normalizeDocumentName(m) === normalizeDocumentName(doc)
+                );
+                return {
+                  documentName: doc,
+                  description: getDocumentRequirementDescription(doc),
+                  required: true,
+                  fileName: uploadedDoc?.fileName,
+                  uploadedAt: uploadedDoc?.uploadedAt,
+                  previewUrl:
+                    pendingDocumentPreviews[doc] ??
+                    (uploadedDoc?.id && applicationId
+                      ? `/api/applicant/applications/${applicationId}/documents/${uploadedDoc.id}/download`
+                      : undefined),
+                  error: isMissing ? "This document is required." : undefined,
+                  remarks: uploadedDoc?.validationRemarks ?? undefined,
+                  validationStatus: uploadedDoc?.fileName
+                    ? uploadedDoc.validationStatus ?? "Pending Review"
+                    : undefined,
+                  disabled: submitting || records.length === 0 || isReadOnly,
+                };
+              })}
+              onFileChange={(documentName, file) => {
+                void handleDocumentUpload(documentName, file);
+              }}
+              onRemove={(documentName) => {
+                const uploadedDoc = getUploadedDocumentForRequiredName(documentName);
+                void handleDocumentDelete(uploadedDoc?.documentName ?? documentName);
+              }}
+            />
+          </SectionCard>
+        </div>
+      ) : null}
+
+      {step === 4 ? (
         <div className={`space-y-4 ${lockInteractivityClass}`}>
           <InfoBanner
             title="BPLO assessment"
@@ -1534,18 +1774,34 @@ export function RenewalApplicationForm() {
             title="Applicant-selected payment preference"
             description="This selected mode is included in your renewal submission form data."
           >
-            <p className="text-sm font-semibold text-slate-900">{info.paymentFrequency.replace("_", "-")}</p>
+            <p className="text-sm font-semibold text-[var(--foreground)]">{info.paymentFrequency.replace("_", "-")}</p>
           </SectionCard>
         </div>
       ) : null}
 
-      {step === 4 ? (
+      {step === 5 ? (
         <div className="space-y-4">
           <SectionCard
             title="Review and Submit"
             description="Confirm the selected business, uploaded requirements, and readiness for final validation."
             action={
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={isReadOnly}
+                  onClick={back}
+                  className={actionButtonStyles("ghost", "md")}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={records.length === 0}
+                  onClick={() => setShowVerificationPrint(true)}
+                  className={actionButtonStyles("secondary", "md")}
+                >
+                  Print Verification Form
+                </button>
                 <button
                   type="button"
                   disabled={submitting || records.length === 0 || isReadOnly}
@@ -1559,12 +1815,10 @@ export function RenewalApplicationForm() {
                 <button
                   type="button"
                   disabled={submitting || records.length === 0 || isReadOnly}
-                  onClick={() => {
-                    void persist("SUBMIT");
-                  }}
+                  onClick={handleFinalSubmit}
                   className={actionButtonStyles("primary", "md")}
                 >
-                  Submit Renewal
+                  {getApplicationSubmitButtonLabel("RENEWAL", isResubmission)}
                 </button>
               </div>
             }
@@ -1606,17 +1860,40 @@ export function RenewalApplicationForm() {
               />
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Before you submit</p>
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Main Office Address</p>
+              <p className="mt-1">{info.mainOfficeAddress || "-"}</p>
+              <p className="mt-1 ui-caption">Zip Code: {info.mainOfficeZipCode?.trim() || "-"}</p>
+            </div>
+
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Business Address</p>
+              <p className="mt-1">{info.businessAddress || "-"}</p>
+              <p className="mt-1 ui-caption">Zip Code: {info.businessZipCode?.trim() || EB_MAGALONA_ZIP_CODE}</p>
+            </div>
+
+            <div className={`mt-4 ${applicantPanelClass}`}>
+              <p className="font-semibold text-[var(--foreground)]">Before you submit</p>
               <ul className="mt-2 space-y-1">
                 <li>• Verify the selected business record is correct.</li>
                 <li>• Review editable contact and address details for updates.</li>
                 <li>• Confirm the renewal document set is complete and readable.</li>
               </ul>
             </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border-color)] pt-4">
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={back}
+                className={actionButtonStyles("secondary", "md")}
+              >
+                Back
+              </button>
+            </div>
           </SectionCard>
 
-          {validationDetail ? <ValidationPanel detail={validationDetail} /> : null}
+          {validationDetail ? <ValidationPanel detail={validationDetail} onBack={back} /> : null}
         </div>
       ) : null}
 
@@ -1629,15 +1906,27 @@ export function RenewalApplicationForm() {
         >
           Back
         </button>
-        <button
-          type="button"
-          disabled={step === steps.length - 1 || isReadOnly}
-          onClick={next}
-          className={actionButtonStyles("primary", "md")}
-        >
-          Next
-        </button>
+        {step < steps.length - 1 ? (
+          <button
+            type="button"
+            disabled={isReadOnly}
+            onClick={next}
+            className={actionButtonStyles("primary", "md")}
+          >
+            Next
+          </button>
+        ) : null}
       </div>
+
+      {showVerificationPrint ? (
+        <ApplicationVerificationTemplate
+          info={info}
+          applicationTypeLabel="Business Permit Renewal Application"
+          requiredDocuments={requiredRenewalDocs}
+          uploadedDocumentNames={Object.values(uploadedDocuments).map((doc) => doc.documentName)}
+          onClose={() => setShowVerificationPrint(false)}
+        />
+      ) : null}
     </div>
   );
 }

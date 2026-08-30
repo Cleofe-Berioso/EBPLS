@@ -1,9 +1,12 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
+import { mapDocumentValidationStatusToUi } from "@/lib/document-validation";
 import { getAuditLogs } from "@/lib/audit-log";
 import { getPaymentReferencesFromFormData } from "@/lib/payment-reference";
 import { toMoneyNumber } from "@/lib/money";
+import { buildPaginatedResult, clampPage, clampPageSize, resolvePagination, type PaginatedResult } from "@/lib/pagination";
+import { formatMonthYearLabel, monthYearToDateRange } from "@/lib/printable-reports";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -157,6 +160,8 @@ export interface SuperAdminApplicationDetail {
     mimeType: string;
     sizeBytes: number;
     uploadedAt: string;
+    validationStatus: string;
+    validationRemarks: string | null;
   }>;
   feeAssessment: {
     assessmentNumber: string | null;
@@ -271,16 +276,6 @@ function parseDateAtEndOfDay(value?: string): Date | undefined {
 
   const parsed = new Date(`${trimmed}T23:59:59.999Z`);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function clampPage(value?: number): number {
-  if (!value || Number.isNaN(value) || value < 1) return 1;
-  return Math.floor(value);
-}
-
-function clampPageSize(value?: number): number {
-  if (!value || Number.isNaN(value)) return 25;
-  return Math.min(Math.max(Math.floor(value), 1), 100);
 }
 
 function humanizeAuditValue(value: string): string {
@@ -484,40 +479,54 @@ export async function getSuperAdminDashboardSummary(): Promise<SuperAdminDashboa
 }
 
 export async function listSuperAdminApplications(
-  search?: string
-): Promise<SuperAdminApplicationListRow[]> {
+  search?: string,
+  pagination?: { page?: number | string; pageSize?: number | string }
+): Promise<PaginatedResult<SuperAdminApplicationListRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(pagination);
   const normalizedSearch = search?.trim();
 
-  const rows = await prisma.businessApplication.findMany({
-    where: normalizedSearch
-      ? {
-          OR: [
-            { applicationNumber: { contains: normalizedSearch } },
-            { applicant: { email: { contains: normalizedSearch } } },
-          ],
-        }
-      : undefined,
-    include: {
-      applicant: { select: { email: true } },
-      businessRecord: { select: { businessName: true } },
-      feeAssessment: { select: { assessmentNumber: true } },
-      permitIssuance: { select: { documentNumber: true } },
-    },
-    orderBy: [{ updatedAt: "desc" }],
-  });
+  const where = normalizedSearch
+    ? {
+        OR: [
+          { applicationNumber: { contains: normalizedSearch, mode: "insensitive" as const } },
+          { applicant: { email: { contains: normalizedSearch, mode: "insensitive" as const } } },
+        ],
+      }
+    : undefined;
 
-  return rows.map((row) => ({
-    id: row.id,
-    applicationNumber: row.applicationNumber,
-    businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
-    applicantEmail: row.applicant.email,
-    applicationType: row.applicationType as ApplicationType,
-    status: mapDbStatusToUi(row.status),
-    topNumber: row.feeAssessment?.assessmentNumber ?? null,
-    permitOrCertificateNumber: row.permitIssuance?.documentNumber ?? null,
-    dateSubmitted: toDateOnly(row.submittedAt),
-    lastUpdated: toDateOnly(row.updatedAt),
-  }));
+  const [rows, totalCount] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where,
+      include: {
+        applicant: { select: { email: true } },
+        businessRecord: { select: { businessName: true } },
+        feeAssessment: { select: { assessmentNumber: true } },
+        permitIssuance: { select: { documentNumber: true } },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.businessApplication.count({ where }),
+  ]);
+
+  return buildPaginatedResult(
+    rows.map((row) => ({
+      id: row.id,
+      applicationNumber: row.applicationNumber,
+      businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
+      applicantEmail: row.applicant.email,
+      applicationType: row.applicationType as ApplicationType,
+      status: mapDbStatusToUi(row.status),
+      topNumber: row.feeAssessment?.assessmentNumber ?? null,
+      permitOrCertificateNumber: row.permitIssuance?.documentNumber ?? null,
+      dateSubmitted: toDateOnly(row.submittedAt),
+      lastUpdated: toDateOnly(row.updatedAt),
+    })),
+    totalCount,
+    page,
+    pageSize
+  );
 }
 
 export async function getSuperAdminApplicationDetail(
@@ -536,6 +545,8 @@ export async function getSuperAdminApplicationDetail(
           mimeType: true,
           sizeBytes: true,
           uploadedAt: true,
+          validationStatus: true,
+          validationRemarks: true,
         },
         orderBy: { uploadedAt: "asc" },
       },
@@ -670,6 +681,8 @@ export async function getSuperAdminApplicationDetail(
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
       uploadedAt: doc.uploadedAt.toISOString(),
+      validationStatus: mapDocumentValidationStatusToUi(doc.validationStatus),
+      validationRemarks: doc.validationRemarks ?? null,
     })),
     feeAssessment: {
       assessmentNumber: row.feeAssessment?.assessmentNumber ?? null,
@@ -866,55 +879,72 @@ export async function getSuperAdminActivityFilterOptions(): Promise<SuperAdminAc
   };
 }
 
-export async function listSuperAdminUsers(filters?: {
-  search?: string;
-  role?: "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
-  status?: "ALL" | "ACTIVE" | "DISABLED";
-}): Promise<SuperAdminUserRow[]> {
+export async function listSuperAdminUsers(
+  filters?: {
+    search?: string;
+    role?: "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
+    status?: "ALL" | "ACTIVE" | "DISABLED";
+    page?: number | string;
+    pageSize?: number | string;
+  }
+): Promise<PaginatedResult<SuperAdminUserRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(filters);
   const normalizedSearch = filters?.search?.trim();
   const roleFilter = filters?.role ?? "ALL";
   const statusFilter = filters?.status ?? "ALL";
 
-  const users = await prisma.user.findMany({
-    where: {
-      ...(normalizedSearch
-        ? {
-            OR: [
-              { name: { contains: normalizedSearch } },
-              { email: { contains: normalizedSearch } },
-            ],
-          }
-        : {}),
-      ...(roleFilter !== "ALL" ? { role: roleFilter } : {}),
-      ...(statusFilter === "ALL"
-        ? {}
-        : {
-            isActive: statusFilter === "ACTIVE",
-          }),
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-      updatedAt: true,
-      profileImageStoragePath: true,
-    },
-    orderBy: [{ createdAt: "desc" }],
-  });
+  const where = {
+    ...(normalizedSearch
+      ? {
+          OR: [
+            { name: { contains: normalizedSearch, mode: "insensitive" as const } },
+            { email: { contains: normalizedSearch, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    ...(roleFilter !== "ALL" ? { role: roleFilter } : {}),
+    ...(statusFilter === "ALL"
+      ? {}
+      : {
+          isActive: statusFilter === "ACTIVE",
+        }),
+  };
 
-  return users.map((user) => ({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    status: user.isActive ? "ACTIVE" : "DISABLED",
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt.toISOString(),
-    profileImageStoragePath: user.profileImageStoragePath,
-  }));
+  const [users, totalCount] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        profileImageStoragePath: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  return buildPaginatedResult(
+    users.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.isActive ? "ACTIVE" : "DISABLED",
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+      profileImageStoragePath: user.profileImageStoragePath,
+    })),
+    totalCount,
+    page,
+    pageSize
+  );
 }
 
 export async function getSuperAdminUserSummary(): Promise<SuperAdminUserSummary> {
@@ -1072,92 +1102,7 @@ export async function getApplicationSummaryReport(
   }));
 }
 
-// ── Report 2: Revenue Collection ─────────────────────────────────────────────
-
-export interface RevenueCollectionReportRow {
-  applicationNumber: string;
-  businessName: string;
-  officialReceiptNumber: string;
-  amountAssessed: string;
-  amountPaid: string;
-  paymentStatus: string;
-  verifiedDate: string;
-}
-
-export interface RevenueCollectionReportFilters {
-  from?: string;
-  to?: string;
-}
-
-export async function getRevenueCollectionReport(
-  filters: RevenueCollectionReportFilters = {}
-): Promise<RevenueCollectionReportRow[]> {
-  const startDate = parseDateAtStartOfDay(filters.from);
-  const endDate = parseDateAtEndOfDay(filters.to);
-
-  const rows = await prisma.businessApplication.findMany({
-    where: {
-      feeAssessment: { isNot: null },
-      ...((startDate ?? endDate)
-        ? {
-            submittedAt: {
-              ...(startDate ? { gte: startDate } : {}),
-              ...(endDate ? { lte: endDate } : {}),
-            },
-          }
-        : {}),
-    },
-    include: {
-      businessRecord: { select: { businessName: true } },
-      feeAssessment: {
-        select: {
-          totalAmount: true,
-          amountPaid: true,
-          paymentStatus: true,
-        },
-      },
-      paymentReferences: {
-        where: { status: "VERIFIED" },
-        orderBy: { reviewedAt: "desc" },
-        take: 1,
-        select: {
-          transactionNumber: true,
-          amountPaid: true,
-          reviewedAt: true,
-        },
-      },
-    },
-    orderBy: { submittedAt: "desc" },
-  });
-
-  function formatPeso(n: Parameters<typeof toMoneyNumber>[0]): string {
-    const v = toMoneyNumber(n);
-    return `₱${v.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-
-  function humanizePaymentStatus(s: string): string {
-    if (s === "UNPAID") return "Unpaid";
-    if (s === "PARTIALLY_PAID") return "Partially Paid";
-    if (s === "PAID") return "Paid";
-    return s;
-  }
-
-  return rows.map((row) => {
-    const verifiedRef = row.paymentReferences[0] ?? null;
-    const payStatus = row.feeAssessment?.paymentStatus ?? "UNPAID";
-    return {
-      applicationNumber: row.applicationNumber,
-      businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
-      officialReceiptNumber: verifiedRef?.transactionNumber ?? "-",
-      amountAssessed: formatPeso(row.feeAssessment?.totalAmount),
-      amountPaid: formatPeso(row.feeAssessment?.amountPaid),
-      paymentStatus: humanizePaymentStatus(payStatus),
-      verifiedDate: verifiedRef?.reviewedAt ? toDateOnly(verifiedRef.reviewedAt) : "-",
-    };
-  });
-}
-
-// ── Report 3: Business Registry ───────────────────────────────────────────────
+// ── Report 2: Business Registry ───────────────────────────────────────────────
 
 export interface BusinessRegistryReportRow {
   businessName: string;
@@ -1328,7 +1273,7 @@ export interface InspectionComplianceReportFilters {
   inspectionStatus?: string;
 }
 
-const VALID_COMPLIANCE_STATUSES = ["COMPLIANT", "NON_COMPLIANT"] as const;
+const VALID_COMPLIANCE_STATUSES = ["PENDING_REVIEW", "COMPLIANT", "NON_COMPLIANT"] as const;
 function parseComplianceStatus(
   v?: string
 ): (typeof VALID_COMPLIANCE_STATUSES)[number] | undefined {
@@ -1406,7 +1351,7 @@ export async function getInspectionComplianceReport(
     businessName: row.businessRecord?.businessName ?? "-",
     applicationNumber: row.application?.applicationNumber ?? "-",
     inspector: row.inspector?.name ?? "-",
-    complianceStatus: row.complianceStatus === "COMPLIANT" ? "Compliant" : "Non-Compliant",
+    complianceStatus: row.complianceStatus === "COMPLIANT" ? "Compliant" : row.complianceStatus === "PENDING_REVIEW" ? "Pending Review" : "Non-Compliant",
     inspectionStatus: labelInspectionStatus(row.status),
     decidedBy: row.decidedBy?.name ?? "-",
     decidedAt: toDateOnly(row.decidedAt),
@@ -1463,7 +1408,7 @@ function humanizeActorRole(role: string | null): string {
   const map: Record<string, string> = {
     APPLICANT: "Applicant",
     BPLO: "BPLO",
-    SUPER_ADMIN: "Super Admin",
+    SUPER_ADMIN: "IT Administrator",
     DEPARTMENT_HEAD: "Department Head",
     JIT: "JIT Inspector",
   };
@@ -1476,7 +1421,7 @@ export async function getAuditTrailReport(
   const startDate = parseDateAtStartOfDay(filters.from);
   const endDate = parseDateAtEndOfDay(filters.to);
   const actorRole = parseAuditActorRole(filters.actorRole);
-  const module = parseAuditModule(filters.module);
+  const auditModule = parseAuditModule(filters.module);
 
   const rows = await prisma.auditLog.findMany({
     where: {
@@ -1489,7 +1434,7 @@ export async function getAuditTrailReport(
           }
         : {}),
       ...(actorRole ? { actorRole } : {}),
-      ...(module ? { module } : {}),
+      ...(auditModule ? { module: auditModule } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 1000,
@@ -1578,4 +1523,147 @@ export async function getSmsDeliveryReport(
         ? `${row.messageBody.slice(0, 117)}...`
         : row.messageBody,
   }));
+}
+
+// ── Report 8: Monthly Executive Summary ───────────────────────────────────────
+
+export interface MonthlySummaryReportData {
+  periodLabel: string;
+  month: number;
+  year: number;
+  applicationsSubmitted: number;
+  applicationsByType: Array<{ type: string; count: number }>;
+  applicationsByStatus: Array<{ status: string; count: number }>;
+  releasedApplications: number;
+  returnedForCorrection: number;
+  rejectedApplications: number;
+  permitsReleased: number;
+  closureCertificatesReleased: number;
+  closuresSubmitted: number;
+  inspectionsConducted: number;
+  compliantInspections: number;
+  nonCompliantInspections: number;
+  pendingInspectionReview: number;
+  bploActions: number;
+  auditEvents: number;
+  newUsers: number;
+  verifiedPayments: number;
+  verifiedPaymentAmount: number;
+  smsSent: number;
+  smsFailed: number;
+}
+
+export async function getMonthlySummaryReport(month: number, year: number): Promise<MonthlySummaryReportData> {
+  const { start, end } = monthYearToDateRange(month, year);
+  const submittedWhere = { submittedAt: { gte: start, lte: end } };
+  const createdWhere = { createdAt: { gte: start, lte: end } };
+  const releasedWhere = { releasedAt: { gte: start, lte: end } };
+
+  const [
+    applicationsSubmitted,
+    typeGroups,
+    statusGroups,
+    releasedApplications,
+    returnedForCorrection,
+    rejectedApplications,
+    permitsReleased,
+    closureCertificatesReleased,
+    closuresSubmitted,
+    inspections,
+    bploActions,
+    auditEvents,
+    newUsers,
+    verifiedPayments,
+    smsSent,
+    smsFailed,
+  ] = await Promise.all([
+    prisma.businessApplication.count({ where: submittedWhere }),
+    prisma.businessApplication.groupBy({
+      by: ["applicationType"],
+      where: submittedWhere,
+      _count: { _all: true },
+    }),
+    prisma.businessApplication.groupBy({
+      by: ["status"],
+      where: submittedWhere,
+      _count: { _all: true },
+    }),
+    prisma.businessApplication.count({
+      where: {
+        status: "RELEASED",
+        updatedAt: { gte: start, lte: end },
+      },
+    }),
+    prisma.businessApplication.count({
+      where: { ...submittedWhere, status: "RETURNED_FOR_CORRECTION" },
+    }),
+    prisma.businessApplication.count({
+      where: { ...submittedWhere, status: "REJECTED" },
+    }),
+    prisma.permitIssuance.count({
+      where: { documentType: "BUSINESS_PERMIT", status: "RELEASED", ...releasedWhere },
+    }),
+    prisma.permitIssuance.count({
+      where: { documentType: "CLOSURE_CERTIFICATE", status: "RELEASED", ...releasedWhere },
+    }),
+    prisma.businessApplication.count({
+      where: { applicationType: "CLOSURE", ...submittedWhere },
+    }),
+    prisma.inspection.findMany({
+      where: createdWhere,
+      select: { complianceStatus: true },
+    }),
+    prisma.applicationHistory.count({
+      where: { actorRole: "BPLO", ...createdWhere },
+    }),
+    prisma.auditLog.count({ where: createdWhere }),
+    prisma.user.count({ where: createdWhere }),
+    prisma.paymentReference.findMany({
+      where: { status: "VERIFIED", reviewedAt: { gte: start, lte: end } },
+      select: { amountPaid: true },
+    }),
+    prisma.smsDeliveryLog.count({
+      where: { ...createdWhere, status: "SENT" },
+    }),
+    prisma.smsDeliveryLog.count({
+      where: { ...createdWhere, status: "FAILED" },
+    }),
+  ]);
+
+  let verifiedPaymentAmount = 0;
+  for (const payment of verifiedPayments) {
+    verifiedPaymentAmount += toMoneyNumber(payment.amountPaid);
+  }
+
+  return {
+    periodLabel: formatMonthYearLabel(month, year),
+    month,
+    year,
+    applicationsSubmitted,
+    applicationsByType: typeGroups.map((row) => ({
+      type: row.applicationType,
+      count: row._count._all,
+    })),
+    applicationsByStatus: statusGroups.map((row) => ({
+      status: mapDbStatusToUi(row.status as DbApplicationStatus),
+      count: row._count._all,
+    })),
+    releasedApplications,
+    returnedForCorrection,
+    rejectedApplications,
+    permitsReleased,
+    closureCertificatesReleased,
+    closuresSubmitted,
+    inspectionsConducted: inspections.length,
+    compliantInspections: inspections.filter((row) => row.complianceStatus === "COMPLIANT").length,
+    nonCompliantInspections: inspections.filter((row) => row.complianceStatus === "NON_COMPLIANT").length,
+    pendingInspectionReview: inspections.filter((row) => row.complianceStatus === "PENDING_REVIEW").length,
+    bploActions,
+    auditEvents,
+    newUsers,
+    verifiedPayments: verifiedPayments.length,
+    verifiedPaymentAmount: Math.round(verifiedPaymentAmount * 100) / 100,
+    smsSent,
+    smsFailed,
+  };
 }

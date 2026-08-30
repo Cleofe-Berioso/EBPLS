@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ClipboardCheck, ShieldAlert, ShieldX, AlertCircle } from "lucide-react";
+import { dhSurfacePanelClass } from "@/components/department-head/department-head-ui-styles";
+import { LoadingState } from "@/components/ui/loading-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { InlineAlert } from "@/components/ui/inline-alert";
 
 interface DashboardSummary {
   pendingApplicationApprovals: number;
@@ -10,6 +14,9 @@ interface DashboardSummary {
   businessesUnderRestriction: number;
   revocationRecommendations: number;
 }
+
+const dashboardCardClass =
+  "group relative cursor-pointer overflow-hidden rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--surface)] p-5 shadow-sm transition-colors hover:shadow-md";
 
 export function DepartmentHeadDashboardClient() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -37,134 +44,118 @@ export function DepartmentHeadDashboardClient() {
 
   if (loading) {
     return (
-      <main className="px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-12">
-            <h1 className="text-3xl font-bold text-slate-900">Department Head Dashboard</h1>
-            <p className="mt-2 text-lg text-slate-600">Loading summary data...</p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-32 rounded-2xl border border-slate-200 bg-white animate-pulse" />
-            ))}
-          </div>
+      <section className="ui-page-stack">
+        <PageHeader
+          eyebrow="Department Head"
+          title="Dashboard"
+          description="Summary of pending approvals, flagged cases, and permit restrictions."
+        />
+        <LoadingState message="Loading summary data…" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 animate-pulse rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--muted-surface)]" />
+          ))}
         </div>
-      </main>
+      </section>
     );
   }
 
   if (error || !summary) {
     return (
-      <main className="px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-12">
-            <h1 className="text-3xl font-bold text-slate-900">Department Head Dashboard</h1>
-          </div>
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-6 w-6 text-red-600" />
-              <p className="text-red-700">{error || "Failed to load dashboard data"}</p>
-            </div>
-          </div>
-        </div>
-      </main>
+      <section className="ui-page-stack">
+        <PageHeader eyebrow="Department Head" title="Dashboard" />
+        <InlineAlert variant="error" title="Unable to load dashboard" message={error || "Failed to load dashboard data"} />
+      </section>
     );
   }
 
   return (
-    <main className="px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-4xl">
-        {/* Page Header */}
-        <div className="mb-12">
-          <h1 className="text-3xl font-bold text-slate-900">Department Head Dashboard</h1>
-          <p className="mt-2 text-lg text-slate-600">Manage applications, flagged cases, and permits.</p>
-        </div>
+    <section className="ui-page-stack">
+      <PageHeader
+        eyebrow="Department Head"
+        title="Dashboard"
+        description="Manage applications, flagged cases, and permits."
+      />
 
-        {/* Summary Cards Grid */}
-        <div className="grid gap-6 sm:grid-cols-2">
-          {/* Pending Application Approvals */}
-          <Link href="/department-head/application-approval">
-            <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-emerald-200 hover:shadow-md hover:bg-emerald-50/30 cursor-pointer">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="rounded-lg bg-emerald-100 p-3 text-emerald-700 transition-all group-hover:bg-emerald-200">
-                    <ClipboardCheck className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="font-semibold text-slate-900">Application Approvals</h2>
-                    <p className="mt-1 text-sm text-slate-600">Pending approvals awaiting decision</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-4xl font-bold text-emerald-700">{summary.pendingApplicationApprovals}</div>
-                  <p className="mt-1 text-xs text-slate-500">pending</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          {/* Pending Flagged Cases */}
-          <Link href="/department-head/permit-to-revoke">
-            <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-orange-200 hover:shadow-md hover:bg-orange-50/30 cursor-pointer">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="rounded-lg bg-orange-100 p-3 text-orange-700 transition-all group-hover:bg-orange-200">
-                    <ShieldAlert className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="font-semibold text-slate-900">Flagged Cases</h2>
-                    <p className="mt-1 text-sm text-slate-600">Non-compliant businesses under review</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-4xl font-bold text-orange-600">{summary.pendingFlaggedCases}</div>
-                  <p className="mt-1 text-xs text-slate-500">pending</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          {/* Businesses Under Restriction */}
-          <Link href="/department-head/revoke-permit-list">
-            <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-red-200 hover:shadow-md hover:bg-red-50/30 cursor-pointer">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="rounded-lg bg-red-100 p-3 text-red-700 transition-all group-hover:bg-red-200">
-                    <ShieldX className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="font-semibold text-slate-900">Restrictions List</h2>
-                    <p className="mt-1 text-sm text-slate-600">Revoked permits and active restrictions</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-4xl font-bold text-red-600">{summary.businessesUnderRestriction}</div>
-                  <p className="mt-1 text-xs text-slate-500">active</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          {/* Revocation Recommendations */}
-          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Link href="/department-head/application-approval">
+          <div className={`${dashboardCardClass} hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]`}>
             <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <div className="rounded-lg bg-slate-100 p-3 text-slate-700">
-                  <AlertCircle className="h-6 w-6" />
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-[var(--primary-soft)] p-2.5 text-[var(--primary)]">
+                  <ClipboardCheck className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="font-semibold text-slate-900">Revocation Recommendations</h2>
-                  <p className="mt-1 text-sm text-slate-600">JIT non-compliant recommendations</p>
+                  <h2 className="font-semibold text-[var(--foreground)]">Application Approvals</h2>
+                  <p className="mt-1 text-sm text-[var(--ink-muted)]">Pending approvals awaiting decision</p>
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-4xl font-bold text-slate-700">{summary.revocationRecommendations}</div>
-                <p className="mt-1 text-xs text-slate-500">recommendations</p>
+                <div className="text-3xl font-bold text-[var(--primary)]">{summary.pendingApplicationApprovals}</div>
+                <p className="mt-1 ui-caption">pending</p>
               </div>
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/department-head/permit-to-revoke">
+          <div className={`${dashboardCardClass} hover:border-[var(--warning)] hover:bg-[var(--warning-soft)]`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-[var(--warning-soft)] p-2.5 text-[var(--warning)]">
+                  <ShieldAlert className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-[var(--foreground)]">Flagged Cases</h2>
+                  <p className="mt-1 text-sm text-[var(--ink-muted)]">Non-compliant businesses under review</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-[var(--warning)]">{summary.pendingFlaggedCases}</div>
+                <p className="mt-1 ui-caption">pending</p>
+              </div>
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/department-head/revoke-permit-list">
+          <div className={`${dashboardCardClass} hover:border-[var(--danger)] hover:bg-[var(--danger-soft)]`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-[var(--danger-soft)] p-2.5 text-[var(--danger)]">
+                  <ShieldX className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-[var(--foreground)]">Restrictions List</h2>
+                  <p className="mt-1 text-sm text-[var(--ink-muted)]">Revoked permits and active restrictions</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-[var(--danger)]">{summary.businessesUnderRestriction}</div>
+                <p className="mt-1 ui-caption">active</p>
+              </div>
+            </div>
+          </div>
+        </Link>
+
+        <div className={dhSurfacePanelClass}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-[var(--muted-surface)] p-2.5 text-[var(--ink-muted)]">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-semibold text-[var(--foreground)]">Revocation Recommendations</h2>
+                <p className="mt-1 text-sm text-[var(--ink-muted)]">JIT non-compliant recommendations</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold text-[var(--foreground)]">{summary.revocationRecommendations}</div>
+              <p className="mt-1 ui-caption">recommendations</p>
             </div>
           </div>
         </div>
       </div>
-    </main>
+    </section>
   );
 }

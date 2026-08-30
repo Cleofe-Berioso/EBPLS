@@ -2,9 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { LoadingState } from "@/components/ui/loading-state";
+import {
+  dhDocumentListItemClass,
+  dhFormControlClass,
+  dhPanelClass,
+  dhSelectableCardActiveClass,
+  dhSelectableCardClass,
+  dhSelectableCardIdleClass,
+  dhSummaryLabelClass,
+  dhSummaryTileClass,
+  dhSummaryValueClass,
+} from "@/components/department-head/department-head-ui-styles";
+
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
+import type { ChecklistItemReadOnlyApiRow } from "@/lib/jit-post-audit-checklist";
 
 type InspectionVerificationRow = {
   inspectionId: string;
@@ -22,7 +36,7 @@ type InspectionVerificationRow = {
   inspectionDate: string;
   inspectorName: string;
   inspectionStatus: string;
-  complianceStatus: "COMPLIANT" | "NON_COMPLIANT";
+  complianceStatus: "PENDING_REVIEW" | "COMPLIANT" | "NON_COMPLIANT";
   inspectorComment: string | null;
   evidenceFileName: string | null;
   evidenceMimeType: string | null;
@@ -54,6 +68,91 @@ const HELPER_TEXT = {
   RENEWAL_RELATED: "Renewal may continue later, but renewal-related penalties or fees may apply during assessment.",
 };
 
+function InspectionChecklistReadOnlyPanel({
+  inspectionId,
+  items,
+  loading,
+  error,
+}: {
+  inspectionId: string;
+  items: ChecklistItemReadOnlyApiRow[];
+  loading: boolean;
+  error: string | null;
+}) {
+  if (loading) {
+    return (
+      <SectionCard title="JIT Post-Audit Checklist" description="Submitted department checklist responses from the JIT inspection.">
+        <LoadingState message="Loading post-audit checklist…" compact />
+      </SectionCard>
+    );
+  }
+
+  if (error) {
+    return (
+      <SectionCard title="JIT Post-Audit Checklist" description="Submitted department checklist responses from the JIT inspection.">
+        <InfoBanner title="Checklist unavailable" description={error} variant="danger" />
+      </SectionCard>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <SectionCard title="JIT Post-Audit Checklist" description="Submitted department checklist responses from the JIT inspection.">
+        <div className="text-sm text-[var(--ink-muted)]">No post-audit checklist was submitted for this inspection.</div>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <SectionCard
+      title="JIT Post-Audit Checklist"
+      description="Read-only view of all 8 department responses submitted by JIT."
+    >
+      <div className="space-y-3">
+        {items.map((item) => {
+          const evidenceUrl = `/api/department-head/inspection-verification/${inspectionId}/checklist/${item.id}/evidence`;
+
+          return (
+            <article key={item.id} className={dhDocumentListItemClass}>
+              <p className="text-sm font-semibold text-[var(--primary)]">{item.departmentLabel}</p>
+              <p className="mt-2 text-sm text-[var(--foreground)]">{item.question}</p>
+
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Response</p>
+                  <p className={dhSummaryValueClass}>{item.responseLabel}</p>
+                </div>
+                <div className={dhSummaryTileClass}>
+                  <p className={dhSummaryLabelClass}>Remarks</p>
+                  <p className="mt-1 text-sm text-[var(--foreground)]">{item.remarks?.trim() || "None"}</p>
+                </div>
+              </div>
+
+              {item.hasEvidence ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <p className="w-full text-sm font-medium text-[var(--foreground)]">
+                    {item.evidenceFileName ?? "Checklist evidence"}
+                  </p>
+                  <a
+                    href={evidenceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={actionButtonStyles("secondary", "sm")}
+                  >
+                    View Evidence
+                  </a>
+                </div>
+              ) : (
+                <p className="mt-3 ui-caption">No optional evidence uploaded for this item.</p>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+}
+
 export function DepartmentHeadInspectionVerificationClient() {
   const [rows, setRows] = useState<InspectionVerificationRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -64,13 +163,19 @@ export function DepartmentHeadInspectionVerificationClient() {
   const [nonComplianceType, setNonComplianceType] = useState("");
   const [violationSeverity, setViolationSeverity] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [checklistItems, setChecklistItems] = useState<ChecklistItemReadOnlyApiRow[]>([]);
+  const [checklistLoading, setChecklistLoading] = useState(false);
+  const [checklistError, setChecklistError] = useState<string | null>(null);
+  const [complianceDecision, setComplianceDecision] = useState<"COMPLIANT" | "NON_COMPLIANT" | "">("" );
 
   const selected = useMemo(
     () => rows.find((row) => row.inspectionId === selectedId) ?? null,
     [rows, selectedId]
   );
 
-  const isNonCompliant = selected?.complianceStatus === "NON_COMPLIANT";
+  const isPendingReview = selected?.complianceStatus === "PENDING_REVIEW";
+  const effectiveCompliance = isPendingReview ? complianceDecision : selected?.complianceStatus;
+  const isNonCompliant = effectiveCompliance === "NON_COMPLIANT";
 
   async function loadQueue() {
     setLoading(true);
@@ -103,8 +208,52 @@ export function DepartmentHeadInspectionVerificationClient() {
     setNonComplianceType("");
     setViolationSeverity("");
     setRemarks("");
+    setComplianceDecision("");
     setMessage(null);
     setEvidenceOpen(false);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setChecklistItems([]);
+      setChecklistLoading(false);
+      setChecklistError(null);
+      return;
+    }
+
+    let active = true;
+
+    async function loadChecklist() {
+      setChecklistLoading(true);
+      setChecklistError(null);
+
+      const response = await fetch(
+        `/api/department-head/inspection-verification/${selectedId}/checklist`,
+        { cache: "no-store" }
+      );
+      const data = (await response.json()) as {
+        items?: ChecklistItemReadOnlyApiRow[];
+        error?: string;
+      };
+
+      if (!active) return;
+
+      if (!response.ok) {
+        setChecklistItems([]);
+        setChecklistError(data.error ?? "Unable to load post-audit checklist.");
+        setChecklistLoading(false);
+        return;
+      }
+
+      setChecklistItems(data.items ?? []);
+      setChecklistLoading(false);
+    }
+
+    void loadChecklist();
+
+    return () => {
+      active = false;
+    };
   }, [selectedId]);
 
   const selectedEvidenceUrl = selected ? `/api/department-head/inspection-verification/${selected.inspectionId}/evidence` : "";
@@ -121,6 +270,11 @@ export function DepartmentHeadInspectionVerificationClient() {
     }
 
     // Validate classification fields for NON_COMPLIANT
+    if (isPendingReview && !complianceDecision) {
+      setMessage({ type: "error", text: "Compliance decision is required for Pending Review inspections." });
+      return;
+    }
+
     if (isNonCompliant) {
       if (!nonComplianceType) {
         setMessage({ type: "error", text: "Non-compliance type is required for non-compliant inspections." });
@@ -132,7 +286,7 @@ export function DepartmentHeadInspectionVerificationClient() {
       }
     }
 
-    if (!window.confirm(`Verify ${selected.complianceStatus} inspection for ${selected.businessName}?`)) {
+    if (!window.confirm(`Verify inspection for ${selected.businessName} as ${effectiveCompliance}?`)) {
       return;
     }
 
@@ -146,6 +300,7 @@ export function DepartmentHeadInspectionVerificationClient() {
         remarks,
         nonComplianceType: isNonCompliant ? nonComplianceType : undefined,
         violationSeverity: isNonCompliant ? violationSeverity : undefined,
+        complianceDecision: isPendingReview ? complianceDecision : undefined,
       }),
     });
 
@@ -170,6 +325,7 @@ export function DepartmentHeadInspectionVerificationClient() {
     setRemarks("");
     setNonComplianceType("");
     setViolationSeverity("");
+    setComplianceDecision("");
     setSubmitting(false);
     await loadQueue();
   }
@@ -178,7 +334,7 @@ export function DepartmentHeadInspectionVerificationClient() {
     <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
       <SectionCard title="Inspection Verification Queue" description="Only DH_VERIFICATION_PENDING inspections are listed here.">
         {loading ? (
-          <div className="text-sm text-slate-500">Loading verification queue...</div>
+          <LoadingState message="Loading verification queue…" compact />
         ) : rows.length === 0 ? (
           <EmptyState title="No inspections awaiting verification" description="JIT inspections will appear here after submission." />
         ) : (
@@ -190,14 +346,12 @@ export function DepartmentHeadInspectionVerificationClient() {
                   key={row.inspectionId}
                   type="button"
                   onClick={() => setSelectedId(row.inspectionId)}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                    active ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white hover:bg-slate-50"
-                  }`}
+                  className={`${dhSelectableCardClass} ${active ? dhSelectableCardActiveClass : dhSelectableCardIdleClass}`}
                 >
-                  <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{row.tradeName ? `${row.businessName} / ${row.tradeName}` : row.businessName}</p>
-                  <p className="mt-1 text-xs text-slate-600">Result: {row.complianceStatus}</p>
-                  <p className="mt-1 text-xs text-slate-600">Inspector: {row.inspectorName}</p>
+                  <p className="font-mono ui-caption">{row.applicationNumber}</p>
+                  <p className={dhSummaryValueClass}>{row.tradeName ? `${row.businessName} / ${row.tradeName}` : row.businessName}</p>
+                  <p className="mt-1 ui-caption">Result: {row.complianceStatus === "PENDING_REVIEW" ? "Pending Review" : row.complianceStatus}</p>
+                  <p className="mt-1 ui-caption">Inspector: {row.inspectorName}</p>
                 </button>
               );
             })}
@@ -214,54 +368,61 @@ export function DepartmentHeadInspectionVerificationClient() {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Name / Trade Name</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.tradeName ? `${selected.businessName} / ${selected.tradeName}` : selected.businessName}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Business Name / Trade Name</p>
+                <p className={dhSummaryValueClass}>{selected.tradeName ? `${selected.businessName} / ${selected.tradeName}` : selected.businessName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Permit No.</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.permitOrCertificateNumber ?? "N/A"}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Permit No.</p>
+                <p className={dhSummaryValueClass}>{selected.permitOrCertificateNumber ?? "N/A"}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Type</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessType}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Business Type</p>
+                <p className={dhSummaryValueClass}>{selected.businessType}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Line of Business</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.lineOfBusiness}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Line of Business</p>
+                <p className={dhSummaryValueClass}>{selected.lineOfBusiness}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Owner / Applicant Name</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.ownerName} / {selected.applicantName}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Owner / Applicant Name</p>
+                <p className={dhSummaryValueClass}>{selected.ownerName} / {selected.applicantName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Address</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessAddress}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Business Address</p>
+                <p className={dhSummaryValueClass}>{selected.businessAddress}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">JIT Result</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.complianceStatus}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>JIT Result</p>
+                <p className={dhSummaryValueClass}>{selected.complianceStatus === "PENDING_REVIEW" ? "Pending Review" : selected.complianceStatus}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Inspection Date</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(selected.inspectionDate)}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Inspection Date</p>
+                <p className={dhSummaryValueClass}>{formatDateTime(selected.inspectionDate)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Inspector</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.inspectorName}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Inspector</p>
+                <p className={dhSummaryValueClass}>{selected.inspectorName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">JIT Comment / Remarks</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.inspectorComment ?? "No comment provided."}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>JIT Comment / Remarks</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.inspectorComment ?? "No comment provided."}</p>
               </div>
             </div>
 
+            <InspectionChecklistReadOnlyPanel
+              inspectionId={selected.inspectionId}
+              items={checklistItems}
+              loading={checklistLoading}
+              error={checklistError}
+            />
+
             <SectionCard title="Uploaded Evidence / Photo" description="Evidence attached to the JIT inspection.">
               {!selected.hasEvidence ? (
-                <div className="text-sm text-slate-600">No evidence uploaded.</div>
+                <div className="text-sm text-[var(--ink-muted)]">No evidence uploaded.</div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-700">{selected.evidenceFileName ?? "Evidence file"}</p>
+                  <p className="text-sm font-medium text-[var(--foreground)]">{selected.evidenceFileName ?? "Evidence file"}</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -284,36 +445,37 @@ export function DepartmentHeadInspectionVerificationClient() {
             </SectionCard>
 
             {selected?.hasEvidence && evidenceOpen ? (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
                 <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl">
-                  <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                  <div className="flex items-center justify-between border-b border-[var(--border-color)] px-5 py-4">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">Evidence Preview</p>
-                      <p className="text-xs text-slate-600">{selected.evidenceFileName ?? "Uploaded evidence"}</p>
+                      <p className="text-sm font-semibold text-[var(--foreground)]">Evidence Preview</p>
+                      <p className="ui-caption">{selected.evidenceFileName ?? "Uploaded evidence"}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setEvidenceOpen(false)}
-                      className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                      className={actionButtonStyles("secondary", "sm")}
                     >
                       Close
                     </button>
                   </div>
-                  <div className="max-h-[calc(90vh-72px)] overflow-auto bg-slate-100 p-4">
+                  <div className="max-h-[calc(90vh-72px)] overflow-auto bg-[var(--muted-surface)] p-4">
                     {selectedEvidenceIsImage ? (
                       <img
                         src={selectedEvidenceUrl}
                         alt="Inspection evidence"
-                        className="mx-auto max-h-[75vh] w-full max-w-full rounded-2xl border border-slate-200 object-contain bg-white"
+                        className="mx-auto max-h-[75vh] w-full max-w-full rounded-[var(--radius-card)] border border-[var(--border-color)] object-contain bg-[var(--surface)]"
                       />
                     ) : selectedEvidenceIsPdf ? (
                       <iframe
                         src={selectedEvidenceUrl}
                         title="Inspection evidence preview"
-                        className="h-[75vh] w-full rounded-2xl border border-slate-200 bg-white"
+                        sandbox="allow-same-origin"
+                        className="h-[75vh] w-full rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--surface)]"
                       />
                     ) : (
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                      <div className={`${dhPanelClass} bg-[var(--surface)]`}>
                         Preview unavailable for this file type.
                       </div>
                     )}
@@ -322,13 +484,36 @@ export function DepartmentHeadInspectionVerificationClient() {
               </div>
             ) : null}
 
+            {isPendingReview && (
+              <div className="space-y-2 rounded-xl border border-[var(--primary)] bg-[var(--info-soft)] p-4">
+                <p className="text-sm font-medium text-[var(--foreground)]">Compliance Decision (Required)</p>
+                <p className="ui-caption">JIT submitted this inspection without a compliance determination. Select the appropriate compliance status.</p>
+                <select
+                  id="compliance-decision"
+                  value={complianceDecision}
+                  onChange={(event) => {
+                    setComplianceDecision(event.target.value as "COMPLIANT" | "NON_COMPLIANT" | "");
+                    if (event.target.value !== "NON_COMPLIANT") {
+                      setNonComplianceType("");
+                      setViolationSeverity("");
+                    }
+                  }}
+                  className={dhFormControlClass}
+                >
+                  <option value="">-- Select compliance status --</option>
+                  <option value="COMPLIANT">Compliant</option>
+                  <option value="NON_COMPLIANT">Non-Compliant</option>
+                </select>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700" htmlFor="verification-remarks">
+              <label className="block text-sm font-medium text-[var(--foreground)]" htmlFor="verification-remarks">
                 Verification Remarks
               </label>
               <textarea
                 id="verification-remarks"
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+                className={dhFormControlClass}
                 rows={3}
                 value={remarks}
                 onChange={(event) => setRemarks(event.target.value)}
@@ -337,12 +522,12 @@ export function DepartmentHeadInspectionVerificationClient() {
             </div>
 
             {isNonCompliant && (
-              <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm font-medium text-slate-700">Non-Compliance Classification</p>
+              <div className="space-y-4 rounded-xl border border-[var(--warning)] bg-[var(--warning-soft)] p-4">
+                <p className="text-sm font-medium text-[var(--foreground)]">Non-Compliance Classification</p>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-slate-700" htmlFor="non-compliance-type">
-                    Non-Compliance Type <span className="text-red-600">*</span>
+                  <label className="block text-sm font-medium text-[var(--foreground)]" htmlFor="non-compliance-type">
+                    Non-Compliance Type <span className="text-[var(--danger)]">*</span>
                   </label>
                   <select
                     id="non-compliance-type"
@@ -351,7 +536,7 @@ export function DepartmentHeadInspectionVerificationClient() {
                       setNonComplianceType(event.target.value);
                       setViolationSeverity("");
                     }}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+                    className={dhFormControlClass}
                   >
                     <option value="">-- Select a type --</option>
                     {NON_COMPLIANCE_TYPE_OPTIONS.map((opt) => (
@@ -361,20 +546,20 @@ export function DepartmentHeadInspectionVerificationClient() {
                     ))}
                   </select>
                   {nonComplianceType && (
-                    <p className="text-xs text-slate-600 italic">{HELPER_TEXT[nonComplianceType as keyof typeof HELPER_TEXT]}</p>
+                    <p className="ui-caption italic">{HELPER_TEXT[nonComplianceType as keyof typeof HELPER_TEXT]}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-slate-700" htmlFor="violation-severity">
-                    Violation Severity <span className="text-red-600">*</span>
+                  <label className="block text-sm font-medium text-[var(--foreground)]" htmlFor="violation-severity">
+                    Violation Severity <span className="text-[var(--danger)]">*</span>
                   </label>
                   <select
                     id="violation-severity"
                     value={violationSeverity}
                     onChange={(event) => setViolationSeverity(event.target.value)}
                     disabled={!nonComplianceType}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500"
+                    className={dhFormControlClass}
                   >
                     <option value="">-- Select severity --</option>
                     {VIOLATION_SEVERITY_OPTIONS.map((opt) => (
@@ -394,7 +579,7 @@ export function DepartmentHeadInspectionVerificationClient() {
                 disabled={submitting}
                 className={actionButtonStyles("primary", "sm")}
               >
-                {submitting ? "Verifying..." : "Verify Inspection"}
+                {submitting ? "Verifying…" : "Verify Inspection"}
               </button>
             </div>
 

@@ -2,10 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { LoadingState } from "@/components/ui/loading-state";
+import {
+  dhPanelClass,
+  dhSelectableCardClass,
+  dhSelectableCardIdleClass,
+  dhSummaryLabelClass,
+  dhSummaryTileClass,
+  dhSummaryValueClass,
+} from "@/components/department-head/department-head-ui-styles";
+
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { SectionCard } from "@/components/ui/section-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import type { PaginationPageSize } from "@/lib/pagination";
 
 type RevokedPermitRow = {
   inspectionId: string;
@@ -53,36 +65,66 @@ export function RevokePermitListClient() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [remarksInput, setRemarksInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const selected = useMemo(
     () => rows.find((row) => row.inspectionId === selectedId) ?? null,
     [rows, selectedId]
   );
 
-  async function loadRows() {
+  async function loadRows(next?: { page?: number; pageSize?: PaginationPageSize }) {
+    const nextPage = next?.page ?? page;
+    const nextPageSize = next?.pageSize ?? pageSize;
+
     try {
       setLoading(true);
-      const response = await fetch("/api/department-head/revoke-permit-list", { cache: "no-store" });
-      const data = (await response.json()) as { rows?: RevokedPermitRow[]; error?: string };
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        pageSize: String(nextPageSize),
+      });
+      const response = await fetch(`/api/department-head/revoke-permit-list?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const data = (await response.json()) as {
+        records?: RevokedPermitRow[];
+        rows?: RevokedPermitRow[];
+        totalCount?: number;
+        page?: number;
+        pageSize?: PaginationPageSize;
+        totalPages?: number;
+        error?: string;
+      };
 
       if (!response.ok) {
         setMessage({ type: "error", text: data.error ?? "Unable to load revoked permit list." });
         setRows([]);
         setSelectedId(null);
+        setTotalCount(0);
+        setTotalPages(1);
         setLoading(false);
         return;
       }
 
-      const nextRows = data.rows ?? [];
+      const nextRows = data.records ?? data.rows ?? [];
       setRows(nextRows);
+      setTotalCount(data.totalCount ?? nextRows.length);
+      setPage(data.page ?? nextPage);
+      setPageSize(data.pageSize ?? nextPageSize);
+      setTotalPages(data.totalPages ?? 1);
       setSelectedId((current) => {
         if (current && nextRows.some((row) => row.inspectionId === current)) return current;
         return nextRows[0]?.inspectionId ?? null;
       });
-    } catch (err) {
+      setMessage(null);
+    } catch {
       setMessage({ type: "error", text: "Unable to load revoked permit list." });
       setRows([]);
       setSelectedId(null);
+      setTotalCount(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -90,7 +132,8 @@ export function RevokePermitListClient() {
 
   useEffect(() => {
     void loadRows();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -99,11 +142,9 @@ export function RevokePermitListClient() {
         description="Read-only list of businesses with approved revocations and active restrictions."
       >
         {loading ? (
-          <div className="text-sm text-slate-500">Loading restricted businesses...</div>
+          <LoadingState message="Loading restricted businesses…" compact />
         ) : rows.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
-            No restricted businesses found.
-          </div>
+          <div className={dhPanelClass}>No restricted businesses found.</div>
         ) : (
           <div className="space-y-2">
             {rows.map((row) => {
@@ -113,22 +154,20 @@ export function RevokePermitListClient() {
                   key={row.inspectionId}
                   type="button"
                   onClick={() => setSelectedId(row.inspectionId)}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                    active
-                      ? "border-rose-300 bg-rose-50"
-                      : "border-slate-200 bg-white hover:bg-slate-50"
-                  }`}
+                  className={`${dhSelectableCardClass} ${active ? "border-[var(--danger)] bg-[var(--danger-soft)]" : dhSelectableCardIdleClass}`}
                 >
-                  <p className="font-mono text-xs text-slate-600">{row.applicationNumber}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessName}</p>
-                  <p className="mt-1 text-xs text-slate-600">Decision: {formatDateTime(row.revocationDecisionDate)}</p>
+                  <p className="font-mono ui-caption">{row.applicationNumber}</p>
+                  <p className={dhSummaryValueClass}>{row.businessName}</p>
+                  <p className="mt-1 ui-caption">Decision: {formatDateTime(row.revocationDecisionDate)}</p>
                   <div className="mt-1 flex items-center gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">{row.inspectionStatus}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--danger)]">
+                      {row.inspectionStatus}
+                    </p>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                         row.isSettled
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-amber-100 text-amber-700"
+                          ? "bg-[var(--success-soft)] text-[var(--success)]"
+                          : "bg-[var(--warning-soft)] text-[var(--warning)]"
                       }`}
                     >
                       {row.isSettled ? "Settled" : "Unsettled"}
@@ -139,6 +178,25 @@ export function RevokePermitListClient() {
             })}
           </div>
         )}
+
+        <div className="mt-3">
+          <PaginationControls
+            basePath="/department-head/revoke-permit-list"
+            queryParams={{}}
+            mode="client"
+            isLoading={loading}
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            recordLabel="businesses"
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+        </div>
       </SectionCard>
 
       <SectionCard
@@ -150,70 +208,72 @@ export function RevokePermitListClient() {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Name</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.businessName}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Business Name</p>
+                <p className={dhSummaryValueClass}>{selected.businessName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Owner / Applicant</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.ownerName}</p>
-                <p className="text-xs text-slate-600">Applicant: {selected.applicantName}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Owner / Applicant</p>
+                <p className={dhSummaryValueClass}>{selected.ownerName}</p>
+                <p className="ui-caption">Applicant: {selected.applicantName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Application / Permit</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selected.applicationNumber}</p>
-                <p className="text-xs text-slate-600">Permit: {selected.permitOrCertificateNumber ?? "N/A"}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Application / Permit</p>
+                <p className={dhSummaryValueClass}>{selected.applicationNumber}</p>
+                <p className="ui-caption">Permit: {selected.permitOrCertificateNumber ?? "N/A"}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Business Address</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.businessAddress}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Business Address</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.businessAddress}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Line of Business</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.lineOfBusiness}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Line of Business</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.lineOfBusiness}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">JIT Inspection Date</p>
-                <p className="mt-1 text-sm text-slate-900">{formatDateTime(selected.jitInspectionDate)}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>JIT Inspection Date</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{formatDateTime(selected.jitInspectionDate)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">JIT Inspector</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.jitInspectorName}</p>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>JIT Inspector</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.jitInspectorName}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">JIT Comment</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.jitComment ?? "No comment provided."}</p>
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>JIT Comment</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.jitComment ?? "No comment provided."}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2 xl:col-span-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Department Head Revocation Remarks</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.revocationRemarks ?? "No remarks recorded."}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Revocation Decision Date</p>
-                <p className="mt-1 text-sm text-slate-900">{formatDateTime(selected.revocationDecisionDate)}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Decided By</p>
-                <p className="mt-1 text-sm text-slate-900">{selected.decidedByName}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Current Status</p>
-                <p className="mt-1 text-sm text-slate-900">Application: {selected.applicationStatus}</p>
-                <p className="text-xs text-slate-600">Business: {selected.businessStatus}</p>
-                <p className="text-xs text-slate-600">
-                  Settlement: {selected.isSettled ? "Settled" : "Unsettled"}
+              <div className={`${dhSummaryTileClass} md:col-span-2 xl:col-span-3`}>
+                <p className={dhSummaryLabelClass}>Department Head Revocation Remarks</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">
+                  {selected.revocationRemarks ?? "No remarks recorded."}
                 </p>
               </div>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Revocation Decision Date</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">
+                  {formatDateTime(selected.revocationDecisionDate)}
+                </p>
+              </div>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Decided By</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{selected.decidedByName}</p>
+              </div>
+              <div className={dhSummaryTileClass}>
+                <p className={dhSummaryLabelClass}>Current Status</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">Application: {selected.applicationStatus}</p>
+                <p className="ui-caption">Business: {selected.businessStatus}</p>
+                <p className="ui-caption">Settlement: {selected.isSettled ? "Settled" : "Unsettled"}</p>
+              </div>
               {selected.isSettled ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 md:col-span-2 xl:col-span-3">
-                  <p className="text-xs uppercase tracking-wide text-emerald-700">Settlement Details</p>
-                  <p className="mt-1 text-sm text-emerald-900">
+                <div className="rounded-xl border border-[var(--success)] bg-[var(--success-soft)] p-3 md:col-span-2 xl:col-span-3">
+                  <p className="text-xs uppercase tracking-wide text-[var(--success)]">Settlement Details</p>
+                  <p className="mt-1 text-sm text-[var(--success)]">
                     Settled at: {selected.revocationSettledAt ? formatDateTime(selected.revocationSettledAt) : "-"}
                   </p>
-                  <p className="text-xs text-emerald-800">
+                  <p className="text-xs text-[var(--success)]">
                     Settled by: {selected.revocationSettledBy ?? "Unknown"}
                   </p>
-                  <p className="mt-2 text-sm text-emerald-900">
+                  <p className="mt-2 text-sm text-[var(--success)]">
                     {selected.revocationSettlementRemarks ?? "No settlement remarks recorded."}
                   </p>
                 </div>
@@ -222,15 +282,15 @@ export function RevokePermitListClient() {
 
             <SectionCard title="Evidence" description="Read-only evidence attached during JIT inspection.">
               {!selected.hasEvidence ? (
-                <div className="text-sm text-slate-600">No evidence file attached.</div>
+                <div className="text-sm text-[var(--ink-muted)]">No evidence file attached.</div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm text-slate-700">{selected.evidenceFileName ?? "Evidence"}</p>
+                  <p className="text-sm text-[var(--ink-muted)]">{selected.evidenceFileName ?? "Evidence"}</p>
                   {selected.evidenceMimeType?.startsWith("image/") ? (
                     <img
                       src={`/api/department-head/permit-to-revoke/${selected.inspectionId}/evidence`}
                       alt="Revoked permit inspection evidence"
-                      className="max-h-72 w-full rounded-xl border border-slate-200 object-contain"
+                      className="max-h-72 w-full rounded-[var(--radius-card)] border border-[var(--border-color)] object-contain"
                     />
                   ) : null}
                   <a
@@ -257,7 +317,9 @@ export function RevokePermitListClient() {
                 >
                   Mark as Settled
                 </button>
-                <p className="text-sm text-slate-600">Mark violation as settled without reactivating permit.</p>
+                <p className="text-sm text-[var(--ink-muted)]">
+                  Mark violation as settled without reactivating permit.
+                </p>
               </div>
             ) : null}
 
@@ -279,11 +341,14 @@ export function RevokePermitListClient() {
                 if (!selected) return;
                 try {
                   setIsSubmitting(true);
-                  const res = await fetch(`/api/department-head/revoke-permit-list/${selected.inspectionId}/mark-settled`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ remarks }),
-                  });
+                  const res = await fetch(
+                    `/api/department-head/revoke-permit-list/${selected.inspectionId}/mark-settled`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ remarks }),
+                    }
+                  );
                   const data = await res.json();
                   if (!res.ok) {
                     setMessage({ type: "error", text: data.error ?? "Unable to mark as settled." });
@@ -292,7 +357,7 @@ export function RevokePermitListClient() {
                   setIsModalOpen(false);
                   await loadRows();
                   setMessage(null);
-                } catch (err) {
+                } catch {
                   setMessage({ type: "error", text: "Unable to mark as settled." });
                 } finally {
                   setIsSubmitting(false);
@@ -300,6 +365,7 @@ export function RevokePermitListClient() {
               }}
             >
               <textarea
+                aria-label="Settlement remarks"
                 value={remarksInput}
                 onChange={(e) => setRemarksInput(e.target.value)}
                 className="w-full rounded-md border p-2 text-sm"

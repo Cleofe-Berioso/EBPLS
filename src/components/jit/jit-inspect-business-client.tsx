@@ -1,15 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, FileText, Search, ShieldCheck } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Search, ShieldCheck, AlertTriangle } from "lucide-react";
+import {
+  jitFormControlClass,
+  jitSelectableCardActiveClass,
+  jitSelectableCardClass,
+  jitSelectableCardIdleClass,
+  jitSummaryLabelClass,
+  jitSummaryTileClass,
+  jitSummaryValueClass,
+} from "@/components/jit/jit-ui-styles";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { LoadingState } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
-import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { JitDeclaredInputsPanels } from "@/components/jit/jit-declared-inputs-panels";
+import {
+  createEmptyChecklistDraft,
+  isChecklistComplete,
+  JitPostAuditChecklistForm,
+  type ChecklistDraftState,
+} from "@/components/jit/jit-post-audit-checklist-form";
+import type { JitDeclaredInputsPayload } from "@/lib/jit-declared-inputs";
+import { JIT_POST_AUDIT_CHECKLIST_ITEMS } from "@/lib/jit-post-audit-checklist";
+import type { PaginationPageSize } from "@/lib/pagination";
 import type { MapBusinessCategory } from "@/lib/business-map-categories";
+import { EB_MAGALONA_BARANGAYS } from "@/lib/business-rules";
 
 interface InspectableBusinessRow {
   locationId: string;
@@ -45,7 +66,7 @@ interface InspectableBusinessRow {
   remarks: string | null;
   updatedAt: string;
   latestInspection: {
-    complianceStatus: "COMPLIANT" | "NON_COMPLIANT";
+    complianceStatus: "PENDING_REVIEW" | "COMPLIANT" | "NON_COMPLIANT";
     status:
       | "COMPLIANT"
       | "NON_COMPLIANT"
@@ -59,50 +80,67 @@ interface InspectableBusinessRow {
   } | null;
 }
 
-type ComplianceStatus = "COMPLIANT" | "NON_COMPLIANT";
+function formatInspectionStatus(status: string | undefined | null): string {
+  if (!status) return "No Inspection";
+  switch (status) {
+    case "DH_VERIFICATION_PENDING": return "Pending Verification";
+    case "VERIFIED_COMPLIANT": return "Verified Compliant";
+    case "VERIFIED_NON_COMPLIANT": return "Verified Non-Compliant";
+    case "REVOCATION_REVIEW": return "Revocation Review";
+    case "REVOCATION_DENIED": return "Revocation Denied";
+    case "REVOKED": return "Revoked";
+    case "COMPLIANT": return "Compliant";
+    case "NON_COMPLIANT": return "Non-Compliant";
+    default: return status;
+  }
+}
 
-function formatDateTime(value: string | null): string {
-  if (!value) return "Not available";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "Not available";
-  return parsed.toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function inspectionStatusTone(status: string | undefined | null): string {
+  if (!status) return "text-[var(--ink-muted)]";
+  switch (status) {
+    case "VERIFIED_COMPLIANT":
+    case "COMPLIANT":
+      return "text-[var(--success)]";
+    case "VERIFIED_NON_COMPLIANT":
+    case "NON_COMPLIANT":
+    case "REVOCATION_REVIEW":
+    case "REVOKED":
+      return "text-[var(--danger)]";
+    default:
+      return "text-[var(--warning)]";
+  }
 }
 
 export function JitInspectBusinessClient() {
   const [rows, setRows] = useState<InspectableBusinessRow[]>([]);
   const [selectedBusinessRecordId, setSelectedBusinessRecordId] = useState<string | null>(null);
-  const [complianceStatus, setComplianceStatus] = useState<ComplianceStatus>("COMPLIANT");
   const [comment, setComment] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
-  const [recommendRevocation, setRecommendRevocation] = useState(false);
-  const [revocationRemarks, setRevocationRemarks] = useState("");
   const [searchText, setSearchText] = useState("");
+  const [searchApplied, setSearchApplied] = useState("");
+  const [barangayFilter, setBarangayFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [declaredInputs, setDeclaredInputs] = useState<JitDeclaredInputsPayload | null>(null);
+  const [declaredInputsLoading, setDeclaredInputsLoading] = useState(false);
+  const [checklistDraft, setChecklistDraft] = useState<ChecklistDraftState>(createEmptyChecklistDraft);
+  const previousBusinessRecordIdRef = useRef<string | null>(null);
 
-  const filteredRows = useMemo(() => {
-    const search = searchText.trim().toLowerCase();
-
-    return rows.filter((row) => {
-      const matchesSearch =
-        !search ||
-        row.businessName.toLowerCase().includes(search) ||
-        (row.tradeName ?? "").toLowerCase().includes(search) ||
-        row.ownerName.toLowerCase().includes(search) ||
-        row.applicantName.toLowerCase().includes(search) ||
-        (row.permitOrCertificateNumber ?? "").toLowerCase().includes(search);
-
-      return matchesSearch;
-    });
-  }, [rows, searchText]);
+  const resetInspectionDraftState = useCallback(() => {
+    setChecklistDraft(createEmptyChecklistDraft());
+    setComment("");
+    setEvidenceFile(null);
+    setFormError(null);
+    setDeclaredInputs(null);
+    setDeclaredInputsLoading(false);
+    setIsSubmitting(false);
+  }, []);
 
   const selectedRow = useMemo(
     () => rows.find((row) => row.businessRecordId === selectedBusinessRecordId) ?? null,
@@ -110,39 +148,65 @@ export function JitInspectBusinessClient() {
   );
 
   const summaryCounts = useMemo(() => {
-    const inspectionSummary = rows.length;
-    const flaggedBusinessesCount = rows.filter((row) => {
+    const inspectedCount = rows.filter((row) => row.latestInspection !== null).length;
+    const pendingInspectionCount = rows.filter((row) => row.latestInspection === null).length;
+    const referredCount = rows.filter((row) => {
       const latestStatus = row.latestInspection?.status;
       return latestStatus === "NON_COMPLIANT" || latestStatus === "REVOCATION_REVIEW" || latestStatus === "REVOKED";
     }).length;
-    const compliantCount = rows.filter((row) => row.latestInspection?.status === "COMPLIANT").length;
-    const nonCompliantCount = rows.filter((row) => {
-      const latestStatus = row.latestInspection?.status;
-      return latestStatus === "NON_COMPLIANT" || latestStatus === "REVOCATION_REVIEW";
-    }).length;
 
     return {
-      inspectionSummary,
-      flaggedBusinessesCount,
-      compliantCount,
-      nonCompliantCount,
+      totalBusinesses: totalCount,
+      pendingInspection: pendingInspectionCount,
+      inspected: inspectedCount,
+      referred: referredCount,
     };
-  }, [rows]);
+  }, [rows, totalCount]);
 
-  async function loadRows() {
+  async function loadRows(next?: {
+    search?: string;
+    barangay?: string;
+    page?: number;
+    pageSize?: PaginationPageSize;
+  }) {
+    const nextSearch = next?.search ?? searchApplied;
+    const nextBarangay = next?.barangay ?? barangayFilter;
+    const nextPage = next?.page ?? page;
+    const nextPageSize = next?.pageSize ?? pageSize;
+
     setIsLoading(true);
-    const response = await fetch("/api/jit/inspect-a-business", { cache: "no-store" });
-    const data = (await response.json()) as { rows?: InspectableBusinessRow[]; error?: string };
+    const params = new URLSearchParams({
+      page: String(nextPage),
+      pageSize: String(nextPageSize),
+    });
+    if (nextSearch) params.set("search", nextSearch);
+    if (nextBarangay) params.set("barangay", nextBarangay);
+
+    const response = await fetch(`/api/jit/inspect-a-business?${params.toString()}`, { cache: "no-store" });
+    const data = (await response.json()) as {
+      records?: InspectableBusinessRow[];
+      totalCount?: number;
+      page?: number;
+      pageSize?: PaginationPageSize;
+      totalPages?: number;
+      error?: string;
+    };
 
     if (!response.ok) {
       setStatusMessage({ kind: "error", text: data.error ?? "Unable to load inspectable businesses" });
       setRows([]);
+      setTotalCount(0);
+      setTotalPages(1);
       setIsLoading(false);
       return;
     }
 
-    const nextRows = data.rows ?? [];
+    const nextRows = data.records ?? [];
     setRows(nextRows);
+    setTotalCount(data.totalCount ?? 0);
+    setPage(data.page ?? nextPage);
+    setPageSize(data.pageSize ?? nextPageSize);
+    setTotalPages(data.totalPages ?? 1);
 
     const nextSelected = nextRows.find((row) => row.businessRecordId === selectedBusinessRecordId);
     if (nextSelected) {
@@ -157,31 +221,91 @@ export function JitInspectBusinessClient() {
   }
 
   useEffect(() => {
-    void loadRows();
-  }, []);
+    const timer = window.setTimeout(() => {
+      setSearchApplied(searchText.trim());
+      setPage(1);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [searchText]);
 
   useEffect(() => {
-    if (filteredRows.length === 0) {
+    void loadRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchApplied, barangayFilter, page, pageSize]);
+
+  useEffect(() => {
+    if (rows.length === 0) {
       return;
     }
 
-    if (!filteredRows.some((row) => row.businessRecordId === selectedBusinessRecordId)) {
-      setSelectedBusinessRecordId(filteredRows[0].businessRecordId);
+    if (!rows.some((row) => row.businessRecordId === selectedBusinessRecordId)) {
+      setSelectedBusinessRecordId(rows[0].businessRecordId);
     }
-  }, [filteredRows, selectedBusinessRecordId]);
+  }, [rows, selectedBusinessRecordId]);
+
+  useEffect(() => {
+    const previousId = previousBusinessRecordIdRef.current;
+    if (previousId === selectedBusinessRecordId) {
+      return;
+    }
+
+    if (previousId !== null) {
+      resetInspectionDraftState();
+    }
+
+    previousBusinessRecordIdRef.current = selectedBusinessRecordId;
+  }, [selectedBusinessRecordId, resetInspectionDraftState]);
+
+  useEffect(() => {
+    if (!selectedBusinessRecordId) {
+      setDeclaredInputs(null);
+      return;
+    }
+
+    let active = true;
+
+    async function loadDeclaredInputs() {
+      setDeclaredInputsLoading(true);
+      const response = await fetch(
+        `/api/jit/inspect-a-business/${selectedBusinessRecordId}/declared-inputs`,
+        { cache: "no-store" }
+      );
+      const data = (await response.json()) as {
+        declaredInputs?: JitDeclaredInputsPayload;
+        error?: string;
+      };
+
+      if (!active) return;
+
+      if (!response.ok) {
+        setDeclaredInputs(null);
+        setDeclaredInputsLoading(false);
+        return;
+      }
+
+      setDeclaredInputs(data.declaredInputs ?? null);
+      setDeclaredInputsLoading(false);
+    }
+
+    void loadDeclaredInputs();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedBusinessRecordId]);
 
   function validateForm(): string | null {
     if (!selectedRow) {
       return "Select a business first.";
     }
 
-    if (!comment.trim()) {
-      return "Comment is required for all inspections.";
+    if (!isChecklistComplete(checklistDraft)) {
+      return "Complete all 8 post-audit checklist responses before submitting.";
     }
-    // Evidence is required only when JIT recommends revocation
-    if (recommendRevocation) {
-      if (!revocationRemarks.trim()) return "Revocation remarks are required when recommending revocation.";
-      if (!evidenceFile) return "Photo evidence is required when recommending revocation.";
+
+    if (!comment.trim()) {
+      return "General inspection remarks are required.";
     }
 
     return null;
@@ -201,14 +325,23 @@ export function JitInspectBusinessClient() {
     setStatusMessage(null);
 
     const payload = new FormData();
-    payload.set("complianceStatus", complianceStatus);
     payload.set("comment", comment);
-    if (recommendRevocation) {
-      payload.set("recommendRevocation", "1");
-      payload.set("revocationRemarks", revocationRemarks);
-    }
     if (evidenceFile) {
       payload.set("evidencePhoto", evidenceFile);
+    }
+
+    const checklistPayload = JIT_POST_AUDIT_CHECKLIST_ITEMS.map((item) => ({
+      departmentKey: item.departmentKey,
+      response: checklistDraft[item.departmentKey].response,
+      remarks: checklistDraft[item.departmentKey].remarks.trim() || undefined,
+    }));
+    payload.set("checklist", JSON.stringify(checklistPayload));
+
+    for (const item of JIT_POST_AUDIT_CHECKLIST_ITEMS) {
+      const evidence = checklistDraft[item.departmentKey].evidenceFile;
+      if (evidence) {
+        payload.set(`checklistEvidence_${item.departmentKey}`, evidence);
+      }
     }
 
     const response = await fetch(`/api/jit/inspect-a-business/${selectedRow.businessRecordId}`, {
@@ -227,14 +360,10 @@ export function JitInspectBusinessClient() {
       return;
     }
 
-    setComplianceStatus("COMPLIANT");
-    setComment("");
-    setEvidenceFile(null);
-    setRecommendRevocation(false);
-    setRevocationRemarks("");
+    resetInspectionDraftState();
     setStatusMessage({
       kind: "success",
-      text: "Inspection submitted for Department Head verification.",
+      text: "Inspection submitted. BPLO will review and determine compliance status.",
     });
 
     await loadRows();
@@ -242,7 +371,7 @@ export function JitInspectBusinessClient() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page-stack">
       {statusMessage ? (
         <InfoBanner
           title={statusMessage.kind === "success" ? "Inspection update" : "Inspection issue"}
@@ -253,85 +382,130 @@ export function JitInspectBusinessClient() {
 
       <SectionCard
         title="Inspectable Released Businesses"
-        description="Only active released businesses are listed. Search by business name, owner, or permit number."
+        description="Search by business name, owner, or permit number. Filter by barangay."
         action={
           <Link href="/jit/dashboard" className={actionButtonStyles("secondary", "sm")}>
             Back to Dashboard
           </Link>
         }
       >
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <FormField label="Search" htmlFor="jit-inspection-search">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        {/* Compact stats strip + search / barangay filter */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]" />
               <input
                 id="jit-inspection-search"
+                aria-label="Search"
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
                 placeholder="Business, trade name, owner/applicant, permit number"
-                className="w-full rounded-xl border border-slate-300 py-2.5 pl-9 pr-3 text-sm focus:border-emerald-500 focus:outline-none"
+                className={`${jitFormControlClass} py-2.5 pl-9 pr-3`}
               />
             </div>
-          </FormField>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <DashboardSummaryCard title="Inspection Summary" value={summaryCounts.inspectionSummary.toString()} subtitle="All visible inspection records" tone="slate" icon={<FileText className="h-4 w-4" />} />
-            <DashboardSummaryCard title="Flagged Count" value={summaryCounts.flaggedBusinessesCount.toString()} subtitle="Latest non-compliant/review/revoked" tone="red" icon={<ShieldCheck className="h-4 w-4" />} />
-            <DashboardSummaryCard title="Compliant Count" value={summaryCounts.compliantCount.toString()} subtitle="Latest compliant inspection" tone="green" icon={<ShieldCheck className="h-4 w-4" />} />
-            <DashboardSummaryCard title="Non-Compliant Count" value={summaryCounts.nonCompliantCount.toString()} subtitle="Non-compliant and revocation review records" tone="amber" icon={<ChevronRight className="h-4 w-4" />} />
+            <div className="w-full xl:w-64">
+              <label htmlFor="jit-inspection-barangay" className="sr-only">
+                Filter by barangay
+              </label>
+              <select
+                id="jit-inspection-barangay"
+                aria-label="Filter by barangay"
+                value={barangayFilter}
+                onChange={(event) => {
+                  setBarangayFilter(event.target.value);
+                  setPage(1);
+                }}
+                className={`${jitFormControlClass} py-2.5`}
+              >
+                <option value="">All barangays</option>
+                {EB_MAGALONA_BARANGAYS.map((barangay) => (
+                  <option key={barangay} value={barangay}>
+                    {barangay}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-1.5 font-semibold text-[var(--foreground)]">
+                <FileText className="h-3.5 w-3.5" />
+                {summaryCounts.totalBusinesses} Total
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-1.5 font-semibold text-[var(--ink-muted)]">
+                {summaryCounts.pendingInspection} Pending
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-1.5 font-semibold text-[var(--success)]">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                {summaryCounts.inspected} Inspected
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--muted-surface)] px-3 py-1.5 font-semibold text-[var(--danger)]">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {summaryCounts.referred} Referred
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4">
-          {filteredRows.length > 0 ? (
-            filteredRows.map((row) => {
+        {/* Compact business cards */}
+        <div className="mt-4 grid gap-3">
+          {rows.length > 0 ? (
+            rows.map((row) => {
               const isSelected = selectedRow?.businessRecordId === row.businessRecordId;
+              const inspStatus = row.latestInspection?.status ?? null;
 
               return (
                 <article
                   key={row.businessRecordId}
-                  className={`rounded-3xl border p-4 shadow-sm transition ${
-                    isSelected ? "border-emerald-300 bg-emerald-50/70" : "border-slate-200 bg-white hover:border-slate-300"
-                  }`}
+                  className={`${jitSelectableCardClass} p-3 ${isSelected ? jitSelectableCardActiveClass : jitSelectableCardIdleClass}`}
                 >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1 space-y-3">
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Trade Name / Business Name</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">{row.tradeName ? `${row.tradeName} / ${row.businessName}` : row.businessName}</p>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Permit No.</p>
-                          <p className="mt-1 text-sm font-semibold text-slate-900">{row.permitOrCertificateNumber ?? "Not available"}</p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Business Type</p>
-                          <p className="mt-1 text-sm font-semibold text-slate-900">{row.businessType ?? "Not available"}</p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Line of Business</p>
-                          <p className="mt-1 text-sm font-semibold text-slate-900">{row.lineOfBusiness ?? "Not available"}</p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2 xl:col-span-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Owner / Applicant</p>
-                          <p className="mt-1 text-sm font-semibold text-slate-900">{row.ownerName} / {row.applicantName}</p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2 xl:col-span-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Business Address</p>
-                          <p className="mt-1 text-sm font-semibold text-slate-900">{row.address ?? "Not available"}</p>
-                        </div>
-                      </div>
+                  {/* Row 1: Business Name | Permit No. | Business Type | Inspection Status */}
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <p className={jitSummaryLabelClass}>Business / Trade Name</p>
+                      <p className={`${jitSummaryValueClass} truncate`}>
+                        {row.tradeName ? `${row.tradeName} / ${row.businessName}` : row.businessName}
+                      </p>
                     </div>
+                    <div>
+                      <p className={jitSummaryLabelClass}>Permit No.</p>
+                      <p className={`${jitSummaryValueClass} truncate`}>{row.permitOrCertificateNumber ?? "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className={jitSummaryLabelClass}>Business Type</p>
+                      <p className={`${jitSummaryValueClass} truncate`}>{row.businessType ?? "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className={jitSummaryLabelClass}>Inspection Status</p>
+                      <p className={`text-sm font-semibold ${inspectionStatusTone(inspStatus)} truncate`}>
+                        {formatInspectionStatus(inspStatus)}
+                      </p>
+                    </div>
+                  </div>
 
-                    <div className="flex flex-col gap-2 lg:items-end">
+                  {/* Row 2: Owner | Address | Line of Business | Action */}
+                  <div className="mt-2 grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <p className={jitSummaryLabelClass}>Owner / Applicant</p>
+                      <p className={`${jitSummaryValueClass} truncate`}>{row.ownerName} / {row.applicantName}</p>
+                    </div>
+                    <div>
+                      <p className={jitSummaryLabelClass}>Business Address</p>
+                      <p className={`${jitSummaryValueClass} truncate`}>
+                        {row.barangay ? `Brgy. ${row.barangay}` : null}
+                        {row.barangay && row.address ? " · " : null}
+                        {row.address ?? (row.barangay ? null : "N/A")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={jitSummaryLabelClass}>Line of Business</p>
+                      <p className={`${jitSummaryValueClass} truncate`}>{row.lineOfBusiness ?? "N/A"}</p>
+                    </div>
+                    <div className="flex justify-end">
                       <button
                         type="button"
                         onClick={() => setSelectedBusinessRecordId(row.businessRecordId)}
                         className={actionButtonStyles(isSelected ? "readOnly" : "primary", "sm")}
                       >
-                        Inspect
+                        {isSelected ? "Selected" : "Inspect"}
                       </button>
                     </div>
                   </div>
@@ -340,166 +514,114 @@ export function JitInspectBusinessClient() {
             })
           ) : (
             <EmptyState
-              title="No businesses match the search"
-              description="Try a different search term."
+              title="No businesses match the filters"
+              description="Try a different search term or barangay."
             />
           )}
         </div>
+
+        <PaginationControls
+          basePath="/jit/inspect-a-business"
+          queryParams={{
+            search: searchApplied || undefined,
+            barangay: barangayFilter || undefined,
+          }}
+          mode="client"
+          isLoading={isLoading}
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          totalPages={totalPages}
+          recordLabel="businesses"
+          onPageChange={setPage}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
       </SectionCard>
 
       {isLoading ? (
-        <div className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />
-      ) : rows.length === 0 ? (
+        <LoadingState message="Loading inspection details…" compact />
+      ) : totalCount === 0 ? (
         <EmptyState
-          title="No released businesses available"
-          description="Inspection queue will populate once permits are released with active business records."
+          title={
+            searchApplied || barangayFilter
+              ? "No businesses match the filters"
+              : "No released businesses available"
+          }
+          description={
+            searchApplied || barangayFilter
+              ? "Try a different search term or barangay."
+              : "Inspection queue will populate once permits are released with active business records."
+          }
         />
-      ) : filteredRows.length === 0 ? (
-        <EmptyState title="No businesses match the search" description="Try a different search term." />
-      ) : (
-        <SectionCard
-          title="Inspection Panel"
-          description="JIT may log COMPLIANT or NON_COMPLIANT findings. JIT cannot revoke directly."
-        >
-          {selectedRow ? (
+      ) : rows.length === 0 ? (
+        <EmptyState title="No businesses on this page" description="Try another page or adjust your filters." />
+      ) : selectedRow ? (
+        <>
+          <JitDeclaredInputsPanels declaredInputs={declaredInputs} isLoading={declaredInputsLoading} />
+
+          <JitPostAuditChecklistForm
+            draft={checklistDraft}
+            onChange={setChecklistDraft}
+            disabled={isSubmitting}
+          />
+
+          <SectionCard
+            title="Inspection Submission"
+            description="Submit checklist answers, remarks, and evidence. BPLO will determine the official compliance status."
+          >
             <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Application Number</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.applicationNumber}</p>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className={jitSummaryTileClass}>
+                  <p className={jitSummaryLabelClass}>Application Number</p>
+                  <p className={jitSummaryValueClass}>{selectedRow.applicationNumber}</p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Application Type</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.applicationType}</p>
+                <div className={jitSummaryTileClass}>
+                  <p className={jitSummaryLabelClass}>Permit Number</p>
+                  <p className={jitSummaryValueClass}>{selectedRow.permitOrCertificateNumber ?? "N/A"}</p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Current Status</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.applicationStatus}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Applicant / Owner Name</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.applicantName} / {selectedRow.ownerName}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Business Name / Trade Name</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.tradeName ? `${selectedRow.businessName} / ${selectedRow.tradeName}` : selectedRow.businessName}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Business Type</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.businessType ?? "Not available"}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Line of Business</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.lineOfBusiness ?? "Not available"}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 xl:col-span-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Business Address</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.address ?? "Not available"}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Submitted Date</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(selectedRow.submittedAt)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Permit Number</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.permitOrCertificateNumber ?? "Not available"}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 xl:col-span-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Business Location / Coordinates</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">Lat {selectedRow.latitude.toFixed(6)}, Lng {selectedRow.longitude.toFixed(6)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 xl:col-span-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">BPLO Remarks</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRow.bploRemarks ?? "None"}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 xl:col-span-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Uploaded Application Documents</p>
-                  {selectedRow.documents.length > 0 ? (
-                    <ul className="mt-1 space-y-1 text-sm font-semibold text-slate-900">
-                      {selectedRow.documents.map((doc) => (
-                        <li key={doc.id}>{doc.documentName} - {doc.fileName} ({formatDateTime(doc.uploadedAt)})</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-1 text-sm font-semibold text-slate-900">No uploaded documents found.</p>
-                  )}
+                <div className={jitSummaryTileClass}>
+                  <p className={jitSummaryLabelClass}>Latest Inspection Status</p>
+                  <p className={`text-sm font-semibold ${inspectionStatusTone(selectedRow.latestInspection?.status)}`}>
+                    {formatInspectionStatus(selectedRow.latestInspection?.status)}
+                  </p>
                 </div>
               </div>
 
-              <InfoBanner
-                title="Inspection outcome"
-                description="Both COMPLIANT and NON_COMPLIANT require a comment and photo evidence. Submission routes to Department Head Inspection Verification."
-                variant="warning"
-              />
-
-              <FormField label="Compliance Status" required error={formError?.includes("complianceStatus") ? formError : undefined}>
-                <select
-                  value={complianceStatus}
-                  onChange={(event) => setComplianceStatus(event.target.value as ComplianceStatus)}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-                >
-                  <option value="COMPLIANT">COMPLIANT</option>
-                  <option value="NON_COMPLIANT">NON_COMPLIANT</option>
-                </select>
-              </FormField>
-
-                {complianceStatus === "NON_COMPLIANT" ? (
-                  <div className="space-y-2">
-                    <label className="inline-flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={recommendRevocation}
-                        onChange={(e) => setRecommendRevocation(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-rose-600"
-                      />
-                      <span className="text-sm font-medium text-slate-700">Recommend revocation to Department Head</span>
-                    </label>
-
-                    {recommendRevocation ? (
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700">Revocation remarks (required)</label>
-                        <textarea
-                          rows={3}
-                          value={revocationRemarks}
-                          onChange={(e) => setRevocationRemarks(e.target.value)}
-                          className="mt-1 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none"
-                          placeholder="Explain why revocation is being recommended"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
               <FormField
-                label="Comment / Remarks"
+                label="General Inspection Remarks"
                 required
-                error={formError?.includes("Comment") ? formError : undefined}
-                hint="Required for both COMPLIANT and NON_COMPLIANT."
+                error={formError?.includes("remarks") ? formError : undefined}
+                hint="Required. Summarize inspection observations."
               >
                 <textarea
-                  rows={4}
+                  aria-label="General Inspection Remarks"
+                  rows={3}
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  className={jitFormControlClass}
+                  placeholder="Describe inspection findings and observations"
                 />
               </FormField>
 
               <FormField
-                label="Photo Evidence"
-                required
+                label="Inspection Photo Evidence"
                 error={formError?.includes("Photo evidence") ? formError : undefined}
-                hint="Accepted types follow existing document upload rules (JPG, PNG, WEBP, PDF)."
+                hint="Optional. JPG, PNG, WEBP, or PDF."
               >
                 <input
                   type="file"
+                  aria-label="Inspection Photo Evidence"
                   accept="image/jpeg,image/png,image/webp,application/pdf"
                   onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                  className={jitFormControlClass}
                 />
               </FormField>
 
-              {formError && !formError.includes("complianceStatus") && !formError.includes("Comment") && !formError.includes("Photo evidence") ? (
-                <p className="text-sm font-medium text-rose-700">{formError}</p>
+              {formError && !formError.includes("remarks") && !formError.includes("Photo evidence") ? (
+                <p className="text-sm font-medium text-[var(--danger)]">{formError}</p>
               ) : null}
 
               <div className="flex flex-wrap gap-2">
@@ -520,9 +642,11 @@ export function JitInspectBusinessClient() {
                 ) : null}
               </div>
             </div>
-          ) : (
-            <EmptyState title="Select a business" description="Pick one business card to start inspection." />
-          )}
+          </SectionCard>
+        </>
+      ) : (
+        <SectionCard title="Inspection Panel" description="Select a business to begin post-audit validation.">
+          <EmptyState title="Select a business" description="Pick one business card to start inspection." />
         </SectionCard>
       )}
     </div>

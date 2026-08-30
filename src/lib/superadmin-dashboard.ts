@@ -24,6 +24,14 @@ type TransactionBucket = {
   logins: number;
 };
 
+export interface SuperAdminDashboardInsight {
+  id: string;
+  severity: "info" | "success" | "warning" | "danger";
+  title: string;
+  meaning: string;
+  recommendation: string;
+}
+
 export interface SuperAdminDashboardMetrics {
   userActivityByRole: Array<{
     label: string;
@@ -70,6 +78,15 @@ export interface SuperAdminDashboardMetrics {
     lastSuccessfulDashboardCheck: string;
     recentFailedSmsCount: number;
     recentActivityVolume: number;
+  };
+  insights: SuperAdminDashboardInsight[];
+  operationalSnapshot: {
+    openWorkloadTotal: number;
+    heaviestStage: { label: string; count: number } | null;
+    smsReliabilityPercent: number | null;
+    recentActivityAveragePerDay: number;
+    closureTrendDirection: "up" | "down" | "flat" | "insufficient";
+    topBusinessCategory: { label: string; count: number } | null;
   };
 }
 
@@ -422,6 +439,142 @@ const getCachedSuperAdminDashboardMetrics = cache(async (): Promise<SuperAdminDa
     databaseReachable = false;
   }
 
+  const workloadStages = [
+    { label: "BPLO Review", count: bploReview },
+    { label: "Department Head Approval", count: departmentHeadApproval },
+    { label: "BPLO Assessment", count: bploAssessment },
+    { label: "Payment Processing", count: bploPayment },
+    { label: "Permit Release Queue", count: bploRelease },
+    { label: "JIT Inspection", count: jitInspection },
+  ].sort((a, b) => b.count - a.count);
+
+  const openWorkloadTotal = workloadStages.reduce((sum, stage) => sum + stage.count, 0);
+  const heaviestStage = workloadStages[0]?.count ? workloadStages[0] : null;
+
+  const smsSent = smsCountMap.get("SENT") ?? 0;
+  const smsFailed = smsCountMap.get("FAILED") ?? 0;
+  const smsAttempted = smsSent + smsFailed;
+  const smsReliabilityPercent = smsAttempted > 0 ? Math.round((smsSent / smsAttempted) * 1000) / 10 : null;
+
+  const recentActivityAveragePerDay = Math.round((recentActivityVolume / 7) * 10) / 10;
+
+  const recentClosureMonths = closurePrevalenceTrend.slice(-3);
+  let closureTrendDirection: "up" | "down" | "flat" | "insufficient" = "insufficient";
+  if (recentClosureMonths.length >= 2) {
+    const first = recentClosureMonths[0]?.value ?? 0;
+    const last = recentClosureMonths[recentClosureMonths.length - 1]?.value ?? 0;
+    if (last > first) closureTrendDirection = "up";
+    else if (last < first) closureTrendDirection = "down";
+    else closureTrendDirection = "flat";
+  }
+
+  const topBusinessCategory = prevalentBusinessCategoriesByArea[0]
+    ? { label: prevalentBusinessCategoriesByArea[0].label, count: prevalentBusinessCategoriesByArea[0].value }
+    : null;
+
+  const insights: SuperAdminDashboardInsight[] = [];
+
+  if (!databaseReachable) {
+    insights.push({
+      id: "db-unreachable",
+      severity: "danger",
+      title: "Database connectivity issue",
+      meaning: "The dashboard could not confirm a successful database ping during this refresh.",
+      recommendation: "Check PostgreSQL service status, connection strings, and recent deploy logs before relying on other metrics.",
+    });
+  } else {
+    insights.push({
+      id: "db-healthy",
+      severity: "success",
+      title: "Core database is reachable",
+      meaning: "System records can be queried for monitoring. This does not replace full server/uptime monitoring.",
+      recommendation: "Continue routine checks of storage, SMS delivery, and backlog queues.",
+    });
+  }
+
+  if (heaviestStage && openWorkloadTotal > 0) {
+    const share = Math.round((heaviestStage.count / openWorkloadTotal) * 100);
+    insights.push({
+      id: "workload-bottleneck",
+      severity: heaviestStage.count >= 10 ? "warning" : "info",
+      title: `${heaviestStage.label} holds the largest open queue`,
+      meaning: `${heaviestStage.count.toLocaleString("en-PH")} of ${openWorkloadTotal.toLocaleString("en-PH")} open workload items (${share}%) are concentrated in this stage.`,
+      recommendation:
+        heaviestStage.label.includes("Review") || heaviestStage.label.includes("Approval")
+          ? "Coordinate with the owning office to clear aging applications and verify staffing coverage for peak days."
+          : "Review whether applicants or offices are waiting on a dependency (documents, fees, inspection, or payment proof).",
+    });
+  }
+
+  if (recentFailedSmsCount > 0) {
+    insights.push({
+      id: "sms-failures",
+      severity: recentFailedSmsCount >= 5 ? "danger" : "warning",
+      title: `${recentFailedSmsCount.toLocaleString("en-PH")} SMS failures in the last 7 days`,
+      meaning:
+        smsReliabilityPercent == null
+          ? "Notification delivery is incomplete for some applicant or compliance messages."
+          : `Current SMS success rate across recorded attempts is about ${smsReliabilityPercent}%.`,
+      recommendation: "Open the SMS Delivery Log report, verify provider credentials/balance, and re-check failed destinations.",
+    });
+  } else if (smsAttempted > 0) {
+    insights.push({
+      id: "sms-healthy",
+      severity: "success",
+      title: "No SMS failures recorded in the last 7 days",
+      meaning: `Recent messaging health looks stable (${smsReliabilityPercent ?? 100}% success among attempted deliveries).`,
+      recommendation: "Keep monitoring during renewal peaks when outbound volume usually increases.",
+    });
+  }
+
+  if (verifiedNonCompliant + revokedBusinessRows.length > 0) {
+    insights.push({
+      id: "compliance-pressure",
+      severity: revokedBusinessRows.length > 0 ? "warning" : "info",
+      title: "Compliance and revocation activity is present",
+      meaning: `${verifiedNonCompliant.toLocaleString("en-PH")} verified non-compliant inspections and ${revokedBusinessRows.length.toLocaleString("en-PH")} revoked businesses are in the current system snapshot.`,
+      recommendation: "Use Inspection Compliance and Business Closure reports to confirm follow-through and that revoked businesses still complete closure where required.",
+    });
+  }
+
+  if (topBusinessCategory) {
+    insights.push({
+      id: "category-hotspot",
+      severity: "info",
+      title: "Leading business category by area",
+      meaning: `${topBusinessCategory.label} currently has the highest recorded concentration (${topBusinessCategory.count.toLocaleString("en-PH")} businesses).`,
+      recommendation: "Use this to anticipate inspection load and document-volume demand for the dominant barangay/category mix.",
+    });
+  }
+
+  if (closureTrendDirection === "up") {
+    insights.push({
+      id: "closure-up",
+      severity: "info",
+      title: "Closure filings are trending upward",
+      meaning: "Recent monthly closure applications are higher than earlier months in the tracked window.",
+      recommendation: "Prepare BPLO and Department Head capacity for closure certificate processing and settlement checks.",
+    });
+  } else if (closureTrendDirection === "down") {
+    insights.push({
+      id: "closure-down",
+      severity: "info",
+      title: "Closure filings are easing",
+      meaning: "Recent monthly closure applications are lower than earlier months in the tracked window.",
+      recommendation: "Keep monitoring — a drop may simply reflect seasonality rather than reduced business exits.",
+    });
+  }
+
+  if (recentActivityVolume === 0) {
+    insights.push({
+      id: "quiet-system",
+      severity: "warning",
+      title: "No workflow activity in the last 7 days",
+      meaning: "Application history shows no recent actor actions. This can indicate low usage or logging gaps.",
+      recommendation: "Confirm users can sign in and that production traffic is reaching the expected environment.",
+    });
+  }
+
   return {
     userActivityByRole,
     applicationVolumeAcrossSystem,
@@ -436,6 +589,15 @@ const getCachedSuperAdminDashboardMetrics = cache(async (): Promise<SuperAdminDa
       lastSuccessfulDashboardCheck: new Date().toISOString(),
       recentFailedSmsCount,
       recentActivityVolume,
+    },
+    insights,
+    operationalSnapshot: {
+      openWorkloadTotal,
+      heaviestStage,
+      smsReliabilityPercent,
+      recentActivityAveragePerDay,
+      closureTrendDirection,
+      topBusinessCategory,
     },
   };
 });

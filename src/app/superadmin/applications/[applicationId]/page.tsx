@@ -1,5 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  superadminDocumentCardClass,
+  superadminReadOnlyFieldClass,
+  superadminStatusPillClass,
+  superadminSummaryLabelClass,
+  superadminSummaryTileClass,
+  superadminSummaryValueClass,
+} from "@/components/superadmin/superadmin-ui-styles";
 import { DetailHeader } from "@/components/ui/detail-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
@@ -19,26 +27,15 @@ function currency(value: number) {
   return `P ${value.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 }
 
-function smallPill(label: string, tone: "slate" | "green" | "amber" | "red" = "slate") {
-  const tones = {
-    slate: "border border-slate-200 bg-slate-100 text-slate-700",
-    green: "border border-green-200 bg-green-50 text-green-700",
-    amber: "border border-amber-200 bg-amber-50 text-amber-800",
-    red: "border border-red-200 bg-red-50 text-red-700",
-  } as const;
-
-  return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${tones[tone]}`}>
-      {label}
-    </span>
-  );
+function smallPill(label: string, tone: "muted" | "success" | "warning" | "danger" = "muted") {
+  return <span className={superadminStatusPillClass(tone)}>{label}</span>;
 }
 
 function labelValue(label: string, value: string) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm text-slate-900">{value}</p>
+      <p className={superadminReadOnlyFieldClass}>{label}</p>
+      <p className={superadminSummaryValueClass}>{value}</p>
     </div>
   );
 }
@@ -53,11 +50,11 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
   );
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <DetailHeader
         title="Application Audit Detail"
         subtitle="Read-only audit view of the selected application for monitoring and compliance."
-        badge={<RoleBadge role="VIEW_ONLY" label="Audit View Only" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Audit View Only" />}
         actions={
           <Link href="/superadmin/applications" className={actionButtonStyles("secondary", "sm")}>
             Back to Applications
@@ -67,7 +64,7 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
 
       <InfoBanner
         title="Audit View Only"
-        description="SuperAdmin can view this application but cannot approve, reject, assess fees, verify payments, or release permits."
+        description="IT Administrator can view this application but cannot approve, reject, assess fees, verify payments, or release permits."
         variant="readOnly"
       />
 
@@ -77,40 +74,40 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
         action={<StatusBadge status={app.application.status as ApplicationStatus} />}
       >
         <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Application Number</p>
-            <p className="mt-1 font-medium text-slate-900">{app.application.applicationNumber}</p>
+          <div className={superadminSummaryTileClass}>
+            <p className={superadminSummaryLabelClass}>Application Number</p>
+            <p className={superadminSummaryValueClass}>{app.application.applicationNumber}</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Business Name</p>
-            <p className="mt-1 font-medium text-slate-900">{app.businessInfo.businessName}</p>
+          <div className={superadminSummaryTileClass}>
+            <p className={superadminSummaryLabelClass}>Business Name</p>
+            <p className={superadminSummaryValueClass}>{app.businessInfo.businessName}</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Applicant</p>
-            <p className="mt-1 font-medium text-slate-900">{app.applicant.name}</p>
-            <p className="text-xs text-slate-500">{app.applicant.email}</p>
+          <div className={superadminSummaryTileClass}>
+            <p className={superadminSummaryLabelClass}>Applicant</p>
+            <p className={superadminSummaryValueClass}>{app.applicant.name}</p>
+            <p className="ui-caption">{app.applicant.email}</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Application Type</p>
-            <p className="mt-1 font-medium text-slate-900">{app.application.applicationType}</p>
+          <div className={superadminSummaryTileClass}>
+            <p className={superadminSummaryLabelClass}>Application Type</p>
+            <p className={superadminSummaryValueClass}>{app.application.applicationType}</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Date Submitted</p>
-            <p className="mt-1 font-medium text-slate-900">
+          <div className={superadminSummaryTileClass}>
+            <p className={superadminSummaryLabelClass}>Date Submitted</p>
+            <p className={superadminSummaryValueClass}>
               {app.application.submittedAt
                 ? new Date(app.application.submittedAt).toLocaleString("en-PH")
                 : "-"}
             </p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Current Status</p>
+          <div className={superadminSummaryTileClass}>
+            <p className={superadminSummaryLabelClass}>Current Status</p>
             <div className="mt-1">
               <StatusBadge status={app.application.status as ApplicationStatus} />
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Last Updated</p>
-            <p className="mt-1 font-medium text-slate-900">
+          <div className={superadminSummaryTileClass}>
+            <p className={superadminSummaryLabelClass}>Last Updated</p>
+            <p className={superadminSummaryValueClass}>
               {new Date(app.application.updatedAt).toLocaleString("en-PH")}
             </p>
           </div>
@@ -131,7 +128,7 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
               item.actorRole === "APPLICANT" ||
               item.actorRole === "BPLO" ||
               item.actorRole === "SUPER_ADMIN" ? (
-                <RoleBadge role={item.actorRole} />
+                <RoleBadge roleType={item.actorRole} />
               ) : (
                 smallPill(item.actorRole ?? "SYSTEM")
               ),
@@ -147,9 +144,9 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
 
       <SectionCard title="Remarks" description="Latest BPLO remarks and activity context.">
         {latestRemark ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm text-amber-900">{latestRemark.remarks}</p>
-            <p className="mt-2 text-xs text-amber-800">
+          <div className="rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--warning-soft)] p-3.5 sm:p-4">
+            <p className="text-sm text-[var(--foreground)]">{latestRemark.remarks}</p>
+            <p className="mt-2 ui-caption">
               {latestRemark.actorEmail ? latestRemark.actorEmail : "System"}
               {latestRemark.actorRole ? ` / ${latestRemark.actorRole}` : ""} - {new Date(latestRemark.createdAt).toLocaleString("en-PH")}
             </p>
@@ -170,15 +167,18 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
           />
         ) : (
           <div className="grid gap-3">
-            {app.documents.map((doc) => (
-              <div
-                key={doc.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-              >
+            {app.documents.map((doc) => {
+              const validationStatus = doc.validationStatus ?? "Pending Review";
+              return (
+              <div key={doc.id} className={superadminDocumentCardClass}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{doc.documentName}</p>
-                    <p className="mt-1 text-sm text-slate-600">{doc.fileName}</p>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">{doc.documentName}</p>
+                    <p className="mt-1 text-sm text-[var(--ink-muted)]">{doc.fileName}</p>
+                    <p className="mt-1 ui-caption">Validation: {validationStatus}</p>
+                    {doc.validationRemarks ? (
+                      <p className="mt-1 ui-caption">Remarks: {doc.validationRemarks}</p>
+                    ) : null}
                   </div>
                   <a
                     href={`/api/superadmin/applications/${app.application.id}/documents/${doc.id}/preview`}
@@ -189,12 +189,13 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
                     Preview
                   </a>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 ui-caption">
                   {doc.mimeType} • {doc.sizeBytes.toLocaleString("en-PH")} bytes •{" "}
                   {new Date(doc.uploadedAt).toLocaleString("en-PH")}
                 </p>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </SectionCard>
@@ -299,7 +300,7 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
               app.feeAssessment.status
                 ? smallPill(
                     app.feeAssessment.status,
-                    app.feeAssessment.status === "GENERATED" ? "green" : "amber"
+                    app.feeAssessment.status === "GENERATED" ? "success" : "warning"
                   )
                 : undefined
             }
@@ -327,15 +328,15 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
               <div className="grid gap-4 md:grid-cols-2">
                 {labelValue("Reference Number", app.paymentReference.transactionNumber)}
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payment Status</p>
+                  <p className={superadminReadOnlyFieldClass}>Payment Status</p>
                   <div className="mt-1">
                     {smallPill(
                       app.paymentReference.status,
                       app.paymentReference.status === "VERIFIED"
-                        ? "green"
+                        ? "success"
                         : app.paymentReference.status === "REJECTED"
-                          ? "red"
-                          : "amber"
+                          ? "danger"
+                          : "warning"
                     )}
                   </div>
                 </div>
@@ -366,15 +367,15 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
                 {labelValue("Document Type", app.permitIssuance.documentType)}
                 {labelValue("Document Number", app.permitIssuance.documentNumber)}
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Issuance Status</p>
+                  <p className={superadminReadOnlyFieldClass}>Issuance Status</p>
                   <div className="mt-1">
                     {smallPill(
                       app.permitIssuance.status,
                       app.permitIssuance.status === "RELEASED"
-                        ? "green"
+                        ? "success"
                         : app.permitIssuance.status === "FOR_RELEASE"
-                          ? "amber"
-                          : "slate"
+                          ? "warning"
+                          : "muted"
                     )}
                   </div>
                 </div>

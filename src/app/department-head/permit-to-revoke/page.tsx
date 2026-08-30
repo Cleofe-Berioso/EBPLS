@@ -10,12 +10,12 @@ export default async function DepartmentHeadPermitToRevokePage() {
   if (!session) notFound();
 
   return (
-    <section className="space-y-6">
+    <section className="ui-page-stack">
       <PageHeader
         eyebrow="Department Head"
         title="Flagged Cases"
         description="Review Department Head verified NON_COMPLIANT inspections and decide if revocation should proceed."
-        badge={<RoleBadge role="VIEW_ONLY" label="Department Head" />}
+        badge={<RoleBadge roleType="VIEW_ONLY" label="Department Head" />}
       />
 
       <InfoBanner

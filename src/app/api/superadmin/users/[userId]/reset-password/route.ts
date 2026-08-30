@@ -48,7 +48,7 @@ export async function POST(
 
   if (target.role === "SUPER_ADMIN") {
     return NextResponse.json(
-      { error: "Super Admin password resets are restricted from this screen." },
+      { error: "IT Administrator password resets are restricted from this screen." },
       { status: 403 }
     );
   }
@@ -68,7 +68,7 @@ export async function POST(
     module: "USER_MANAGEMENT",
     entityType: "USER",
     entityId: target.id,
-    description: `Super Admin reset password for ${target.role} account`,
+    description: `IT Administrator reset password for ${target.role} account`,
     metadata: {
       targetUserId: target.id,
       targetRole: target.role,

@@ -22,29 +22,30 @@ export function DashboardChartCard({
   children: ReactNode;
 }) {
   return (
-    <SectionCard title={title} description={description} contentClassName="pt-4 min-w-0">
+    <SectionCard title={title} description={description} contentClassName="pt-3 min-w-0">
       {loading ? (
-        <div className="h-[280px] min-h-[280px] w-full min-w-0 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
+        <div className="h-[clamp(160px,24vh,220px)] min-h-[160px] w-full min-w-0 animate-pulse rounded-xl border border-[var(--border-color)] bg-[var(--muted-surface)]" />
       ) : error ? (
-        <EmptyState title="Unable to load chart" description={error} />
+        <EmptyState compact title="Unable to load chart" description={error} />
       ) : isEmpty ? (
         <EmptyState
+          compact
           title={emptyTitle ?? "No application data available yet."}
-          description={emptyDescription ?? "Once operational records are available, the chart will render here."}
+          description={emptyDescription ?? "Charts appear once operational records are available."}
         />
       ) : (
-        <div className="h-[280px] min-h-[280px] w-full min-w-0">{children}</div>
+        <div className="h-[clamp(160px,24vh,220px)] min-h-[160px] w-full min-w-0">{children}</div>
       )}
     </SectionCard>
   );
 }
 
 export const DASHBOARD_CHART_COLORS = [
-  "#2563eb",
-  "#0891b2",
-  "#16a34a",
-  "#ea580c",
-  "#dc2626",
-  "#7c3aed",
-  "#475569",
+  "#0c5c38",
+  "#c4852a",
+  "#1a5ca8",
+  "#ad5e0e",
+  "#ae3a3a",
+  "#576858",
+  "#8a9d8e",
 ];

@@ -65,6 +65,8 @@ function resolveInspectionClassification(status: string, complianceStatus: strin
     return status;
   }
 
+  // PENDING_REVIEW inspections count as pending for DH verification
+  if (complianceStatus === "PENDING_REVIEW") return "DH_VERIFICATION_PENDING";
   if (complianceStatus === "COMPLIANT") return "COMPLIANT";
   return "NON_COMPLIANT";
 }

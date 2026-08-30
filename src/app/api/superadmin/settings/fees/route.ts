@@ -1,22 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import {
-  type FeeCategoryKey,
-  FEE_CATEGORY_OPTIONS,
+  getAllFeeCategoryOptions,
+  isValidClassificationForOptions,
   listFeeConfigurationItems,
   upsertFeeConfigurationItem,
   updateFeeConfigurationItemById,
 } from "@/lib/fee-settings";
 import { logSettingsAction } from "@/lib/audit-log";
-
-function isValidCategory(category: string): boolean {
-  return FEE_CATEGORY_OPTIONS.some((item) => item.key === category);
-}
-
-function isValidClassification(category: FeeCategoryKey, classification: string): boolean {
-  const option = FEE_CATEGORY_OPTIONS.find((item) => item.key === category);
-  return option ? option.classifications.includes(classification.trim()) : false;
-}
 
 export async function GET() {
   const session = await requireSuperAdminSession();
@@ -24,8 +15,11 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const items = await listFeeConfigurationItems();
-  return NextResponse.json({ items, categories: FEE_CATEGORY_OPTIONS });
+  const [items, categories] = await Promise.all([
+    listFeeConfigurationItems(),
+    getAllFeeCategoryOptions(),
+  ]);
+  return NextResponse.json({ items, categories });
 }
 
 export async function POST(req: Request) {
@@ -42,19 +36,21 @@ export async function POST(req: Request) {
   }
 
   const { category, classification, amount, isActive } = body as Record<string, unknown>;
+  const categories = await getAllFeeCategoryOptions();
 
-  if (typeof category !== "string" || !isValidCategory(category)) {
+  if (typeof category !== "string" || !categories.some((item) => item.key === category)) {
     return NextResponse.json({ error: "Invalid business category." }, { status: 400 });
   }
-
-  const feeCategory = category as FeeCategoryKey;
 
   if (typeof classification !== "string" || !classification.trim()) {
     return NextResponse.json({ error: "Size classification is required." }, { status: 400 });
   }
 
-  if (!isValidClassification(feeCategory, classification)) {
-    return NextResponse.json({ error: "Invalid size classification for the selected business category." }, { status: 400 });
+  if (!isValidClassificationForOptions(category, classification, categories)) {
+    return NextResponse.json(
+      { error: "Invalid size classification for the selected business category." },
+      { status: 400 }
+    );
   }
 
   if (typeof amount !== "number" || Number.isNaN(amount) || amount < 0) {
@@ -67,14 +63,13 @@ export async function POST(req: Request) {
 
   try {
     const item = await upsertFeeConfigurationItem({
-      category: feeCategory,
+      category,
       classification,
       amount,
       isActive,
       updatedById: session.user.id,
     });
 
-    // Audit: Fee configuration created/updated
     void logSettingsAction(
       session.user.id,
       session.user.name ?? session.user.email ?? null,

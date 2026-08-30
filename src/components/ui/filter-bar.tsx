@@ -16,14 +16,23 @@ export function FilterBar({
   contentClassName?: string;
 }) {
   return (
-    <section className={`app-surface px-4 py-5 sm:px-6 sm:py-6 lg:px-8 ${className}`}>
+    <section className={`app-surface px-3.5 py-3 sm:px-4 lg:px-5 ${className}`}>
       {(title || description || actions) ? (
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between lg:gap-4">
+        <div className="mb-2.5 flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between lg:gap-2.5">
           <div className="min-w-0">
-            {title ? <h3 className="text-lg sm:text-xl font-semibold tracking-tight text-slate-900">{title}</h3> : null}
-            {description ? <p className="mt-1 text-sm sm:text-base leading-6 text-slate-600">{description}</p> : null}
+            {title ? (
+              <h3
+                className="ui-section-heading font-semibold tracking-tight"
+                style={{ color: "var(--foreground)", fontSize: "var(--text-section-title)" }}
+              >
+                {title}
+              </h3>
+            ) : null}
+            {description ? (
+              <p className="ui-caption mt-0.5">{description}</p>
+            ) : null}
           </div>
-          {actions ? <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 sm:w-auto">{actions}</div> : null}
+          {actions ? <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div> : null}
         </div>
       ) : null}
       <div className={contentClassName}>{children}</div>

@@ -20,19 +20,27 @@ export function Timeline({
   }
 
   return (
-    <ol className="space-y-3">
+    <ol className="space-y-2.5">
       {items.map((item, index) => (
-        <li key={item.id} className="relative rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+        <li
+          key={item.id}
+          className="relative rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--surface)] px-3.5 py-3.5 sm:px-4"
+        >
           <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-              {item.description ? <p className="text-sm leading-6 text-slate-600">{item.description}</p> : null}
-              {item.timestamp ? <p className="text-xs text-slate-500">{item.timestamp}</p> : null}
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-semibold text-[var(--foreground)]">{item.title}</p>
+              {item.description ? (
+                <p className="text-sm leading-6 text-[var(--ink-muted)]">{item.description}</p>
+              ) : null}
+              {item.timestamp ? <p className="ui-caption">{item.timestamp}</p> : null}
             </div>
             {item.status ? <div className="shrink-0">{item.status}</div> : null}
           </div>
           {index < items.length - 1 ? (
-            <span className="absolute -bottom-3 left-6 h-3 border-l border-dashed border-slate-300" aria-hidden="true" />
+            <span
+              className="absolute -bottom-2.5 left-5 h-2.5 border-l border-dashed border-[var(--border-color)]"
+              aria-hidden="true"
+            />
           ) : null}
         </li>
       ))}
