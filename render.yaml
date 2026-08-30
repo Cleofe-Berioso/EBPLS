@@ -11,7 +11,7 @@ services:
     branch: FINAL-5/3/2026
     buildCommand: npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: npm run start
-    healthCheckPath: /login
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production

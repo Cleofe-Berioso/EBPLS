@@ -22,7 +22,7 @@
     "test:whitebox:full": "tsx scripts/run-whitebox-suite.ts",
     "test:whitebox:report": "tsx scripts/generate-whitebox-detailed-report.ts",
     "test:whitebox:thesis": "tsx scripts/generate-whitebox-thesis-tables.ts",
-    "start": "next start --hostname 0.0.0.0",
+    "start": "node scripts/start-render.cjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
