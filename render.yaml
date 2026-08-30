@@ -32,11 +32,11 @@ services:
       - key: MAIL_FROM_NAME
         value: Municipality of Enrique B. Magalona BPLO
       - key: NEXTAUTH_URL
-        value: https://ebpls.onrender.com
+        value: https://ebpls-th0b.onrender.com
       - key: AUTH_URL
-        value: https://ebpls.onrender.com
+        value: https://ebpls-th0b.onrender.com
       - key: NEXT_PUBLIC_APP_URL
-        value: https://ebpls.onrender.com
+        value: https://ebpls-th0b.onrender.com
       - key: AUTH_SECRET
         sync: false
       - key: NEXTAUTH_SECRET
