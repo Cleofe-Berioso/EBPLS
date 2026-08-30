@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateOtp, hashOtp } from "@/lib/password-reset";
-import { sendEmail, generateRegistrationOtpEmailHtml } from "@/lib/mail";
+import { sendEmail, generateRegistrationOtpEmailHtml, isEmailConfigured } from "@/lib/mail";
 import { prisma } from "@/lib/prisma";
 import {
   checkRateLimit,
@@ -28,6 +28,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Invalid email address format." },
         { status: 400 }
+      );
+    }
+
+    if (!isEmailConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "Email delivery is not configured on the server. Set RESEND_API_KEY (recommended on Render) or contact BPLO support.",
+        },
+        { status: 503 }
       );
     }
 
@@ -90,12 +100,13 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    if (process.env.NODE_ENV !== "production") {
-      console.error("Error sending registration OTP:", error);
-    }
-    return NextResponse.json(
-      { error: "Failed to send OTP. Please try again later." },
-      { status: 500 }
-    );
+    console.error("Error sending registration OTP:", error);
+    const message =
+      error instanceof Error && error.message.includes("SMTP is blocked")
+        ? error.message
+        : error instanceof Error && error.message.includes("Resend")
+          ? "Email delivery failed. Verify RESEND_API_KEY and RESEND_FROM in server settings."
+          : "Failed to send OTP. Please try again later.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

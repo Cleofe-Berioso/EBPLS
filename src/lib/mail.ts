@@ -1,12 +1,36 @@
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-// Initialize transporter with Gmail SMTP
+const SMTP_TIMEOUT_MS = 12_000;
+
+function normalizeGmailAppPassword(): string | undefined {
+  return process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "").trim() || undefined;
+}
+
+function getResendApiKey(): string | undefined {
+  return process.env.RESEND_API_KEY?.trim() || undefined;
+}
+
+function getResendFromAddress(): string {
+  const configured = process.env.RESEND_FROM?.trim();
+  if (configured) return configured;
+
+  const gmail = process.env.GMAIL_USER?.trim();
+  if (gmail) return gmail;
+
+  return "onboarding@resend.dev";
+}
+
+// Gmail SMTP — works locally; Render free tier blocks outbound SMTP ports 587/465.
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
+    pass: normalizeGmailAppPassword(),
   },
+  connectionTimeout: SMTP_TIMEOUT_MS,
+  greetingTimeout: SMTP_TIMEOUT_MS,
+  socketTimeout: SMTP_TIMEOUT_MS,
 });
 
 export interface EmailOptions {
@@ -18,7 +42,14 @@ export interface EmailOptions {
 }
 
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env.GMAIL_USER?.trim() && process.env.GMAIL_APP_PASSWORD?.trim());
+  if (getResendApiKey()) return true;
+  return Boolean(process.env.GMAIL_USER?.trim() && normalizeGmailAppPassword());
+}
+
+export function getEmailTransportLabel(): "resend" | "gmail-smtp" | "none" {
+  if (getResendApiKey()) return "resend";
+  if (isEmailConfigured()) return "gmail-smtp";
+  return "none";
 }
 
 function resolveFromAddress(): string {
@@ -52,33 +83,82 @@ function htmlToPlainText(html: string): string {
     .trim();
 }
 
+async function sendViaResend({ to, subject, html, text }: EmailOptions): Promise<{ messageId?: string }> {
+  const apiKey = getResendApiKey();
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY is not configured.");
+  }
+
+  const resend = new Resend(apiKey);
+  const from = getResendFromAddress();
+  const result = await resend.emails.send({
+    from,
+    to: [to],
+    subject,
+    html,
+    text: text?.trim() || htmlToPlainText(html),
+    replyTo: process.env.MAIL_REPLY_TO?.trim() || process.env.GMAIL_USER?.trim() || undefined,
+  });
+
+  if (result.error) {
+    console.error("Resend API error:", result.error);
+    throw new Error(result.error.message || "Failed to send email via Resend.");
+  }
+
+  console.log("Email sent via Resend:", result.data?.id);
+  return { messageId: result.data?.id };
+}
+
+async function sendViaGmailSmtp({ to, subject, html, text }: EmailOptions): Promise<{ messageId?: string }> {
+  const info = await transporter.sendMail({
+    from: resolveFromAddress(),
+    to,
+    subject,
+    text: text?.trim() || htmlToPlainText(html),
+    html,
+    replyTo: process.env.MAIL_REPLY_TO?.trim() || process.env.GMAIL_USER?.trim(),
+  });
+
+  console.log("Email sent via Gmail SMTP:", info.messageId);
+  return { messageId: info.messageId };
+}
+
+function isSmtpBlockedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String(error.code) : "";
+  const message = "message" in error ? String(error.message) : "";
+  return (
+    code === "ETIMEDOUT" ||
+    code === "ESOCKET" ||
+    code === "ECONNREFUSED" ||
+    code === "ENETUNREACH" ||
+    message.includes("Timeout") ||
+    message.includes("timeout")
+  );
+}
+
 /**
- * Send an email using Gmail SMTP
- * Requires GMAIL_USER and GMAIL_APP_PASSWORD environment variables
+ * Send email via Resend (HTTPS, Render-safe) or Gmail SMTP (local dev).
  */
 export async function sendEmail({ to, subject, html, text }: EmailOptions): Promise<{ messageId?: string }> {
-  // Validate environment variables
   if (!isEmailConfigured()) {
     throw new Error(
-      "Gmail SMTP is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD environment variables."
+      "Email is not configured. Set RESEND_API_KEY (production) or GMAIL_USER + GMAIL_APP_PASSWORD (local)."
     );
   }
 
   try {
-    const info = await transporter.sendMail({
-      from: resolveFromAddress(),
-      to,
-      subject,
-      text: text?.trim() || htmlToPlainText(html),
-      html,
-      // Helps some clients; keep aligned with the authenticated Gmail user.
-      replyTo: process.env.MAIL_REPLY_TO?.trim() || process.env.GMAIL_USER?.trim(),
-    });
-
-    console.log("Email sent successfully:", info.messageId);
-    return { messageId: info.messageId };
+    if (getResendApiKey()) {
+      return await sendViaResend({ to, subject, html, text });
+    }
+    return await sendViaGmailSmtp({ to, subject, html, text });
   } catch (error) {
     console.error("Error sending email:", error);
+    if (isSmtpBlockedError(error)) {
+      throw new Error(
+        "Email could not be sent: SMTP is blocked on this host (Render free tier). Set RESEND_API_KEY in environment variables."
+      );
+    }
     throw new Error("Failed to send email. Please try again later.");
   }
 }

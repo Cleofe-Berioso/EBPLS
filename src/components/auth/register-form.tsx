@@ -177,6 +177,25 @@ export function RegisterForm() {
 
   const otpValue = otp.join("");
 
+  async function postJsonWithTimeout(
+    url: string,
+    body: unknown,
+    timeoutMs = 25_000
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   // ── Step 1: send OTP then move to step 2 ──────────────────────────────────
   async function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -201,10 +220,8 @@ export function RegisterForm() {
     }
 
     try {
-      const res = await fetch("/api/auth/register/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.email }),
+      const res = await postJsonWithTimeout("/api/auth/register/send-otp", {
+        email: data.email,
       });
 
       const json = await res.json();
@@ -221,8 +238,14 @@ export function RegisterForm() {
       setFormState({ status: "idle" });
       startCountdown();
       setStep("otp");
-    } catch {
-      setFormState({ status: "error", message: "A network error occurred. Please try again." });
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === "AbortError";
+      setFormState({
+        status: "error",
+        message: timedOut
+          ? "The request timed out. The server may be waking up — wait a moment and try again."
+          : "A network error occurred. Please try again.",
+      });
     }
   }
 
@@ -292,10 +315,8 @@ export function RegisterForm() {
     setOtpState({ status: "loading" });
 
     try {
-      const res = await fetch("/api/auth/register/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: savedData.email }),
+      const res = await postJsonWithTimeout("/api/auth/register/send-otp", {
+        email: savedData.email,
       });
 
       const json = await res.json();
@@ -309,8 +330,14 @@ export function RegisterForm() {
       setOtpState({ status: "idle" });
       startCountdown();
       digitRefs.current[0]?.focus();
-    } catch {
-      setOtpState({ status: "error", message: "A network error occurred. Please try again." });
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === "AbortError";
+      setOtpState({
+        status: "error",
+        message: timedOut
+          ? "The request timed out. Wait a moment and try resending."
+          : "A network error occurred. Please try again.",
+      });
     }
   }
 
