@@ -27,7 +27,7 @@ export function getPortalSidebarWidth(collapsed: boolean): string {
 
 export function sidebarAsideClass(mobileOpen: boolean, collapsed: boolean): string {
   return [
-    "app-sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-[width,transform] duration-200 lg:z-30",
+    "app-sidebar fixed inset-y-0 left-0 z-50 flex h-full flex-col transition-[width,transform] duration-200 lg:z-30",
     mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
     getPortalSidebarWidth(collapsed),
   ].join(" ");
@@ -169,9 +169,21 @@ export function PortalSidebarFooter({
     .join("");
 
   return (
-    <div className="app-sidebar-footer mt-auto hidden lg:block">
-      <div className={`flex items-center gap-2 ${collapsed ? "justify-center" : ""}`}>
-        {!collapsed ? (
+    <div className="app-sidebar-footer mt-auto hidden shrink-0 lg:block">
+      {collapsed ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={onCollapseToggle}
+            aria-expanded={false}
+            aria-label="Expand sidebar"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--sidebar-text-muted)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-white"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[rgba(197,160,89,0.15)] text-xs font-semibold text-[var(--sidebar-active-text)] ring-1 ring-[rgba(197,160,89,0.24)]">
               {initials || "U"}
@@ -181,21 +193,17 @@ export function PortalSidebarFooter({
               <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--sidebar-text-muted)]">Signed in</p>
             </div>
           </div>
-        ) : (
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[rgba(197,160,89,0.15)] text-xs font-semibold text-[var(--sidebar-active-text)] ring-1 ring-[rgba(197,160,89,0.24)]" title={userName}>
-            {initials || "U"}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={onCollapseToggle}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--sidebar-text-muted)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-white"
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={onCollapseToggle}
+            aria-expanded
+            aria-label="Collapse sidebar"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--sidebar-text-muted)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-white"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
