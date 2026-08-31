@@ -14,7 +14,7 @@ let prisma!: PrismaClient;
 const PASSWORD = "password123";
 const PROOF_FILE_PATH = path.resolve(scriptDirPath, "smoke-test-proof.txt");
 
-type Role = "APPLICANT" | "BPLO" | "SUPER_ADMIN";
+type Role = "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
 type ApplicationType = "NEW" | "RENEWAL" | "CLOSURE";
 type ApplicationStatus =
   | "DRAFT"
@@ -37,6 +37,7 @@ interface SmokeUserInput {
   email: string;
   name: string;
   role: Role;
+  isActive?: boolean;
 }
 
 interface SmokeBusinessRecordInput {
@@ -173,20 +174,21 @@ function buildFormData(record: {
 
 async function ensureUser(input: SmokeUserInput) {
   const passwordHash = await bcrypt.hash(PASSWORD, 12);
+  const isActive = input.isActive ?? true;
   return prisma.user.upsert({
     where: { email: input.email },
     update: {
       name: input.name,
       role: input.role,
       passwordHash,
-      isActive: true,
+      isActive,
     },
     create: {
       email: input.email,
       name: input.name,
       role: input.role,
       passwordHash,
-      isActive: true,
+      isActive,
     },
   });
 }
@@ -532,6 +534,22 @@ async function main() {
     email: "superadmin@example.com",
     name: "IT Administrator",
     role: "SUPER_ADMIN",
+  });
+  await ensureUser({
+    email: "dept-head@example.com",
+    name: "Department Head Officer",
+    role: "DEPARTMENT_HEAD",
+  });
+  await ensureUser({
+    email: "jit@example.com",
+    name: "JIT Inspector",
+    role: "JIT",
+  });
+  await ensureUser({
+    email: "jit-disabled@example.com",
+    name: "Disabled JIT Inspector",
+    role: "JIT",
+    isActive: false,
   });
 
   const retailRecord = await ensureBusinessRecord({

@@ -18,11 +18,20 @@ export type RateLimitResult =
   | { ok: true; remaining: number; resetAt: number }
   | { ok: false; remaining: 0; resetAt: number };
 
+function isE2eRateLimitBypassed(): boolean {
+  return process.env.E2E_BLACKBOX === "1";
+}
+
 /**
  * Fixed-window in-memory rate limiter.
  * Suitable for single-instance deployments; use Redis/Upstash for multi-instance production.
  */
 export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
+  if (isE2eRateLimitBypassed()) {
+    const resetAt = Date.now() + config.windowMs;
+    return { ok: true, remaining: config.limit, resetAt };
+  }
+
   const now = Date.now();
   const existing = store.get(key);
 

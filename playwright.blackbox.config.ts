@@ -34,6 +34,10 @@ export default defineConfig({
     url: "http://127.0.0.1:3000/login",
     reuseExistingServer: true,
     timeout: 180_000,
+    env: {
+      ...process.env,
+      E2E_BLACKBOX: "1",
+    },
   },
   outputDir: path.join(BLACKBOX_OUT, "test-results"),
 });

@@ -207,10 +207,10 @@ function writeResultsMd(
 
 **Reference:** \`EBPLS/docs/TEST_CASE_ANALYSIS_BY_OBJECTIVE.md\`  
 **Run at:** ${ranAt}  
-**Output folder:** `whitebox/`  
+**Output folder:** \`whitebox/\`  
 **Verdict:** ${overallPass ? "**PASS**" : "**FAIL**"}
 
-> **Full per-case report:** [`whitebox/WHITEBOX_DETAILED_RESULTS.md`](../whitebox/WHITEBOX_DETAILED_RESULTS.md) (all 129 Vitest + 47 DB cases)
+> **Full per-case report:** [\`whitebox/WHITEBOX_DETAILED_RESULTS.md\`](../whitebox/WHITEBOX_DETAILED_RESULTS.md) (all 129 Vitest + 47 DB cases)
 
 ---
 
@@ -452,7 +452,13 @@ async function main() {
   writeResultsMd(ranAt, blocks, vitest, db, cov);
   writeReadme();
 
-  // Detailed per-case report
+  spawnSync("npx", ["tsx", "scripts/generate-whitebox-detailed-report.ts"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    shell: process.platform === "win32",
+  });
+
+  // Detailed per-case report + thesis tables
   spawnSync("npx", ["tsx", "scripts/generate-whitebox-thesis-tables.ts"], {
     cwd: ROOT,
     encoding: "utf8",

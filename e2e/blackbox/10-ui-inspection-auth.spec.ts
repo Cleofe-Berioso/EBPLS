@@ -12,6 +12,12 @@ import {
 } from "./helpers";
 import { uiShot, bodyMatches, gotoReady, expectMobileLoginHeader, expectDisabledLoginAlert } from "./ui-inspection-helpers";
 
+const applicantAuth = createRoleTest("applicant");
+const bploAuth = createRoleTest("bplo");
+const deptHeadAuth = createRoleTest("deptHead");
+const jitAuth = createRoleTest("jit");
+const itAdminAuth = createRoleTest("itAdmin");
+
 test.describe("1. Public & Authentication UI", () => {
   test("BB-UI-AUTH-001 Root URL redirect", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -103,24 +109,22 @@ test.describe("1. Public & Authentication UI", () => {
   });
 
   for (const c of [
-    { id: "BB-UI-AUTH-014", email: USERS.applicant.email, home: "/applicant/dashboard", url: /\/applicant\// },
-    { id: "BB-UI-AUTH-015", email: USERS.bplo.email, home: "/bplo/dashboard", url: /\/bplo\/dashboard/ },
-    { id: "BB-UI-AUTH-016", email: USERS.deptHead.email, home: "/department-head/dashboard", url: /\/department-head\/dashboard/ },
-    { id: "BB-UI-AUTH-017", email: USERS.jit.email, home: "/jit/dashboard", url: /\/jit\// },
-    { id: "BB-UI-AUTH-018", email: USERS.itAdmin.email, home: "/superadmin/dashboard", url: /\/superadmin\/dashboard/ },
+    { testFn: applicantAuth, id: "BB-UI-AUTH-014", home: "/applicant/dashboard", url: /\/applicant\// },
+    { testFn: bploAuth, id: "BB-UI-AUTH-015", home: "/bplo/dashboard", url: /\/bplo\/dashboard/ },
+    { testFn: deptHeadAuth, id: "BB-UI-AUTH-016", home: "/department-head/dashboard", url: /\/department-head\/dashboard/ },
+    { testFn: jitAuth, id: "BB-UI-AUTH-017", home: "/jit/dashboard", url: /\/jit\// },
+    { testFn: itAdminAuth, id: "BB-UI-AUTH-018", home: "/superadmin/dashboard", url: /\/superadmin\/dashboard/ },
   ]) {
-    test(`${c.id} login redirect`, async ({ page }) => {
-      await loginAs(page, c.email);
+    c.testFn(`${c.id} login redirect`, async ({ page }) => {
       await page.goto(c.home, { waitUntil: "domcontentloaded", timeout: 90_000 });
       await expect(page).toHaveURL(c.url, { timeout: 45_000 });
       await uiShot(page, c.id);
     });
   }
 
-  test("BB-UI-AUTH-019 Auth redirect handler", async ({ page }) => {
-    await loginAs(page, USERS.applicant.email);
-    await page.goto("/login", { waitUntil: "domcontentloaded" });
-    await page.waitForURL(/\/applicant\//, { timeout: 45_000 });
+  applicantAuth("BB-UI-AUTH-019 Auth redirect handler", async ({ page }) => {
+    await page.goto("/auth/redirect", { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await expect(page).toHaveURL(/\/applicant\//, { timeout: 45_000 });
     await uiShot(page, "BB-UI-AUTH-019");
   });
 });

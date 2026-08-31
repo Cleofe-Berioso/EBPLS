@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { createRoleTest } from "./fixtures";
 import { capture, pageHasText, SMOKE, openRoute } from "./helpers";
+import { assertApplicantTopPage } from "./ui-inspection-helpers";
 
 /**
  * Workflow-oriented black-box checks using smoke seed data when available.
@@ -87,14 +88,14 @@ applicantTest.describe("BB-WF — Applicant TOP workflow surface", () => {
   applicantTest("BB-WF-06 TOP shows ready/pending/rejected/returned messaging patterns", async ({
     page,
   }) => {
-    await page.goto("/applicant/top", { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await assertApplicantTopPage(page);
     if (page.url().includes("profile-picture")) {
       await capture(page, "workflow", "BB-WF-06-top-blocked-by-profile-pic.png");
       return;
     }
     const text = await page.locator("body").innerText();
     expect(
-      /tax order|payment|OR|proof|returned for correction|rejected|pending|not yet available|re-assessment|reassessment/i.test(
+      /tax order|top records|submit payment|payment reference|payment proof|ready for or|returned for correction|rejected|pending|not yet available|re-assessment|reassessment|view/i.test(
         text
       )
     ).toBeTruthy();

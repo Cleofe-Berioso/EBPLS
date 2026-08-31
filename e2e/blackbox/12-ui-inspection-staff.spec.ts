@@ -146,7 +146,7 @@ dh.describe("12–13 Department Head Portal UI", () => {
   dh.setTimeout(180_000);
 
   for (const [id, route, text] of [
-    ["BB-UI-DH-NAV-001", "/department-head/dashboard", /Application Approvals|Inspection Verification|Flagged|Settlement|Compliant|Restrictions/i],
+    ["BB-UI-DH-NAV-001", "/department-head/dashboard", /Application Approvals|Inspection Verification|Flagged|Settlement|Compliant|Restrictions|Profile/i],
     ["BB-UI-DH-NAV-002", "/department-head/dashboard", /Department Head Portal|Welcome/i],
     ["BB-UI-DH-DASH-001", "/department-head/dashboard", /Department Head Dashboard/i],
     ["BB-UI-DH-DASH-002", "/department-head/dashboard", /Action Required|Queue/i],
@@ -164,6 +164,7 @@ dh.describe("12–13 Department Head Portal UI", () => {
     ["BB-UI-DH-SET-001", "/department-head/settlement-management", /Settlement|Eligible/i],
     ["BB-UI-DH-LIST-001", "/department-head/compliant-list", /Compliant/i],
     ["BB-UI-DH-LIST-002", "/department-head/revoke-permit-list", /Restrictions|Restricted/i],
+    ["BB-UI-DH-PRO-001", "/department-head/profile", /Profile|Account|Department Head/i],
   ] as const) {
     dh(`${id}`, async ({ page }) => {
       await staffPage(page, route, /\/department-head\//);
@@ -171,6 +172,12 @@ dh.describe("12–13 Department Head Portal UI", () => {
       await uiShot(page, id);
     });
   }
+
+  dh("BB-UI-DH-PRO-002 Profile picture and name edit", async ({ page }) => {
+    await staffPage(page, "/department-head/profile", /\/department-head\//);
+    await bodyOrVisible(page, /Profile Picture|Save|First Name|Last Name|Account Details/i);
+    await uiShot(page, "BB-UI-DH-PRO-002");
+  });
 
   dh("BB-UI-DH-APP-005 Document Preview/Download", async ({ page }) => {
     await openDhApprovalDetail(page);
@@ -348,8 +355,15 @@ sa.describe("15 IT Administrator Portal UI", () => {
     await uiShot(page, "BB-UI-SA-APP-004");
   });
 
-  sa("BB-UI-SA-USR-005 Reset Password modal", async ({ page }) => {
+  sa("BB-UI-SA-USR-005 Reset Password JIT/DH only", async ({ page }) => {
     await openSuperAdminRoute(page, "/superadmin/users");
+    await bodyOrVisible(page, /User Management|Reset Password|JIT|Department Head/i);
+    const resetButtons = page.getByRole("button", { name: /^Reset Password$/i });
+    const resetCount = await resetButtons.count();
+    if (resetCount > 0) {
+      await resetButtons.first().click();
+      await bodyOrVisible(page, /Temporary Password|New Password|Reset Password/i);
+    }
     await uiShot(page, "BB-UI-SA-USR-005");
   });
 

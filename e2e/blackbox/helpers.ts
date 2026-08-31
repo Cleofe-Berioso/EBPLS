@@ -121,16 +121,33 @@ export async function openRoute(
   opts?: { urlPattern?: RegExp; shot?: string[] }
 ) {
   let lastText = "";
+  let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.goto(route, { waitUntil: "domcontentloaded", timeout: 90_000 });
-    await expectNotLogin(page);
-    if (opts?.urlPattern) {
-      await expect(page).toHaveURL(opts.urlPattern, { timeout: 45_000 });
+    try {
+      await page.goto(route, { waitUntil: "domcontentloaded", timeout: 90_000 });
+      await expectNotLogin(page);
+      if (opts?.urlPattern) {
+        await expect(page).toHaveURL(opts.urlPattern, { timeout: 45_000 });
+      }
+      await expect(page.locator("body")).toBeVisible();
+      lastText = await page.locator("body").innerText();
+      if (!isTransientServerPage(lastText)) break;
+      await page.waitForTimeout(2_000 * (attempt + 1));
+    } catch (error) {
+      lastError = error;
+      const message = String(error);
+      if (
+        attempt < 2 &&
+        /ERR_NO_BUFFER_SPACE|ERR_CONNECTION_RESET|ERR_NETWORK_CHANGED|ECONNRESET/i.test(message)
+      ) {
+        await page.waitForTimeout(3_000 * (attempt + 1));
+        continue;
+      }
+      throw error;
     }
-    await expect(page.locator("body")).toBeVisible();
-    lastText = await page.locator("body").innerText();
-    if (!isTransientServerPage(lastText)) break;
-    await page.waitForTimeout(2_000 * (attempt + 1));
+  }
+  if (isTransientServerPage(lastText)) {
+    throw lastError ?? new Error(`Transient server page after retries for ${route}`);
   }
   expect(isTransientServerPage(lastText)).toBeFalsy();
   if (opts?.shot) await capture(page, ...opts.shot);

@@ -1,7 +1,7 @@
 import { expect } from "@playwright/test";
 import { createRoleTest } from "./fixtures";
 import { openRoute, pageHasText, SMOKE } from "./helpers";
-import { uiShot, bodyOrVisible, assertApplicantDashboardActionRequired, assertApplicantDashboardSection } from "./ui-inspection-helpers";
+import { uiShot, bodyOrVisible, assertApplicantDashboardActionRequired, assertApplicantDashboardSection, waitForClientPage } from "./ui-inspection-helpers";
 
 const test = createRoleTest("applicant");
 test.describe.configure({ mode: "serial" });
@@ -41,6 +41,7 @@ async function onMyApplicationsPage(page: import("@playwright/test").Page) {
 
 async function onTopPage(page: import("@playwright/test").Page) {
   await openRoute(page, "/applicant/top", { urlPattern: /\/top/ });
+  await waitForClientPage(page);
   await expect(page.getByRole("heading", { name: /Tax Order of Payment/i })).toBeVisible({
     timeout: 45_000,
   });
@@ -414,6 +415,29 @@ test.describe("4–8 Applicant Portal UI", () => {
   test("BB-UI-AP-TOP-007 Payment status banners", async ({ page }) => {
     await onTopPage(page);
     await uiShot(page, "BB-UI-AP-TOP-007");
+  });
+
+  test("BB-UI-AP-TOP-008 TOP Records list with View buttons", async ({ page }) => {
+    await onTopPage(page);
+    await bodyOrVisible(page, /TOP Records|View/i);
+    await uiShot(page, "BB-UI-AP-TOP-008");
+  });
+
+  test("BB-UI-AP-TOP-009 Pagination controls", async ({ page }) => {
+    await onTopPage(page);
+    await expect(page.getByRole("region", { name: /Pagination/i })).toBeVisible({ timeout: 20_000 });
+    await bodyOrVisible(page, /Page \d+ of|Rows|TOP records/i);
+    await uiShot(page, "BB-UI-AP-TOP-009");
+  });
+
+  test("BB-UI-AP-TOP-010 TOP History modal", async ({ page }) => {
+    await onTopPage(page);
+    const viewBtn = page.getByRole("button", { name: /^View$/i }).first();
+    if (await viewBtn.isVisible().catch(() => false)) {
+      await viewBtn.click();
+      await bodyOrVisible(page, /TOP History|Browse your other/i);
+    }
+    await uiShot(page, "BB-UI-AP-TOP-010");
   });
 
   test("BB-UI-AP-PRO-001 Profile page sections", async ({ page }) => {
