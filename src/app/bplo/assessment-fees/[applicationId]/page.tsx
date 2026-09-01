@@ -60,12 +60,20 @@ export default async function BploAssessmentDetailPage({
                   Next: Payment Verification
                 </p>
               </div>
-              <Link
-                href="/bplo/assessment-fees"
-                className={actionButtonStyles("primary", "md")}
-              >
-                Back to Assessment Fees
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/bplo/payment-verification"
+                  className={actionButtonStyles("primary", "md")}
+                >
+                  Go to Payment Verification
+                </Link>
+                <Link
+                  href="/bplo/assessment-fees"
+                  className={actionButtonStyles("secondary", "md")}
+                >
+                  Back to Assessment Fees
+                </Link>
+              </div>
             </div>
           </SectionCard>
         </section>

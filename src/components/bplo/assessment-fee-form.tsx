@@ -195,10 +195,9 @@ export function AssessmentFeeForm({ detail }: Props) {
     setStatusMessage(null);
     try {
       await submit(`/api/bplo/assessment-fees/${detail.id}/generate-top`, "generated");
-      // Redirect to assessment fees list after successful TOP generation
-      // (application no longer matches ASSESSED status filter for detail page)
+      // Application moves to APPROVED_FOR_PAYMENT — take BPLO to the payment verification queue.
       setTimeout(() => {
-        router.push("/bplo/assessment-fees");
+        router.push("/bplo/payment-verification");
       }, 1500);
     } catch {
       setStatusMessage({ kind: "error", text: "Network error. Please try again." });
