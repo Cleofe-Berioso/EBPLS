@@ -224,6 +224,8 @@ export function ApplicantLayoutClient({
             <PortalNavToggles
               mobileOpen={mobileOpen}
               onMobileToggle={() => setMobileOpen((value) => !value)}
+              collapsed={collapsed}
+              onCollapseToggle={() => setCollapsed((value) => !value)}
             />
             <PortalHeaderBrand
               eyebrow="Applicant Portal"

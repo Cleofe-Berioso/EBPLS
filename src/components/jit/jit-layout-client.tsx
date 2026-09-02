@@ -43,6 +43,8 @@ export function JitLayoutClient({
             <PortalNavToggles
               mobileOpen={mobileOpen}
               onMobileToggle={() => setMobileOpen((value) => !value)}
+              collapsed={collapsed}
+              onCollapseToggle={() => setCollapsed((value) => !value)}
             />
             <PortalHeaderBrand
               eyebrow="JIT Portal"

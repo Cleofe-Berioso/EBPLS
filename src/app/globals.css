@@ -338,6 +338,12 @@ button, a, input, select, textarea {
   overflow: hidden;
 }
 
+@media (min-width: 1024px) {
+  .app-sidebar {
+    z-index: 30;
+  }
+}
+
 .app-sidebar::before {
   content: '';
   position: absolute;
@@ -398,6 +404,7 @@ button, a, input, select, textarea {
   border: 1px solid var(--border-color);
   background: var(--surface);
   color: var(--foreground);
+  cursor: pointer;
   transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
 }
 

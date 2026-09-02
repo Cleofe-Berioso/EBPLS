@@ -91,20 +91,35 @@ export function PortalMobileOverlay({
 export function PortalNavToggles({
   mobileOpen,
   onMobileToggle,
+  collapsed,
+  onCollapseToggle,
 }: {
   mobileOpen: boolean;
   onMobileToggle: () => void;
+  collapsed: boolean;
+  onCollapseToggle: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onMobileToggle}
-      aria-expanded={mobileOpen}
-      aria-label={mobileOpen ? "Close sidebar" : "Open sidebar"}
-      className="app-portal-nav-toggle lg:hidden"
-    >
-      {mobileOpen ? <X className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={onMobileToggle}
+        aria-expanded={mobileOpen}
+        aria-label={mobileOpen ? "Close sidebar" : "Open sidebar"}
+        className="app-portal-nav-toggle lg:hidden"
+      >
+        {mobileOpen ? <X className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+      </button>
+      <button
+        type="button"
+        onClick={onCollapseToggle}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        className="app-portal-nav-toggle hidden lg:inline-flex"
+      >
+        {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </button>
+    </>
   );
 }
 
