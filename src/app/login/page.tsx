@@ -26,6 +26,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const email = getSingleParam(params.email).trim();
   const error = getSingleParam(params.error).trim();
   const disabledAccountNotice = error === "account-disabled";
+  const sessionExpiredNotice = error === "session-expired";
   const hasPasswordQuery = Object.prototype.hasOwnProperty.call(params, "password");
 
   if (hasPasswordQuery) {
@@ -36,6 +37,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <LoginForm initialEmail={email} disabledAccountNotice={disabledAccountNotice} />
+    <LoginForm
+      initialEmail={email}
+      disabledAccountNotice={disabledAccountNotice}
+      sessionExpiredNotice={sessionExpiredNotice}
+    />
   );
 }

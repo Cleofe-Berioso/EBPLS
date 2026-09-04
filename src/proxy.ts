@@ -25,7 +25,9 @@ export const proxy = auth((req) => {
   const isLoggedIn = !!req.auth;
   const role = req.auth?.user?.role as Role | undefined;
   const userId = req.auth?.user?.id;
-  const accountDisabled = nextUrl.searchParams.get("error") === "account-disabled";
+  const loginError = nextUrl.searchParams.get("error");
+  const stayOnLogin =
+    loginError === "account-disabled" || loginError === "session-expired";
 
   // Never redirect/alter response expectations for server action or RSC transport requests.
   if (isServerActionRequest || isRscRequest) {
@@ -38,7 +40,7 @@ export const proxy = auth((req) => {
   }
 
   // Redirect logged-in users away from the login page
-  if (isLoggedIn && pathname === "/login" && !accountDisabled) {
+  if (isLoggedIn && pathname === "/login" && !stayOnLogin) {
     const home = role ? ROLE_HOME[role] : "/login";
     if (home === pathname) {
       return NextResponse.next();

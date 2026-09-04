@@ -9,9 +9,11 @@ import { googleSignInAction, loginAction } from "@/app/login/actions";
 export function LoginForm({
   initialEmail = "",
   disabledAccountNotice = false,
+  sessionExpiredNotice = false,
 }: {
   initialEmail?: string;
   disabledAccountNotice?: boolean;
+  sessionExpiredNotice?: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(loginAction, null);
   const [showPassword, setShowPassword] = useState(false);
@@ -111,6 +113,15 @@ export function LoginForm({
                   className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
                 >
                   Your account has been disabled. Please contact the system administrator.
+                </div>
+              )}
+
+              {sessionExpiredNotice && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                >
+                  Your session is no longer valid. Please sign in again.
                 </div>
               )}
 

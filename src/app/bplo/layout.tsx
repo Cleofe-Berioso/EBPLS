@@ -1,11 +1,13 @@
-import { notFound } from "next/navigation";
 import { signOut } from "@/lib/auth";
 import { requireBploSession } from "@/lib/bplo-api";
 import { BploLayoutClient } from "@/components/bplo/bplo-layout-client";
 
 export default async function BploLayout({ children }: { children: React.ReactNode }) {
   const session = await requireBploSession();
-  if (!session) notFound();
+  if (!session) {
+    await signOut({ redirectTo: "/login?error=session-expired" });
+    return null;
+  }
 
   async function handleSignOut() {
     "use server";
