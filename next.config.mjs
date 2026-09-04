@@ -56,7 +56,6 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  outputFileTracingRoot: process.cwd(),
   experimental: {
     proxyClientMaxBodySize: "20mb",
   },

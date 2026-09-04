@@ -10,6 +10,7 @@ export function DashboardChartCard({
   isEmpty,
   emptyTitle,
   emptyDescription,
+  fillHeight = true,
   children,
 }: {
   title: string;
@@ -19,8 +20,14 @@ export function DashboardChartCard({
   isEmpty?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  /** When false, chart content controls its own height (needed for horizontal bar charts). */
+  fillHeight?: boolean;
   children: ReactNode;
 }) {
+  const chartShellClass = fillHeight
+    ? "h-[clamp(160px,24vh,220px)] min-h-[160px] w-full min-w-0"
+    : "w-full min-w-0";
+
   return (
     <SectionCard title={title} description={description} contentClassName="pt-3 min-w-0">
       {loading ? (
@@ -34,7 +41,7 @@ export function DashboardChartCard({
           description={emptyDescription ?? "Charts appear once operational records are available."}
         />
       ) : (
-        <div className="h-[clamp(160px,24vh,220px)] min-h-[160px] w-full min-w-0">{children}</div>
+        <div className={chartShellClass}>{children}</div>
       )}
     </SectionCard>
   );

@@ -207,7 +207,7 @@ export async function assertSuperAdminDashboard(page: Page) {
   await expect(page.getByRole("heading", { name: /IT Administrator Dashboard/i })).toBeVisible({
     timeout: 60_000,
   });
-  await bodyOrVisible(page, /Audit view only|Open Reports Hub|What needs attention/i);
+  await bodyOrVisible(page, /Audit view only|Open Reports Hub|Operational meaning/i);
 }
 
 export async function assertSuperAdminReportsHub(page: Page) {

@@ -71,3 +71,5 @@ scripts/smoke-test-proof.txt
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+.vercel
+.env*

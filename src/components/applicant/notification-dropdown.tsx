@@ -67,7 +67,7 @@ export function NotificationDropdown() {
         aria-label="Notifications"
         aria-expanded={isOpen}
         aria-haspopup="true"
-        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-white text-[var(--ink-muted)] shadow-sm transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
+        className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-color)] bg-white text-[var(--ink-muted)] shadow-sm transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
       >
         <Bell className="h-4 w-4" />
 

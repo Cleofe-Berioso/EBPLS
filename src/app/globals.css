@@ -394,7 +394,7 @@ button, a, input, select, textarea {
 }
 
 .app-portal-nav-toggle {
-  display: inline-flex;
+  /* Do not set display here — Tailwind hidden/lg:inline-flex must control visibility */
   height: 2.75rem;
   width: 2.75rem;
   flex-shrink: 0;

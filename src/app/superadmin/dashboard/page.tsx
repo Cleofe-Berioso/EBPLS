@@ -3,7 +3,6 @@ import { Activity, ClipboardList, MessageSquareWarning, Users } from "lucide-rea
 import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { DashboardQueueCard } from "@/components/ui/dashboard-queue-card";
 import { DashboardLineChart } from "@/components/ui/dashboard-line-chart";
@@ -23,12 +22,6 @@ import { getSuperAdminDashboardMetrics } from "@/lib/superadmin-dashboard";
 function percentOf(part: number, whole: number): string {
   if (whole <= 0) return "0%";
   return `${Math.round((part / whole) * 1000) / 10}%`;
-}
-
-function insightBannerVariant(
-  severity: "info" | "success" | "warning" | "danger"
-): "info" | "success" | "warning" | "danger" {
-  return severity;
 }
 
 export default async function SuperAdminDashboard() {
@@ -84,29 +77,6 @@ export default async function SuperAdminDashboard() {
         description="This dashboard cannot approve, reject, assess, verify payments, release permits, verify inspections, or mutate records. Use it to understand system load and where offices may need support."
         variant="readOnly"
       />
-
-      <SectionCard
-        title="What needs attention now"
-        description="Plain-language findings derived from live queues, messaging logs, and compliance records — not just raw totals."
-      >
-        {metrics.insights.length === 0 ? (
-          <EmptyState
-            title="No prioritized findings yet"
-            description="Insights appear once applications, inspections, or SMS logs exist."
-          />
-        ) : (
-          <div className="space-y-3">
-            {metrics.insights.map((insight) => (
-              <InfoBanner
-                key={insight.id}
-                title={insight.title}
-                description={`${insight.meaning} Recommended action: ${insight.recommendation}`}
-                variant={insightBannerVariant(insight.severity)}
-              />
-            ))}
-          </div>
-        )}
-      </SectionCard>
 
       <SectionCard
         title="Operational meaning at a glance"
@@ -333,15 +303,45 @@ export default async function SuperAdminDashboard() {
         />
 
         <SectionCard
-          title="Error & exception logs"
-          description="Persisted system exception tracking for IT root-cause analysis."
+          title="Diagnostic logs"
+          description="Use these live audit sources for IT root-cause checks. Dedicated exception-table logging is not part of this deployment."
         >
-          {metrics.errorLogConfigured ? null : (
-            <EmptyState
-              title="Error log tracking is not configured yet"
-              description="No dedicated error/exception log table is available in this deployment. Use Activity Log and SMS Delivery Log as interim diagnostics."
-            />
-          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Link
+              href="/superadmin/activities"
+              className="rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--muted-surface)] p-3 transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]"
+            >
+              <div className="flex items-start gap-2.5">
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--warning-soft)] text-[var(--warning)] ring-1 ring-[var(--border-color)]">
+                  <Activity className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--foreground)]">Activity Log</p>
+                  <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                    {metrics.systemHealth.recentActivityVolume.toLocaleString("en-PH")} workflow events in the last 7 days
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-[var(--primary)]">Open activity trail →</p>
+                </div>
+              </div>
+            </Link>
+            <Link
+              href="/superadmin/reports/print/sms"
+              className="rounded-[var(--radius-card)] border border-[var(--border-color)] bg-[var(--muted-surface)] p-3 transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]"
+            >
+              <div className="flex items-start gap-2.5">
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--danger-soft)] text-[var(--danger)] ring-1 ring-[var(--border-color)]">
+                  <MessageSquareWarning className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--foreground)]">SMS Delivery Log</p>
+                  <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                    {metrics.systemHealth.recentFailedSmsCount.toLocaleString("en-PH")} failed SMS in the last 7 days
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-[var(--primary)]">Open SMS delivery report →</p>
+                </div>
+              </div>
+            </Link>
+          </div>
         </SectionCard>
       </div>
 

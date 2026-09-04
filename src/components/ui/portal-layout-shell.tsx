@@ -106,7 +106,7 @@ export function PortalNavToggles({
         onClick={onMobileToggle}
         aria-expanded={mobileOpen}
         aria-label={mobileOpen ? "Close sidebar" : "Open sidebar"}
-        className="app-portal-nav-toggle lg:hidden"
+        className="app-portal-nav-toggle inline-flex lg:hidden"
       >
         {mobileOpen ? <X className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
       </button>

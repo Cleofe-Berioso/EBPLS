@@ -72,7 +72,6 @@ export interface SuperAdminDashboardMetrics {
   closurePrevalenceTrend: Array<{ label: string; value: number }>;
   prevalentBusinessCategoriesByArea: Array<{ label: string; value: number }>;
   smsDeliveryDistribution: Array<{ name: string; value: number }>;
-  errorLogConfigured: boolean;
   systemHealth: {
     databaseReachable: boolean;
     lastSuccessfulDashboardCheck: string;
@@ -583,7 +582,6 @@ const getCachedSuperAdminDashboardMetrics = cache(async (): Promise<SuperAdminDa
     closurePrevalenceTrend,
     prevalentBusinessCategoriesByArea,
     smsDeliveryDistribution,
-    errorLogConfigured: false,
     systemHealth: {
       databaseReachable,
       lastSuccessfulDashboardCheck: new Date().toISOString(),

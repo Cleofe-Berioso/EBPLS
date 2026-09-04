@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { LogOut, UserCircle2 } from "lucide-react";
 import { ApplicantSidebar } from "@/components/applicant/applicant-sidebar";
 import { NotificationDropdown } from "@/components/applicant/notification-dropdown";
 import { actionButtonStyles } from "@/components/ui/action-button";
@@ -10,7 +12,6 @@ import { LoadingState } from "@/components/ui/loading-state";
 import {
   PortalContentColumn,
   PortalGuardMain,
-  PortalHeaderActions,
   PortalHeaderBrand,
   PortalLayoutRoot,
   PortalMain,
@@ -28,6 +29,62 @@ import {
 } from "@/lib/applicant-profile-setup-next";
 
 type ProfileGuardState = "checking" | "ready" | "require_profile_picture" | "error";
+
+function ApplicantHeaderActions({
+  name,
+  profileHref,
+  signOutAction,
+  profileImageUrl,
+  profileImageFailed,
+  onProfileImageError,
+}: {
+  name: string;
+  profileHref: string;
+  signOutAction: () => Promise<void>;
+  profileImageUrl?: string | null;
+  profileImageFailed?: boolean;
+  onProfileImageError?: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+      <div className="hidden min-w-0 text-right md:block">
+        <p className="truncate text-sm font-semibold text-[var(--foreground)]">{name}</p>
+        <p className="truncate text-xs text-[var(--ink-muted)]">Applicant</p>
+      </div>
+      <Link
+        href={profileHref}
+        className="app-portal-user-avatar"
+        aria-label="Open profile"
+        title="Profile"
+      >
+        {profileImageUrl && !profileImageFailed ? (
+          <img
+            src={profileImageUrl}
+            alt={name}
+            className="h-full w-full object-cover"
+            onError={onProfileImageError}
+          />
+        ) : (
+          <UserCircle2 className="h-5 w-5" />
+        )}
+      </Link>
+      <Link href={profileHref} className={`${actionButtonStyles("secondary", "sm")} hidden md:inline-flex`}>
+        Profile
+      </Link>
+      <form action={signOutAction}>
+        <button
+          className={`${actionButtonStyles("primary", "sm")} inline-flex h-10 w-10 items-center justify-center p-0 sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3`}
+          type="submit"
+          aria-label="Sign Out"
+          title="Sign Out"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Sign Out</span>
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export function ApplicantLayoutClient({
   userName,
@@ -220,31 +277,39 @@ export function ApplicantLayoutClient({
 
       <PortalContentColumn collapsed={collapsed}>
         <PortalTopHeader>
-          <div className="flex min-w-0 items-center gap-3">
-            <PortalNavToggles
-              mobileOpen={mobileOpen}
-              onMobileToggle={() => setMobileOpen((value) => !value)}
-              collapsed={collapsed}
-              onCollapseToggle={() => setCollapsed((value) => !value)}
-            />
-            <PortalHeaderBrand
-              eyebrow="Applicant Portal"
-              title={`Welcome, ${userName}`}
-              subtitle="Track applications, payments, and permit status"
-            />
-          </div>
+          <div className="flex w-full min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <PortalNavToggles
+                mobileOpen={mobileOpen}
+                onMobileToggle={() => setMobileOpen((value) => !value)}
+                collapsed={collapsed}
+                onCollapseToggle={() => setCollapsed((value) => !value)}
+              />
+              <div className="min-w-0 sm:hidden">
+                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                  Applicant Portal
+                </p>
+              </div>
+              <div className="hidden min-w-0 sm:block">
+                <PortalHeaderBrand
+                  eyebrow="Applicant Portal"
+                  title={`Welcome, ${userName}`}
+                  subtitle="Track applications, payments, and permit status"
+                />
+              </div>
+            </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            <NotificationDropdown />
-            <PortalHeaderActions
-              name={userName}
-              roleLabel="Applicant"
-              profileHref="/applicant/profile"
-              signOutAction={signOutAction}
-              profileImageUrl={profileImageUrl}
-              profileImageFailed={profileImageFailed}
-              onProfileImageError={() => setProfileImageFailed(true)}
-            />
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <NotificationDropdown />
+              <ApplicantHeaderActions
+                name={userName}
+                profileHref="/applicant/profile"
+                signOutAction={signOutAction}
+                profileImageUrl={profileImageUrl}
+                profileImageFailed={profileImageFailed}
+                onProfileImageError={() => setProfileImageFailed(true)}
+              />
+            </div>
           </div>
         </PortalTopHeader>
 
