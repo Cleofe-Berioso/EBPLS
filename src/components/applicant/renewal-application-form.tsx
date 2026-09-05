@@ -1290,8 +1290,21 @@ export function RenewalApplicationForm() {
                 const normalizedNext = normalizeBusinessInfo(nextInfo);
                 setInfo({
                   ...normalizedNext,
+                  // Preserve live typing (spaces / multi-word) — trim only on blur/submit.
+                  businessName: nextInfo.businessName,
+                  tradeName: nextInfo.tradeName,
+                  ownerName: nextInfo.ownerName,
+                  ownerFirstName: nextInfo.ownerFirstName,
+                  ownerMiddleName: nextInfo.ownerMiddleName,
+                  ownerSurname: nextInfo.ownerSurname,
+                  ownerSuffix: nextInfo.ownerSuffix,
                   businessStreetAddress: nextInfo.businessStreetAddress,
                   streetAddress: nextInfo.streetAddress,
+                  mainOfficeStreetAddress: nextInfo.mainOfficeStreetAddress,
+                  mainOfficeBarangay: nextInfo.mainOfficeBarangay,
+                  barangay: nextInfo.barangay,
+                  lineOfBusiness: nextInfo.lineOfBusiness,
+                  taxIncentives: nextInfo.taxIncentives,
                 });
                 if (
                   typeof normalizedNext.businessLatitude === "number" &&

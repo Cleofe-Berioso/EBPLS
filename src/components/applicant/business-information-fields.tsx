@@ -15,6 +15,7 @@ import {
   resolveNationalityOnBusinessTypeChange,
 } from "@/lib/business-rules";
 import { formatOwnerName } from "@/lib/person-name";
+import { autoCapitalizeWords } from "@/lib/text-input";
 import { NATIONALITY_OPTIONS } from "@/lib/nationality-options";
 import {
   buildEbMagalonaBusinessAddress,
@@ -504,7 +505,10 @@ export function BusinessInformationFields({
           className={fieldClasses(fieldLocked(lockedFields, "businessName"))}
           value={value.businessName}
           disabled={fieldLocked(lockedFields, "businessName")}
-          onChange={(event) => onChange({ ...value, businessName: event.target.value })}
+          autoCapitalize="words"
+          onChange={(event) =>
+            onChange({ ...value, businessName: autoCapitalizeWords(event.target.value) })
+          }
         />
         <LockedHint visible={fieldLocked(lockedFields, "businessName")} />
       </FormField>
@@ -528,7 +532,10 @@ export function BusinessInformationFields({
           className={fieldClasses(fieldLocked(lockedFields, "tradeName"))}
           value={value.tradeName}
           disabled={fieldLocked(lockedFields, "tradeName")}
-          onChange={(event) => onChange({ ...value, tradeName: event.target.value })}
+          autoCapitalize="words"
+          onChange={(event) =>
+            onChange({ ...value, tradeName: autoCapitalizeWords(event.target.value) })
+          }
         />
         <LockedHint visible={fieldLocked(lockedFields, "tradeName")} />
       </FormField>
@@ -552,8 +559,9 @@ export function BusinessInformationFields({
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerFirstName ?? ""}
           disabled={ownerIdentityLocked}
+          autoCapitalize="words"
           onChange={(event) => {
-            const ownerFirstName = event.target.value;
+            const ownerFirstName = autoCapitalizeWords(event.target.value);
             onChange({
               ...value,
               ownerFirstName,
@@ -581,8 +589,9 @@ export function BusinessInformationFields({
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerMiddleName ?? ""}
           disabled={ownerIdentityLocked}
+          autoCapitalize="words"
           onChange={(event) => {
-            const ownerMiddleName = event.target.value;
+            const ownerMiddleName = autoCapitalizeWords(event.target.value);
             onChange({
               ...value,
               ownerMiddleName,
@@ -610,8 +619,9 @@ export function BusinessInformationFields({
           className={fieldClasses(ownerIdentityLocked)}
           value={value.ownerSurname ?? ""}
           disabled={ownerIdentityLocked}
+          autoCapitalize="words"
           onChange={(event) => {
-            const ownerSurname = event.target.value;
+            const ownerSurname = autoCapitalizeWords(event.target.value);
             onChange({
               ...value,
               ownerSurname,
@@ -639,7 +649,7 @@ export function BusinessInformationFields({
           value={value.ownerSuffix ?? ""}
           disabled={ownerIdentityLocked}
           onChange={(event) => {
-            const ownerSuffix = event.target.value;
+            const ownerSuffix = autoCapitalizeWords(event.target.value);
             onChange({
               ...value,
               ownerSuffix,

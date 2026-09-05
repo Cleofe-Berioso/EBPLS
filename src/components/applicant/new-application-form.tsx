@@ -885,10 +885,22 @@ export function NewApplicationForm() {
     const normalizedNext = normalizeBusinessInfo(next);
     const nextInfo = {
       ...normalizedNext,
-      // Keep the raw typed values while editing; validation/submission normalize separately.
+      // Keep raw typed values while editing — live .trim() blocks multi-word input
+      // (trailing spaces are stripped before the next word can be typed).
+      businessName: next.businessName,
+      tradeName: next.tradeName,
       ownerName: next.ownerName,
+      ownerFirstName: next.ownerFirstName,
+      ownerMiddleName: next.ownerMiddleName,
+      ownerSurname: next.ownerSurname,
+      ownerSuffix: next.ownerSuffix,
       businessStreetAddress: next.businessStreetAddress,
       streetAddress: next.streetAddress,
+      mainOfficeStreetAddress: next.mainOfficeStreetAddress,
+      mainOfficeBarangay: next.mainOfficeBarangay,
+      barangay: next.barangay,
+      lineOfBusiness: next.lineOfBusiness,
+      taxIncentives: next.taxIncentives,
     };
 
     setInfo(nextInfo);

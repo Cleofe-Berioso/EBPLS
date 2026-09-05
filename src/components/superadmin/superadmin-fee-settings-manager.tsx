@@ -509,7 +509,7 @@ export function SuperAdminFeeSettingsManager() {
         return;
       }
 
-      setFlash({ type: "success", message: "Surcharge, interest, and compliance penalty settings updated." });
+      setFlash({ type: "success", message: "Surcharge and interest settings updated." });
       await loadSettings();
     } catch {
       setFlash({ type: "danger", message: "Failed to save surcharge/interest settings." });
@@ -675,7 +675,7 @@ export function SuperAdminFeeSettingsManager() {
     <section className="ui-page-stack">
       <PageHeader
         title="System Fee Settings"
-        description="Configure fee tables, renewal penalties, and official extension rules."
+        description="Configure fee tables, renewal surcharge/interest rates, and official extension rules."
         badge={<RoleBadge roleType="VIEW_ONLY" label="Configuration Scope" />}
       />
 
@@ -1010,53 +1010,9 @@ export function SuperAdminFeeSettingsManager() {
             />
           </FormField>
 
-          <div className="md:col-span-2 xl:col-span-3">
-            <p className={`mb-2 ${superadminSummaryLabelClass}`}>
-              Renewal Compliance Penalties (JIT — RENEWAL_RELATED)
-            </p>
-            <p className="mb-3 ui-caption">
-              Fixed penalty amounts (₱) applied per violation severity when a renewal application has unsettled RENEWAL_RELATED non-compliance cases. Set to 0 to disable.
-            </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              <FormField label="Minor Violation Penalty (₱)">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  aria-label="Minor Violation Penalty (₱)"
-                  value={penaltyForm.renewalComplianceMinorPenalty}
-                  onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceMinorPenalty: e.target.value }))}
-                  className={superadminFormControlClass}
-                />
-              </FormField>
-              <FormField label="Major Violation Penalty (₱)">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  aria-label="Major Violation Penalty (₱)"
-                  value={penaltyForm.renewalComplianceMajorPenalty}
-                  onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceMajorPenalty: e.target.value }))}
-                  className={superadminFormControlClass}
-                />
-              </FormField>
-              <FormField label="Severe Violation Penalty (₱)">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  aria-label="Severe Violation Penalty (₱)"
-                  value={penaltyForm.renewalComplianceSeverePenalty}
-                  onChange={(e) => setPenaltyForm((prev) => ({ ...prev, renewalComplianceSeverePenalty: e.target.value }))}
-                  className={superadminFormControlClass}
-                />
-              </FormField>
-            </div>
-          </div>
-
           <div className="md:col-span-2 xl:col-span-3 flex justify-end">
             <button type="submit" className={actionButtonStyles("primary", "sm")} disabled={isLoading}>
-              Save Penalty Settings
+              Save Surcharge Settings
             </button>
           </div>
         </form>

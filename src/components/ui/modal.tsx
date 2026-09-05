@@ -27,12 +27,17 @@ export function Modal({
   const [mounted, setMounted] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedElement = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const titleId = useId();
   const descriptionId = useId();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -43,7 +48,7 @@ export function Modal({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -73,11 +78,16 @@ export function Modal({
     }
 
     window.addEventListener("keydown", handleKeyDown);
+    // Prefer the first field input over the header close button so typing
+    // does not land on × / Cancel when the parent re-renders.
     requestAnimationFrame(() => {
-      const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
-        'button:not([disabled]), a[href], textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      const preferred = dialogRef.current?.querySelector<HTMLElement>(
+        'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])'
       );
-      firstFocusable?.focus();
+      const fallback = dialogRef.current?.querySelector<HTMLElement>(
+        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+      );
+      (preferred ?? fallback)?.focus();
     });
 
     return () => {
@@ -85,7 +95,7 @@ export function Modal({
       window.removeEventListener("keydown", handleKeyDown);
       previouslyFocusedElement.current?.focus();
     };
-  }, [onClose, open]);
+  }, [open]);
 
   if (!mounted || !open) {
     return null;

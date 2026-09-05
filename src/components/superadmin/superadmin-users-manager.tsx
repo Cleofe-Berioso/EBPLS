@@ -20,6 +20,7 @@ import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Modal } from "@/components/ui/modal";
 import { UserAccountIdCard } from "@/components/superadmin/user-account-id-card";
 import { canSuperAdminResetPassword } from "@/lib/superadmin-password-reset";
+import { autoCapitalizeWords } from "@/lib/text-input";
 import type { PaginationPageSize } from "@/lib/pagination";
 
 type RoleFilter = "ALL" | "APPLICANT" | "BPLO" | "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "JIT";
@@ -684,8 +685,14 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
               <input
                 id="create-bplo-first-name"
                 value={createForm.firstName}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    firstName: autoCapitalizeWords(e.target.value),
+                  }))
+                }
                 required
+                autoCapitalize="words"
                 className={superadminFormControlClass}
               />
             </div>
@@ -694,8 +701,14 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
               <input
                 id="create-bplo-last-name"
                 value={createForm.lastName}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    lastName: autoCapitalizeWords(e.target.value),
+                  }))
+                }
                 required
+                autoCapitalize="words"
                 className={superadminFormControlClass}
               />
             </div>
@@ -704,7 +717,13 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
               <input
                 id="create-bplo-middle-name"
                 value={createForm.middleName}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, middleName: e.target.value }))}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    middleName: autoCapitalizeWords(e.target.value),
+                  }))
+                }
+                autoCapitalize="words"
                 className={superadminFormControlClass}
               />
             </div>
@@ -713,7 +732,13 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
               <input
                 id="create-bplo-suffix"
                 value={createForm.suffix}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, suffix: e.target.value }))}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    suffix: autoCapitalizeWords(e.target.value),
+                  }))
+                }
+                autoCapitalize="words"
                 className={superadminFormControlClass}
               />
             </div>

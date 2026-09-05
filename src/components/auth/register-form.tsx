@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail, Phone, User, ShieldCheck, RotateCcw } from "lucide-react";
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
+import { autoCapitalizeWords } from "@/lib/text-input";
 
 // ── Step types ────────────────────────────────────────────────────────────────
 type Step =
@@ -484,8 +485,14 @@ export function RegisterForm() {
                 type="text"
                 aria-label="First Name"
                 autoComplete="given-name"
+                autoCapitalize="words"
                 required
                 defaultValue={savedData?.firstName ?? ""}
+                onInput={(event) => {
+                  const target = event.currentTarget;
+                  const next = autoCapitalizeWords(target.value);
+                  if (next !== target.value) target.value = next;
+                }}
                 className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Juan"
               />
@@ -507,7 +514,13 @@ export function RegisterForm() {
                 type="text"
                 aria-label="Middle Name"
                 autoComplete="additional-name"
+                autoCapitalize="words"
                 defaultValue={savedData?.middleName ?? ""}
+                onInput={(event) => {
+                  const target = event.currentTarget;
+                  const next = autoCapitalizeWords(target.value);
+                  if (next !== target.value) target.value = next;
+                }}
                 className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Santos"
               />
@@ -529,8 +542,14 @@ export function RegisterForm() {
                 type="text"
                 aria-label="Last Name"
                 autoComplete="family-name"
+                autoCapitalize="words"
                 required
                 defaultValue={savedData?.lastName ?? ""}
+                onInput={(event) => {
+                  const target = event.currentTarget;
+                  const next = autoCapitalizeWords(target.value);
+                  if (next !== target.value) target.value = next;
+                }}
                 className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Dela Cruz"
               />
@@ -552,7 +571,13 @@ export function RegisterForm() {
                 type="text"
                 aria-label="Suffix"
                 autoComplete="honorific-suffix"
+                autoCapitalize="words"
                 defaultValue={savedData?.suffix ?? ""}
+                onInput={(event) => {
+                  const target = event.currentTarget;
+                  const next = autoCapitalizeWords(target.value);
+                  if (next !== target.value) target.value = next;
+                }}
                 className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
                 placeholder="Jr."
               />
