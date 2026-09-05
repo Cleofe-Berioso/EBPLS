@@ -27,6 +27,16 @@ describe("WB-UTIL — person name, API errors, IP, OTP, options", () => {
     expect(safeApiErrorMessage(new Error("secret"), "Safe", { forceProduction: true })).toBe("Safe");
     expect(safeApiErrorMessage(new Error("secret"), "Safe", { forceProduction: false })).toBe("secret");
     expect(safeApiErrorMessage("x", "Safe", { forceProduction: false })).toBe("Safe");
+    expect(safeApiErrorMessage(new Error("Wrong Format"), "Safe", { forceProduction: true })).toBe(
+      "Wrong Format"
+    );
+    expect(
+      safeApiErrorMessage(
+        new Error("Transaction API error: expired transaction. The timeout for this transaction was 5000 ms"),
+        "Safe",
+        { forceProduction: true }
+      )
+    ).toMatch(/Upload took too long/);
   });
 
   it("WB-UTIL-03 getClientIp from forwarded headers", () => {

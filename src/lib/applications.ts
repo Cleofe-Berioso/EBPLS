@@ -1309,6 +1309,7 @@ export async function saveApplicantApplication(
 
   const writtenStoragePaths: string[] = [];
   const replacedStoragePaths: string[] = [];
+  let createdApplicationId: string | null = null;
 
   try {
     const buildNewDocumentsByName = async (applicationId: string): Promise<Map<string, StagedSubmitDocument>> => {
@@ -1354,100 +1355,108 @@ export async function saveApplicantApplication(
     };
 
     if (existing) {
-      const updated = await prisma.$transaction(async (tx: any) => {
-        const row = await tx.businessApplication.update({
-          where: { id: existing.id },
-          data: {
-            applicationType: input.applicationType,
-            businessRecordId: input.businessRecordId ?? null,
-            closureType:
-              input.applicationType === "CLOSURE" ? normalizeClosureType(input.closureType) : null,
-            closureTypeOtherReason:
-              input.applicationType === "CLOSURE"
-                ? normalizeClosureType(input.closureType) === "OTHERS"
-                  ? input.closureTypeOtherReason?.trim() || null
-                  : null
-                : null,
-            status: nextStatus,
-            formData: normalizedFormData,
-            submittedAt: input.mode === "SUBMIT" ? new Date() : null,
-          },
-        });
+      // Upload files BEFORE the DB transaction — storage I/O for many documents
+      // exceeds Prisma's default 5s interactive transaction timeout on Vercel.
+      const newDocumentsByName =
+        input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0
+          ? await buildNewDocumentsByName(existing.id)
+          : null;
 
-        // Persist newly uploaded files on draft save as well as final submit so
-        // reopening a draft does not force the applicant to re-upload documents.
-        if (input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0) {
-          const newDocumentsByName = await buildNewDocumentsByName(existing.id);
+      const updated = await prisma.$transaction(
+        async (tx: any) => {
+          const row = await tx.businessApplication.update({
+            where: { id: existing.id },
+            data: {
+              applicationType: input.applicationType,
+              businessRecordId: input.businessRecordId ?? null,
+              closureType:
+                input.applicationType === "CLOSURE" ? normalizeClosureType(input.closureType) : null,
+              closureTypeOtherReason:
+                input.applicationType === "CLOSURE"
+                  ? normalizeClosureType(input.closureType) === "OTHERS"
+                    ? input.closureTypeOtherReason?.trim() || null
+                    : null
+                  : null,
+              status: nextStatus,
+              formData: normalizedFormData,
+              submittedAt: input.mode === "SUBMIT" ? new Date() : null,
+            },
+          });
 
-          for (const doc of newDocumentsByName.values()) {
-            const existingDoc = await tx.applicationDocument.findFirst({
-              where: {
-                applicationId: existing.id,
-                documentName: doc.documentName,
-              },
-            });
-
-            if (existingDoc) {
-              if (existingDoc.storagePath !== doc.storagePath) {
-                replacedStoragePaths.push(existingDoc.storagePath);
-              }
-
-              const storageChanged = existingDoc.storagePath !== doc.storagePath;
-
-              await tx.applicationDocument.update({
-                where: { id: existingDoc.id },
-                data: {
-                  fileName: doc.fileName,
-                  storagePath: doc.storagePath,
-                  bucket: doc.bucket,
-                  filePath: doc.filePath,
-                  originalName: doc.originalName,
-                  mimeType: doc.mimeType,
-                  sizeBytes: doc.sizeBytes,
-                  fileSize: doc.fileSize,
-                  uploadedAt: new Date(),
-                  ...(storageChanged
-                    ? {
-                        validationStatus: "PENDING_REVIEW",
-                        validationRemarks: null,
-                        validatedAt: null,
-                        validatedById: null,
-                      }
-                    : {}),
-                },
-              });
-            } else {
-              await tx.applicationDocument.create({
-                data: {
+          // Persist newly uploaded files on draft save as well as final submit so
+          // reopening a draft does not force the applicant to re-upload documents.
+          if (newDocumentsByName) {
+            for (const doc of newDocumentsByName.values()) {
+              const existingDoc = await tx.applicationDocument.findFirst({
+                where: {
                   applicationId: existing.id,
                   documentName: doc.documentName,
-                  fileName: doc.fileName,
-                  storagePath: doc.storagePath,
-                  bucket: doc.bucket,
-                  filePath: doc.filePath,
-                  originalName: doc.originalName,
-                  mimeType: doc.mimeType,
-                  sizeBytes: doc.sizeBytes,
-                  fileSize: doc.fileSize,
                 },
               });
+
+              if (existingDoc) {
+                if (existingDoc.storagePath !== doc.storagePath) {
+                  replacedStoragePaths.push(existingDoc.storagePath);
+                }
+
+                const storageChanged = existingDoc.storagePath !== doc.storagePath;
+
+                await tx.applicationDocument.update({
+                  where: { id: existingDoc.id },
+                  data: {
+                    fileName: doc.fileName,
+                    storagePath: doc.storagePath,
+                    bucket: doc.bucket,
+                    filePath: doc.filePath,
+                    originalName: doc.originalName,
+                    mimeType: doc.mimeType,
+                    sizeBytes: doc.sizeBytes,
+                    fileSize: doc.fileSize,
+                    uploadedAt: new Date(),
+                    ...(storageChanged
+                      ? {
+                          validationStatus: "PENDING_REVIEW",
+                          validationRemarks: null,
+                          validatedAt: null,
+                          validatedById: null,
+                        }
+                      : {}),
+                  },
+                });
+              } else {
+                await tx.applicationDocument.create({
+                  data: {
+                    applicationId: existing.id,
+                    documentName: doc.documentName,
+                    fileName: doc.fileName,
+                    storagePath: doc.storagePath,
+                    bucket: doc.bucket,
+                    filePath: doc.filePath,
+                    originalName: doc.originalName,
+                    mimeType: doc.mimeType,
+                    sizeBytes: doc.sizeBytes,
+                    fileSize: doc.fileSize,
+                  },
+                });
+              }
             }
           }
-        }
 
-        await tx.applicationHistory.create({
-          data: {
-            applicationId: existing.id,
-            actorId: applicantId,
-            actorRole: "APPLICANT",
-            fromStatus: existing.status,
-            toStatus: nextStatus,
-            remarks: input.mode === "SUBMIT" ? "Applicant submitted application" : "Applicant saved draft",
-          },
-        });
+          await tx.applicationHistory.create({
+            data: {
+              applicationId: existing.id,
+              actorId: applicantId,
+              actorRole: "APPLICANT",
+              fromStatus: existing.status,
+              toStatus: nextStatus,
+              remarks: input.mode === "SUBMIT" ? "Applicant submitted application" : "Applicant saved draft",
+            },
+          });
 
-        return row;
-      });
+          return row;
+        },
+        { timeout: 30_000, maxWait: 10_000 }
+      );
 
       for (const storagePath of replacedStoragePaths) {
         await removeApplicantDocument(storagePath);
@@ -1478,62 +1487,67 @@ export async function saveApplicantApplication(
 
     const applicationNumber = await generateApplicationNumber();
 
-    const created = await prisma.$transaction(async (tx: any) => {
-      const row = await tx.businessApplication.create({
-        data: {
-          applicationNumber,
-          applicantId,
-          businessRecordId: input.businessRecordId ?? null,
-          applicationType: input.applicationType,
-          closureType:
-            input.applicationType === "CLOSURE" ? normalizeClosureType(input.closureType) : null,
-          closureTypeOtherReason:
-            input.applicationType === "CLOSURE"
-              ? normalizeClosureType(input.closureType) === "OTHERS"
-                ? input.closureTypeOtherReason?.trim() || null
-                : null
-              : null,
-          status: nextStatus,
-          formData: normalizedFormData,
-          submittedAt: input.mode === "SUBMIT" ? new Date() : null,
-        },
-      });
-
-      if (input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0) {
-          const newDocumentsByName = await buildNewDocumentsByName(row.id);
-
-        for (const doc of newDocumentsByName.values()) {
-          await tx.applicationDocument.create({
-            data: {
-              applicationId: row.id,
-              documentName: doc.documentName,
-              fileName: doc.fileName,
-              storagePath: doc.storagePath,
-              bucket: doc.bucket,
-              filePath: doc.filePath,
-              originalName: doc.originalName,
-              mimeType: doc.mimeType,
-              sizeBytes: doc.sizeBytes,
-              fileSize: doc.fileSize,
-            },
-          });
-        }
-      }
-
-      await tx.applicationHistory.create({
-        data: {
-          applicationId: row.id,
-          actorId: applicantId,
-          actorRole: "APPLICANT",
-          fromStatus: null,
-          toStatus: nextStatus,
-          remarks: input.mode === "SUBMIT" ? "Applicant submitted application" : "Applicant saved draft",
-        },
-      });
-
-      return row;
+    // Create the application row first so storage uploads have a stable applicationId,
+    // then upload outside any interactive transaction, then write document rows.
+    const created = await prisma.businessApplication.create({
+      data: {
+        applicationNumber,
+        applicantId,
+        businessRecordId: input.businessRecordId ?? null,
+        applicationType: input.applicationType,
+        closureType:
+          input.applicationType === "CLOSURE" ? normalizeClosureType(input.closureType) : null,
+        closureTypeOtherReason:
+          input.applicationType === "CLOSURE"
+            ? normalizeClosureType(input.closureType) === "OTHERS"
+              ? input.closureTypeOtherReason?.trim() || null
+              : null
+            : null,
+        status: nextStatus,
+        formData: normalizedFormData as object,
+        submittedAt: input.mode === "SUBMIT" ? new Date() : null,
+      },
     });
+    createdApplicationId = created.id;
+    const newDocumentsByName =
+      input.mode === "SUBMIT" || normalizedSubmitFiles.length > 0
+        ? await buildNewDocumentsByName(created.id)
+        : null;
 
+    await prisma.$transaction(
+      async (tx: any) => {
+        if (newDocumentsByName) {
+          for (const doc of newDocumentsByName.values()) {
+            await tx.applicationDocument.create({
+              data: {
+                applicationId: created.id,
+                documentName: doc.documentName,
+                fileName: doc.fileName,
+                storagePath: doc.storagePath,
+                bucket: doc.bucket,
+                filePath: doc.filePath,
+                originalName: doc.originalName,
+                mimeType: doc.mimeType,
+                sizeBytes: doc.sizeBytes,
+                fileSize: doc.fileSize,
+              },
+            });
+          }
+        }
+
+        await tx.applicationHistory.create({
+          data: {
+            applicationId: created.id,
+            actorId: applicantId,
+            actorRole: "APPLICANT",
+            fromStatus: null,
+            toStatus: nextStatus,
+            remarks: input.mode === "SUBMIT" ? "Applicant submitted application" : "Applicant saved draft",
+          },
+        });
+      },
+      { timeout: 30_000, maxWait: 10_000 }
+    );
     if (process.env.NODE_ENV !== "production") {
       console.info("[ApplicantSubmission] create", {
         applicantId,
@@ -1550,7 +1564,7 @@ export async function saveApplicantApplication(
       id: created.id,
       applicationNumber: created.applicationNumber,
       applicationType: input.applicationType,
-      status: created.status,
+      status: nextStatus,
       submittedAt: created.submittedAt,
       updatedAt: created.updatedAt,
       formData: normalizedFormData,
@@ -1558,6 +1572,11 @@ export async function saveApplicantApplication(
   } catch (error) {
     for (const storagePath of writtenStoragePaths) {
       await removeApplicantDocument(storagePath);
+    }
+    if (createdApplicationId) {
+      await prisma.businessApplication
+        .delete({ where: { id: createdApplicationId } })
+        .catch(() => undefined);
     }
     throw error;
   }
