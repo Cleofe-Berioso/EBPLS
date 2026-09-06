@@ -53,7 +53,16 @@ export const FEE_CATEGORY_OPTIONS: FeeCategoryOption[] = [
   {
     key: "MANUFACTURERS",
     label: "Manufacturers / Importers / Producers",
-    classifications: [...DEFAULT_CLASSIFICATIONS],
+    classifications: [
+      ...DEFAULT_CLASSIFICATIONS,
+      "Micro Industry (no workers)",
+      "Micro Industry (1–5)",
+      "Cottage Industries A (6–10)",
+      "Small-Scale Industries A (11–50)",
+      "Small-Scale Industries B (51–99)",
+      "Medium-Scale Industries (100–150)",
+      "Large-Scale Industries (200+)",
+    ],
   },
   {
     key: "BANKS",

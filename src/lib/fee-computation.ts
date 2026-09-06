@@ -299,11 +299,12 @@ const FEE_TABLES: Partial<Record<BusinessCategory, CategoryFeeTable>> = {
   },
 
   // ── Restaurants, Cafés, Catering Services ────────────────────────────────
-  // Micro ₱300 | Cottage ₱500 | Small ₱1,000 | Medium ₱2,000 | Large ₱3,000
+  // Micro ₱300 | Cottage ₱500 | Small ₱1,000 | Medium ₱2,500 | Large ₱3,000
+  // (Ordinance Ch. III Art. A §12 — Medium-Scale Industries = ₱2,500)
   RESTAURANTS: {
     label: "Restaurants, Cafés, Catering Services",
-    assetFees:  buildFees7([300, 500, 500, 1000, 2000, 3000, 3000]),
-    workerFees: buildFees7([300, 300, 500, 1000, 2000, 3000, 3000]),
+    assetFees:  buildFees7([300, 500, 500, 1000, 2500, 3000, 3000]),
+    workerFees: buildFees7([300, 300, 500, 1000, 2500, 3000, 3000]),
     assetTierNames: ["Micro", "Cottage", "Cottage", "Small", "Medium", "Large", "Large"],
     workerTierNames: ["Micro (no workers)", "Micro (1–5)", "Cottage (6–10)", "Small (11–50)", "Medium (51–99)", "Large (100–150)", "Large (200+)"],
   },
