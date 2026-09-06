@@ -326,7 +326,7 @@ export async function applyDepartmentHeadAction(
         status: mapDbStatusToUi(updated.status),
       };
     },
-    { timeout: 30_000, maxWait: 10_000 }
+    { timeout: 60_000, maxWait: 10_000 }
   );
 }
 
