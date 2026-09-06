@@ -6,6 +6,7 @@ import { computeMayorsPermitFee } from "@/lib/fee-computation";
 import { getRuntimeFeeSettings } from "@/lib/fee-settings";
 import { toMoneyNumber } from "@/lib/money";
 import type { BusinessInfo, FeeLineItemInput } from "@/lib/applicant-types";
+import { buildPaginatedResult, resolvePagination, type PaginatedResult } from "@/lib/pagination";
 
 type DbApplicationStatus =
   | "DRAFT"
@@ -631,28 +632,44 @@ async function getAssessmentApplication(applicationId: string, dbClient: any = p
 }
 
 export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[]> {
-  const rows = await prisma.businessApplication.findMany({
-    where: {
-      OR: [
-        { status: { in: ASSESSMENT_QUEUE_STATUSES } },
-        {
-          feeAssessment: {
-            is: {
-              reassessmentRequestedAt: { not: null },
-            },
+  const result = await listAssessmentFeeApplicationsPaginated({ page: 1, pageSize: 50 });
+  return result.records;
+}
+
+export async function listAssessmentFeeApplicationsPaginated(options?: {
+  page?: number | string;
+  pageSize?: number | string;
+}): Promise<PaginatedResult<AssessmentFeeRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(options);
+  const where = {
+    OR: [
+      { status: { in: ASSESSMENT_QUEUE_STATUSES } },
+      {
+        feeAssessment: {
+          is: {
+            reassessmentRequestedAt: { not: null },
           },
         },
-      ],
-    },
-    include: {
-      applicant: { select: { name: true, email: true } },
-      businessRecord: { select: { businessName: true } },
-      feeAssessment: { select: { status: true, reassessmentRequestedAt: true } },
-    },
-    orderBy: [{ updatedAt: "desc" }],
-  });
+      },
+    ],
+  };
 
-  return rows.map((row: any) => ({
+  const [rows, totalCount] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where,
+      include: {
+        applicant: { select: { name: true, email: true } },
+        businessRecord: { select: { businessName: true } },
+        feeAssessment: { select: { status: true, reassessmentRequestedAt: true } },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.businessApplication.count({ where }),
+  ]);
+
+  const records = rows.map((row: any) => ({
     id: row.id,
     applicationNumber: row.applicationNumber,
     businessName: resolveBusinessName(row.formData, row.businessRecord?.businessName ?? null),
@@ -666,6 +683,8 @@ export async function listAssessmentFeeApplications(): Promise<AssessmentFeeRow[
     assessmentStatus: (row.feeAssessment?.status as "DRAFT" | "GENERATED" | null) ?? null,
     reassessmentRequested: Boolean(row.feeAssessment?.reassessmentRequestedAt),
   }));
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
 export async function getApplicationForAssessment(applicationId: string): Promise<AssessmentDetail | null> {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { DocumentDownloadButton } from "@/components/ui/document-download-button";
 import { LoadingState } from "@/components/ui/loading-state";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   dhDocumentListItemClass,
   dhFormControlClass,
@@ -22,6 +23,7 @@ import {
 } from "@/components/department-head/department-head-ui-styles";
 import { validationStatusBadgeClass, evaluateRequiredDocumentsValidation, mapDocumentValidationStatusToDb } from "@/lib/document-validation";
 import type { BusinessInfo } from "@/lib/applicant-types";
+import { DEFAULT_PAGE_SIZE, type PaginationPageSize } from "@/lib/pagination";
 
 type ApprovalRow = {
   id: string;
@@ -103,6 +105,10 @@ export default function DepartmentHeadApplicationApprovalPage() {
   const [pendingAction, setPendingAction] = useState<ActionType | null>(null);
   const [remarks, setRemarks] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(DEFAULT_PAGE_SIZE);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const selected = useMemo(
     () => rows.find((row) => row.id === selectedId) ?? null,
@@ -151,31 +157,61 @@ export default function DepartmentHeadApplicationApprovalPage() {
         )
         .join("; ")}`;
 
-  async function loadQueue() {
+  const loadQueue = useCallback(async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true);
-    const response = await fetch("/api/department-head/application-approval", { cache: "no-store" });
-    const data = (await response.json()) as { rows?: ApprovalRow[]; error?: string };
+    const params = new URLSearchParams({
+      page: String(nextPage),
+      pageSize: String(nextPageSize),
+    });
+    const response = await fetch(`/api/department-head/application-approval?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const data = (await response.json()) as {
+      rows?: ApprovalRow[];
+      records?: ApprovalRow[];
+      totalCount?: number;
+      page?: number;
+      pageSize?: PaginationPageSize;
+      totalPages?: number;
+      error?: string;
+    };
 
     if (!response.ok) {
       setMessage({ type: "error", text: data.error ?? "Unable to load Department Head review queue." });
       setRows([]);
       setSelectedId(null);
+      setTotalCount(0);
+      setTotalPages(1);
       setLoading(false);
       return;
     }
 
-    const nextRows = data.rows ?? [];
+    const nextRows = data.rows ?? data.records ?? [];
+    const nextTotalCount = data.totalCount ?? nextRows.length;
+    const nextTotalPages = data.totalPages ?? 1;
+    const resolvedPage = data.page ?? nextPage;
+
+    if (nextRows.length === 0 && resolvedPage > 1 && nextTotalCount > 0) {
+      setLoading(false);
+      setPage(resolvedPage - 1);
+      return;
+    }
+
     setRows(nextRows);
+    setTotalCount(nextTotalCount);
+    setPage(resolvedPage);
+    setPageSize(data.pageSize ?? nextPageSize);
+    setTotalPages(nextTotalPages);
     setSelectedId((current) => {
       if (current && nextRows.some((row) => row.id === current)) return current;
       return nextRows[0]?.id ?? null;
     });
     setLoading(false);
-  }
+  }, [page, pageSize]);
 
   useEffect(() => {
-    void loadQueue();
-  }, []);
+    void loadQueue(page, pageSize);
+  }, [page, pageSize, loadQueue]);
 
   async function runAction(action: ActionType) {
     if (!selected) return;
@@ -232,7 +268,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
         text: `${data.application?.applicationNumber ?? "Application"} moved to ${data.application?.status ?? "new status"}.`,
       });
       setRemarks("");
-      await loadQueue();
+      await loadQueue(page, pageSize);
     } catch (error) {
       setMessage({
         type: "error",
@@ -266,7 +302,7 @@ export default function DepartmentHeadApplicationApprovalPage() {
           <div className="mb-3 flex justify-end">
             <button
               type="button"
-              onClick={() => void loadQueue()}
+              onClick={() => void loadQueue(page, pageSize)}
               disabled={loading}
               className={actionButtonStyles("secondary", "sm")}
             >
@@ -302,6 +338,24 @@ export default function DepartmentHeadApplicationApprovalPage() {
               })}
             </div>
           )}
+          <div className="mt-3">
+            <PaginationControls
+              basePath="/department-head/application-approval"
+              queryParams={{}}
+              mode="client"
+              isLoading={loading}
+              page={page}
+              pageSize={pageSize}
+              totalCount={totalCount}
+              totalPages={totalPages}
+              recordLabel="applications"
+              onPageChange={setPage}
+              onPageSizeChange={(nextSize) => {
+                setPageSize(nextSize);
+                setPage(1);
+              }}
+            />
+          </div>
         </SectionCard>
 
         <SectionCard

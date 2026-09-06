@@ -231,6 +231,11 @@ export function getClosureBusinessReason(snapshot: BusinessSnapshot): string | n
   return getEligibility(snapshot).userFriendlyReason;
 }
 
+/** Exported for unit tests and shared callers that need the full eligibility result. */
+export function evaluateClosureEligibility(snapshot: BusinessSnapshot): ClosureEligibilityResult {
+  return getEligibility(snapshot);
+}
+
 export async function resolveClosureEligibilityForBusiness(
   applicantId: string,
   businessRecordId: string

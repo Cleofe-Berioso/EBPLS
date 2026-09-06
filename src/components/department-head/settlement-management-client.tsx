@@ -180,7 +180,10 @@ export function SettlementManagementClient() {
             </div>
 
             <SectionCard title="Actions" description="Settle eligible cases here.">
-              <p className="text-sm text-[var(--ink-muted)]">Only Minor or Major government-agency-related cases can be settled. Settlement does not reactivate permits or change payments.</p>
+              <p className="text-sm text-[var(--ink-muted)]">
+                Only Minor or Major government-agency-related cases can be settled. Settling restores the permit for renewal.
+                Severe revoked permits are not settled here — applicants may still file a business closure.
+              </p>
 
               <div className="mt-4 flex items-center gap-3">
                 <button

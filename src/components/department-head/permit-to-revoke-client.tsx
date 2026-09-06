@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { LoadingState } from "@/components/ui/loading-state";
 import {
@@ -16,6 +16,8 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, type PaginationPageSize } from "@/lib/pagination";
 
 type PermitToRevokeRow = {
   inspectionId: string;
@@ -73,6 +75,10 @@ export function PermitToRevokeClient() {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [remarks, setRemarks] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(DEFAULT_PAGE_SIZE);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const selected = useMemo(
     () => rows.find((row) => row.inspectionId === selectedId) ?? null,
@@ -84,31 +90,60 @@ export function PermitToRevokeClient() {
   const selectedEvidenceIsImage = Boolean(selected?.evidenceMimeType?.startsWith("image/") || /\.(jpg|jpeg|png|webp)$/i.test(selectedEvidenceFileName));
   const selectedEvidenceIsPdf = Boolean(selected?.evidenceMimeType === "application/pdf" || /\.pdf$/i.test(selectedEvidenceFileName));
 
-  async function loadQueue() {
+  const loadQueue = useCallback(async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true);
-    const response = await fetch("/api/department-head/permit-to-revoke", { cache: "no-store" });
-    const data = (await response.json()) as { rows?: PermitToRevokeRow[]; error?: string };
+    const params = new URLSearchParams({
+      page: String(nextPage),
+      pageSize: String(nextPageSize),
+    });
+    const response = await fetch(`/api/department-head/permit-to-revoke?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const data = (await response.json()) as {
+      rows?: PermitToRevokeRow[];
+      records?: PermitToRevokeRow[];
+      totalCount?: number;
+      page?: number;
+      pageSize?: PaginationPageSize;
+      totalPages?: number;
+      error?: string;
+    };
 
     if (!response.ok) {
       setMessage({ type: "error", text: data.error ?? "Unable to load revocation review queue." });
       setRows([]);
       setSelectedId(null);
+      setTotalCount(0);
+      setTotalPages(1);
       setLoading(false);
       return;
     }
 
-    const nextRows = data.rows ?? [];
+    const nextRows = data.rows ?? data.records ?? [];
+    const nextTotalCount = data.totalCount ?? nextRows.length;
+    const resolvedPage = data.page ?? nextPage;
+
+    if (nextRows.length === 0 && resolvedPage > 1 && nextTotalCount > 0) {
+      setLoading(false);
+      setPage(resolvedPage - 1);
+      return;
+    }
+
     setRows(nextRows);
+    setTotalCount(nextTotalCount);
+    setPage(resolvedPage);
+    setPageSize(data.pageSize ?? nextPageSize);
+    setTotalPages(data.totalPages ?? 1);
     setSelectedId((current) => {
       if (current && nextRows.some((row) => row.inspectionId === current)) return current;
       return nextRows[0]?.inspectionId ?? null;
     });
     setLoading(false);
-  }
+  }, [page, pageSize]);
 
   useEffect(() => {
-    void loadQueue();
-  }, []);
+    void loadQueue(page, pageSize);
+  }, [page, pageSize, loadQueue]);
 
   useEffect(() => {
     setEvidenceOpen(false);
@@ -176,7 +211,7 @@ export function PermitToRevokeClient() {
     setMessage({ type: "success", text: successText });
     setRemarks("");
     setPendingAction(null);
-    await loadQueue();
+    await loadQueue(page, pageSize);
   }
 
   return (
@@ -211,6 +246,24 @@ export function PermitToRevokeClient() {
             })}
           </div>
         )}
+        <div className="mt-3">
+          <PaginationControls
+            basePath="/department-head/permit-to-revoke"
+            queryParams={{}}
+            mode="client"
+            isLoading={loading}
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            recordLabel="flagged cases"
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+        </div>
       </SectionCard>
 
       <SectionCard

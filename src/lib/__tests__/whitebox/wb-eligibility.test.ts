@@ -3,6 +3,7 @@ import { getBusinessRenewalBlockReason } from "@/lib/renewal-eligibility";
 import {
   getClosureBusinessReason,
   isComplianceForcedClosureBusiness,
+  evaluateClosureEligibility,
 } from "@/lib/closure-eligibility";
 import { baseBusinessInfo } from "./fixtures";
 
@@ -62,8 +63,27 @@ describe("WB-ELIG — renewal & closure eligibility helpers", () => {
       })
     );
     expect(result.eligible).toBe(false);
-    // Code maps FLAGGED_UNSETTLED into FORCED_CLOSURE_PENDING reasonCode branch
-    expect(result.reasonCode).toBe("FORCED_CLOSURE_PENDING");
+    expect(result.reasonCode).toBe("UNRESOLVED_GOVERNMENT_COMPLIANCE");
+  });
+
+  it("WB-ELIG-03a settled minor/major government case allows renewal", () => {
+    const result = getBusinessRenewalBlockReason(
+      renewalSnapshot({
+        inspections: [
+          {
+            id: "insp1a",
+            nonComplianceType: "GOVERNMENT_AGENCY_RELATED",
+            violationSeverity: "MINOR",
+            isSettled: true,
+            forcedClosure: false,
+            complianceCaseStatus: "SETTLED",
+            createdAt: new Date(),
+          },
+        ],
+      })
+    );
+    expect(result.eligible).toBe(true);
+    expect(result.reasonCode).toBeNull();
   });
 
   it("WB-ELIG-03b expired unsettled compliance uses EXPIRED reason", () => {
@@ -114,5 +134,35 @@ describe("WB-ELIG — renewal & closure eligibility helpers", () => {
     };
     expect(isComplianceForcedClosureBusiness(snap)).toBe(true);
     expect(getClosureBusinessReason(snap)).toBeTruthy();
+  });
+
+  it("WB-ELIG-06 severe revoked permit can still apply for business closure", () => {
+    const result = evaluateClosureEligibility({
+      businessStatus: "INACTIVE",
+      location: { status: "VERIFIED" },
+      applications: [{ status: "REVOKED" }],
+      inspections: [
+        {
+          id: "insp3",
+          nonComplianceType: "GOVERNMENT_AGENCY_RELATED",
+          complianceCaseStatus: "FORCED_CLOSURE_PENDING",
+          forcedClosure: true,
+          createdAt: new Date(),
+        },
+      ],
+    });
+    expect(result.eligible).toBe(true);
+    expect(result.isComplianceForcedClosure).toBe(true);
+  });
+
+  it("WB-ELIG-07 revoked permit without forced-closure flag remains closable", () => {
+    const result = evaluateClosureEligibility({
+      businessStatus: "INACTIVE",
+      location: { status: "VERIFIED" },
+      applications: [{ status: "REVOKED" }],
+      inspections: [],
+    });
+    expect(result.eligible).toBe(true);
+    expect(result.reasonCode).toBe("REVOKED_PERMIT_CLOSURE");
   });
 });

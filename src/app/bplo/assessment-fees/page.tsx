@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listAssessmentFeeApplications } from "@/lib/bplo-assessment";
+import { listAssessmentFeeApplicationsPaginated } from "@/lib/bplo-assessment";
 import {
   bploEmptyStateClass,
   bploMobileRecordCardClass,
@@ -8,6 +8,7 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { actionButtonStyles } from "@/components/ui/action-button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 const TYPE_LABEL: Record<string, string> = {
   NEW: "New",
@@ -20,8 +21,24 @@ const ASSESSMENT_STATUS_BADGE: Record<string, string> = {
   GENERATED: "border border-[var(--border-color)] bg-[var(--success-soft)] text-[var(--success)]",
 };
 
-export default async function BploAssessmentFeesPage() {
-  const rows = await listAssessmentFeeApplications();
+interface PageProps {
+  searchParams: Promise<{
+    page?: string;
+    pageSize?: string;
+  }>;
+}
+
+export default async function BploAssessmentFeesPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const queueResult = await listAssessmentFeeApplicationsPaginated({
+    page: params.page,
+    pageSize: params.pageSize,
+  });
+  const rows = queueResult.records;
+  const queryParams = {
+    page: params.page,
+    pageSize: params.pageSize,
+  };
 
   return (
     <section className="ui-page-stack">
@@ -33,7 +50,7 @@ export default async function BploAssessmentFeesPage() {
 
       <ResponsiveDataTable
         title="Assessment Queue"
-        description={`${rows.length} record${rows.length === 1 ? "" : "s"} ready for assessment or currently under assessment.`}
+        description={`${queueResult.totalCount} record${queueResult.totalCount === 1 ? "" : "s"} ready for assessment or currently under assessment.`}
         switchAt="xl"
         table={rows.length === 0 ? (
           <div className={bploEmptyStateClass}>
@@ -146,6 +163,17 @@ export default async function BploAssessmentFeesPage() {
             ))}
           </div>
         )}
+      />
+
+      <PaginationControls
+        basePath="/bplo/assessment-fees"
+        queryParams={queryParams}
+        page={queueResult.page}
+        pageSize={queueResult.pageSize}
+        totalCount={queueResult.totalCount}
+        totalPages={queueResult.totalPages}
+        recordLabel="applications"
+        sortHint="Most recently updated applications appear first."
       />
     </section>
   );

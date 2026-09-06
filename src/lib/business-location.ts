@@ -9,6 +9,7 @@ import {
 import { getJitMapMarkerStatus, getJitMapMarkerColor } from "@/lib/jit-inspections";
 import { getJitInspectionCycleStartedAt } from "@/lib/jit-settings";
 import { EB_MAGALONA_BOUNDS, EB_MAGALONA_CENTER, isWithinEbMagalona } from "@/lib/eb-magalona";
+import { normalizeEbMagalonaBarangayName } from "@/lib/business-rules";
 
 type ApplicationType = "NEW" | "RENEWAL" | "CLOSURE";
 type BusinessMapApplicationType = "NEW" | "RENEWAL";
@@ -79,6 +80,39 @@ export interface BusinessMapFilters {
 }
 
 const ACTIVE_PERMITTED_MAP_APP_STATUSES = ["RELEASED"] as const;
+
+function readFormString(formData: unknown, key: string): string | null {
+  if (typeof formData !== "object" || !formData) return null;
+  const value = (formData as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function resolveLocationBarangay(
+  locationBarangay: string | null | undefined,
+  formData: unknown
+): string | null {
+  const fromLocation = locationBarangay?.trim() || null;
+  if (fromLocation) return fromLocation;
+  return (
+    readFormString(formData, "barangay") ??
+    readFormString(formData, "businessBarangay") ??
+    null
+  );
+}
+
+function barangayMatchesFilter(candidate: string | null | undefined, filter: string): boolean {
+  const rawFilter = filter.trim();
+  if (!rawFilter) return true;
+  const rawCandidate = candidate?.trim() ?? "";
+  if (!rawCandidate) return false;
+
+  const canonicalFilter = normalizeEbMagalonaBarangayName(rawFilter).toLowerCase();
+  const canonicalCandidate = normalizeEbMagalonaBarangayName(rawCandidate).toLowerCase();
+  return (
+    canonicalCandidate === canonicalFilter ||
+    rawCandidate.toLowerCase() === rawFilter.toLowerCase()
+  );
+}
 
 function parseCoordinate(input: unknown, kind: "latitude" | "longitude"): number {
   const value = typeof input === "number" ? input : Number(input);
@@ -562,7 +596,7 @@ export async function listActivePermittedBusinessLocations(
         latitude: location.latitude,
         longitude: location.longitude,
         address: location.address,
-        barangay: location.barangay,
+        barangay: resolveLocationBarangay(location.barangay, latestApplication.formData),
         status: location.status as LocationStatus,
         remarks: location.remarks,
         updatedAt: location.updatedAt.toISOString(),
@@ -595,9 +629,9 @@ export async function listActivePermittedBusinessLocations(
   }
 
   if (filters.barangay?.trim()) {
-    const barangay = filters.barangay.trim().toLowerCase();
-    filtered = filtered.filter(
-      (row: BusinessLocationMapRow) => (row.barangay ?? "").trim().toLowerCase() === barangay
+    const barangay = filters.barangay.trim();
+    filtered = filtered.filter((row: BusinessLocationMapRow) =>
+      barangayMatchesFilter(row.barangay, barangay)
     );
   }
 
@@ -611,6 +645,16 @@ export async function listActivePermittedBusinessLocationsPaginated(
   const { page, pageSize, skip, take } = resolvePagination(pagination);
   const search = filters.search?.trim();
   const barangay = filters.barangay?.trim();
+
+  // Barangay often lives on application formData while BusinessLocation.barangay is null
+  // (e.g. auto-created at permit release). Resolve + normalize in memory so filtering
+  // still works for unverified / incomplete location rows.
+  if (barangay) {
+    const matched = await listActivePermittedBusinessLocations(filters);
+    const totalCount = matched.length;
+    const records = matched.slice(skip, skip + take);
+    return buildPaginatedResult(records, totalCount, page, pageSize);
+  }
 
   const businessRecordWhere: Record<string, unknown> = {
     businessStatus: "ACTIVE",
@@ -651,14 +695,6 @@ export async function listActivePermittedBusinessLocationsPaginated(
 
   const where: Record<string, unknown> = {
     businessRecord: businessRecordWhere,
-    ...(barangay
-      ? {
-          barangay: {
-            equals: barangay,
-            mode: "insensitive",
-          },
-        }
-      : {}),
   };
 
   const [locations, totalCount] = await Promise.all([
@@ -810,7 +846,7 @@ export async function listActivePermittedBusinessLocationsPaginated(
         latitude: location.latitude,
         longitude: location.longitude,
         address: location.address,
-        barangay: location.barangay,
+        barangay: resolveLocationBarangay(location.barangay, latestApplication.formData),
         status: location.status as LocationStatus,
         remarks: location.remarks,
         updatedAt: location.updatedAt.toISOString(),

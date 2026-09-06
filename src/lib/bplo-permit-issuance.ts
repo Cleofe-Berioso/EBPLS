@@ -771,7 +771,12 @@ export async function releasePermitIssuance(
         latitude,
         longitude,
         address: typeof form.businessAddress === "string" ? form.businessAddress : null,
-        barangay: null,
+        barangay:
+          typeof form.barangay === "string" && form.barangay.trim()
+            ? form.barangay.trim()
+            : typeof form.businessBarangay === "string" && form.businessBarangay.trim()
+              ? form.businessBarangay.trim()
+              : null,
         submittedById: app.applicantId,
       });
     }

@@ -196,27 +196,43 @@ function toRevocationInspectionStatus(action: RevocationDecisionAction) {
 }
 
 export async function listDepartmentHeadApprovalQueue(): Promise<DepartmentHeadApprovalRow[]> {
-  const rows = await prisma.businessApplication.findMany({
-    where: { status: "DEPARTMENT_HEAD_REVIEW" },
-    include: {
-      applicant: { select: { name: true } },
-      businessRecord: { select: { businessName: true } },
-      documents: { orderBy: { uploadedAt: "asc" } },
-      history: {
-        include: {
-          actor: {
-            select: {
-              role: true,
+  const result = await listDepartmentHeadApprovalQueuePaginated({ page: 1, pageSize: 50 });
+  return result.records;
+}
+
+export async function listDepartmentHeadApprovalQueuePaginated(options?: {
+  page?: number | string;
+  pageSize?: number | string;
+}): Promise<PaginatedResult<DepartmentHeadApprovalRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(options);
+  const where = { status: "DEPARTMENT_HEAD_REVIEW" as const };
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.businessApplication.findMany({
+      where,
+      include: {
+        applicant: { select: { name: true } },
+        businessRecord: { select: { businessName: true } },
+        documents: { orderBy: { uploadedAt: "asc" } },
+        history: {
+          include: {
+            actor: {
+              select: {
+                role: true,
+              },
             },
           },
+          orderBy: { createdAt: "desc" },
         },
-        orderBy: { createdAt: "desc" },
       },
-    },
-    orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }],
-  });
+      orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }],
+      skip,
+      take,
+    }),
+    prisma.businessApplication.count({ where }),
+  ]);
 
-  return rows.map((row: any) => ({
+  const records = rows.map((row: any) => ({
     id: row.id,
     applicationNumber: row.applicationNumber,
     applicationType: row.applicationType,
@@ -254,6 +270,8 @@ export async function listDepartmentHeadApprovalQueue(): Promise<DepartmentHeadA
       validationRemarks: doc.validationRemarks ?? null,
     })),
   }));
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
 export async function applyDepartmentHeadAction(
@@ -331,43 +349,59 @@ export async function applyDepartmentHeadAction(
 }
 
 export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHeadPermitToRevokeRow[]> {
-  const rows = await prisma.inspection.findMany({
-    where: {
-      status: "VERIFIED_NON_COMPLIANT",
-      complianceStatus: "NON_COMPLIANT",
-      revocationDecision: null,
-      application: {
-        status: "REVOCATION_REVIEW",
-      },
-    },
-    include: {
-      inspector: { select: { name: true } },
-      decidedBy: { select: { name: true } },
-      revocationSettledBy: { select: { name: true } },
-      application: {
-        select: {
-          id: true,
-          applicationNumber: true,
-          status: true,
-          permitIssuance: { select: { documentNumber: true } },
-        },
-      },
-      businessRecord: {
-        select: {
-          businessName: true,
-          tradeName: true,
-          businessType: true,
-          ownerName: true,
-          businessAddress: true,
-          lineOfBusiness: true,
-          applicant: { select: { name: true } },
-        },
-      },
-    },
-    orderBy: [{ createdAt: "asc" }],
-  });
+  const result = await listDepartmentHeadRevocationQueuePaginated({ page: 1, pageSize: 50 });
+  return result.records;
+}
 
-  return rows
+export async function listDepartmentHeadRevocationQueuePaginated(options?: {
+  page?: number | string;
+  pageSize?: number | string;
+}): Promise<PaginatedResult<DepartmentHeadPermitToRevokeRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(options);
+  const where = {
+    status: "VERIFIED_NON_COMPLIANT" as const,
+    complianceStatus: "NON_COMPLIANT" as const,
+    revocationDecision: null,
+    application: {
+      status: "REVOCATION_REVIEW" as const,
+    },
+  };
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.inspection.findMany({
+      where,
+      include: {
+        inspector: { select: { name: true } },
+        decidedBy: { select: { name: true } },
+        revocationSettledBy: { select: { name: true } },
+        application: {
+          select: {
+            id: true,
+            applicationNumber: true,
+            status: true,
+            permitIssuance: { select: { documentNumber: true } },
+          },
+        },
+        businessRecord: {
+          select: {
+            businessName: true,
+            tradeName: true,
+            businessType: true,
+            ownerName: true,
+            businessAddress: true,
+            lineOfBusiness: true,
+            applicant: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "asc" }],
+      skip,
+      take,
+    }),
+    prisma.inspection.count({ where }),
+  ]);
+
+  const records = rows
     .filter((row: any) => Boolean(row.application))
     .map((row: any) => ({
       inspectionId: row.id,
@@ -393,46 +427,67 @@ export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHea
       inspectionStatus: row.status,
       applicationStatus: mapDbStatusToUi(row.application.status),
     }));
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
 export async function listDepartmentHeadInspectionVerificationQueue(): Promise<DepartmentHeadInspectionVerificationRow[]> {
-  const rows = await prisma.inspection.findMany({
-    where: {
-      status: "DH_VERIFICATION_PENDING",
-      application: {
-        status: "RELEASED",
-      },
-      businessRecord: {
-        businessStatus: "ACTIVE",
-      },
-    },
-    include: {
-      inspector: { select: { name: true } },
-      application: {
-        select: {
-          id: true,
-          applicationNumber: true,
-          status: true,
-          applicationType: true,
-          permitIssuance: { select: { documentNumber: true } },
-        },
-      },
-      businessRecord: {
-        select: {
-          businessName: true,
-          tradeName: true,
-          businessType: true,
-          ownerName: true,
-          businessAddress: true,
-          lineOfBusiness: true,
-          applicant: { select: { name: true } },
-        },
-      },
-    },
-    orderBy: [{ createdAt: "asc" }],
+  const result = await listDepartmentHeadInspectionVerificationQueuePaginated({
+    page: 1,
+    pageSize: 50,
   });
+  return result.records;
+}
 
-  return rows
+export async function listDepartmentHeadInspectionVerificationQueuePaginated(options?: {
+  page?: number | string;
+  pageSize?: number | string;
+}): Promise<PaginatedResult<DepartmentHeadInspectionVerificationRow>> {
+  const { page, pageSize, skip, take } = resolvePagination(options);
+  const where = {
+    status: "DH_VERIFICATION_PENDING" as const,
+    application: {
+      status: "RELEASED" as const,
+    },
+    businessRecord: {
+      businessStatus: "ACTIVE" as const,
+    },
+  };
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.inspection.findMany({
+      where,
+      include: {
+        inspector: { select: { name: true } },
+        application: {
+          select: {
+            id: true,
+            applicationNumber: true,
+            status: true,
+            applicationType: true,
+            permitIssuance: { select: { documentNumber: true } },
+          },
+        },
+        businessRecord: {
+          select: {
+            businessName: true,
+            tradeName: true,
+            businessType: true,
+            ownerName: true,
+            businessAddress: true,
+            lineOfBusiness: true,
+            applicant: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "asc" }],
+      skip,
+      take,
+    }),
+    prisma.inspection.count({ where }),
+  ]);
+
+  const records = rows
     .filter((row: any) => Boolean(row.application))
     .map((row: any) => ({
       inspectionId: row.id,
@@ -457,6 +512,8 @@ export async function listDepartmentHeadInspectionVerificationQueue(): Promise<D
       hasEvidence: Boolean(row.evidenceStoragePath),
       applicationStatus: mapDbStatusToUi(row.application.status),
     }));
+
+  return buildPaginatedResult(records, totalCount, page, pageSize);
 }
 
 export async function getDepartmentHeadInspectionChecklistForVerification(inspectionId: string) {
@@ -549,119 +606,146 @@ export async function applyDepartmentHeadSettlement(
   const normalizedRemarks = settlementRemarks?.trim();
   if (!normalizedRemarks) throw new Error("Settlement remarks are required");
 
-  return prisma.$transaction(async (tx: any) => {
-    const inspection = await tx.inspection.findUnique({
-      where: { id: inspectionId },
-      include: {
-        application: { select: { id: true, applicationNumber: true, status: true } },
-        businessRecord: { select: { id: true, businessName: true, ownerName: true, applicant: { select: { id: true, name: true } }, phone: true } },
-      },
-    });
-
-    if (!inspection) throw new Error("Inspection not found");
-
-    if (inspection.nonComplianceType !== "GOVERNMENT_AGENCY_RELATED") {
-      throw new Error("Only government-agency-related cases can be settled here");
-    }
-
-    if (!inspection.violationSeverity || !["MINOR", "MAJOR"].includes(inspection.violationSeverity)) {
-      throw new Error("Only MINOR or MAJOR cases can be settled through this action");
-    }
-
-    if (inspection.complianceCaseStatus !== "FLAGGED_UNSETTLED") {
-      throw new Error("Case is not in FLAGGED_UNSETTLED status");
-    }
-
-    if (inspection.isSettled) {
-      throw new Error("Case is already settled");
-    }
-
-    if (inspection.forcedClosure) {
-      throw new Error("Forced closure cases cannot be settled here");
-    }
-
-    // RENEWAL_RELATED cannot be settled here
-    if (inspection.nonComplianceType === "RENEWAL_RELATED") {
-      throw new Error("RENEWAL_RELATED cases cannot be settled through this action");
-    }
-
-    const previousStatus = inspection.complianceCaseStatus;
-
-    const updated = await tx.inspection.update({
-      where: { id: inspection.id },
-      data: {
-        isSettled: true,
-        settledAt: new Date(),
-        settledById: departmentHeadUserId,
-        complianceCaseStatus: "SETTLED",
-        settlementRemarks: normalizedRemarks,
-      },
-    });
-
-    if (inspection.application && inspection.application.id) {
-      await tx.applicationHistory.create({
-        data: {
-          applicationId: inspection.application.id,
-          actorId: departmentHeadUserId,
-          actorRole: "DEPARTMENT_HEAD",
-          fromStatus: inspection.application.status,
-          toStatus: inspection.application.status,
-          remarks: `Department Head marked flagged case as SETTLED. Remarks: ${normalizedRemarks}`,
+  return prisma.$transaction(
+    async (tx: any) => {
+      const inspection = await tx.inspection.findUnique({
+        where: { id: inspectionId },
+        include: {
+          application: { select: { id: true, applicationNumber: true, status: true } },
+          businessRecord: {
+            select: {
+              id: true,
+              businessName: true,
+              ownerName: true,
+              applicant: { select: { id: true, name: true } },
+              phone: true,
+            },
+          },
         },
       });
-    }
 
-    // Audit log (non-blocking)
-    try {
-      await createAuditLog({
-        actorId: departmentHeadUserId,
-        actorRole: "DEPARTMENT_HEAD",
-        action: "SETTLED",
-        module: "INSPECTION",
-        entityType: "INSPECTION",
-        entityId: inspection.id,
-        inspectionId: inspection.id,
-        applicationId: inspection.application?.id ?? null,
-        businessRecordId: inspection.businessRecordId,
-        beforeStatus: previousStatus,
-        afterStatus: "SETTLED",
-        description: "Department Head marked government-agency-related compliance case as SETTLED.",
-        metadata: {
+      if (!inspection) throw new Error("Inspection not found");
+
+      if (inspection.nonComplianceType !== "GOVERNMENT_AGENCY_RELATED") {
+        throw new Error("Only government-agency-related cases can be settled here");
+      }
+
+      if (!inspection.violationSeverity || !["MINOR", "MAJOR"].includes(inspection.violationSeverity)) {
+        throw new Error("Only MINOR or MAJOR cases can be settled through this action");
+      }
+
+      if (inspection.complianceCaseStatus !== "FLAGGED_UNSETTLED") {
+        throw new Error("Case is not in FLAGGED_UNSETTLED status");
+      }
+
+      if (inspection.isSettled) {
+        throw new Error("Case is already settled");
+      }
+
+      if (inspection.forcedClosure) {
+        throw new Error("Forced closure cases cannot be settled here");
+      }
+
+      const previousStatus = inspection.complianceCaseStatus;
+      const previousApplicationStatus = inspection.application?.status ?? null;
+      let restoredApplicationStatus: string | null = null;
+
+      const updated = await tx.inspection.update({
+        where: { id: inspection.id },
+        data: {
+          isSettled: true,
+          settledAt: new Date(),
+          settledById: departmentHeadUserId,
+          complianceCaseStatus: "SETTLED",
           settlementRemarks: normalizedRemarks,
         },
       });
-    } catch (err) {
-      // non-blocking: ignore
-      console.error("[Settlement] audit failed", err instanceof Error ? err.message : String(err));
-    }
 
-    // Best-effort notification record (non-blocking). Only create if linked application exists.
-    try {
-      if (inspection.application && inspection.application.id) {
-        const phone = inspection.businessRecord?.phone ?? null;
-        await tx.smsDeliveryLog.create({
+      // Settled minor/major government cases leave the revocation track so renewal can proceed.
+      if (inspection.application?.id && inspection.application.status === "REVOCATION_REVIEW") {
+        assertStatusTransition(inspection.application.status, "RELEASED");
+        await tx.businessApplication.update({
+          where: { id: inspection.application.id },
+          data: { status: "RELEASED" },
+        });
+        restoredApplicationStatus = "RELEASED";
+
+        await tx.applicationHistory.create({
           data: {
             applicationId: inspection.application.id,
-            applicantId: inspection.businessRecord?.applicant?.id ?? null,
-            phoneNumber: phone,
-            provider: "none",
-            status: "SKIPPED",
-            messageBody: "Your business compliance case has been marked as settled. You may continue with eligible transactions subject to normal system rules.",
+            actorId: departmentHeadUserId,
+            actorRole: "DEPARTMENT_HEAD",
+            fromStatus: previousApplicationStatus,
+            toStatus: "RELEASED",
+            remarks: `Department Head marked flagged case as SETTLED and restored the permit for renewal. Remarks: ${normalizedRemarks}`,
+          },
+        });
+      } else if (inspection.application?.id) {
+        await tx.applicationHistory.create({
+          data: {
+            applicationId: inspection.application.id,
+            actorId: departmentHeadUserId,
+            actorRole: "DEPARTMENT_HEAD",
+            fromStatus: inspection.application.status,
+            toStatus: inspection.application.status,
+            remarks: `Department Head marked flagged case as SETTLED. Remarks: ${normalizedRemarks}`,
           },
         });
       }
-    } catch (err) {
-      console.error("[Settlement] notification log failed", err instanceof Error ? err.message : String(err));
-    }
 
-    return {
-      inspectionId: updated.id,
-      applicationId: inspection.application?.id ?? null,
-      businessRecordId: inspection.businessRecordId,
-      complianceCaseStatus: updated.complianceCaseStatus,
-      settledAt: updated.settledAt,
-    };
-  });
+      try {
+        await createAuditLog({
+          actorId: departmentHeadUserId,
+          actorRole: "DEPARTMENT_HEAD",
+          action: "SETTLED",
+          module: "INSPECTION",
+          entityType: "INSPECTION",
+          entityId: inspection.id,
+          inspectionId: inspection.id,
+          applicationId: inspection.application?.id ?? null,
+          businessRecordId: inspection.businessRecordId,
+          beforeStatus: previousStatus,
+          afterStatus: "SETTLED",
+          description: "Department Head marked government-agency-related compliance case as SETTLED.",
+          metadata: {
+            settlementRemarks: normalizedRemarks,
+            restoredApplicationStatus,
+          },
+        });
+      } catch (err) {
+        console.error("[Settlement] audit failed", err instanceof Error ? err.message : String(err));
+      }
+
+      try {
+        if (inspection.application?.id) {
+          const phone = inspection.businessRecord?.phone ?? null;
+          await tx.smsDeliveryLog.create({
+            data: {
+              applicationId: inspection.application.id,
+              applicantId: inspection.businessRecord?.applicant?.id ?? null,
+              phoneNumber: phone,
+              provider: "none",
+              status: "SKIPPED",
+              messageBody:
+                "Your business compliance case has been marked as settled. You may continue with eligible transactions such as renewal, subject to normal system rules.",
+            },
+          });
+        }
+      } catch (err) {
+        console.error("[Settlement] notification log failed", err instanceof Error ? err.message : String(err));
+      }
+
+      return {
+        inspectionId: updated.id,
+        applicationId: inspection.application?.id ?? null,
+        businessRecordId: inspection.businessRecordId,
+        complianceCaseStatus: updated.complianceCaseStatus,
+        settledAt: updated.settledAt,
+        restoredApplicationStatus,
+      };
+    },
+    { timeout: 60_000, maxWait: 10_000 }
+  );
 }
 
 export async function applyDepartmentHeadInspectionVerification(

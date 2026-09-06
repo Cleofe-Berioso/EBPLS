@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { LoadingState } from "@/components/ui/loading-state";
 import {
@@ -18,7 +18,9 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { SectionCard } from "@/components/ui/section-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import type { ChecklistItemReadOnlyApiRow } from "@/lib/jit-post-audit-checklist";
+import { DEFAULT_PAGE_SIZE, type PaginationPageSize } from "@/lib/pagination";
 
 type InspectionVerificationRow = {
   inspectionId: string;
@@ -166,7 +168,11 @@ export function DepartmentHeadInspectionVerificationClient() {
   const [checklistItems, setChecklistItems] = useState<ChecklistItemReadOnlyApiRow[]>([]);
   const [checklistLoading, setChecklistLoading] = useState(false);
   const [checklistError, setChecklistError] = useState<string | null>(null);
-  const [complianceDecision, setComplianceDecision] = useState<"COMPLIANT" | "NON_COMPLIANT" | "">("" );
+  const [complianceDecision, setComplianceDecision] = useState<"COMPLIANT" | "NON_COMPLIANT" | "">("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(DEFAULT_PAGE_SIZE);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const selected = useMemo(
     () => rows.find((row) => row.inspectionId === selectedId) ?? null,
@@ -177,31 +183,61 @@ export function DepartmentHeadInspectionVerificationClient() {
   const effectiveCompliance = isPendingReview ? complianceDecision : selected?.complianceStatus;
   const isNonCompliant = effectiveCompliance === "NON_COMPLIANT";
 
-  async function loadQueue() {
+  const loadQueue = useCallback(async (nextPage = page, nextPageSize = pageSize) => {
     setLoading(true);
-    const response = await fetch("/api/department-head/inspection-verification", { cache: "no-store" });
-    const data = (await response.json()) as { rows?: InspectionVerificationRow[]; error?: string };
+    const params = new URLSearchParams({
+      page: String(nextPage),
+      pageSize: String(nextPageSize),
+    });
+    const response = await fetch(
+      `/api/department-head/inspection-verification?${params.toString()}`,
+      { cache: "no-store" }
+    );
+    const data = (await response.json()) as {
+      rows?: InspectionVerificationRow[];
+      records?: InspectionVerificationRow[];
+      totalCount?: number;
+      page?: number;
+      pageSize?: PaginationPageSize;
+      totalPages?: number;
+      error?: string;
+    };
 
     if (!response.ok) {
       setMessage({ type: "error", text: data.error ?? "Unable to load inspection verification queue." });
       setRows([]);
       setSelectedId(null);
+      setTotalCount(0);
+      setTotalPages(1);
       setLoading(false);
       return;
     }
 
-    const nextRows = data.rows ?? [];
+    const nextRows = data.rows ?? data.records ?? [];
+    const nextTotalCount = data.totalCount ?? nextRows.length;
+    const resolvedPage = data.page ?? nextPage;
+
+    if (nextRows.length === 0 && resolvedPage > 1 && nextTotalCount > 0) {
+      setLoading(false);
+      setPage(resolvedPage - 1);
+      return;
+    }
+
     setRows(nextRows);
+    setTotalCount(nextTotalCount);
+    setPage(resolvedPage);
+    setPageSize(data.pageSize ?? nextPageSize);
+    setTotalPages(data.totalPages ?? 1);
     setSelectedId((current) => {
       if (current && nextRows.some((row) => row.inspectionId === current)) return current;
       return nextRows[0]?.inspectionId ?? null;
     });
     setLoading(false);
-  }
+  }, [page, pageSize]);
 
   useEffect(() => {
-    void loadQueue();
-  }, []);
+    void loadQueue(page, pageSize);
+  }, [page, pageSize, loadQueue]);
 
   // Reset classification fields when selection changes
   useEffect(() => {
@@ -327,7 +363,7 @@ export function DepartmentHeadInspectionVerificationClient() {
     setViolationSeverity("");
     setComplianceDecision("");
     setSubmitting(false);
-    await loadQueue();
+    await loadQueue(page, pageSize);
   }
 
   return (
@@ -357,6 +393,24 @@ export function DepartmentHeadInspectionVerificationClient() {
             })}
           </div>
         )}
+        <div className="mt-3">
+          <PaginationControls
+            basePath="/department-head/inspection-verification"
+            queryParams={{}}
+            mode="client"
+            isLoading={loading}
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            recordLabel="inspections"
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+        </div>
       </SectionCard>
 
       <SectionCard

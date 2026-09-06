@@ -91,6 +91,10 @@ function getComplianceBlockReason(snapshot: BusinessSnapshot): RenewalEligibilit
   const candidates = snapshot.inspections
     .filter((inspection) => inspection.nonComplianceType === "GOVERNMENT_AGENCY_RELATED")
     .filter((inspection) => {
+      // Settled minor/major government cases must not block renewal.
+      if (inspection.isSettled || inspection.complianceCaseStatus === "SETTLED") {
+        return false;
+      }
       if (inspection.forcedClosure) return true;
       return BLOCKED_COMPLIANCE_STATUSES.has(inspection.complianceCaseStatus);
     })
@@ -115,19 +119,15 @@ function getComplianceBlockReason(snapshot: BusinessSnapshot): RenewalEligibilit
       ? "EXPIRED_UNSETTLED_COMPLIANCE"
       : blockingInspection.complianceCaseStatus === "CLOSED_NON_COMPLIANT"
         ? "CLOSED_NON_COMPLIANT"
-        : "FORCED_CLOSURE_PENDING";
-
-  const userFriendlyReason =
-    reasonCode === "EXPIRED_UNSETTLED_COMPLIANCE"
-      ? BLOCKED_REASON_MESSAGES.EXPIRED_UNSETTLED_COMPLIANCE
-      : reasonCode === "CLOSED_NON_COMPLIANT"
-        ? BLOCKED_REASON_MESSAGES.CLOSED_NON_COMPLIANT
-        : BLOCKED_REASON_MESSAGES.FORCED_CLOSURE_PENDING;
+        : blockingInspection.forcedClosure ||
+            blockingInspection.complianceCaseStatus === "FORCED_CLOSURE_PENDING"
+          ? "FORCED_CLOSURE_PENDING"
+          : "UNRESOLVED_GOVERNMENT_COMPLIANCE";
 
   return {
     eligible: false,
     reasonCode,
-    userFriendlyReason,
+    userFriendlyReason: BLOCKED_REASON_MESSAGES[reasonCode],
     blockingInspectionId: blockingInspection.id,
     complianceCaseStatus: blockingInspection.complianceCaseStatus,
     nonComplianceType: blockingInspection.nonComplianceType,
