@@ -390,8 +390,14 @@ export function resolveApplicantPaymentFrequency(formData: unknown): PaymentFreq
   return PAYMENT_FREQUENCIES.includes(normalized) ? normalized : null;
 }
 
+function isBlankCustomLineItem(item: FeeLineItemInput): boolean {
+  if (item.isSystemGenerated) return false;
+  const trimmedDesc = item.description?.trim() ?? "";
+  return !trimmedDesc && !(item.amount > 0);
+}
+
 function validateCustomLineItems(lineItems: FeeLineItemInput[]): void {
-  const customItems = lineItems.filter((item) => !item.isSystemGenerated);
+  const customItems = lineItems.filter((item) => !item.isSystemGenerated && !isBlankCustomLineItem(item));
   customItems.forEach((item, index) => {
     const trimmedDesc = item.description?.trim() ?? "";
     if (!trimmedDesc) {
@@ -406,6 +412,7 @@ function validateCustomLineItems(lineItems: FeeLineItemInput[]): void {
 function sanitizeCustomLineItems(lineItems: FeeLineItemInput[]): Array<{ description: string; amount: number }> {
   return lineItems
     .filter((item) => !item.isSystemGenerated)
+    .filter((item) => !isBlankCustomLineItem(item))
     .filter((item) => !isRegulatoryFeeDescription(item.description ?? ""))
     .map((item) => ({
       description: item.description.trim(),
@@ -569,15 +576,16 @@ function validateClosureSettlementAmountForTopGeneration(
     return;
   }
 
+  // ₱0 is valid when there are no outstanding dues — the fixed ₱100 certificate fee still makes the TOP payable.
   const settlementAmount = parseClosureSettlementAmountForValidation(rawClosurePaymentDues);
   if (settlementAmount === null) {
-    throw new Error("Settlement / Outstanding Amount is required before generating the Closure TOP.");
+    return;
   }
   if (Number.isNaN(settlementAmount)) {
-    throw new Error("Settlement / Outstanding Amount must be a valid number greater than 0 before generating the Closure TOP.");
+    throw new Error("Settlement / Outstanding Amount must be a valid number (0 or greater) before generating the Closure TOP.");
   }
-  if (settlementAmount <= 0) {
-    throw new Error("Settlement / Outstanding Amount must be greater than 0 before generating the Closure TOP.");
+  if (settlementAmount < 0) {
+    throw new Error("Settlement / Outstanding Amount cannot be negative.");
   }
 }
 

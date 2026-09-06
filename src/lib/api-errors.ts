@@ -11,6 +11,23 @@ const APPLICANT_SAFE_ERROR_MESSAGES = new Set([
   "Application not found",
 ]);
 
+/** Intentional business-rule messages that staff need to see in production (no secrets). */
+const STAFF_SAFE_ERROR_PATTERNS = [
+  /^Settlement \/ Outstanding Amount/i,
+  /^Custom fee item #/i,
+  /^Closure assessment must include/i,
+  /^Assessment must include at least one fee item/i,
+  /^Payment frequency must be selected/i,
+  /^Payment frequency is applicant-selected/i,
+  /^Tax Order of Payment can only be generated/i,
+  /^Assessment draft can only be saved/i,
+  /^Tax Order of Payment has already been generated/i,
+];
+
+function isStaffSafeErrorMessage(message: string): boolean {
+  return STAFF_SAFE_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 export function safeApiErrorMessage(
   error: unknown,
   fallback: string,
@@ -24,6 +41,9 @@ export function safeApiErrorMessage(
     return error.message;
   }
   if (APPLICANT_SAFE_ERROR_MESSAGES.has(error.message)) {
+    return error.message;
+  }
+  if (isStaffSafeErrorMessage(error.message)) {
     return error.message;
   }
   if (/expired transaction|transaction.*timeout/i.test(error.message)) {

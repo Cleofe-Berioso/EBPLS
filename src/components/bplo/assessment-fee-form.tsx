@@ -257,38 +257,61 @@ export function AssessmentFeeForm({ detail }: Props) {
       ) : null}
 
       <SectionCard title="System Guidance" description="Assessment basis from the current application and automatic penalty rules.">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryTile label="Line of Business" value={detail.lineOfBusiness} />
-          <SummaryTile label="Detected Category" value={detail.suggestedFees.detectedCategory} />
-          <SummaryTile label="Suggested Mayor's Fee" value={`₱ ${detail.suggestedFees.selectedMayorPermitFee.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
-          <SummaryTile
-            label="Late Renewal Rule"
-            value={
-              detail.applicationType === "RENEWAL" && detail.suggestedFees.overdueMonths > 12
-                ? `${detail.suggestedFees.overdueMonths} months overdue`
-                : "Not triggered"
-            }
-            helper="Automatic surcharge and interest apply only beyond 1 year overdue."
-          />
-        </div>
+        {detail.applicationType === "CLOSURE" ? (
+          <>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <SummaryTile label="Line of Business" value={detail.lineOfBusiness} />
+              <SummaryTile
+                label="Closure Certificate Fee"
+                value={`₱ ${detail.suggestedFees.closureCertificateFee.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
+                helper="Fixed system fee for closure certificate issuance."
+              />
+              <SummaryTile
+                label="Mayor's Permit Fee"
+                value="₱ 0.00"
+                helper="Not assessed on closure applications."
+              />
+            </div>
+            <div className={`mt-4 ${bploPanelClass}`}>
+              Closure rule: Mayor&apos;s Permit Fee is not charged. Enter any outstanding settlement amount below (use ₱0 when none). The ₱100 Closure Certificate Fee is added automatically.
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <SummaryTile label="Line of Business" value={detail.lineOfBusiness} />
+              <SummaryTile label="Detected Category" value={detail.suggestedFees.detectedCategory} />
+              <SummaryTile label="Suggested Mayor's Fee" value={`₱ ${detail.suggestedFees.selectedMayorPermitFee.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
+              <SummaryTile
+                label="Late Renewal Rule"
+                value={
+                  detail.applicationType === "RENEWAL" && detail.suggestedFees.overdueMonths > 12
+                    ? `${detail.suggestedFees.overdueMonths} months overdue`
+                    : "Not triggered"
+                }
+                helper="Automatic surcharge and interest apply only beyond 1 year overdue."
+              />
+            </div>
 
-        {detail.applicationType === "RENEWAL" && detail.suggestedFees.renewalComplianceSeverity ? (
-          <div className="mt-4">
-            <InfoBanner
-              title={`Renewal Compliance Penalty — ${detail.suggestedFees.renewalComplianceSeverity} violation`}
-              description={
-                detail.suggestedFees.renewalCompliancePenalty > 0
-                  ? `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). A system-generated penalty of ₱\u00a0${detail.suggestedFees.renewalCompliancePenalty.toLocaleString("en-PH", { minimumFractionDigits: 2 })} will be added to the fee line items.`
-                  : `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). No penalty amount is configured — contact the IT Administrator to set the compliance penalty amounts.`
-              }
-              variant="warning"
-            />
-          </div>
-        ) : null}
+            {detail.applicationType === "RENEWAL" && detail.suggestedFees.renewalComplianceSeverity ? (
+              <div className="mt-4">
+                <InfoBanner
+                  title={`Renewal Compliance Penalty — ${detail.suggestedFees.renewalComplianceSeverity} violation`}
+                  description={
+                    detail.suggestedFees.renewalCompliancePenalty > 0
+                      ? `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). A system-generated penalty of ₱\u00a0${detail.suggestedFees.renewalCompliancePenalty.toLocaleString("en-PH", { minimumFractionDigits: 2 })} will be added to the fee line items.`
+                      : `This business has an unsettled RENEWAL_RELATED non-compliance case (${detail.suggestedFees.renewalComplianceSeverity}). No penalty amount is configured — contact the IT Administrator to set the compliance penalty amounts.`
+                  }
+                  variant="warning"
+                />
+              </div>
+            ) : null}
 
-        <div className={`mt-4 ${bploPanelClass}`}>
-          {detail.suggestedFees.computation}
-        </div>
+            <div className={`mt-4 ${bploPanelClass}`}>
+              {detail.suggestedFees.computation}
+            </div>
+          </>
+        )}
       </SectionCard>
 
       <SectionCard
@@ -385,7 +408,7 @@ export function AssessmentFeeForm({ detail }: Props) {
           title="Closure Charges"
           description="Payment dues are BPLO-entered. The fixed closure certificate fee of ₱100 is added automatically."
         >
-          <FormField label="Settlement / Outstanding Amount" hint="Enter the full outstanding settlement amount required before closure can proceed.">
+          <FormField label="Settlement / Outstanding Amount" hint="Enter outstanding dues if any. Use 0 when the business has no settlement balance — the ₱100 certificate fee still applies.">
             <input
               type="number"
               min="0"

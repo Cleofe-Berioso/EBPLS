@@ -37,6 +37,13 @@ describe("WB-UTIL — person name, API errors, IP, OTP, options", () => {
         { forceProduction: true }
       )
     ).toMatch(/took too long/i);
+    expect(
+      safeApiErrorMessage(
+        new Error("Settlement / Outstanding Amount cannot be negative."),
+        "Safe",
+        { forceProduction: true }
+      )
+    ).toBe("Settlement / Outstanding Amount cannot be negative.");
   });
 
   it("WB-UTIL-03 getClientIp from forwarded headers", () => {

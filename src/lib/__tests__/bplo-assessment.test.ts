@@ -21,6 +21,10 @@ describe('bplo-assessment helpers', () => {
     expect(addOn).toBe(500);
   });
 
+  it('closure applications skip liquor/tobacco surcharge', () => {
+    expect(buildAutomaticLiquorTobaccoSurcharge('CLOSURE', 2000, true, {})).toBe(0);
+  });
+
   it('resolves applicant payment frequency only from applicant data', () => {
     expect(resolveApplicantPaymentFrequency({ paymentFrequency: 'ANNUAL' })).toBe('ANNUAL');
     expect(resolveApplicantPaymentFrequency({ paymentFrequency: 'BI_ANNUAL' })).toBe('BI_ANNUAL');
