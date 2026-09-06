@@ -427,57 +427,72 @@ export async function applyBploReviewAction(
     throw new Error("Remarks are required for this action");
   }
 
-  return prisma.$transaction(async (tx: any) => {
-    const current = await tx.businessApplication.findUnique({
+  // Document readiness uses the global Prisma client — run it before opening an
+  // interactive transaction so we do not hold a 5s txn open for extra queries.
+  if (action === "APPROVE_FOR_ASSESSMENT") {
+    const precheck = await prisma.businessApplication.findUnique({
       where: { id: applicationId },
-      select: {
-        id: true,
-        status: true,
-      },
+      select: { id: true, status: true },
     });
-
-    if (!current) {
+    if (!precheck) {
       throw new Error("Application not found");
     }
-
-    if (!canTransition(current.status, action)) {
+    if (!canTransition(precheck.status, action)) {
       throw new Error("Invalid status transition");
     }
+    await assertRequiredDocumentsReadyForApproval(applicationId);
+  }
 
-    if (action === "APPROVE_FOR_ASSESSMENT") {
-      await assertRequiredDocumentsReadyForApproval(applicationId);
-    }
+  return prisma.$transaction(
+    async (tx: any) => {
+      const current = await tx.businessApplication.findUnique({
+        where: { id: applicationId },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
 
-    const nextStatus = getNextStatus(action);
-    assertStatusTransition(current.status, nextStatus);
+      if (!current) {
+        throw new Error("Application not found");
+      }
 
-    const updated = await tx.businessApplication.update({
-      where: { id: current.id },
-      data: {
-        status: nextStatus,
-      },
-      select: {
-        id: true,
-        applicationNumber: true,
-        status: true,
-      },
-    });
+      if (!canTransition(current.status, action)) {
+        throw new Error("Invalid status transition");
+      }
 
-    await tx.applicationHistory.create({
-      data: {
-        applicationId: current.id,
-        actorId: bploUserId,
-        actorRole: "BPLO",
-        fromStatus: current.status,
-        toStatus: nextStatus,
-        remarks: normalizedRemarks ?? null,
-      },
-    });
+      const nextStatus = getNextStatus(action);
+      assertStatusTransition(current.status, nextStatus);
 
-    return {
-      id: updated.id,
-      applicationNumber: updated.applicationNumber,
-      status: mapDbStatusToUi(updated.status),
-    };
-  });
+      const updated = await tx.businessApplication.update({
+        where: { id: current.id },
+        data: {
+          status: nextStatus,
+        },
+        select: {
+          id: true,
+          applicationNumber: true,
+          status: true,
+        },
+      });
+
+      await tx.applicationHistory.create({
+        data: {
+          applicationId: current.id,
+          actorId: bploUserId,
+          actorRole: "BPLO",
+          fromStatus: current.status,
+          toStatus: nextStatus,
+          remarks: normalizedRemarks ?? null,
+        },
+      });
+
+      return {
+        id: updated.id,
+        applicationNumber: updated.applicationNumber,
+        status: mapDbStatusToUi(updated.status),
+      };
+    },
+    { timeout: 30_000, maxWait: 10_000 }
+  );
 }

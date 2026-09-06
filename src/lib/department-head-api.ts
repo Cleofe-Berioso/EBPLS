@@ -268,51 +268,66 @@ export async function applyDepartmentHeadAction(
     throw new Error("Remarks are required for this action");
   }
 
-  return prisma.$transaction(async (tx: any) => {
-    const current = await tx.businessApplication.findUnique({
+  // Document readiness uses the global Prisma client — run it before opening an
+  // interactive transaction so we do not hold a 5s txn open for extra queries.
+  if (action === "APPROVE") {
+    const precheck = await prisma.businessApplication.findUnique({
       where: { id: applicationId },
-      select: { id: true, status: true, applicationNumber: true, applicationType: true },
+      select: { id: true, status: true },
     });
-
-    if (!current) {
+    if (!precheck) {
       throw new Error("Application not found");
     }
-
-    if (current.status !== "DEPARTMENT_HEAD_REVIEW") {
+    if (precheck.status !== "DEPARTMENT_HEAD_REVIEW") {
       throw new Error("Application is not in Department Head review stage");
     }
+    await assertRequiredDocumentsReadyForApproval(applicationId);
+  }
 
-    if (action === "APPROVE") {
-      await assertRequiredDocumentsReadyForApproval(applicationId);
-    }
+  return prisma.$transaction(
+    async (tx: any) => {
+      const current = await tx.businessApplication.findUnique({
+        where: { id: applicationId },
+        select: { id: true, status: true, applicationNumber: true, applicationType: true },
+      });
 
-    const nextStatus = getNextStatus(action);
-    assertStatusTransition(current.status, nextStatus);
+      if (!current) {
+        throw new Error("Application not found");
+      }
 
-    const updated = await tx.businessApplication.update({
-      where: { id: current.id },
-      data: { status: nextStatus },
-      select: { id: true, applicationNumber: true, status: true },
-    });
+      if (current.status !== "DEPARTMENT_HEAD_REVIEW") {
+        throw new Error("Application is not in Department Head review stage");
+      }
 
-    await tx.applicationHistory.create({
-      data: {
-        applicationId: current.id,
-        actorId: departmentHeadUserId,
-        actorRole: "DEPARTMENT_HEAD",
-        fromStatus: current.status,
-        toStatus: nextStatus,
-        remarks: normalizedRemarks ?? null,
-      },
-    });
+      const nextStatus = getNextStatus(action);
+      assertStatusTransition(current.status, nextStatus);
 
-    return {
-      id: updated.id,
-      applicationNumber: updated.applicationNumber,
-      applicationType: current.applicationType,
-      status: mapDbStatusToUi(updated.status),
-    };
-  });
+      const updated = await tx.businessApplication.update({
+        where: { id: current.id },
+        data: { status: nextStatus },
+        select: { id: true, applicationNumber: true, status: true },
+      });
+
+      await tx.applicationHistory.create({
+        data: {
+          applicationId: current.id,
+          actorId: departmentHeadUserId,
+          actorRole: "DEPARTMENT_HEAD",
+          fromStatus: current.status,
+          toStatus: nextStatus,
+          remarks: normalizedRemarks ?? null,
+        },
+      });
+
+      return {
+        id: updated.id,
+        applicationNumber: updated.applicationNumber,
+        applicationType: current.applicationType,
+        status: mapDbStatusToUi(updated.status),
+      };
+    },
+    { timeout: 30_000, maxWait: 10_000 }
+  );
 }
 
 export async function listDepartmentHeadRevocationQueue(): Promise<DepartmentHeadPermitToRevokeRow[]> {

@@ -27,7 +27,7 @@ export function safeApiErrorMessage(
     return error.message;
   }
   if (/expired transaction|transaction.*timeout/i.test(error.message)) {
-    return "Upload took too long. Please try again — large document sets may need a second attempt.";
+    return "The request took too long. Please try again.";
   }
   return fallback;
 }

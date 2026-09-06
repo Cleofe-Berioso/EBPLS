@@ -36,7 +36,7 @@ describe("WB-UTIL — person name, API errors, IP, OTP, options", () => {
         "Safe",
         { forceProduction: true }
       )
-    ).toMatch(/Upload took too long/);
+    ).toMatch(/took too long/i);
   });
 
   it("WB-UTIL-03 getClientIp from forwarded headers", () => {

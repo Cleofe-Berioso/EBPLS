@@ -166,9 +166,17 @@ export function BploReviewActions({
 
         {message ? (
           <InfoBanner
-            title={message.includes("Unable") || message.includes("required") ? "Action blocked" : "Action update"}
+            title={
+              /unable|required|took too long|try again|blocked|invalid/i.test(message)
+                ? "Action blocked"
+                : "Action update"
+            }
             description={message}
-            variant={message.includes("Unable") || message.includes("required") ? "danger" : "success"}
+            variant={
+              /unable|required|took too long|try again|blocked|invalid/i.test(message)
+                ? "danger"
+                : "success"
+            }
           />
         ) : null}
       </div>
