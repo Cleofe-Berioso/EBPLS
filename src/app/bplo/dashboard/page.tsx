@@ -150,24 +150,24 @@ export default async function BploDashboard() {
       <div className="grid gap-4 xl:grid-cols-2">
         <DashboardPieChart
           title="Application Status Distribution"
-          description="Grouped status counts across BPLO operations."
+          description="Current application counts by workflow stage (all statuses)."
           data={metrics.applicationStatusDistribution}
         />
         <DashboardLineChart
-          title="Applications Processed Per Day"
-          description="Daily processed count from application updatedAt."
+          title="Applications Completed Per Day"
+          description="Daily count of first RELEASED or REJECTED completions (last 14 days)."
           data={metrics.applicationsProcessedPerDay}
-          lineLabel="Processed Applications"
+          lineLabel="Completed Applications"
         />
         <DashboardBarChart
           title="Processing Time per Application"
-          description="Average hours from submittedAt to latest updatedAt."
+          description="Average hours from submittedAt to first RELEASED/REJECTED completion."
           data={metrics.processingTimeByApplicationType}
           barLabel="Average Hours"
         />
         <DashboardStackedBarChart
           title="Pending Queue by Status"
-          description="Pending workloads by review, assessment, payment, and release."
+          description="Active BPLO workloads: review, assessment, payment verification, and release."
           data={metrics.pendingQueueByStatus}
           categoryKey="queue"
           series={[

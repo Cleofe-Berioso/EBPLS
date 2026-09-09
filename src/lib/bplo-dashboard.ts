@@ -19,6 +19,8 @@ type DbApplicationStatus =
 
 type ApplicationType = "NEW" | "RENEWAL" | "CLOSURE";
 
+const TERMINAL_COMPLETION_STATUSES = ["RELEASED", "REJECTED"] as const;
+
 export interface BploDashboardMetrics {
   applicationStatusDistribution: Array<{ name: string; value: number }>;
   applicationsProcessedPerDay: Array<{ label: string; value: number }>;
@@ -50,24 +52,47 @@ function emptyMetrics(): BploDashboardMetrics {
   };
 }
 
+function resolveCompletionAt(row: {
+  status: DbApplicationStatus;
+  history: Array<{ createdAt: Date }>;
+  permitIssuance: { releasedAt: Date | null } | null;
+}): Date | null {
+  if (row.history[0]?.createdAt) return row.history[0].createdAt;
+  if (row.status === "RELEASED" && row.permitIssuance?.releasedAt) {
+    return row.permitIssuance.releasedAt;
+  }
+  return null;
+}
+
 const getCachedBploDashboardMetrics = cache(async (): Promise<BploDashboardMetrics> => {
   const rows = await prisma.businessApplication.findMany({
     select: {
       status: true,
       applicationType: true,
       submittedAt: true,
-      updatedAt: true,
+      permitIssuance: {
+        select: { releasedAt: true },
+      },
+      history: {
+        where: { toStatus: { in: [...TERMINAL_COMPLETION_STATUSES] } },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: { createdAt: true, toStatus: true },
+      },
     },
   });
 
   if (rows.length === 0) return emptyMetrics();
 
   const statusCount = {
+    draft: 0,
     pendingUnderReview: 0,
     returned: 0,
-    approvedForPayment: 0,
+    assessmentPayment: 0,
+    paidForRelease: 0,
+    released: 0,
     rejected: 0,
-    paidRelease: 0,
+    revocation: 0,
   };
 
   const now = new Date();
@@ -87,30 +112,39 @@ const getCachedBploDashboardMetrics = cache(async (): Promise<BploDashboardMetri
   for (const row of rows) {
     const status = row.status as DbApplicationStatus;
 
-    if (status === "SUBMITTED" || status === "UNDER_REVIEW" || status === "DEPARTMENT_HEAD_REVIEW") {
+    if (status === "DRAFT") statusCount.draft += 1;
+    else if (status === "SUBMITTED" || status === "UNDER_REVIEW" || status === "DEPARTMENT_HEAD_REVIEW") {
       statusCount.pendingUnderReview += 1;
-    }
-    if (status === "RETURNED_FOR_CORRECTION") {
+    } else if (status === "RETURNED_FOR_CORRECTION") {
       statusCount.returned += 1;
-    }
-    if (status === "DEPARTMENT_HEAD_APPROVED" || status === "ASSESSED" || status === "APPROVED_FOR_PAYMENT") {
-      statusCount.approvedForPayment += 1;
-    }
-    if (status === "REJECTED") {
+    } else if (status === "DEPARTMENT_HEAD_APPROVED" || status === "ASSESSED" || status === "APPROVED_FOR_PAYMENT") {
+      statusCount.assessmentPayment += 1;
+    } else if (status === "PAID" || status === "FOR_RELEASE") {
+      statusCount.paidForRelease += 1;
+    } else if (status === "RELEASED") {
+      statusCount.released += 1;
+    } else if (status === "REJECTED") {
       statusCount.rejected += 1;
-    }
-    if (status === "PAID" || status === "FOR_RELEASE" || status === "RELEASED") {
-      statusCount.paidRelease += 1;
-    }
-
-    // Exact processed timestamp is not modeled. We safely approximate processed date by updatedAt.
-    const updatedKey = dateKey(row.updatedAt);
-    if (dayBuckets.has(updatedKey)) {
-      dayBuckets.set(updatedKey, (dayBuckets.get(updatedKey) ?? 0) + 1);
+    } else if (status === "REVOCATION_REVIEW" || status === "REVOKED") {
+      statusCount.revocation += 1;
     }
 
-    if (row.submittedAt) {
-      const hours = (row.updatedAt.getTime() - row.submittedAt.getTime()) / (1000 * 60 * 60);
+    const completionAt = resolveCompletionAt({
+      status,
+      history: row.history,
+      permitIssuance: row.permitIssuance,
+    });
+
+    if (completionAt) {
+      const completedKey = dateKey(completionAt);
+      if (dayBuckets.has(completedKey)) {
+        dayBuckets.set(completedKey, (dayBuckets.get(completedKey) ?? 0) + 1);
+      }
+    }
+
+    // True cycle time: submit → first RELEASED/REJECTED completion only.
+    if (row.submittedAt && completionAt) {
+      const hours = (completionAt.getTime() - row.submittedAt.getTime()) / (1000 * 60 * 60);
       if (hours >= 0) {
         const type = row.applicationType as ApplicationType;
         typeAccumulator[type].totalHours += hours;
@@ -120,12 +154,15 @@ const getCachedBploDashboardMetrics = cache(async (): Promise<BploDashboardMetri
   }
 
   const applicationStatusDistribution = [
+    { name: "Draft", value: statusCount.draft },
     { name: "Pending / Under Review", value: statusCount.pendingUnderReview },
     { name: "Returned", value: statusCount.returned },
-    { name: "Approved / For Payment", value: statusCount.approvedForPayment },
+    { name: "Assessment / For Payment", value: statusCount.assessmentPayment },
+    { name: "Paid / For Release", value: statusCount.paidForRelease },
+    { name: "Released", value: statusCount.released },
     { name: "Rejected", value: statusCount.rejected },
-    { name: "Paid / Release / Released", value: statusCount.paidRelease },
-  ];
+    { name: "Revocation", value: statusCount.revocation },
+  ].filter((row) => row.value > 0);
 
   const applicationsProcessedPerDay = Array.from(dayBuckets.entries()).map(([iso, value]) => ({
     label: formatShortDate(iso),
@@ -148,12 +185,11 @@ const getCachedBploDashboardMetrics = cache(async (): Promise<BploDashboardMetri
 
   const pendingQueueData = {
     queue: "Pending Queue",
-    bploReview: rows.filter(
-      (row) => row.status === "SUBMITTED" || row.status === "UNDER_REVIEW" || row.status === "RETURNED_FOR_CORRECTION"
-    ).length,
+    // BPLO-owned review only. Returned-for-correction is applicant-side, not BPLO active work.
+    bploReview: rows.filter((row) => row.status === "SUBMITTED" || row.status === "UNDER_REVIEW").length,
     assessment: rows.filter((row) => row.status === "DEPARTMENT_HEAD_APPROVED" || row.status === "ASSESSED").length,
     paymentVerification: rows.filter((row) => row.status === "APPROVED_FOR_PAYMENT").length,
-    permitRelease: rows.filter((row) => row.status === "FOR_RELEASE").length,
+    permitRelease: rows.filter((row) => row.status === "FOR_RELEASE" || row.status === "PAID").length,
   };
 
   const pendingQueueByStatus =
