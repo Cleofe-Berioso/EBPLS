@@ -43,6 +43,7 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
   const applicantPreview = variant === "applicant-preview";
   const lineOfBusiness = displayText(permit.lineOfBusiness || permit.natureOfBusiness || permit.businessActivity).trim();
   const lineOfBusinessLabel = lineOfBusiness ? lineOfBusiness.toUpperCase() : "LINE OF BUSINESS NOT SPECIFIED";
+  const permitTitle = (permit.heading.title?.trim() || "MAYOR'S BUSINESS PERMIT").toUpperCase();
 
   return (
     <section className="mx-auto w-full max-w-[860px] bg-white px-3 py-4 text-black sm:px-4 print:max-w-none print:px-0 print:py-0">
@@ -68,34 +69,38 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
         </div>
 
         <header className="relative z-10">
-          {/* Absolute seal so the municipal heading stays truly page-centered. */}
-          <div className="pointer-events-none absolute left-0 top-0 z-[1]">
-            <div className="flex h-[72px] w-[72px] items-center justify-center bg-white sm:h-[84px] sm:w-[84px]">
-              <Image
-                src="/images/logo.png"
-                alt="Municipality seal"
-                width={84}
-                height={84}
-                className="h-full w-full object-contain"
-                priority
-              />
+          <div className="grid grid-cols-[84px_1fr_84px] items-start gap-2 sm:grid-cols-[100px_1fr_100px]">
+            <div className="flex justify-start">
+              <div className="flex h-[72px] w-[72px] items-center justify-center bg-white sm:h-[84px] sm:w-[84px]">
+                <Image
+                  src="/images/logo.png"
+                  alt="Municipality seal"
+                  width={84}
+                  height={84}
+                  className="h-full w-full object-contain"
+                  priority
+                />
+              </div>
             </div>
+
+            <div className="text-center">
+              <p className="text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.republic}</p>
+              <p className="mt-1 text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.province}</p>
+              <p className="mt-2 text-[22px] font-black uppercase leading-none tracking-[0.02em] sm:text-[30px]">
+                {permit.heading.municipality}
+              </p>
+              <p className="mt-2 text-[14px] font-extrabold uppercase leading-tight tracking-[0.08em] sm:text-[16px]">
+                {permit.heading.office}
+              </p>
+            </div>
+
+            {/* Spacer column keeps the municipal heading optically centered opposite the seal. */}
+            <div aria-hidden="true" />
           </div>
 
-          <div className="mx-auto w-full text-center">
-            <p className="text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.republic}</p>
-            <p className="mt-1 text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.province}</p>
-            <p className="mt-2 text-[22px] font-black uppercase leading-none tracking-[0.02em] sm:text-[30px]">
-              {permit.heading.municipality}
-            </p>
-            <p className="mt-2 text-[14px] font-extrabold uppercase leading-tight tracking-[0.08em] sm:text-[16px]">
-              {permit.heading.office}
-            </p>
-          </div>
-
-          <div className="mt-5 flex w-full items-center justify-center border-[2px] border-slate-200 px-3 py-3">
-            <h1 className="w-full text-center text-[26px] font-black leading-none tracking-normal text-[#bf1d18] sm:text-[32px]">
-              {permit.heading.title}
+          <div className="permit-title-banner mt-5 grid w-full place-items-center border-[2px] border-slate-300 px-4 py-3">
+            <h1 className="permit-title-text m-0 w-full text-center text-[26px] font-black uppercase leading-none text-[#bf1d18] sm:text-[32px]">
+              {permitTitle}
             </h1>
           </div>
         </header>
@@ -171,6 +176,12 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
           margin: 0;
         }
 
+        .permit-title-banner,
+        .permit-title-text {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
         @media print {
           .business-permit-sheet {
             break-inside: avoid;
@@ -183,11 +194,20 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
             page-break-after: avoid;
           }
 
-          .business-permit-sheet header h1 {
-            text-align: center !important;
+          .permit-title-banner {
+            display: grid !important;
             width: 100% !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
+            place-items: center !important;
+            visibility: visible !important;
+          }
+
+          .permit-title-text {
+            display: block !important;
+            width: 100% !important;
+            margin: 0 !important;
+            color: #bf1d18 !important;
+            text-align: center !important;
+            visibility: visible !important;
           }
         }
       `}</style>
