@@ -7,6 +7,7 @@ import { Eye, EyeOff, Lock, Mail, Phone, User, ShieldCheck, RotateCcw } from "lu
 import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { autoCapitalizeWords } from "@/lib/text-input";
+import { PASSWORD_POLICY_HINT, validatePasswordPolicy } from "@/lib/password-policy";
 
 // ── Step types ────────────────────────────────────────────────────────────────
 type Step =
@@ -30,44 +31,47 @@ interface FormData {
   confirmPassword: string;
 }
 
+const inputClassName =
+  "block w-full rounded-lg border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]";
+
+const inputWithToggleClassName =
+  "block w-full rounded-lg border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-9 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]";
+
 // ── Shared card wrapper ───────────────────────────────────────────────────────
 function CardShell({ subtitle, title, children }: { subtitle: string; title: string; children: React.ReactNode }) {
   return (
-    <div className="relative z-10 w-full max-w-md">
-      <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
-        <div className="bg-[var(--primary)] px-8 py-8 text-center text-white">
-          <div className="mb-4 flex justify-center">
-            <div className="rounded-full bg-white p-2 shadow-sm">
+    <div className="relative z-10 flex w-full max-w-lg max-h-[calc(100dvh-1.5rem)] flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl backdrop-blur-md">
+        <div className="shrink-0 bg-[var(--primary)] px-5 py-3 text-center text-white sm:px-6 sm:py-3.5">
+          <div className="mb-2 flex justify-center">
+            <div className="rounded-full bg-white p-1 shadow-sm">
               <Image
                 src="/images/logo.png"
                 alt="Municipality of Enrique B. Magalona Logo"
-                width={64}
-                height={64}
-                className="h-16 w-16 object-contain"
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
               />
             </div>
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">Municipality of Enrique B. Magalona</p>
-          <h1 className="mt-2 text-2xl font-bold text-white">{title}</h1>
-          <p className="mt-2 text-sm text-[var(--primary-soft)]">{subtitle}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--accent-soft)]">
+            Municipality of Enrique B. Magalona
+          </p>
+          <h1 className="mt-1 text-lg font-bold leading-tight text-white sm:text-xl">{title}</h1>
+          <p className="mt-0.5 text-xs text-[var(--primary-soft)] sm:text-sm">{subtitle}</p>
         </div>
-        {children}
-        <div className="bg-slate-50 px-8 py-4">
-          <p className="text-[10px] sm:text-xs text-center text-slate-500">
-            © 2026 Municipality of Enrique B. Magalona - BPLO. All rights reserved.
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50 px-4 py-2 sm:px-5">
+          <p className="text-center text-[10px] leading-snug text-slate-500">
+            © 2026 Municipality of Enrique B. Magalona - BPLO ·{" "}
+            <a
+              href="mailto:support@bplo.gov.ph"
+              className="font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)]"
+            >
+              support@bplo.gov.ph
+            </a>
           </p>
         </div>
-      </div>
-      <div className="mt-4 rounded-xl border border-white/40 bg-white/90 px-4 py-3 text-center shadow-lg backdrop-blur-md">
-        <p className="text-sm font-medium text-slate-700">
-          Need account assistance? Contact BPLO at{" "}
-          <a
-            href="mailto:support@bplo.gov.ph"
-            className="font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)]"
-          >
-            support@bplo.gov.ph
-          </a>
-        </p>
       </div>
     </div>
   );
@@ -77,17 +81,17 @@ function CardShell({ subtitle, title, children }: { subtitle: string; title: str
 function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
   const steps = [
     { n: 1, label: "Details" },
-    { n: 2, label: "Verify Email" },
+    { n: 2, label: "Verify" },
     { n: 3, label: "Done" },
   ] as const;
 
   return (
-    <div className="flex items-center justify-center gap-2 mb-6">
+    <div className="mb-3 flex items-center justify-center gap-1.5">
       {steps.map(({ n, label }, i) => (
-        <div key={n} className="flex items-center gap-2">
-          <div className="flex flex-col items-center gap-1">
+        <div key={n} className="flex items-center gap-1.5">
+          <div className="flex flex-col items-center gap-0.5">
             <div
-              className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+              className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
                 current === n
                   ? "bg-[var(--primary)] text-white"
                   : current > n
@@ -97,13 +101,13 @@ function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
             >
               {current > n ? "✓" : n}
             </div>
-            <span className={`text-[10px] font-medium ${current === n ? "text-[var(--primary)]" : "text-slate-400"}`}>
+            <span className={`text-[9px] font-medium ${current === n ? "text-[var(--primary)]" : "text-slate-400"}`}>
               {label}
             </span>
           </div>
           {i < steps.length - 1 && (
             <div
-              className={`h-0.5 w-10 mb-3 rounded-full transition-colors ${
+              className={`mb-3 h-0.5 w-8 rounded-full transition-colors ${
                 current > n ? "bg-[var(--primary)]" : "bg-slate-200"
               }`}
             />
@@ -214,7 +218,13 @@ export function RegisterForm() {
       confirmPassword: (form.elements.namedItem("confirmPassword") as HTMLInputElement).value,
     };
 
-    // Client-side confirm check before sending
+    // Client-side password checks before sending
+    const passwordPolicyError = validatePasswordPolicy(data.password);
+    if (passwordPolicyError) {
+      setFormState({ status: "error", message: passwordPolicyError });
+      return;
+    }
+
     if (data.password !== data.confirmPassword) {
       setFormState({ status: "error", message: "Passwords do not match." });
       return;
@@ -348,16 +358,16 @@ export function RegisterForm() {
   if (step === "success") {
     return (
       <CardShell title="Registration Successful" subtitle="Your applicant account is ready for sign in.">
-        <div className="p-8">
+        <div className="p-5 sm:p-6">
           <InfoBanner
             title="Your account is ready"
             description="Your applicant account has been created. You can now sign in."
             variant="success"
           />
-          <div className="mt-6 text-center">
+          <div className="mt-4 text-center">
             <Link
               href="/login"
-              className="inline-flex w-full items-center justify-center rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)]"
+              className="inline-flex w-full items-center justify-center rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)]"
             >
               Go to Login
             </Link>
@@ -375,23 +385,22 @@ export function RegisterForm() {
 
     return (
       <CardShell title="Verify Your Email" subtitle="Enter the 6-digit OTP sent to your email.">
-        <div className="p-8">
+        <div className="p-5 sm:p-6">
           <StepIndicator current={2} />
 
           {otpState.status === "error" && (
             <InfoBanner title="Verification issue" description={otpState.message} variant="danger" />
           )}
 
-          <div className="mb-5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <ShieldCheck className="mb-1 inline-block h-4 w-4 text-[var(--primary)]" />{" "}
+          <div className="mb-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 sm:text-sm">
+            <ShieldCheck className="mb-0.5 inline-block h-4 w-4 text-[var(--primary)]" />{" "}
             We sent a 6-digit OTP to{" "}
             <span className="font-semibold text-slate-800">{savedData?.email}</span>.
             Check your inbox and spam folder.
           </div>
 
-          <form onSubmit={handleOtpSubmit} className="space-y-6">
-            {/* OTP digit boxes */}
-            <div className="flex justify-center gap-2" onPaste={handleDigitPaste}>
+          <form onSubmit={handleOtpSubmit} className="space-y-4">
+            <div className="flex justify-center gap-1.5 sm:gap-2" onPaste={handleDigitPaste}>
               {otp.map((digit, i) => (
                 <input
                   key={i}
@@ -404,7 +413,7 @@ export function RegisterForm() {
                   disabled={isLoading}
                   onChange={(e) => handleDigitChange(i, e.target.value)}
                   onKeyDown={(e) => handleDigitKeyDown(i, e)}
-                  className="h-14 w-11 rounded-xl border border-slate-200 bg-slate-50 text-center text-2xl font-bold text-slate-900 outline-none transition-colors focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)] disabled:opacity-50"
+                  className="h-11 w-9 rounded-lg border border-slate-200 bg-slate-50 text-center text-xl font-bold text-slate-900 outline-none transition-colors focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)] disabled:opacity-50 sm:h-12 sm:w-10 sm:text-2xl"
                   aria-label={`OTP digit ${i + 1}`}
                 />
               ))}
@@ -413,14 +422,13 @@ export function RegisterForm() {
             <button
               type="submit"
               disabled={isLoading || otpValue.length !== 6}
-              className="w-full rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
+              className="w-full rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
             >
               {isLoading ? "Verifying…" : "Verify & Create Account"}
             </button>
           </form>
 
-          {/* Resend */}
-          <div className="mt-5 text-center text-sm text-slate-600">
+          <div className="mt-4 text-center text-xs text-slate-600 sm:text-sm">
             {canResend ? (
               <button
                 type="button"
@@ -428,7 +436,7 @@ export function RegisterForm() {
                 disabled={isLoading}
                 className="inline-flex items-center gap-1 font-semibold text-[var(--primary)] hover:text-[var(--primary-strong)] disabled:opacity-50"
               >
-                <RotateCcw className="h-4 w-4" />
+                <RotateCcw className="h-3.5 w-3.5" />
                 Resend OTP
               </button>
             ) : (
@@ -438,8 +446,7 @@ export function RegisterForm() {
             )}
           </div>
 
-          {/* Back link */}
-          <div className="mt-3 text-center text-sm">
+          <div className="mt-2 text-center text-xs sm:text-sm">
             <button
               type="button"
               onClick={() => { setStep("form"); setFormState({ status: "idle" }); }}
@@ -459,141 +466,119 @@ export function RegisterForm() {
   const isLoading = formState.status === "loading";
 
   return (
-    <CardShell title="Create Account" subtitle="Register as an applicant to start filing and tracking permits.">
-      <div className="p-8">
+    <CardShell title="Create Account" subtitle="Register as an applicant to start filing permits.">
+      <div className="p-4 sm:p-5">
         <StepIndicator current={1} />
 
-        <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
+        <form onSubmit={handleFormSubmit} className="space-y-2.5" noValidate>
           {formState.status === "error" && (
             <InfoBanner title="Registration issue" description={formState.message} variant="danger" />
           )}
 
-          {/* Split Legal Name */}
-          <FormField
-            label="First Name"
-            htmlFor="firstName"
-            hint="Use your legal name as it appears on government records."
-            required
-          >
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-slate-400" />
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <FormField label="First Name" htmlFor="firstName" required>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                  <User className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  aria-label="First Name"
+                  autoComplete="given-name"
+                  autoCapitalize="words"
+                  required
+                  defaultValue={savedData?.firstName ?? ""}
+                  onInput={(event) => {
+                    const target = event.currentTarget;
+                    const next = autoCapitalizeWords(target.value);
+                    if (next !== target.value) target.value = next;
+                  }}
+                  className={inputClassName}
+                  placeholder="Juan"
+                />
               </div>
-              <input
-                id="firstName"
-                name="firstName"
-                type="text"
-                aria-label="First Name"
-                autoComplete="given-name"
-                autoCapitalize="words"
-                required
-                defaultValue={savedData?.firstName ?? ""}
-                onInput={(event) => {
-                  const target = event.currentTarget;
-                  const next = autoCapitalizeWords(target.value);
-                  if (next !== target.value) target.value = next;
-                }}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="Juan"
-              />
-            </div>
-          </FormField>
+            </FormField>
 
-          <FormField
-            label="Middle Name"
-            htmlFor="middleName"
-            hint="Optional. Leave blank if not applicable."
-          >
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-slate-400" />
+            <FormField label="Middle Name" htmlFor="middleName">
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                  <User className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  id="middleName"
+                  name="middleName"
+                  type="text"
+                  aria-label="Middle Name"
+                  autoComplete="additional-name"
+                  autoCapitalize="words"
+                  defaultValue={savedData?.middleName ?? ""}
+                  onInput={(event) => {
+                    const target = event.currentTarget;
+                    const next = autoCapitalizeWords(target.value);
+                    if (next !== target.value) target.value = next;
+                  }}
+                  className={inputClassName}
+                  placeholder="Optional"
+                />
               </div>
-              <input
-                id="middleName"
-                name="middleName"
-                type="text"
-                aria-label="Middle Name"
-                autoComplete="additional-name"
-                autoCapitalize="words"
-                defaultValue={savedData?.middleName ?? ""}
-                onInput={(event) => {
-                  const target = event.currentTarget;
-                  const next = autoCapitalizeWords(target.value);
-                  if (next !== target.value) target.value = next;
-                }}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="Santos"
-              />
-            </div>
-          </FormField>
+            </FormField>
 
-          <FormField
-            label="Last Name"
-            htmlFor="lastName"
-            required
-          >
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-slate-400" />
+            <FormField label="Last Name" htmlFor="lastName" required>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                  <User className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  aria-label="Last Name"
+                  autoComplete="family-name"
+                  autoCapitalize="words"
+                  required
+                  defaultValue={savedData?.lastName ?? ""}
+                  onInput={(event) => {
+                    const target = event.currentTarget;
+                    const next = autoCapitalizeWords(target.value);
+                    if (next !== target.value) target.value = next;
+                  }}
+                  className={inputClassName}
+                  placeholder="Dela Cruz"
+                />
               </div>
-              <input
-                id="lastName"
-                name="lastName"
-                type="text"
-                aria-label="Last Name"
-                autoComplete="family-name"
-                autoCapitalize="words"
-                required
-                defaultValue={savedData?.lastName ?? ""}
-                onInput={(event) => {
-                  const target = event.currentTarget;
-                  const next = autoCapitalizeWords(target.value);
-                  if (next !== target.value) target.value = next;
-                }}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="Dela Cruz"
-              />
-            </div>
-          </FormField>
+            </FormField>
 
-          <FormField
-            label="Suffix"
-            htmlFor="suffix"
-            hint="Optional (e.g., Jr., Sr., III)."
-          >
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-slate-400" />
+            <FormField label="Suffix" htmlFor="suffix">
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                  <User className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  id="suffix"
+                  name="suffix"
+                  type="text"
+                  aria-label="Suffix"
+                  autoComplete="honorific-suffix"
+                  autoCapitalize="words"
+                  defaultValue={savedData?.suffix ?? ""}
+                  onInput={(event) => {
+                    const target = event.currentTarget;
+                    const next = autoCapitalizeWords(target.value);
+                    if (next !== target.value) target.value = next;
+                  }}
+                  className={inputClassName}
+                  placeholder="Jr. / Sr. / III"
+                />
               </div>
-              <input
-                id="suffix"
-                name="suffix"
-                type="text"
-                aria-label="Suffix"
-                autoComplete="honorific-suffix"
-                autoCapitalize="words"
-                defaultValue={savedData?.suffix ?? ""}
-                onInput={(event) => {
-                  const target = event.currentTarget;
-                  const next = autoCapitalizeWords(target.value);
-                  if (next !== target.value) target.value = next;
-                }}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="Jr."
-              />
-            </div>
-          </FormField>
+            </FormField>
+          </div>
 
-          {/* Email */}
-          <FormField
-            label="Email Address"
-            htmlFor="email"
-            hint="Use this email for sign in and application notifications. An OTP will be sent here."
-            required
-          >
+          <FormField label="Email Address" htmlFor="email" required>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-slate-400" />
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                <Mail className="h-4 w-4 text-slate-400" />
               </div>
               <input
                 id="email"
@@ -603,22 +588,16 @@ export function RegisterForm() {
                 autoComplete="email"
                 required
                 defaultValue={savedData?.email ?? ""}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
+                className={inputClassName}
                 placeholder="your.email@example.com"
               />
             </div>
           </FormField>
 
-          {/* Contact Number */}
-          <FormField
-            label="Contact Number"
-            htmlFor="contactNumber"
-            hint="Enter an active mobile number for verification follow-ups and notices."
-            required
-          >
+          <FormField label="Contact Number" htmlFor="contactNumber" required>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Phone className="h-5 w-5 text-slate-400" />
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                <Phone className="h-4 w-4 text-slate-400" />
               </div>
               <input
                 id="contactNumber"
@@ -629,97 +608,87 @@ export function RegisterForm() {
                 required
                 pattern="^(\+63|0)9\d{9}$"
                 defaultValue={savedData?.contactNumber ?? ""}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="09XX-XXX-XXXX"
+                className={inputClassName}
+                placeholder="09XXXXXXXXX"
               />
             </div>
           </FormField>
 
-          {/* Password */}
-          <FormField
-            label="Password"
-            htmlFor="password"
-            hint="Minimum of 8 characters."
-            required
-          >
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-slate-400" />
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <FormField label="Password" htmlFor="password" hint={PASSWORD_POLICY_HINT} required>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                  <Lock className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  aria-label="Password"
+                  required
+                  minLength={8}
+                  className={inputWithToggleClassName}
+                  placeholder="Password"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-2.5"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-slate-400 transition-colors hover:text-[var(--primary)]" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-slate-400 transition-colors hover:text-[var(--primary)]" />
+                  )}
+                </button>
               </div>
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="new-password"
-                aria-label="Password"
-                required
-                minLength={8}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="At least 8 characters"
-              />
-              <button
-                type="button"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-5 w-5 text-slate-400 transition-colors hover:text-[var(--primary)]" />
-                ) : (
-                  <Eye className="h-5 w-5 text-slate-400 transition-colors hover:text-[var(--primary)]" />
-                )}
-              </button>
-            </div>
-          </FormField>
+            </FormField>
 
-          {/* Confirm Password */}
-          <FormField
-            label="Confirm Password"
-            htmlFor="confirmPassword"
-            hint="Re-enter the same password to confirm."
-            required
-          >
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-slate-400" />
+            <FormField label="Confirm Password" htmlFor="confirmPassword" required>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                  <Lock className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirm ? "text" : "password"}
+                  autoComplete="new-password"
+                  aria-label="Confirm Password"
+                  required
+                  minLength={8}
+                  className={inputWithToggleClassName}
+                  placeholder="Confirm"
+                />
+                <button
+                  type="button"
+                  aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}
+                  onClick={() => setShowConfirm((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-2.5"
+                >
+                  {showConfirm ? (
+                    <EyeOff className="h-4 w-4 text-slate-400 transition-colors hover:text-[var(--primary)]" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-slate-400 transition-colors hover:text-[var(--primary)]" />
+                  )}
+                </button>
               </div>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type={showConfirm ? "text" : "password"}
-                autoComplete="new-password"
-                aria-label="Confirm Password"
-                required
-                minLength={8}
-                className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="Re-enter your password"
-              />
-              <button
-                type="button"
-                aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}
-                onClick={() => setShowConfirm((v) => !v)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-              >
-                {showConfirm ? (
-                  <EyeOff className="h-5 w-5 text-slate-400 transition-colors hover:text-[var(--primary)]" />
-                ) : (
-                  <Eye className="h-5 w-5 text-slate-400 transition-colors hover:text-[var(--primary)]" />
-                )}
-              </button>
-            </div>
-          </FormField>
+            </FormField>
+          </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
+            className="mt-1 w-full rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--primary-strong)] disabled:opacity-60"
           >
             {isLoading ? "Sending OTP…" : "Send Verification OTP"}
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-slate-700">
+        <div className="mt-3 text-center">
+          <p className="text-xs text-slate-700 sm:text-sm">
             Already have an account?{" "}
             <Link
               href="/login"

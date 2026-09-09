@@ -8,6 +8,7 @@ import {
   REGISTER_RATE_LIMIT,
 } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-client-ip";
+import { validatePasswordPolicy } from "@/lib/password-policy";
 
 export async function POST(req: NextRequest) {
   const ipLimit = checkRateLimit(`register:ip:${getClientIp(req)}`, REGISTER_RATE_LIMIT);
@@ -57,11 +58,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password is required." }, { status: 400 });
   }
 
-  if (password.length < 8) {
-    return NextResponse.json(
-      { error: "Password must be at least 8 characters long." },
-      { status: 400 }
-    );
+  const passwordPolicyError = validatePasswordPolicy(password);
+  if (passwordPolicyError) {
+    return NextResponse.json({ error: passwordPolicyError }, { status: 400 });
   }
 
   if (confirmPassword !== password) {
