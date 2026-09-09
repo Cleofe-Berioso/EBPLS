@@ -27,7 +27,7 @@ export function getPortalSidebarWidth(collapsed: boolean): string {
 
 export function sidebarAsideClass(mobileOpen: boolean, collapsed: boolean): string {
   return [
-    "app-sidebar fixed inset-y-0 left-0 z-50 flex h-full flex-col transition-[width,transform] duration-200 lg:z-30",
+    "app-sidebar no-print fixed inset-y-0 left-0 z-50 flex h-full flex-col transition-[width,transform] duration-200 lg:z-30",
     mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
     getPortalSidebarWidth(collapsed),
   ].join(" ");
@@ -309,7 +309,9 @@ export function PortalContentColumn({
   children: ReactNode;
 }) {
   return (
-    <div className={`min-w-0 transition-[padding] duration-200 ${getPortalContentOffset(collapsed)}`}>
+    <div
+      className={`portal-content-column min-w-0 transition-[padding] duration-200 print:pl-0 ${getPortalContentOffset(collapsed)}`}
+    >
       {children}
     </div>
   );
@@ -317,7 +319,7 @@ export function PortalContentColumn({
 
 export function PortalTopHeader({ children }: { children: ReactNode }) {
   return (
-    <header className="app-header sticky top-0 z-30">
+    <header className="app-header no-print sticky top-0 z-30" data-app-chrome>
       <div className="app-portal-header-bar">{children}</div>
     </header>
   );

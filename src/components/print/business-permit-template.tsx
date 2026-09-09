@@ -17,10 +17,6 @@ function dateLabel(value: string | null): string {
   });
 }
 
-function moneyLabel(value: number): string {
-  return `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 function printDateLabel(): string {
   return new Date().toLocaleDateString("en-PH", {
     year: "numeric",
@@ -63,7 +59,7 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
         </button>
       </div>
 
-      <article className="relative overflow-hidden rounded-[26px] border border-slate-300 bg-white px-7 py-5 shadow-[0_0_40px_rgba(15,23,42,0.06)] print:rounded-none print:shadow-none sm:px-9 sm:py-6">
+      <article className="business-permit-sheet relative overflow-hidden rounded-[26px] border border-slate-300 bg-white px-7 py-5 shadow-[0_0_40px_rgba(15,23,42,0.06)] print:rounded-none print:border-0 print:shadow-none print:px-0 print:py-0 sm:px-9 sm:py-6">
         <div className="pointer-events-none absolute inset-0 opacity-[0.06]">
           <div className="absolute left-1/2 top-[54%] h-[580px] w-[580px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-500" />
           <div className="absolute left-1/2 top-[54%] flex h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-400/60 bg-white/10">
@@ -72,25 +68,33 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
         </div>
 
         <header className="relative z-10">
-          <div className="grid grid-cols-[82px_1fr_82px] items-start gap-3 sm:grid-cols-[100px_1fr_100px]">
-            <div className="flex justify-start">
-              <div className="flex h-[76px] w-[76px] items-center justify-center bg-white sm:h-[88px] sm:w-[88px]">
-                <Image src="/images/logo.png" alt="Municipality seal" width={84} height={84} className="h-full w-full object-contain" />
-              </div>
+          {/* Absolute seal so the municipal heading stays truly page-centered. */}
+          <div className="pointer-events-none absolute left-0 top-0 z-[1]">
+            <div className="flex h-[72px] w-[72px] items-center justify-center bg-white sm:h-[84px] sm:w-[84px]">
+              <Image
+                src="/images/logo.png"
+                alt="Municipality seal"
+                width={84}
+                height={84}
+                className="h-full w-full object-contain"
+                priority
+              />
             </div>
+          </div>
 
-            <div className="text-center">
-              <p className="text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.republic}</p>
-              <p className="mt-1 text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.province}</p>
-              <p className="mt-2 text-[24px] font-black uppercase leading-none tracking-[0.02em] sm:text-[34px]">{permit.heading.municipality}</p>
-              <p className="mt-2 text-[16px] font-extrabold uppercase leading-tight tracking-[0.08em]">{permit.heading.office}</p>
-            </div>
-
-            <div />
+          <div className="mx-auto max-w-[640px] px-[76px] text-center sm:px-[92px]">
+            <p className="text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.republic}</p>
+            <p className="mt-1 text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.province}</p>
+            <p className="mt-2 text-[22px] font-black uppercase leading-none tracking-[0.02em] sm:text-[30px]">
+              {permit.heading.municipality}
+            </p>
+            <p className="mt-2 text-[14px] font-extrabold uppercase leading-tight tracking-[0.08em] sm:text-[16px]">
+              {permit.heading.office}
+            </p>
           </div>
 
           <div className="mt-5 border-[2px] border-slate-200 px-4 py-3 text-center">
-            <h1 className="text-[28px] font-black tracking-[0.01em] text-[#bf1d18] sm:text-[32px]">
+            <h1 className="text-[26px] font-black tracking-[0.01em] text-[#bf1d18] sm:text-[32px]">
               {permit.heading.title}
             </h1>
           </div>
@@ -160,6 +164,20 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
           </div>
         </section>
       </article>
+
+      <style jsx global>{`
+        @media print {
+          .business-permit-sheet {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .business-permit-sheet header {
+            break-after: avoid;
+            page-break-after: avoid;
+          }
+        }
+      `}</style>
     </section>
   );
 }

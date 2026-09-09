@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { BusinessPermitTemplate } from "@/components/print/business-permit-template";
 import { actionButtonStyles } from "@/components/ui/action-button";
 import { requireBploSession } from "@/lib/bplo-api";
@@ -8,6 +9,10 @@ import { getBploBusinessPermitPrintAccess } from "@/lib/printable-documents";
 interface PageProps {
   params: Promise<{ applicationId: string }>;
 }
+
+export const metadata: Metadata = {
+  title: "Mayor's Business Permit",
+};
 
 export default async function BploBusinessPermitPrintPage({ params }: PageProps) {
   const session = await requireBploSession();

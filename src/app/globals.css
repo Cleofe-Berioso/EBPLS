@@ -771,3 +771,45 @@ table tbody tr:hover {
     background: var(--background);
   }
 }
+
+/* ─── Print / Save as PDF ─────────────────────────── */
+
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .no-print,
+  .app-header,
+  .app-sidebar,
+  .app-portal-overlay,
+  .app-portal-nav-toggle,
+  nav,
+  aside,
+  [data-app-chrome],
+  [data-navigation],
+  [data-sidebar] {
+    display: none !important;
+  }
+
+  .app-shell,
+  .app-shell-main,
+  .app-portal-main {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+
+  /* Clear portal sidebar offset so the permit is full-page. */
+  .portal-content-column {
+    padding-left: 0 !important;
+  }
+}
