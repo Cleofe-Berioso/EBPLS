@@ -190,10 +190,11 @@ export function LoginForm({
                   <input
                     type="checkbox"
                     name="rememberMe"
+                    value="true"
                     className="h-4 w-4 rounded"
                     style={{ accentColor: "var(--primary)" }}
                   />
-                  <span className="text-sm text-[var(--ink-muted)]">Remember me</span>
+                  <span className="text-sm text-[var(--ink-muted)]">Remember me (30 days)</span>
                 </label>
                 <Link
                   href="/forgot-password"

@@ -7,12 +7,18 @@ import { getUserByEmail } from "@/lib/db";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@/lib/db";
 import { checkRateLimit, LOGIN_EMAIL_RATE_LIMIT } from "@/lib/rate-limit";
+import {
+  SESSION_MAX_AGE_REMEMBER_SECONDS,
+  isRememberMeValue,
+  sessionMaxAgeSeconds,
+} from "@/lib/session-policy";
 
 type AuthUser = {
   id: string;
   email: string;
   name: string;
   role: Role;
+  rememberMe?: boolean;
 };
 
 const configuredSecret =
@@ -38,10 +44,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        rememberMe: { label: "Remember me", type: "text" },
       },
       async authorize(credentials) {
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
+        const rememberMe = isRememberMeValue(credentials?.rememberMe);
 
         if (!email || !password) return null;
 
@@ -65,6 +73,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             email: user.email,
             name: user.name,
             role: user.role,
+            rememberMe,
           };
         } catch (error) {
           if (process.env.NODE_ENV !== "production") {
@@ -128,11 +137,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const now = Date.now();
 
       if (user) {
-        token.id = user.id;
+        const rememberMe = Boolean((user as AuthUser).rememberMe);
+        const maxAgeSeconds = sessionMaxAgeSeconds(rememberMe);
+        token.id = user.id!;
         token.role = (user as { role: Role }).role;
         token.isActive = true;
+        token.rememberMe = rememberMe;
+        token.sessionExpiresAt = now + maxAgeSeconds * 1000;
         token.roleCheckedAt = now;
         return token;
+      }
+
+      if (
+        typeof token.sessionExpiresAt === "number" &&
+        now > token.sessionExpiresAt
+      ) {
+        return {
+          ...token,
+          id: "",
+          isActive: false,
+          roleCheckedAt: now,
+        };
       }
 
       const checkedAt = typeof token.roleCheckedAt === "number" ? token.roleCheckedAt : 0;
@@ -187,7 +212,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     session({ session, token }) {
       if (session.user) {
-        if (token.isActive === false) {
+        if (
+          token.isActive === false ||
+          !token.id ||
+          (typeof token.sessionExpiresAt === "number" && Date.now() > token.sessionExpiresAt)
+        ) {
           session.user.id = "";
           session.user.role = "APPLICANT";
           return session;
@@ -204,6 +233,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
-    maxAge: 8 * 60 * 60, // 8 hours — reduces stale-token window
+    // Cookie upper bound for Remember me (30 days). Shorter sessions use sessionExpiresAt.
+    maxAge: SESSION_MAX_AGE_REMEMBER_SECONDS,
   },
 });

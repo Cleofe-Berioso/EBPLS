@@ -22,9 +22,10 @@ export const proxy = auth((req) => {
   const acceptHeader = req.headers.get("accept") ?? "";
   const isServerActionRequest = req.headers.has("next-action");
   const isRscRequest = req.headers.get("rsc") === "1" || acceptHeader.includes("text/x-component");
-  const isLoggedIn = !!req.auth;
+  const sessionUserId = req.auth?.user?.id?.trim() ?? "";
+  const isLoggedIn = Boolean(req.auth?.user && sessionUserId);
   const role = req.auth?.user?.role as Role | undefined;
-  const userId = req.auth?.user?.id;
+  const userId = sessionUserId || undefined;
   const loginError = nextUrl.searchParams.get("error");
   const stayOnLogin =
     loginError === "account-disabled" || loginError === "session-expired";

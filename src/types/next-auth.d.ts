@@ -11,6 +11,7 @@ declare module "next-auth" {
 
   interface User {
     role: Role;
+    rememberMe?: boolean;
   }
 }
 
@@ -19,5 +20,9 @@ declare module "next-auth/jwt" {
     id: string;
     role: Role;
     isActive?: boolean;
+    roleCheckedAt?: number;
+    rememberMe?: boolean;
+    /** Absolute session end (ms since epoch). Enforces short sessions when Remember me is off. */
+    sessionExpiresAt?: number;
   }
 }

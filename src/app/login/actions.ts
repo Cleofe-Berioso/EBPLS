@@ -22,6 +22,13 @@ export async function loginAction(
     }
 
     const normalizedEmail = email.toLowerCase();
+    const rememberMeRaw = formData.get("rememberMe");
+    const rememberMe =
+      rememberMeRaw === "on" ||
+      rememberMeRaw === "true" ||
+      rememberMeRaw === "1" ||
+      rememberMeRaw === true;
+
     try {
       const existing = await getUserByEmail(normalizedEmail);
       if (existing && !existing.isActive) {
@@ -40,6 +47,7 @@ export async function loginAction(
     await signIn("credentials", {
       email,
       password,
+      rememberMe: rememberMe ? "true" : "false",
       redirectTo: "/auth/redirect",
     });
   } catch (error) {
