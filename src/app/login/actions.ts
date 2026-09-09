@@ -26,8 +26,7 @@ export async function loginAction(
     const rememberMe =
       rememberMeRaw === "on" ||
       rememberMeRaw === "true" ||
-      rememberMeRaw === "1" ||
-      rememberMeRaw === true;
+      rememberMeRaw === "1";
 
     try {
       const existing = await getUserByEmail(normalizedEmail);
