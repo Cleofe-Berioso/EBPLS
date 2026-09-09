@@ -87,7 +87,7 @@ function readFormString(formData: unknown, key: string): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function resolveLocationBarangay(
+export function resolveLocationBarangay(
   locationBarangay: string | null | undefined,
   formData: unknown
 ): string | null {

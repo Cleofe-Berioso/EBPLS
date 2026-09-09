@@ -160,6 +160,7 @@ const getCachedJitDashboardMetrics = cache(async (): Promise<JitDashboardMetrics
   const barangayCounts = new Map<string, number>();
   for (const business of businesses) {
     const barangay = business.barangay?.trim() || "Unspecified Barangay";
+    if (barangay === "Unspecified Barangay") continue;
     barangayCounts.set(barangay, (barangayCounts.get(barangay) ?? 0) + 1);
   }
 

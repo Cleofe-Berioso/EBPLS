@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { resolveLocationBarangay } from "@/lib/business-location";
 
 type DbRole = "APPLICANT" | "BPLO" | "DEPARTMENT_HEAD" | "JIT" | "SUPER_ADMIN";
 type SmsStatus = "SENT" | "FAILED" | "SKIPPED";
@@ -252,6 +253,11 @@ const getCachedSuperAdminDashboardMetrics = cache(async (): Promise<SuperAdminDa
         lineOfBusiness: true,
         businessType: true,
         location: { select: { barangay: true } },
+        applications: {
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: 1,
+          select: { formData: true },
+        },
       },
     }),
     prisma.smsDeliveryLog.groupBy({
@@ -404,7 +410,11 @@ const getCachedSuperAdminDashboardMetrics = cache(async (): Promise<SuperAdminDa
 
   const categoryByAreaMap = new Map<string, number>();
   for (const row of businessCategoryRows) {
-    const area = row.location?.barangay?.trim() || "Unspecified Barangay";
+    const area =
+      resolveLocationBarangay(row.location?.barangay, row.applications[0]?.formData) ??
+      "Unspecified Barangay";
+    // Skip rows with no barangay on location or form data — usually incomplete/test records.
+    if (area === "Unspecified Barangay") continue;
     const category = row.lineOfBusiness?.trim() || row.businessType?.trim() || "Unspecified Category";
     const key = `${area}: ${category}`;
     categoryByAreaMap.set(key, (categoryByAreaMap.get(key) ?? 0) + 1);

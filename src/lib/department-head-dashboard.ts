@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { resolveLocationBarangay } from "@/lib/business-location";
 
 export interface DepartmentHeadDashboardSummary {
   pendingApplicationApprovals: number;
@@ -111,6 +112,11 @@ const getCachedDepartmentHeadDashboardMetrics = cache(async (): Promise<Departme
                 barangay: true,
               },
             },
+            applications: {
+              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+              take: 1,
+              select: { formData: true },
+            },
           },
         },
       },
@@ -182,7 +188,12 @@ const getCachedDepartmentHeadDashboardMetrics = cache(async (): Promise<Departme
 
   const barangayMap = new Map<string, number>();
   for (const row of flaggedInspections) {
-    const label = row.businessRecord.location?.barangay?.trim() || "Unspecified Barangay";
+    const label =
+      resolveLocationBarangay(
+        row.businessRecord.location?.barangay,
+        row.businessRecord.applications[0]?.formData
+      ) ?? "Unspecified Barangay";
+    if (label === "Unspecified Barangay") continue;
     barangayMap.set(label, (barangayMap.get(label) ?? 0) + 1);
   }
 
