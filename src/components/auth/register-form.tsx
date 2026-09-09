@@ -8,7 +8,7 @@ import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { autoCapitalizeWords } from "@/lib/text-input";
 import { PASSWORD_POLICY_HINT, validatePasswordPolicy } from "@/lib/password-policy";
-import { PH_MOBILE_HINT, phMobileFieldError, sanitizePhMobileInput } from "@/lib/ph-mobile";
+import { PH_MOBILE_HINT, handlePhMobileBeforeInput, handlePhMobileKeyDown, phMobileFieldError, sanitizePhMobileInput } from "@/lib/ph-mobile";
 
 // ── Step types ────────────────────────────────────────────────────────────────
 type Step =
@@ -619,6 +619,16 @@ export function RegisterForm() {
                 defaultValue={savedData?.contactNumber ?? ""}
                 className={inputClassName}
                 placeholder="09XXXXXXXXX"
+                onKeyDown={(event) => handlePhMobileKeyDown(event)}
+                onBeforeInput={(event) =>
+                  handlePhMobileBeforeInput(event.nativeEvent as InputEvent)
+                }
+                onPaste={(event) => {
+                  event.preventDefault();
+                  event.currentTarget.value = sanitizePhMobileInput(
+                    event.clipboardData.getData("text")
+                  );
+                }}
                 onInput={(event) => {
                   const target = event.currentTarget;
                   target.value = sanitizePhMobileInput(target.value);

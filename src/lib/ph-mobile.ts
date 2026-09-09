@@ -9,6 +9,20 @@ export const PH_MOBILE_REQUIRED_ERROR = "Mobile Number is required.";
 export const PH_MOBILE_FORMAT_ERROR =
   "Enter a valid Philippine mobile number (09XXXXXXXXX).";
 
+const PH_MOBILE_NAV_KEYS = new Set([
+  "Backspace",
+  "Delete",
+  "Tab",
+  "Escape",
+  "Enter",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+]);
+
 /** Strip non-digits and normalize 63… / 9… input toward 09XXXXXXXXX while typing. */
 export function sanitizePhMobileInput(raw: string): string {
   let digits = raw.replace(/\D/g, "");
@@ -22,6 +36,25 @@ export function sanitizePhMobileInput(raw: string): string {
   }
 
   return digits.slice(0, 11);
+}
+
+/** Block letter / symbol keypresses; allow digits and navigation/shortcuts. */
+export function handlePhMobileKeyDown(
+  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "preventDefault">
+): void {
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (PH_MOBILE_NAV_KEYS.has(event.key)) return;
+  if (event.key.length === 1 && !/\d/.test(event.key)) {
+    event.preventDefault();
+  }
+}
+
+/** Block non-digit typed inserts; paste/autofill still go through sanitize on change. */
+export function handlePhMobileBeforeInput(
+  event: Pick<InputEvent, "inputType" | "data" | "preventDefault">
+): void {
+  if (event.inputType !== "insertText" || !event.data) return;
+  if (/\D/.test(event.data)) event.preventDefault();
 }
 
 export function compactPhMobile(raw: string | null | undefined): string {

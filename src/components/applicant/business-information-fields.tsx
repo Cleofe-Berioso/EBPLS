@@ -30,7 +30,7 @@ import { loadBarangays, loadCities, loadCountries, loadStates } from "@/lib/addr
 import { FormField } from "@/components/ui/form-field";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { BusinessLocationPicker } from "@/components/maps/business-location-picker";
-import { PH_MOBILE_HINT, sanitizePhMobileInput } from "@/lib/ph-mobile";
+import { PH_MOBILE_HINT, handlePhMobileBeforeInput, handlePhMobileKeyDown, sanitizePhMobileInput } from "@/lib/ph-mobile";
 
 interface BusinessInformationFieldsProps {
   value: BusinessInfo;
@@ -1204,6 +1204,7 @@ export function BusinessInformationFields({
         <input
           data-field-key="phone"
           aria-label="Mobile Number"
+          type="tel"
           inputMode="numeric"
           autoComplete="tel-national"
           pattern="^09\d{9}$"
@@ -1211,8 +1212,18 @@ export function BusinessInformationFields({
           className={fieldClasses(fieldLocked(lockedFields, "phone"))}
           value={value.phone}
           disabled={fieldLocked(lockedFields, "phone")}
+          onKeyDown={(event) => handlePhMobileKeyDown(event)}
+          onBeforeInput={(event) =>
+            handlePhMobileBeforeInput(event.nativeEvent as InputEvent)
+          }
           onChange={(event) => {
             const phone = sanitizePhMobileInput(event.target.value);
+            onChange({ ...value, phone });
+            onClearFieldError?.("phone");
+          }}
+          onPaste={(event) => {
+            event.preventDefault();
+            const phone = sanitizePhMobileInput(event.clipboardData.getData("text"));
             onChange({ ...value, phone });
             onClearFieldError?.("phone");
           }}

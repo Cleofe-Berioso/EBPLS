@@ -9,7 +9,7 @@ import {
   validateBusinessIdentityFormats,
   BUSINESS_ACTIVITY_OPTIONS,
 } from "@/lib/business-rules";
-import { phMobileFieldError } from "@/lib/ph-mobile";
+import { phMobileFieldError, sanitizePhMobileInput } from "@/lib/ph-mobile";
 import {
   EB_MAGALONA_CITY,
   EB_MAGALONA_COUNTRY,
@@ -902,6 +902,7 @@ export function NewApplicationForm() {
       barangay: next.barangay,
       lineOfBusiness: next.lineOfBusiness,
       taxIncentives: next.taxIncentives,
+      phone: sanitizePhMobileInput(next.phone ?? ""),
     };
 
     setInfo(nextInfo);

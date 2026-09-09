@@ -7,7 +7,7 @@ import { isWithinEbMagalona } from "@/lib/eb-magalona";
 import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/numeric-input";
 import { isPhilippinesCountry, validateBusinessIdentityFormats } from "@/lib/business-rules";
 import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
-import { phMobileFieldError } from "@/lib/ph-mobile";
+import { phMobileFieldError, sanitizePhMobileInput } from "@/lib/ph-mobile";
 import {
   EB_MAGALONA_CITY,
   EB_MAGALONA_COUNTRY,
@@ -1311,7 +1311,7 @@ export function RenewalApplicationForm() {
                   barangay: nextInfo.barangay,
                   lineOfBusiness: nextInfo.lineOfBusiness,
                   taxIncentives: nextInfo.taxIncentives,
-                  phone: nextInfo.phone,
+                  phone: sanitizePhMobileInput(nextInfo.phone ?? ""),
                 });
                 if (
                   typeof normalizedNext.businessLatitude === "number" &&
