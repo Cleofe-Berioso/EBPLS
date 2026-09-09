@@ -65,6 +65,15 @@ function resolveCompletionAt(row: {
 }
 
 const getCachedBploDashboardMetrics = cache(async (): Promise<BploDashboardMetrics> => {
+  try {
+    return await loadBploDashboardMetrics();
+  } catch (error) {
+    console.error("[bplo-dashboard] metrics query failed", error);
+    return emptyMetrics();
+  }
+});
+
+async function loadBploDashboardMetrics(): Promise<BploDashboardMetrics> {
   const rows = await prisma.businessApplication.findMany({
     select: {
       status: true,
@@ -207,7 +216,7 @@ const getCachedBploDashboardMetrics = cache(async (): Promise<BploDashboardMetri
     processingTimeByApplicationType,
     pendingQueueByStatus,
   };
-});
+}
 
 export async function getBploDashboardMetrics(): Promise<BploDashboardMetrics> {
   return getCachedBploDashboardMetrics();

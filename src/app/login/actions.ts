@@ -22,15 +22,19 @@ export async function loginAction(
     }
 
     const normalizedEmail = email.toLowerCase();
-    const existing = await getUserByEmail(normalizedEmail);
-    if (existing && !existing.isActive) {
-      const passwordMatch = await bcrypt.compare(password, existing.passwordHash);
-      if (passwordMatch) {
-        return {
-          error:
-            "Your account has been disabled. Please contact the system administrator.",
-        };
+    try {
+      const existing = await getUserByEmail(normalizedEmail);
+      if (existing && !existing.isActive) {
+        const passwordMatch = await bcrypt.compare(password, existing.passwordHash);
+        if (passwordMatch) {
+          return {
+            error:
+              "Your account has been disabled. Please contact the system administrator.",
+          };
+        }
       }
+    } catch {
+      // Continue to signIn — authorize has its own DB path and null handling.
     }
 
     await signIn("credentials", {

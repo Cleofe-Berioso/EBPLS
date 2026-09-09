@@ -124,37 +124,63 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return true;
     },
     async jwt({ token, user }) {
+      const ROLE_CHECK_TTL_MS = 5 * 60 * 1000;
+      const now = Date.now();
+
       if (user) {
         token.id = user.id;
         token.role = (user as { role: Role }).role;
+        token.isActive = true;
+        token.roleCheckedAt = now;
+        return token;
       }
 
-      if ((!token.id || !token.role) && typeof token.email === "string") {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: token.email.toLowerCase() },
-          select: { id: true, role: true, isActive: true },
-        });
-
-        if (dbUser) {
-          token.id = dbUser.id;
-          token.role = dbUser.role as Role;
-          token.isActive = dbUser.isActive;
-        }
+      const checkedAt = typeof token.roleCheckedAt === "number" ? token.roleCheckedAt : 0;
+      const recentlyChecked = now - checkedAt < ROLE_CHECK_TTL_MS;
+      if (
+        recentlyChecked &&
+        typeof token.id === "string" &&
+        token.id.length > 0 &&
+        token.role &&
+        token.isActive !== false
+      ) {
+        return token;
       }
 
-      if (typeof token.id === "string" && token.id.length > 0) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id },
-          select: { id: true, role: true, isActive: true },
-        });
+      try {
+        if ((!token.id || !token.role) && typeof token.email === "string") {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: token.email.toLowerCase() },
+            select: { id: true, role: true, isActive: true },
+          });
 
-        if (!dbUser || !dbUser.isActive) {
-          token.isActive = false;
-        } else {
-          token.id = dbUser.id;
-          token.role = dbUser.role as Role;
-          token.isActive = true;
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role as Role;
+            token.isActive = dbUser.isActive;
+          }
         }
+
+        if (typeof token.id === "string" && token.id.length > 0) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id },
+            select: { id: true, role: true, isActive: true },
+          });
+
+          if (!dbUser || !dbUser.isActive) {
+            token.isActive = false;
+          } else {
+            token.id = dbUser.id;
+            token.role = dbUser.role as Role;
+            token.isActive = true;
+          }
+        }
+
+        token.roleCheckedAt = now;
+      } catch (error) {
+        // Avoid cascading login/page failures when the pooler is saturated.
+        console.error("[auth] jwt role refresh failed", error);
+        token.roleCheckedAt = now;
       }
 
       return token;

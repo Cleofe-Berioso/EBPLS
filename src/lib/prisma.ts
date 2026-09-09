@@ -22,6 +22,5 @@ function createPrismaClient(): PrismaClient {
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+// Reuse one client per isolate in production too (Vercel warm lambdas).
+globalForPrisma.prisma = prisma;
