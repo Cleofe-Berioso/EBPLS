@@ -30,6 +30,7 @@ import { loadBarangays, loadCities, loadCountries, loadStates } from "@/lib/addr
 import { FormField } from "@/components/ui/form-field";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { BusinessLocationPicker } from "@/components/maps/business-location-picker";
+import { PH_MOBILE_HINT, sanitizePhMobileInput } from "@/lib/ph-mobile";
 
 interface BusinessInformationFieldsProps {
   value: BusinessInfo;
@@ -39,6 +40,7 @@ interface BusinessInformationFieldsProps {
   fieldErrors?: Partial<Record<keyof BusinessInfo, string>>;
   enableCascadingAddress?: boolean;
   onFieldBlur?: (field: keyof BusinessInfo) => void;
+  onClearFieldError?: (field: keyof BusinessInfo) => void;
 }
 
 function fieldLocked(lockedFields: Array<keyof BusinessInfo>, key: keyof BusinessInfo) {
@@ -91,6 +93,7 @@ export function BusinessInformationFields({
   fieldErrors = {},
   enableCascadingAddress = false,
   onFieldBlur,
+  onClearFieldError,
 }: BusinessInformationFieldsProps) {
   const registrationLabel = getRegistrationLabel(value.businessType);
   const registrationHelperText = getRegistrationHelperText(value.businessType);
@@ -1194,17 +1197,26 @@ export function BusinessInformationFields({
 
       <FormField
         label="Mobile Number"
-        hint="Provide a reachable Philippine mobile number."
+        hint={PH_MOBILE_HINT}
         required
         error={fieldErrors.phone}
       >
         <input
           data-field-key="phone"
           aria-label="Mobile Number"
+          inputMode="numeric"
+          autoComplete="tel-national"
+          pattern="^09\d{9}$"
+          maxLength={11}
           className={fieldClasses(fieldLocked(lockedFields, "phone"))}
           value={value.phone}
           disabled={fieldLocked(lockedFields, "phone")}
-          onChange={(event) => onChange({ ...value, phone: event.target.value })}
+          onChange={(event) => {
+            const phone = sanitizePhMobileInput(event.target.value);
+            onChange({ ...value, phone });
+            onClearFieldError?.("phone");
+          }}
+          onBlur={() => onFieldBlur?.("phone")}
         />
       </FormField>
 

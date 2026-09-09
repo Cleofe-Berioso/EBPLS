@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logSmsAction } from "@/lib/audit-log";
 import { getSmsProviderEnvLabel, isSmsEnabled, resolveSmsProvider, type SmsProviderName } from "@/lib/sms-config";
+import { normalizePhMobile } from "@/lib/ph-mobile";
 
 export type ReleaseSmsStatus = "FOR_RELEASE" | "RELEASED";
 
@@ -28,15 +29,6 @@ export interface SmsProviderSendResult {
   provider: SmsProviderName;
   reason?: string;
   providerMessageId?: string;
-}
-
-function normalizePhMobile(raw: string | null): string | null {
-  if (!raw) return null;
-  const compact = raw.replace(/[\s-]/g, "").trim();
-  if (/^\+639\d{9}$/.test(compact)) return compact;
-  if (/^09\d{9}$/.test(compact)) return `+63${compact.slice(1)}`;
-  if (/^639\d{9}$/.test(compact)) return `+${compact}`;
-  return null;
 }
 
 function shortName(fullName: string): string {

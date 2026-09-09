@@ -9,6 +9,7 @@ import {
 } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-client-ip";
 import { validatePasswordPolicy } from "@/lib/password-policy";
+import { isValidPhMobile } from "@/lib/ph-mobile";
 
 export async function POST(req: NextRequest) {
   const ipLimit = checkRateLimit(`register:ip:${getClientIp(req)}`, REGISTER_RATE_LIMIT);
@@ -43,8 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   const normalizedContactNumber = contactNumber.replace(/[\s-]/g, "");
-  const mobileRegex = /^(\+63|0)9\d{9}$/;
-  if (!mobileRegex.test(normalizedContactNumber)) {
+  if (!isValidPhMobile(normalizedContactNumber)) {
     return NextResponse.json({ error: "Invalid Philippine mobile number format." }, { status: 400 });
   }
 

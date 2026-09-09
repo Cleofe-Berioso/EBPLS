@@ -8,6 +8,7 @@ import { FormField } from "@/components/ui/form-field";
 import { InfoBanner } from "@/components/ui/info-banner";
 import { autoCapitalizeWords } from "@/lib/text-input";
 import { PASSWORD_POLICY_HINT, validatePasswordPolicy } from "@/lib/password-policy";
+import { PH_MOBILE_HINT, phMobileFieldError, sanitizePhMobileInput } from "@/lib/ph-mobile";
 
 // ── Step types ────────────────────────────────────────────────────────────────
 type Step =
@@ -219,6 +220,12 @@ export function RegisterForm() {
     };
 
     // Client-side password checks before sending
+    const contactError = phMobileFieldError(data.contactNumber);
+    if (contactError) {
+      setFormState({ status: "error", message: contactError });
+      return;
+    }
+
     const passwordPolicyError = validatePasswordPolicy(data.password);
     if (passwordPolicyError) {
       setFormState({ status: "error", message: passwordPolicyError });
@@ -594,7 +601,7 @@ export function RegisterForm() {
             </div>
           </FormField>
 
-          <FormField label="Contact Number" htmlFor="contactNumber" required>
+          <FormField label="Contact Number" htmlFor="contactNumber" hint={PH_MOBILE_HINT} required>
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
                 <Phone className="h-4 w-4 text-slate-400" />
@@ -603,13 +610,19 @@ export function RegisterForm() {
                 id="contactNumber"
                 name="contactNumber"
                 type="tel"
+                inputMode="numeric"
                 aria-label="Contact Number"
-                autoComplete="tel"
+                autoComplete="tel-national"
                 required
-                pattern="^(\+63|0)9\d{9}$"
+                pattern="^09\d{9}$"
+                maxLength={11}
                 defaultValue={savedData?.contactNumber ?? ""}
                 className={inputClassName}
                 placeholder="09XXXXXXXXX"
+                onInput={(event) => {
+                  const target = event.currentTarget;
+                  target.value = sanitizePhMobileInput(target.value);
+                }}
               />
             </div>
           </FormField>

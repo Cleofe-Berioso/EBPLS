@@ -7,6 +7,7 @@ import { isWithinEbMagalona } from "@/lib/eb-magalona";
 import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/numeric-input";
 import { isPhilippinesCountry, validateBusinessIdentityFormats } from "@/lib/business-rules";
 import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
+import { phMobileFieldError } from "@/lib/ph-mobile";
 import {
   EB_MAGALONA_CITY,
   EB_MAGALONA_COUNTRY,
@@ -549,8 +550,12 @@ export function RenewalApplicationForm() {
     const value = normalizedInfo[field];
 
     const requiredFields: Array<keyof BusinessInfo> = ["email", "mainOfficeAddress", "phone", "businessAddress"];
-    if (requiredFields.includes(field) && (typeof value !== "string" || value.trim().length === 0)) {
-      nextErrors[field] = `${field === "phone" ? "Contact Number" : field === "mainOfficeAddress" ? "Main Office Address" : field === "businessAddress" ? "Business Address" : "Email"} is required.`;
+    if (field === "phone") {
+      const phoneError = phMobileFieldError(normalizedInfo.phone);
+      if (phoneError) nextErrors.phone = phoneError;
+      else if (nextErrors.phone !== "This already exist") delete nextErrors.phone;
+    } else if (requiredFields.includes(field) && (typeof value !== "string" || value.trim().length === 0)) {
+      nextErrors[field] = `${field === "mainOfficeAddress" ? "Main Office Address" : field === "businessAddress" ? "Business Address" : "Email"} is required.`;
     } else if (nextErrors[field] !== "This already exist") {
       delete nextErrors[field];
     }
@@ -731,7 +736,8 @@ export function RenewalApplicationForm() {
       const nextErrors: Partial<Record<keyof BusinessInfo, string>> = {};
       if (!normalizedInfo.email.trim()) nextErrors.email = "Email is required.";
       if (!normalizedInfo.mainOfficeAddress.trim()) nextErrors.mainOfficeAddress = "Main Office Address is required.";
-      if (!normalizedInfo.phone.trim()) nextErrors.phone = "Mobile Number is required.";
+      const phoneError = phMobileFieldError(normalizedInfo.phone);
+      if (phoneError) nextErrors.phone = phoneError;
       if (requiresBarangay(normalizedInfo) && !normalizedInfo.mainOfficeBarangay?.trim()) {
         nextErrors.mainOfficeBarangay = "Barangay is required for Philippine main office addresses.";
       }
@@ -1305,6 +1311,7 @@ export function RenewalApplicationForm() {
                   barangay: nextInfo.barangay,
                   lineOfBusiness: nextInfo.lineOfBusiness,
                   taxIncentives: nextInfo.taxIncentives,
+                  phone: nextInfo.phone,
                 });
                 if (
                   typeof normalizedNext.businessLatitude === "number" &&
@@ -1324,6 +1331,14 @@ export function RenewalApplicationForm() {
               }}
               applicationType="RENEWAL"
               onFieldBlur={validateFieldOnBlur}
+              onClearFieldError={(field) => {
+                setFieldErrors((current) => {
+                  if (!current[field]) return current;
+                  const nextErrors = { ...current };
+                  delete nextErrors[field];
+                  return nextErrors;
+                });
+              }}
               lockedFields={lockedFields}
               fieldErrors={fieldErrors}
               enableCascadingAddress

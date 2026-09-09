@@ -9,6 +9,7 @@ import {
   validateBusinessIdentityFormats,
   BUSINESS_ACTIVITY_OPTIONS,
 } from "@/lib/business-rules";
+import { phMobileFieldError } from "@/lib/ph-mobile";
 import {
   EB_MAGALONA_CITY,
   EB_MAGALONA_COUNTRY,
@@ -961,6 +962,12 @@ export function NewApplicationForm() {
       delete nextErrors[field];
     }
 
+    if (field === "phone") {
+      const phoneError = phMobileFieldError(normalizedInfo.phone);
+      if (phoneError) nextErrors.phone = phoneError;
+      else if (nextErrors.phone !== "This already exist") delete nextErrors.phone;
+    }
+
     if (field === "registrationNumber" && normalizedInfo.registrationNumber.trim().length > 0) {
       const valid = validateBusinessIdentityFormats(normalizedInfo).registrationNumber;
       if (!valid) nextErrors.registrationNumber = "Wrong Format";
@@ -1025,6 +1032,11 @@ export function NewApplicationForm() {
 
     for (const key of requiredFields) {
       const value = normalizedInfo[key];
+      if (key === "phone") {
+        const phoneError = phMobileFieldError(normalizedInfo.phone);
+        if (phoneError) nextErrors.phone = phoneError;
+        continue;
+      }
       if (isMissingRequiredValue(value)) {
         if (key === "mainOfficeAddress") {
           nextErrors[key] = requiresBarangay(normalizedInfo)
@@ -1624,6 +1636,14 @@ export function NewApplicationForm() {
             onChange={applyInfoChange}
             applicationType="NEW"
             onFieldBlur={validateFieldOnBlur}
+            onClearFieldError={(field) => {
+              setFieldErrors((current) => {
+                if (!current[field]) return current;
+                const nextErrors = { ...current };
+                delete nextErrors[field];
+                return nextErrors;
+              });
+            }}
             lockedFields={isReadOnly ? READ_ONLY_LOCKED_FIELDS : []}
             fieldErrors={fieldErrors}
             enableCascadingAddress

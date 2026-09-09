@@ -47,6 +47,7 @@ import {
 } from "@/lib/address-options";
 import { isValidLineOfBusiness } from "@/lib/business-options";
 import { isWithinEbMagalona } from "@/lib/eb-magalona";
+import { isValidPhMobile } from "@/lib/ph-mobile";
 import { resolveRenewalEligibilityForBusiness } from "@/lib/renewal-eligibility";
 import { resolveClosureEligibilityForBusiness } from "@/lib/closure-eligibility";
 import type {
@@ -156,7 +157,6 @@ const REQUIRED_FIELD_KEYS: Array<keyof BusinessInfo> = [
   "businessActivity",
 ];
 
-const PH_MOBILE_REGEX = /^(\+63|0)9\d{9}$/;
 const ALLOWED_PAYMENT_FREQUENCIES = ["ANNUAL", "BI_ANNUAL", "QUARTERLY"] as const;
 
 function parsePositiveAmount(value: string): number | null {
@@ -784,7 +784,7 @@ function validateSubmitPayload(
     }
 
     const normalizedPhone = normalizedFormData.phone.replace(/[\s-]/g, "");
-    if (!PH_MOBILE_REGEX.test(normalizedPhone)) {
+    if (!isValidPhMobile(normalizedPhone)) {
       missingFields.push("phone (must be a valid Philippine mobile number)");
     }
 
