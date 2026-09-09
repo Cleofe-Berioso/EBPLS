@@ -12,6 +12,10 @@ interface PageProps {
 
 export const metadata: Metadata = {
   title: "Mayor's Business Permit",
+  other: {
+    // Helps some browsers omit noisy print footers when headers are enabled.
+    robots: "noindex",
+  },
 };
 
 export default async function BploBusinessPermitPrintPage({ params }: PageProps) {

@@ -775,8 +775,9 @@ table tbody tr:hover {
 /* ─── Print / Save as PDF ─────────────────────────── */
 
 @page {
+  /* Zero margins suppress Chrome/Edge date, title, URL, and page headers/footers. */
   size: A4 portrait;
-  margin: 12mm;
+  margin: 0;
 }
 
 @media print {
@@ -811,5 +812,10 @@ table tbody tr:hover {
   /* Clear portal sidebar offset so the permit is full-page. */
   .portal-content-column {
     padding-left: 0 !important;
+  }
+
+  /* Restore usable page margins inside the document (not as @page margins). */
+  .business-permit-sheet {
+    padding: 12mm !important;
   }
 }

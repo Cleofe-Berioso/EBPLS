@@ -82,7 +82,7 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
             </div>
           </div>
 
-          <div className="mx-auto max-w-[640px] px-[76px] text-center sm:px-[92px]">
+          <div className="mx-auto w-full text-center">
             <p className="text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.republic}</p>
             <p className="mt-1 text-[12px] font-medium leading-tight sm:text-[14px]">{permit.heading.province}</p>
             <p className="mt-2 text-[22px] font-black uppercase leading-none tracking-[0.02em] sm:text-[30px]">
@@ -93,8 +93,8 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
             </p>
           </div>
 
-          <div className="mt-5 border-[2px] border-slate-200 px-4 py-3 text-center">
-            <h1 className="text-[26px] font-black tracking-[0.01em] text-[#bf1d18] sm:text-[32px]">
+          <div className="mt-5 flex w-full items-center justify-center border-[2px] border-slate-200 px-3 py-3">
+            <h1 className="w-full text-center text-[26px] font-black leading-none tracking-normal text-[#bf1d18] sm:text-[32px]">
               {permit.heading.title}
             </h1>
           </div>
@@ -166,15 +166,28 @@ export function BusinessPermitTemplate({ permit, variant = "official" }: Busines
       </article>
 
       <style jsx global>{`
+        @page {
+          size: A4 portrait;
+          margin: 0;
+        }
+
         @media print {
           .business-permit-sheet {
             break-inside: avoid;
             page-break-inside: avoid;
+            padding: 12mm !important;
           }
 
           .business-permit-sheet header {
             break-after: avoid;
             page-break-after: avoid;
+          }
+
+          .business-permit-sheet header h1 {
+            text-align: center !important;
+            width: 100% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
           }
         }
       `}</style>
