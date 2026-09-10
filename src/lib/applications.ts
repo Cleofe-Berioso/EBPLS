@@ -45,7 +45,8 @@ import {
   isEbMagalonaProvince,
   isPhilippinesCountry,
 } from "@/lib/address-options";
-import { isAllowedLineOfBusiness, isValidLineOfBusiness } from "@/lib/business-options";
+import { isValidLineOfBusiness } from "@/lib/business-options";
+import { isAllowedLineOfBusiness } from "@/lib/business-options-server";
 import { isWithinEbMagalona } from "@/lib/eb-magalona";
 import { isValidPhMobile } from "@/lib/ph-mobile";
 import { resolveRenewalEligibilityForBusiness } from "@/lib/renewal-eligibility";
