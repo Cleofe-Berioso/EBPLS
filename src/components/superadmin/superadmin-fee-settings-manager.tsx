@@ -718,7 +718,7 @@ export function SuperAdminFeeSettingsManager() {
             className={`mb-4 grid gap-3 ${superadminFormPanelClass} md:grid-cols-2 xl:grid-cols-3`}
             onSubmit={saveCategory}
           >
-            <FormField label="Category Label" required hint="Display name shown in dropdowns and reports.">
+            <FormField label="Category Label" required hint="Display name shown in fee settings and applicant Line of Business dropdowns.">
               <input
                 aria-label="Category Label"
                 value={categoryForm.label}

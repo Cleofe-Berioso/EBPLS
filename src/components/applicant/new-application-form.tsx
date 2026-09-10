@@ -39,7 +39,7 @@ import {
   MAX_DOCUMENT_FILE_SIZE_BYTES,
   validateDocumentFileUpload,
 } from "@/lib/document-upload-rules";
-import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
+import { useLineOfBusinessOptions } from "@/hooks/use-line-of-business-options";
 import { resolveBusinessBarangayFromFormState } from "@/lib/business-rules";
 import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/numeric-input";
 import { BusinessInformationFields } from "./business-information-fields";
@@ -684,6 +684,7 @@ function buildSubmitValidationMessage(params: { missingFields: string[]; missing
 export function NewApplicationForm() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("applicationId");
+  const lineOfBusinessOptions = useLineOfBusinessOptions();
 
   const [step, setStep] = useState(0);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
@@ -1803,7 +1804,7 @@ export function NewApplicationForm() {
                   }}
                 >
                   <option value="" disabled>Select line of business</option>
-                  {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
+                  {lineOfBusinessOptions.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>

@@ -40,7 +40,8 @@ import {
   getResubmissionConfirmMessage,
   isReturnedCorrectionResubmission,
 } from "@/lib/resubmission-copy";
-import { isValidLineOfBusiness, LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
+import { isValidLineOfBusiness } from "@/lib/business-options";
+import { useLineOfBusinessOptions } from "@/hooks/use-line-of-business-options";
 import { BUSINESS_ACTIVITY_OPTIONS } from "@/lib/business-rules";
 
 const CLOSURE_BUSINESS_ACTIVITY_OPTIONS = [...BUSINESS_ACTIVITY_OPTIONS] as string[];
@@ -245,6 +246,7 @@ export function ClosureApplicationForm() {
   const [closureType, setClosureType] = useState<ClosureTypeValue>("");
   const [closureTypeOtherReason, setClosureTypeOtherReason] = useState("");
   const [closureLineOfBusiness, setClosureLineOfBusiness] = useState("");
+  const lineOfBusinessOptions = useLineOfBusinessOptions([closureLineOfBusiness]);
   const [closureBusinessActivity, setClosureBusinessActivity] = useState("");
   const [closureBusinessActivityOther, setClosureBusinessActivityOther] = useState("");
   const [closureLastDateOfOperation, setClosureLastDateOfOperation] = useState("");
@@ -924,7 +926,7 @@ export function ClosureApplicationForm() {
                     onChange={(event) => setClosureLineOfBusiness(event.target.value)}
                   >
                     <option value="" disabled>Select line of business</option>
-                    {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
+                    {lineOfBusinessOptions.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>

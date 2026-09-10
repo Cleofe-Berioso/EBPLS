@@ -45,7 +45,7 @@ import {
   isEbMagalonaProvince,
   isPhilippinesCountry,
 } from "@/lib/address-options";
-import { isValidLineOfBusiness } from "@/lib/business-options";
+import { isAllowedLineOfBusiness, isValidLineOfBusiness } from "@/lib/business-options";
 import { isWithinEbMagalona } from "@/lib/eb-magalona";
 import { isValidPhMobile } from "@/lib/ph-mobile";
 import { resolveRenewalEligibilityForBusiness } from "@/lib/renewal-eligibility";
@@ -704,7 +704,7 @@ async function getApplicantBusinessRecordSource(applicantId: string, businessRec
   return record ? buildBusinessInfoFromRecord(record) : null;
 }
 
-function validateSubmitPayload(
+async function validateSubmitPayload(
   input: SaveApplicationInput,
   normalizedFormData: BusinessInfo,
   mergedDocuments: ApplicationDocumentInput[]
@@ -834,7 +834,7 @@ function validateSubmitPayload(
   if (input.applicationType === "NEW" || input.applicationType === "RENEWAL") {
     if (!normalizedFormData.lineOfBusiness.trim()) {
       missingFields.push("lineOfBusiness");
-    } else if (!isValidLineOfBusiness(normalizedFormData.lineOfBusiness)) {
+    } else if (!(await isAllowedLineOfBusiness(normalizedFormData.lineOfBusiness))) {
       missingFields.push("lineOfBusiness (must be one of the allowed options)");
     }
 
@@ -1294,7 +1294,7 @@ export async function saveApplicantApplication(
     if (input.applicationType === "CLOSURE") {
       validateClosureSubmissionRules(input, closureEligibility);
     }
-    validateSubmitPayload(input, normalizedFormData, mergedDocuments);
+    await validateSubmitPayload(input, normalizedFormData, mergedDocuments);
   }
 
   const persistedPayloadDocuments = documents.filter(

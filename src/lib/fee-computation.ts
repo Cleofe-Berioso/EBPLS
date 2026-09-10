@@ -1,4 +1,4 @@
-import { BANK_CLASSIFICATIONS, type FeeCategoryKey, type RuntimeFeeSettings } from "@/lib/fee-settings";
+import { BANK_CLASSIFICATIONS, FIXED_FEE_CLASSIFICATION, type FeeCategoryKey, type RuntimeFeeSettings } from "@/lib/fee-settings";
 
 /**
  * Mayor's Permit Fee computation helper.
@@ -456,7 +456,7 @@ function normalizeClassification(value: string): string {
 
 function findConfiguredFeeAmount(
   runtimeSettings: RuntimeFeeSettings | undefined,
-  category: FeeCategoryKey,
+  category: FeeCategoryKey | string,
   classification: string
 ): number | null {
   if (!runtimeSettings) return null;
@@ -468,6 +468,19 @@ function findConfiguredFeeAmount(
 
   if (!row) return null;
   return row.amount;
+}
+
+function resolveCategoryKeyFromLineOfBusiness(
+  lineOfBusiness: string | null | undefined,
+  runtimeSettings?: RuntimeFeeSettings
+): string | null {
+  const trimmed = lineOfBusiness?.trim();
+  if (!trimmed || !runtimeSettings?.categoryByLabel) return null;
+  return (
+    runtimeSettings.categoryByLabel[trimmed] ??
+    runtimeSettings.categoryByLabel[trimmed.toLowerCase()] ??
+    null
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -561,8 +574,88 @@ export function computeMayorsPermitFee(
 
   // ----- 5. Standard categories with asset × worker comparison -----
 
-  // Detect primary category (excluding liquor/tobacco from primary detection if another matches)
-  const detectedCategory = detectBusinessCategory(lineOfBusiness);
+  const exactCategoryKey = resolveCategoryKeyFromLineOfBusiness(lineOfBusiness, runtimeSettings);
+
+  // Custom Super Admin categories: use configured Fixed Fee when present, else GENERAL size table + custom overrides.
+  if (exactCategoryKey?.startsWith("CUSTOM_")) {
+    const fixedConfigured = findConfiguredFeeAmount(
+      runtimeSettings,
+      exactCategoryKey,
+      FIXED_FEE_CLASSIFICATION
+    );
+    if (typeof fixedConfigured === "number") {
+      return buildResult(input, {
+        detectedCategory: lineOfBusiness?.trim() || exactCategoryKey,
+        assetBracket,
+        workerBracket,
+        assetBracketLabel,
+        workerBracketLabel,
+        assetTierName: FIXED_FEE_CLASSIFICATION,
+        workerTierName: FIXED_FEE_CLASSIFICATION,
+        assetBasedFee: fixedConfigured,
+        workerBasedFee: fixedConfigured,
+        selectedMayorPermitFee: fixedConfigured,
+        selectedBy: "Configured fixed fee",
+        specialRuleApplied: `Fixed fee: ${lineOfBusiness?.trim() || exactCategoryKey} — ₱${fixedConfigured.toLocaleString("en-PH")}`,
+        explanation: `Fixed fee: ${lineOfBusiness?.trim() || exactCategoryKey} — ₱${fixedConfigured.toLocaleString("en-PH")}`,
+      }, runtimeSettings);
+    }
+
+    const feeCategory: BusinessCategory = "GENERAL";
+    const catLabel = lineOfBusiness?.trim() || exactCategoryKey;
+    const assetFee = getAssetFee(feeCategory, assetBracket);
+    const workerFee = getWorkerFee(feeCategory, workerBracket);
+    const assetTierName = getAssetTierName(feeCategory, assetBracket);
+    const workerTierName = getWorkerTierName(feeCategory, workerBracket);
+    let baseFee: number;
+    let selectedBy: string;
+    const selectedTierNameFromDefaults = assetFee >= workerFee ? assetTierName : workerTierName;
+
+    if (assetFee >= workerFee) {
+      baseFee = assetFee;
+      selectedBy = `Asset size (₱${assetFee.toLocaleString("en-PH")} ≥ Worker count ₱${workerFee.toLocaleString("en-PH")})`;
+    } else {
+      baseFee = workerFee;
+      selectedBy = `Worker count (₱${workerFee.toLocaleString("en-PH")} > Asset size ₱${assetFee.toLocaleString("en-PH")})`;
+    }
+
+    const configuredAmount =
+      findConfiguredFeeAmount(runtimeSettings, exactCategoryKey, selectedTierNameFromDefaults) ??
+      findConfiguredFeeAmount(runtimeSettings, feeCategory, selectedTierNameFromDefaults);
+
+    if (typeof configuredAmount === "number") {
+      baseFee = configuredAmount;
+      selectedBy = `Configured setting (${selectedTierNameFromDefaults}) = ₱${configuredAmount.toLocaleString("en-PH")}`;
+    }
+
+    const explanation =
+      `Category: ${catLabel}` +
+      ` | Asset: ${assetBracketLabel} → ${assetTierName} = ₱${assetFee.toLocaleString("en-PH")}` +
+      ` | Workers: ${workerBracketLabel} → ${workerTierName} = ₱${workerFee.toLocaleString("en-PH")}` +
+      ` | Selected by: ${selectedBy}`;
+
+    return buildResult(input, {
+      detectedCategory: catLabel,
+      assetBracket,
+      workerBracket,
+      assetBracketLabel,
+      workerBracketLabel,
+      assetTierName,
+      workerTierName,
+      assetBasedFee: assetFee,
+      workerBasedFee: workerFee,
+      selectedMayorPermitFee: baseFee,
+      selectedBy,
+      specialRuleApplied: null,
+      explanation,
+    }, runtimeSettings);
+  }
+
+  // Detect primary category (prefer exact fee-category label match over keyword heuristics)
+  const detectedCategory =
+    exactCategoryKey && !exactCategoryKey.startsWith("CUSTOM_")
+      ? (exactCategoryKey as BusinessCategory)
+      : detectBusinessCategory(lineOfBusiness);
 
   const isExplicitLiquorTobacco = detectedCategory === "LIQUOR_TOBACCO";
 

@@ -16,7 +16,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingState } from "@/components/ui/loading-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { EB_MAGALONA_CENTER } from "@/lib/eb-magalona";
-import { LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
+import { useLineOfBusinessOptions } from "@/hooks/use-line-of-business-options";
 import type { PaginationPageSize } from "@/lib/pagination";
 
 const LeafletBusinessMap = dynamic(
@@ -66,6 +66,7 @@ export function JitNoPermitRecordClient() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyFormData);
+  const lineOfBusinessOptions = useLineOfBusinessOptions([formData.lineOfBusiness]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastPrintPath, setLastPrintPath] = useState<string | null>(null);
 
@@ -249,7 +250,7 @@ export function JitNoPermitRecordClient() {
                 className={`mt-1 ${jitFormControlClass}`}
               >
                 <option value="">-- Select line of business --</option>
-                {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
+                {lineOfBusinessOptions.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>

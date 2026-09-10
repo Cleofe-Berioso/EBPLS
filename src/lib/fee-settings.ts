@@ -380,10 +380,12 @@ export type RuntimeFeeSettings = {
     privatePortFixedFee: number;
   };
   feeOverrides: Array<{
-    category: FeeCategoryKey;
+    category: FeeCategoryKey | string;
     classification: string;
     amount: number;
   }>;
+  /** Exact Line of Business / fee category label → fee category key (includes CUSTOM_*). */
+  categoryByLabel: Record<string, string>;
   activeExtension: {
     id: string;
     waiveSurcharge: boolean;
@@ -834,7 +836,7 @@ export async function toggleRenewalExtension(input: {
 }
 
 export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFeeSettings> {
-  const [penalties, feeOverrides, activeExtension, configurableKeys] = await Promise.all([
+  const [penalties, feeOverrides, activeExtension, configurableKeys, categoryOptions] = await Promise.all([
     getOrCreateSystemFeeSetting(),
     prisma.feeConfigurationItem.findMany({
       where: { isActive: true },
@@ -857,6 +859,7 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
       },
     }),
     getConfigurableCategoryKeySet(),
+    getAllFeeCategoryOptions(),
   ]);
 
   const feeOverrideRows = feeOverrides
@@ -871,6 +874,14 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
   const powerCompanyOverride = findFixedFeeOverride(feeOverrideRows, "POWER_COMPANY");
   const powerGenDistOverride = findFixedFeeOverride(feeOverrideRows, "POWER_GEN_DIST");
   const privatePortOverride = findFixedFeeOverride(feeOverrideRows, "PRIVATE_PORT");
+
+  const categoryByLabel: Record<string, string> = {};
+  for (const option of categoryOptions) {
+    const label = option.label.trim();
+    if (!label) continue;
+    categoryByLabel[label] = option.key;
+    categoryByLabel[label.toLowerCase()] = option.key;
+  }
 
   return {
     penalties: {
@@ -903,6 +914,7 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
       classification: row.classification,
       amount: row.amount,
     })),
+    categoryByLabel,
     activeExtension: activeExtension
       ? {
           id: activeExtension.id,

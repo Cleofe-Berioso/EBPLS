@@ -46,7 +46,8 @@ import {
   MAX_DOCUMENT_FILE_SIZE_BYTES,
   validateDocumentFileUpload,
 } from "@/lib/document-upload-rules";
-import { isValidLineOfBusiness, LINE_OF_BUSINESS_OPTIONS } from "@/lib/business-options";
+import { isValidLineOfBusiness } from "@/lib/business-options";
+import { useLineOfBusinessOptions } from "@/hooks/use-line-of-business-options";
 import type {
   ApplicationDocumentInput,
   BusinessInfo,
@@ -435,7 +436,6 @@ function humanizeNonComplianceType(value: string | null): string {
 export function RenewalApplicationForm() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("applicationId");
-
   const [step, setStep] = useState(0);
   const [applicationId, setApplicationId] = useState<string | undefined>(editId ?? undefined);
   const [draftLoading, setDraftLoading] = useState(Boolean(editId));
@@ -445,6 +445,7 @@ export function RenewalApplicationForm() {
   >([]);
   const [blockedRecords, setBlockedRecords] = useState<RenewalBlockedRecord[]>([]);
   const [info, setInfo] = useState<BusinessInfo>(defaultBusinessInfo);
+  const lineOfBusinessOptions = useLineOfBusinessOptions([info.lineOfBusiness]);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, ApplicationDocumentInput>>({});
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, File>>({});
   const [pendingDocumentPreviews, setPendingDocumentPreviews] = useState<Record<string, string>>({});
@@ -1487,7 +1488,7 @@ export function RenewalApplicationForm() {
                   }}
                 >
                   <option value="" disabled>Select line of business</option>
-                  {LINE_OF_BUSINESS_OPTIONS.map((opt) => (
+                  {lineOfBusinessOptions.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
