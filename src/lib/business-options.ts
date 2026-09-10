@@ -6,7 +6,8 @@ export const LINE_OF_BUSINESS_OPTIONS = [
   "Wholesalers / Retailers / Dealers / Distributors",
   "Transportation Operations",
   "Communications",
-  "Lessors of Real Estate",
+  "Lessors of Real Estate - Land",
+  "Lessors of Real Estate - Commercial Buildings",
   "Hotels / Motels / Pension Houses / Apartelles",
   "Lodging / Boarding Houses",
   "Amusement Places",
@@ -19,11 +20,17 @@ export const LINE_OF_BUSINESS_OPTIONS = [
 
 export type LineOfBusinessOption = (typeof LINE_OF_BUSINESS_OPTIONS)[number];
 
+/** Legacy LOB labels still accepted on older applications. */
+const LEGACY_LINE_OF_BUSINESS_OPTIONS = ["Lessors of Real Estate"] as const;
+
 /** Built-in LOB options only (sync). Prefer `isAllowedLineOfBusiness` when custom fee categories matter. */
-export function isValidLineOfBusiness(value: string | null | undefined): value is LineOfBusinessOption {
+export function isValidLineOfBusiness(value: string | null | undefined): boolean {
   if (typeof value !== "string") return false;
   const normalized = value.trim();
-  return LINE_OF_BUSINESS_OPTIONS.some((option) => option === normalized);
+  return (
+    LINE_OF_BUSINESS_OPTIONS.some((option) => option === normalized) ||
+    LEGACY_LINE_OF_BUSINESS_OPTIONS.some((option) => option === normalized)
+  );
 }
 
 /**

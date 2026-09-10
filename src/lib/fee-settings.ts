@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { toMoneyNumber } from "@/lib/money";
+import {
+  BANK_CLASSIFICATIONS,
+  DEFAULT_CLASSIFICATIONS,
+  FIXED_FEE_CLASSIFICATION,
+} from "@/lib/fee-constants";
 
 export type FeeCategoryKey =
   | "MANUFACTURERS"
@@ -31,23 +36,7 @@ export type FeeCategoryOption = {
 
 const CONFIGURABLE_FEE_CATEGORY_KEYS = new Set<string>();
 
-export const FIXED_FEE_CLASSIFICATION = "Fixed Fee";
-
-export const BANK_CLASSIFICATIONS = [
-  "Rural / Thrift / Savings Banks",
-  "Commercial and Development Banks",
-  "Universal Banks",
-] as const;
-
-export const DEFAULT_CLASSIFICATIONS = [
-  "Micro Industry",
-  "Cottage Industries A",
-  "Cottage Industries B",
-  "Small-Scale Industries A",
-  "Small-Scale Industries B",
-  "Medium-Scale Industries",
-  "Large-Scale Industries",
-] as const;
+export { FIXED_FEE_CLASSIFICATION, BANK_CLASSIFICATIONS, DEFAULT_CLASSIFICATIONS };
 
 export const FEE_CATEGORY_OPTIONS: FeeCategoryOption[] = [
   {
@@ -937,7 +926,14 @@ export async function getRuntimeFeeSettings(now = new Date()): Promise<RuntimeFe
     if (!label) continue;
     categoryByLabel[label] = option.key;
     categoryByLabel[label.toLowerCase()] = option.key;
+    // Normalize en-dash / em-dash variants used in older fee table labels.
+    const hyphenated = label.replace(/[–—]/g, "-");
+    categoryByLabel[hyphenated] = option.key;
+    categoryByLabel[hyphenated.toLowerCase()] = option.key;
   }
+  // Legacy applicant LOB that maps to Land lessors.
+  categoryByLabel["Lessors of Real Estate"] = "LESSORS_LAND";
+  categoryByLabel["lessors of real estate"] = "LESSORS_LAND";
 
   return {
     penalties: {

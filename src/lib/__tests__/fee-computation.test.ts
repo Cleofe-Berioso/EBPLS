@@ -75,6 +75,38 @@ describe('fee-computation', () => {
     expect(computed.specialRuleApplied).toContain('Fixed fee');
   });
 
+  it('applies bank schedule for plain Banks LOB (default rural/thrift/savings)', () => {
+    const computed = computeMayorsPermitFee({
+      applicationType: 'NEW',
+      lineOfBusiness: 'Banks',
+      assetSize: '1000000',
+      totalEmployees: '20',
+    });
+    expect(computed.selectedMayorPermitFee).toBe(4000);
+    expect(computed.detectedCategory).toContain('Banks');
+  });
+
+  it('maps Lessors of Real Estate to land lessor schedule', () => {
+    const computed = computeMayorsPermitFee({
+      applicationType: 'NEW',
+      lineOfBusiness: 'Lessors of Real Estate',
+      assetSize: '600000',
+      totalEmployees: '0',
+    });
+    expect(computed.detectedCategory.toLowerCase()).toContain('lessor');
+    expect(computed.selectedMayorPermitFee).toBe(1500);
+  });
+
+  it('maps Lessors of Real Estate - Land exactly', () => {
+    const computed = computeMayorsPermitFee({
+      applicationType: 'NEW',
+      lineOfBusiness: 'Lessors of Real Estate - Land',
+      assetSize: '600000',
+      totalEmployees: '0',
+    });
+    expect(computed.selectedMayorPermitFee).toBe(1500);
+  });
+
   it('sums fee components correctly', () => {
     const total = sumFeeComponents({
       mayorsPermitFee: 1000,

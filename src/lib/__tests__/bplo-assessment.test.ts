@@ -16,6 +16,22 @@ describe('bplo-assessment helpers', () => {
     expect(interest).toBe(260);
   });
 
+  it('uses Super Admin penalty percents and honors extension waivers', () => {
+    const base = 1000;
+    const withCustom = buildAutomaticRenewalCharges(base, 13, {
+      penalties: { renewalSurchargePercent: 10, monthlyInterestPercent: 1 },
+    });
+    expect(withCustom.surcharge).toBe(100);
+    expect(withCustom.interest).toBe(130);
+
+    const waived = buildAutomaticRenewalCharges(base, 13, {
+      penalties: { renewalSurchargePercent: 25, monthlyInterestPercent: 2 },
+      activeExtension: { waiveSurcharge: true, waiveInterest: true },
+    });
+    expect(waived.surcharge).toBe(0);
+    expect(waived.interest).toBe(0);
+  });
+
   it('computes liquor/tobacco surcharge at 25%', () => {
     const addOn = buildAutomaticLiquorTobaccoSurcharge('NEW', 2000, true, {});
     expect(addOn).toBe(500);

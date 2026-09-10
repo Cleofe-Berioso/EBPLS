@@ -1,20 +1,26 @@
-import { BANK_CLASSIFICATIONS, FIXED_FEE_CLASSIFICATION, type FeeCategoryKey, type RuntimeFeeSettings } from "@/lib/fee-settings";
-
 /**
  * Mayor's Permit Fee computation helper.
  * Source: eBPLS municipal business permit fee schedule.
  *
  * Determination order:
- *  1. Check for fixed-fee special business types first (Power, Private Port).
- *  2. Check for Banks (fee by bank sub-type, not size).
- *  3. Detect business category by keywords in Line of Business.
- *  4. Determine asset-size classification using the exact 7 brackets.
- *  5. Determine worker-count classification using the exact 7 brackets.
- *  6. Look up the fee for each classification independently.
- *  7. Use the classification that produces the higher fee.
- *  8. Apply renewal surcharge (25%) and monthly interest (2%) if indicated.
- *  9. Apply Closure Certificate Fee (₱100) for closure applications.
+ *  1. Exact LOB → category (including CUSTOM_* from Super Admin).
+ *  2. Fixed-fee / bank specials by exact category or LOB text.
+ *  3. Keyword regex specials only when no exact category match.
+ *  4. Standard asset × worker comparison (higher fee wins).
+ *  5. Apply FeeConfigurationItem overrides by matching classification label.
+ *  6. Late surcharge/interest when isLateRenewal / lateMonths are set (also applied in BPLO assessment).
+ *  7. Liquor/Tobacco add-on is a separate assessment line from the isLiquorOrTobacco checkbox
+ *     (or LOB keyword detection), not multiplied inside the mayor's base fee.
+ *  8. Closure: Mayor's fee ₱0 + Closure Certificate Fee ₱100.
  */
+
+import {
+  BANK_CLASSIFICATIONS,
+  DEFAULT_CLASSIFICATIONS,
+  FIXED_FEE_CLASSIFICATION,
+} from "@/lib/fee-constants";
+import type { FeeCategoryKey, RuntimeFeeSettings } from "@/lib/fee-settings";
+
 
 // ---------------------------------------------------------------------------
 // Asset-size brackets (7 exact tiers per the fee schedule)
@@ -104,7 +110,7 @@ const CATEGORY_KEYWORDS: Array<{ category: BusinessCategory; keywords: string[] 
   // Liquor/Tobacco — explicit primary business only
   { category: "LIQUOR_TOBACCO",       keywords: ["liquor store", "wine shop", "beer distributor", "spirits dealer", "tobacco shop", "cigarette dealer", "liquor dealer", "alcohol distributor", "wine dealer"] },
   // Banks — checked separately by sub-type; listed here only for detection order
-  { category: "BANKS",                keywords: ["rural bank", "thrift bank", "savings bank", "commercial bank", "development bank", "universal bank", "cooperative bank", "microfinance bank"] },
+  { category: "BANKS",                keywords: ["rural bank", "thrift bank", "savings bank", "commercial bank", "development bank", "universal bank", "cooperative bank", "microfinance bank", "banks"] },
   { category: "OTHER_FINANCIAL",      keywords: ["lending", "credit company", "finance company", "insurance", "pawnshop", "remittance", "money changer", "money transfer", "investment house", "securities", "fund management", "microfinance institution", "cooperative financial"] },
   { category: "MANUFACTURERS",        keywords: ["manufactur", "factory", "fabricat", "assembl", "bakery", "food process", "production plant", "printing press", "garment", "weaving", "welding shop", "foundry", "importer", "producer", "packaging", "bottl"] },
   { category: "CONTRACTORS",          keywords: ["contractor", "construct", "builder", "carpentry", "plumbing", "electrical contractor", "civil works", "mason", "painting service", "roofing", "service provider", "pest control", "janitorial", "security agency", "manpower", "landscaping", "repair shop", "salon", "spa", "clinic", "dental", "medical", "veterinary", "funeral", "mortuary", "advertising agency", "it services", "software", "legal", "accounting", "consult", "architect", "engineering firm", "professional service"] },
@@ -114,8 +120,8 @@ const CATEGORY_KEYWORDS: Array<{ category: BusinessCategory; keywords: string[] 
   { category: "LODGING",              keywords: ["boarding house", "lodging", "dormitory", "student housing", "transient dormitory"] },
   { category: "AMUSEMENT",            keywords: ["amusement", "arcade", "billiard", "cinema", "theater", "theatre", "bowling", "golf", "swimming pool", "spa resort", "entertainment center", "karaoke", "bar ", "night club", "nightclub", "disco", "cockpit", "horse race", "casino", "bingo", "gambling"] },
   { category: "RESTAURANTS",          keywords: ["restaurant", "eatery", "cafe", "catering", "fast food", "food service", "cafeteria", "kiosk food", "carinderia", "canteen", "food court", "bakeshop", "bakery resto", "coffee shop", "diner"] },
-  { category: "LESSORS_COMMERCIAL",   keywords: ["lessor commercial", "commercial space", "commercial building", "office space", "stall rental", "commercial lot lessor", "mall owner", "commercial property", "rental commercial"] },
-  { category: "LESSORS_LAND",         keywords: ["lessor land", "land rental", "lot rental", "real estate lessor", "land owner", "agricultural lessor", "lessor of real property"] },
+  { category: "LESSORS_COMMERCIAL",   keywords: ["lessor commercial", "commercial space", "commercial building", "office space", "stall rental", "commercial lot lessor", "mall owner", "commercial property", "rental commercial", "lessors of real estate - commercial", "lessors of real estate – commercial"] },
+  { category: "LESSORS_LAND",         keywords: ["lessor land", "land rental", "lot rental", "real estate lessor", "land owner", "agricultural lessor", "lessor of real property", "lessors of real estate", "lessors of real estate - land", "lessors of real estate – land"] },
   { category: "WHOLESALERS_RETAILERS",keywords: ["wholesale", "retail", " store", "shop", "trading", "drugstore", "pharmacy", "grocery", "supermarket", "hardware", "boutique", "department store", "sari-sari", "convenience store", "distribut", "supplier", "dealer", "market vendor", "trading post", "merchandise"] },
   { category: "OTHER_INDUSTRIAL",     keywords: ["industrial", "processing plant", "recycling", "waste management", "chemical", "petroleum", "mining", "quarry", "rice mill", "sugar mill", "water refilling", "ice plant", "fuel station", "gasoline station", "lpg", "oil depot"] },
 ];
@@ -322,17 +328,27 @@ const FEE_TABLES: Partial<Record<BusinessCategory, CategoryFeeTable>> = {
   },
 
   // LIQUOR_TOBACCO fee table intentionally omitted here —
-  // computed as Wholesalers/Retailers fee × 1.25 at runtime.
+  // base fees use WHOLESALERS_RETAILERS; the liquor/tobacco % add-on is applied
+  // as a separate assessment line (checkbox and/or LOB keyword detection).
 
   // BANKS, POWER_COMPANY, POWER_GEN_DIST, PRIVATE_PORT handled separately (fixed/special).
 
   // ── General / Fallback ────────────────────────────────────────────────────
+  // Tier names align with DEFAULT_CLASSIFICATIONS so Super Admin overrides match.
   GENERAL: {
     label: "General Business",
     assetFees:  buildFees7([200, 500, 1200, 2500, 3500, 5000, 6000]),
     workerFees: buildFees7([200, 200, 500, 2500, 3500, 5000, 6000]),
-    assetTierNames: ["Micro", "Cottage A", "Cottage B", "Small A", "Small B", "Medium", "Large"],
-    workerTierNames: ["Micro (no workers)", "Micro (1–5)", "Cottage A (6–10)", "Small A (11–50)", "Small B (51–99)", "Medium (100–150)", "Large (200+)"],
+    assetTierNames: [...DEFAULT_CLASSIFICATIONS],
+    workerTierNames: [
+      "Micro Industry (no workers)",
+      "Micro Industry (1–5)",
+      "Cottage Industries A (6–10)",
+      "Small-Scale Industries A (11–50)",
+      "Small-Scale Industries B (51–99)",
+      "Medium-Scale Industries (100–150)",
+      "Large-Scale Industries (200+)",
+    ],
   },
 };
 
@@ -403,15 +419,106 @@ function getAssetTierName(category: BusinessCategory, assetBracket: AssetBracket
 function getWorkerTierName(category: BusinessCategory, workerBracket: WorkerBracket): string {
   const table = FEE_TABLES[category] ?? FEE_TABLES.GENERAL!;
   const idx = WORKER_BRACKETS.indexOf(workerBracket);
-  const tierName = table.workerTierNames[idx] ?? WORKER_BRACKET_LABELS[workerBracket];
-  return tierName.replace(/100[–-]150/g, "100–199");
+  return table.workerTierNames[idx] ?? WORKER_BRACKET_LABELS[workerBracket];
 }
 
 function detectBankType(lineOfBusiness: string): "RURAL_THRIFT_SAVINGS" | "COMMERCIAL_DEVELOPMENT" | "UNIVERSAL" {
   const lower = lineOfBusiness.toLowerCase();
   if (/universal bank/.test(lower)) return "UNIVERSAL";
   if (/commercial bank|development bank/.test(lower)) return "COMMERCIAL_DEVELOPMENT";
-  return "RURAL_THRIFT_SAVINGS"; // default for rural/thrift/savings/cooperative banks
+  return "RURAL_THRIFT_SAVINGS"; // default for rural/thrift/savings/cooperative banks and plain "Banks"
+}
+
+function resolveBuiltInCategoryAlias(lineOfBusiness: string | null | undefined): string | null {
+  const trimmed = (lineOfBusiness ?? "").trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (lower === "banks") return "BANKS";
+  if (lower === "lessors of real estate") return "LESSORS_LAND";
+  if (lower.includes("lessors of real estate") && lower.includes("commercial")) {
+    return "LESSORS_COMMERCIAL";
+  }
+  if (lower.includes("lessors of real estate") && lower.includes("land")) {
+    return "LESSORS_LAND";
+  }
+  return null;
+}
+
+function normalizeClassification(value: string): string {
+  return value.trim().toLowerCase().replace(/[–—]/g, "-");
+}
+
+function findConfiguredFeeAmount(
+  runtimeSettings: RuntimeFeeSettings | undefined,
+  category: FeeCategoryKey | string,
+  classification: string
+): number | null {
+  if (!runtimeSettings) return null;
+
+  const target = normalizeClassification(classification);
+  const row = runtimeSettings.feeOverrides.find(
+    (item) => item.category === category && normalizeClassification(item.classification) === target
+  );
+
+  if (!row) return null;
+  return row.amount;
+}
+
+function resolveCategoryKeyFromLineOfBusiness(
+  lineOfBusiness: string | null | undefined,
+  runtimeSettings?: RuntimeFeeSettings
+): string | null {
+  const trimmed = lineOfBusiness?.trim();
+  if (!trimmed) return null;
+  const fromRuntime =
+    runtimeSettings?.categoryByLabel?.[trimmed] ??
+    runtimeSettings?.categoryByLabel?.[trimmed.toLowerCase()] ??
+    null;
+  return fromRuntime ?? resolveBuiltInCategoryAlias(trimmed);
+}
+
+function buildBankFeeResult(
+  input: AssessmentInput,
+  runtimeSettings: RuntimeFeeSettings | undefined,
+  lineOfBusiness: string,
+  assetBracket: AssetBracket,
+  workerBracket: WorkerBracket,
+  assetBracketLabel: string,
+  workerBracketLabel: string
+): ComputedFees {
+  const bankType = detectBankType(lineOfBusiness);
+  const bankFeeMap = {
+    RURAL_THRIFT_SAVINGS: {
+      fee: 4_000,
+      label: BANK_CLASSIFICATIONS[0],
+    },
+    COMMERCIAL_DEVELOPMENT: {
+      fee: 6_000,
+      label: BANK_CLASSIFICATIONS[1],
+    },
+    UNIVERSAL: {
+      fee: 8_000,
+      label: BANK_CLASSIFICATIONS[2],
+    },
+  };
+  const bankConfig = bankFeeMap[bankType];
+  const bankLabel = bankConfig.label;
+  const fee = findConfiguredFeeAmount(runtimeSettings, "BANKS", bankLabel) ?? bankConfig.fee;
+  return buildResult(input, {
+    detectedCategory: `Banks — ${bankLabel}`,
+    assetBracket,
+    workerBracket,
+    assetBracketLabel,
+    workerBracketLabel,
+    assetTierName: bankLabel,
+    workerTierName: bankLabel,
+    assetBasedFee: fee,
+    workerBasedFee: fee,
+    selectedMayorPermitFee: fee,
+    selectedBy: "Bank type classification",
+    specialRuleApplied: null,
+    explanation: `Banks — ${bankLabel}: ₱${fee.toLocaleString("en-PH")} (fee is fixed by bank type, not by size)`,
+  }, runtimeSettings);
 }
 
 // ---------------------------------------------------------------------------
@@ -450,39 +557,6 @@ export interface ComputedFees {
   sizeClassification: string;        // = selectedClassification
 }
 
-function normalizeClassification(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function findConfiguredFeeAmount(
-  runtimeSettings: RuntimeFeeSettings | undefined,
-  category: FeeCategoryKey | string,
-  classification: string
-): number | null {
-  if (!runtimeSettings) return null;
-
-  const target = normalizeClassification(classification);
-  const row = runtimeSettings.feeOverrides.find(
-    (item) => item.category === category && normalizeClassification(item.classification) === target
-  );
-
-  if (!row) return null;
-  return row.amount;
-}
-
-function resolveCategoryKeyFromLineOfBusiness(
-  lineOfBusiness: string | null | undefined,
-  runtimeSettings?: RuntimeFeeSettings
-): string | null {
-  const trimmed = lineOfBusiness?.trim();
-  if (!trimmed || !runtimeSettings?.categoryByLabel) return null;
-  return (
-    runtimeSettings.categoryByLabel[trimmed] ??
-    runtimeSettings.categoryByLabel[trimmed.toLowerCase()] ??
-    null
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Main computation function
 // ---------------------------------------------------------------------------
@@ -493,90 +567,16 @@ export function computeMayorsPermitFee(
 ): ComputedFees {
   const { lineOfBusiness, assetSize, totalEmployees } = input;
   const lower = (lineOfBusiness ?? "").toLowerCase();
+  const exactCategoryKey = resolveCategoryKeyFromLineOfBusiness(lineOfBusiness, runtimeSettings);
 
   const assetBracket = classifyAssetBracket(assetSize);
   const workerBracket = classifyWorkerBracket(totalEmployees);
   const assetBracketLabel = ASSET_BRACKET_LABELS[assetBracket];
   const workerBracketLabel = WORKER_BRACKET_LABELS[workerBracket];
+  const assetIdx = ASSET_BRACKETS.indexOf(assetBracket);
+  const workerIdx = WORKER_BRACKETS.indexOf(workerBracket);
 
-  // ----- 1. Private Ports / Wharves — ₱50,000 fixed -----
-  if (/private port|private wharf|port operation|port facility|wharf|pier facility|harbor terminal|marina/.test(lower)) {
-    const fee = runtimeSettings?.fixed.privatePortFixedFee ?? 50_000;
-    return buildResult(input, {
-      detectedCategory: "Private Ports / Wharves",
-      assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
-      assetTierName: "Fixed", workerTierName: "Fixed",
-      assetBasedFee: fee, workerBasedFee: fee,
-      selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
-      specialRuleApplied: "Fixed fee: Private Port / Wharf — ₱50,000",
-      explanation: "Fixed fee: Private Port / Wharf — ₱50,000",
-    }, runtimeSettings);
-  }
-
-  // ----- 2. Power Companies / Hydropower Plants — ₱10,000 fixed -----
-  if (/power company|hydropower|hydro power|hydroelectric|electric cooperative/.test(lower)) {
-    const fee = runtimeSettings?.fixed.powerCompanyFixedFee ?? 10_000;
-    return buildResult(input, {
-      detectedCategory: "Power Companies / Hydropower Plants",
-      assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
-      assetTierName: "Fixed", workerTierName: "Fixed",
-      assetBasedFee: fee, workerBasedFee: fee,
-      selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
-      specialRuleApplied: "Fixed fee: Power Company / Hydropower — ₱10,000",
-      explanation: "Fixed fee: Power Companies / Hydropower Plants — ₱10,000",
-    }, runtimeSettings);
-  }
-
-  // ----- 3. Power Generation and Distribution — ₱10,000 fixed -----
-  if (/power generation|power distribution|generation company|distribution company/.test(lower)) {
-    const fee = runtimeSettings?.fixed.powerGenerationDistributionFixedFee ?? 10_000;
-    return buildResult(input, {
-      detectedCategory: "Power Generation and Distribution",
-      assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
-      assetTierName: "Fixed", workerTierName: "Fixed",
-      assetBasedFee: fee, workerBasedFee: fee,
-      selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
-      specialRuleApplied: "Fixed fee: Power Generation and Distribution — ₱10,000",
-      explanation: "Fixed fee: Power Generation and Distribution — ₱10,000",
-    }, runtimeSettings);
-  }
-
-  // ----- 4. Banks (fee by bank sub-type, not size) -----
-  if (/rural bank|thrift bank|savings bank|commercial bank|development bank|universal bank|cooperative bank/.test(lower)) {
-    const bankType = detectBankType(lineOfBusiness ?? "");
-    const bankFeeMap = {
-      RURAL_THRIFT_SAVINGS: {
-        fee: 4_000,
-        label: BANK_CLASSIFICATIONS[0],
-      },
-      COMMERCIAL_DEVELOPMENT: {
-        fee: 6_000,
-        label: BANK_CLASSIFICATIONS[1],
-      },
-      UNIVERSAL: {
-        fee: 8_000,
-        label: BANK_CLASSIFICATIONS[2],
-      },
-    };
-    const bankConfig = bankFeeMap[bankType];
-    const bankLabel = bankConfig.label;
-    const fee = findConfiguredFeeAmount(runtimeSettings, "BANKS", bankLabel) ?? bankConfig.fee;
-    return buildResult(input, {
-      detectedCategory: `Banks — ${bankLabel}`,
-      assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
-      assetTierName: bankLabel, workerTierName: bankLabel,
-      assetBasedFee: fee, workerBasedFee: fee,
-      selectedMayorPermitFee: fee, selectedBy: "Bank type classification",
-      specialRuleApplied: null,
-      explanation: `Banks — ${bankLabel}: ₱${fee.toLocaleString("en-PH")} (fee is fixed by bank type, not by size)`,
-    }, runtimeSettings);
-  }
-
-  // ----- 5. Standard categories with asset × worker comparison -----
-
-  const exactCategoryKey = resolveCategoryKeyFromLineOfBusiness(lineOfBusiness, runtimeSettings);
-
-  // Custom Super Admin categories: use configured Fixed Fee when present, else GENERAL size table + custom overrides.
+  // ----- 1. Custom Super Admin categories (exact label match) -----
   if (exactCategoryKey?.startsWith("CUSTOM_")) {
     const fixedConfigured = findConfiguredFeeAmount(
       runtimeSettings,
@@ -601,16 +601,21 @@ export function computeMayorsPermitFee(
       }, runtimeSettings);
     }
 
-    const feeCategory: BusinessCategory = "GENERAL";
+    // Size-tier customs use the Manufacturers schedule amounts + DEFAULT_CLASSIFICATIONS labels
+    // so Super Admin fee rows match override lookups.
+    const sizeTable = FEE_TABLES.MANUFACTURERS!;
     const catLabel = lineOfBusiness?.trim() || exactCategoryKey;
-    const assetFee = getAssetFee(feeCategory, assetBracket);
-    const workerFee = getWorkerFee(feeCategory, workerBracket);
-    const assetTierName = getAssetTierName(feeCategory, assetBracket);
-    const workerTierName = getWorkerTierName(feeCategory, workerBracket);
+    const assetFee = sizeTable.assetFees[assetIdx] ?? 0;
+    const workerFee = sizeTable.workerFees[workerIdx] ?? 0;
+    const assetTierName = DEFAULT_CLASSIFICATIONS[assetIdx] ?? sizeTable.assetTierNames[assetIdx]!;
+    const workerTierName = sizeTable.workerTierNames[workerIdx]!;
+    const overrideClassification =
+      assetFee >= workerFee
+        ? (DEFAULT_CLASSIFICATIONS[assetIdx] ?? assetTierName)
+        : (DEFAULT_CLASSIFICATIONS[workerIdx] ?? assetTierName);
+
     let baseFee: number;
     let selectedBy: string;
-    const selectedTierNameFromDefaults = assetFee >= workerFee ? assetTierName : workerTierName;
-
     if (assetFee >= workerFee) {
       baseFee = assetFee;
       selectedBy = `Asset size (₱${assetFee.toLocaleString("en-PH")} ≥ Worker count ₱${workerFee.toLocaleString("en-PH")})`;
@@ -619,13 +624,14 @@ export function computeMayorsPermitFee(
       selectedBy = `Worker count (₱${workerFee.toLocaleString("en-PH")} > Asset size ₱${assetFee.toLocaleString("en-PH")})`;
     }
 
-    const configuredAmount =
-      findConfiguredFeeAmount(runtimeSettings, exactCategoryKey, selectedTierNameFromDefaults) ??
-      findConfiguredFeeAmount(runtimeSettings, feeCategory, selectedTierNameFromDefaults);
-
+    const configuredAmount = findConfiguredFeeAmount(
+      runtimeSettings,
+      exactCategoryKey,
+      overrideClassification
+    );
     if (typeof configuredAmount === "number") {
       baseFee = configuredAmount;
-      selectedBy = `Configured setting (${selectedTierNameFromDefaults}) = ₱${configuredAmount.toLocaleString("en-PH")}`;
+      selectedBy = `Configured setting (${overrideClassification}) = ₱${configuredAmount.toLocaleString("en-PH")}`;
     }
 
     const explanation =
@@ -651,7 +657,114 @@ export function computeMayorsPermitFee(
     }, runtimeSettings);
   }
 
-  // Detect primary category (prefer exact fee-category label match over keyword heuristics)
+  // ----- 2. Exact-match fixed / bank categories -----
+  if (exactCategoryKey === "PRIVATE_PORT") {
+    const fee = runtimeSettings?.fixed.privatePortFixedFee ?? 50_000;
+    return buildResult(input, {
+      detectedCategory: "Private Ports / Wharves",
+      assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
+      assetTierName: "Fixed", workerTierName: "Fixed",
+      assetBasedFee: fee, workerBasedFee: fee,
+      selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
+      specialRuleApplied: "Fixed fee: Private Port / Wharf — ₱50,000",
+      explanation: "Fixed fee: Private Port / Wharf — ₱50,000",
+    }, runtimeSettings);
+  }
+
+  if (exactCategoryKey === "POWER_COMPANY") {
+    const fee = runtimeSettings?.fixed.powerCompanyFixedFee ?? 10_000;
+    return buildResult(input, {
+      detectedCategory: "Power Companies / Hydropower Plants",
+      assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
+      assetTierName: "Fixed", workerTierName: "Fixed",
+      assetBasedFee: fee, workerBasedFee: fee,
+      selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
+      specialRuleApplied: "Fixed fee: Power Company / Hydropower — ₱10,000",
+      explanation: "Fixed fee: Power Companies / Hydropower Plants — ₱10,000",
+    }, runtimeSettings);
+  }
+
+  if (exactCategoryKey === "POWER_GEN_DIST") {
+    const fee = runtimeSettings?.fixed.powerGenerationDistributionFixedFee ?? 10_000;
+    return buildResult(input, {
+      detectedCategory: "Power Generation and Distribution",
+      assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
+      assetTierName: "Fixed", workerTierName: "Fixed",
+      assetBasedFee: fee, workerBasedFee: fee,
+      selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
+      specialRuleApplied: "Fixed fee: Power Generation and Distribution — ₱10,000",
+      explanation: "Fixed fee: Power Generation and Distribution — ₱10,000",
+    }, runtimeSettings);
+  }
+
+  if (exactCategoryKey === "BANKS") {
+    return buildBankFeeResult(
+      input,
+      runtimeSettings,
+      lineOfBusiness ?? "Banks",
+      assetBracket,
+      workerBracket,
+      assetBracketLabel,
+      workerBracketLabel
+    );
+  }
+
+  // ----- 3. Keyword specials only when LOB did not exact-match a fee category -----
+  if (!exactCategoryKey) {
+    if (/private port|private wharf|port operation|port facility|wharf|pier facility|harbor terminal|marina/.test(lower)) {
+      const fee = runtimeSettings?.fixed.privatePortFixedFee ?? 50_000;
+      return buildResult(input, {
+        detectedCategory: "Private Ports / Wharves",
+        assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
+        assetTierName: "Fixed", workerTierName: "Fixed",
+        assetBasedFee: fee, workerBasedFee: fee,
+        selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
+        specialRuleApplied: "Fixed fee: Private Port / Wharf — ₱50,000",
+        explanation: "Fixed fee: Private Port / Wharf — ₱50,000",
+      }, runtimeSettings);
+    }
+
+    if (/power company|hydropower|hydro power|hydroelectric|electric cooperative/.test(lower)) {
+      const fee = runtimeSettings?.fixed.powerCompanyFixedFee ?? 10_000;
+      return buildResult(input, {
+        detectedCategory: "Power Companies / Hydropower Plants",
+        assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
+        assetTierName: "Fixed", workerTierName: "Fixed",
+        assetBasedFee: fee, workerBasedFee: fee,
+        selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
+        specialRuleApplied: "Fixed fee: Power Company / Hydropower — ₱10,000",
+        explanation: "Fixed fee: Power Companies / Hydropower Plants — ₱10,000",
+      }, runtimeSettings);
+    }
+
+    if (/power generation|power distribution|generation company|distribution company/.test(lower)) {
+      const fee = runtimeSettings?.fixed.powerGenerationDistributionFixedFee ?? 10_000;
+      return buildResult(input, {
+        detectedCategory: "Power Generation and Distribution",
+        assetBracket, workerBracket, assetBracketLabel, workerBracketLabel,
+        assetTierName: "Fixed", workerTierName: "Fixed",
+        assetBasedFee: fee, workerBasedFee: fee,
+        selectedMayorPermitFee: fee, selectedBy: "Fixed fee",
+        specialRuleApplied: "Fixed fee: Power Generation and Distribution — ₱10,000",
+        explanation: "Fixed fee: Power Generation and Distribution — ₱10,000",
+      }, runtimeSettings);
+    }
+
+    if (/rural bank|thrift bank|savings bank|commercial bank|development bank|universal bank|cooperative bank|\bbanks\b/.test(lower)) {
+      return buildBankFeeResult(
+        input,
+        runtimeSettings,
+        lineOfBusiness ?? "",
+        assetBracket,
+        workerBracket,
+        assetBracketLabel,
+        workerBracketLabel
+      );
+    }
+  }
+
+  // ----- 4. Standard categories with asset × worker comparison -----
+
   const detectedCategory =
     exactCategoryKey && !exactCategoryKey.startsWith("CUSTOM_")
       ? (exactCategoryKey as BusinessCategory)
@@ -660,6 +773,7 @@ export function computeMayorsPermitFee(
   const isExplicitLiquorTobacco = detectedCategory === "LIQUOR_TOBACCO";
 
   // For Liquor/Tobacco explicit business: base fees are from WHOLESALERS_RETAILERS
+  // (add-on % is applied separately during BPLO assessment).
   const baseCategory: BusinessCategory =
     isExplicitLiquorTobacco ? "WHOLESALERS_RETAILERS" : detectedCategory;
 
@@ -687,11 +801,11 @@ export function computeMayorsPermitFee(
   }
 
   const overrideCategory = (isExplicitLiquorTobacco ? "LIQUOR_TOBACCO" : feeCategory) as FeeCategoryKey;
-  const configuredAmount = findConfiguredFeeAmount(
-    runtimeSettings,
-    overrideCategory,
-    selectedTierNameFromDefaults
-  );
+  const configuredAmount =
+    findConfiguredFeeAmount(runtimeSettings, overrideCategory, selectedTierNameFromDefaults) ??
+    (assetFee >= workerFee
+      ? findConfiguredFeeAmount(runtimeSettings, feeCategory, DEFAULT_CLASSIFICATIONS[assetIdx] ?? "")
+      : findConfiguredFeeAmount(runtimeSettings, feeCategory, DEFAULT_CLASSIFICATIONS[workerIdx] ?? ""));
 
   if (typeof configuredAmount === "number") {
     baseFee = configuredAmount;
@@ -702,7 +816,7 @@ export function computeMayorsPermitFee(
   const specialRuleApplied: string | null = null;
 
   const explanation =
-    `Category: ${catLabel}${isExplicitLiquorTobacco ? " (Liquor/Tobacco — base: Wholesalers/Retailers)" : ""}` +
+    `Category: ${catLabel}${isExplicitLiquorTobacco ? " (Liquor/Tobacco — base: Wholesalers/Retailers; add-on applied at assessment)" : ""}` +
     ` | Asset: ${assetBracketLabel} → ${assetTierName} = ₱${assetFee.toLocaleString("en-PH")}` +
     ` | Workers: ${workerBracketLabel} → ${workerTierName} = ₱${workerFee.toLocaleString("en-PH")}` +
     ` | Selected by: ${selectedBy}` +

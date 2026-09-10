@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit-log";
 import { mapDbStatusToUi } from "@/lib/application-mappers";
 import { assertStatusTransition } from "@/lib/application-status";
-import { computeMayorsPermitFee } from "@/lib/fee-computation";
+import { computeMayorsPermitFee, detectBusinessCategory } from "@/lib/fee-computation";
 import { getRuntimeFeeSettings } from "@/lib/fee-settings";
 import { toMoneyNumber } from "@/lib/money";
 import type { BusinessInfo, FeeLineItemInput } from "@/lib/applicant-types";
@@ -420,22 +420,47 @@ function sanitizeCustomLineItems(lineItems: FeeLineItemInput[]): Array<{ descrip
     }));
 }
 
-export function buildAutomaticRenewalCharges(baseMayorPermitFee: number, overdueMonths: number, settings: any) {
+export function buildAutomaticRenewalCharges(
+  baseMayorPermitFee: number,
+  overdueMonths: number,
+  settings: {
+    penalties?: {
+      renewalSurchargePercent?: number;
+      monthlyInterestPercent?: number;
+    };
+    activeExtension?: {
+      waiveSurcharge?: boolean;
+      waiveInterest?: boolean;
+    } | null;
+    lateRenewalSurchargeRate?: number;
+    lateRenewalMonthlyInterestRate?: number;
+  } | null | undefined
+) {
   if (overdueMonths <= 12 || baseMayorPermitFee <= 0) {
     return { surcharge: 0, interest: 0 };
   }
 
-  const surchargeRate = typeof settings?.lateRenewalSurchargeRate === "number"
-    ? settings.lateRenewalSurchargeRate
-    : 0.25;
-  const interestRate = typeof settings?.lateRenewalMonthlyInterestRate === "number"
-    ? settings.lateRenewalMonthlyInterestRate
-    : 0.02;
+  const surchargePercent =
+    typeof settings?.penalties?.renewalSurchargePercent === "number"
+      ? settings.penalties.renewalSurchargePercent
+      : typeof settings?.lateRenewalSurchargeRate === "number"
+        ? settings.lateRenewalSurchargeRate * 100
+        : 25;
+  const interestPercent =
+    typeof settings?.penalties?.monthlyInterestPercent === "number"
+      ? settings.penalties.monthlyInterestPercent
+      : typeof settings?.lateRenewalMonthlyInterestRate === "number"
+        ? settings.lateRenewalMonthlyInterestRate * 100
+        : 2;
 
-  return {
-    surcharge: roundMoney(baseMayorPermitFee * surchargeRate),
-    interest: roundMoney(baseMayorPermitFee * interestRate * overdueMonths),
-  };
+  const surcharge = settings?.activeExtension?.waiveSurcharge
+    ? 0
+    : roundMoney(baseMayorPermitFee * (surchargePercent / 100));
+  const interest = settings?.activeExtension?.waiveInterest
+    ? 0
+    : roundMoney(baseMayorPermitFee * (interestPercent / 100) * overdueMonths);
+
+  return { surcharge, interest };
 }
 
 export function buildAutomaticLiquorTobaccoSurcharge(
@@ -718,6 +743,8 @@ export async function getApplicationForAssessment(applicationId: string): Promis
       lineOfBusiness: lineOfBusiness !== "-" ? lineOfBusiness : null,
       assetSize: assetSize !== "-" ? assetSize : null,
       totalEmployees: totalEmployees !== "-" ? totalEmployees : null,
+      isLateRenewal: overdueMonths > 12,
+      lateMonths: overdueMonths > 12 ? overdueMonths : 0,
     },
     runtimeSettings
   );
@@ -727,10 +754,12 @@ export async function getApplicationForAssessment(applicationId: string): Promis
     overdueMonths,
     runtimeSettings
   );
+  const liquorFromLob =
+    lineOfBusiness !== "-" && detectBusinessCategory(lineOfBusiness) === "LIQUOR_TOBACCO";
   const automaticLiquorTobaccoSurcharge = buildAutomaticLiquorTobaccoSurcharge(
     row.applicationType,
     computed.mayorsPermitFee,
-    isLiquorOrTobacco,
+    isLiquorOrTobacco || liquorFromLob,
     runtimeSettings
   );
 
