@@ -936,7 +936,10 @@ async function persistAssessment(
     }
 
     const overdueMonths = resolveOverdueMonths(application);
-    const isLiquorOrTobacco = resolveLiquorOrTobacco(application.formData);
+    const lob = resolveField(application.formData, "lineOfBusiness");
+    const isLiquorOrTobacco =
+      resolveLiquorOrTobacco(application.formData) ||
+      (lob !== "-" && detectBusinessCategory(lob) === "LIQUOR_TOBACCO");
     const applicationInspections: Array<{ nonComplianceType: string | null; violationSeverity: string | null; isSettled: boolean }> =
       application.businessRecord?.inspections ?? [];
     const complianceSeverity = application.applicationType === "RENEWAL"
