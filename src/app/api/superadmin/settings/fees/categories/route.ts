@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { label, key, classifications, useDefaultClassifications, useFixedFeeOnly } = body as Record<
+  const { label, key, useDefaultClassifications, useFixedFeeOnly } = body as Record<
     string,
     unknown
   >;
@@ -40,27 +40,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Category label is required." }, { status: 400 });
   }
 
-  let resolvedClassifications: string[] = [];
-  if (useFixedFeeOnly === true) {
-    resolvedClassifications = ["Fixed Fee"];
-  } else if (Array.isArray(classifications)) {
-    resolvedClassifications = classifications.filter(
-      (item): item is string => typeof item === "string" && item.trim().length > 0
-    );
-  } else if (typeof classifications === "string") {
-    resolvedClassifications = classifications
-      .split(/\r?\n|,/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  if (resolvedClassifications.length === 0 && useDefaultClassifications !== false) {
-    resolvedClassifications = [...DEFAULT_CLASSIFICATIONS];
-  }
+  // Size customization is not allowed — only default Micro–Large tiers or Fixed Fee.
+  const resolvedClassifications =
+    useFixedFeeOnly === true
+      ? ["Fixed Fee"]
+      : useDefaultClassifications === false
+        ? []
+        : [...DEFAULT_CLASSIFICATIONS];
 
   if (resolvedClassifications.length === 0) {
     return NextResponse.json(
-      { error: "Provide at least one size classification or enable default classifications." },
+      { error: "Select default size tiers or fixed fee only." },
       { status: 400 }
     );
   }

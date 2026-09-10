@@ -170,7 +170,6 @@ export function SuperAdminFeeSettingsManager() {
   const [categoryForm, setCategoryForm] = useState({
     label: "",
     key: "",
-    classifications: "",
     useDefaultClassifications: true,
     useFixedFeeOnly: false,
   });
@@ -390,14 +389,6 @@ export function SuperAdminFeeSettingsManager() {
       return;
     }
 
-    if (!categoryForm.useFixedFeeOnly && !categoryForm.useDefaultClassifications && !categoryForm.classifications.trim()) {
-      setFlash({
-        type: "danger",
-        message: "Provide size classifications or enable default classifications.",
-      });
-      return;
-    }
-
     setIsSavingCategory(true);
     try {
       const res = await fetch("/api/superadmin/settings/fees/categories", {
@@ -406,8 +397,7 @@ export function SuperAdminFeeSettingsManager() {
         body: JSON.stringify({
           label: categoryForm.label.trim(),
           key: categoryForm.key.trim() || undefined,
-          classifications: categoryForm.classifications,
-          useDefaultClassifications: categoryForm.useDefaultClassifications,
+          useDefaultClassifications: !categoryForm.useFixedFeeOnly,
           useFixedFeeOnly: categoryForm.useFixedFeeOnly,
         }),
       });
@@ -431,7 +421,6 @@ export function SuperAdminFeeSettingsManager() {
       setCategoryForm({
         label: "",
         key: "",
-        classifications: "",
         useDefaultClassifications: true,
         useFixedFeeOnly: false,
       });
@@ -741,49 +730,27 @@ export function SuperAdminFeeSettingsManager() {
               />
             </FormField>
 
-            <FormField label="Classification Mode" required>
+            <FormField
+              label="Size Mode"
+              required
+              hint="New categories use the standard Micro–Large size tiers, or a single fixed fee."
+            >
               <select
-                value={
-                  categoryForm.useFixedFeeOnly
-                    ? "FIXED"
-                    : categoryForm.useDefaultClassifications
-                      ? "DEFAULT"
-                      : "CUSTOM"
-                }
+                value={categoryForm.useFixedFeeOnly ? "FIXED" : "DEFAULT"}
                 onChange={(e) => {
                   const mode = e.target.value;
                   setCategoryForm((prev) => ({
                     ...prev,
                     useFixedFeeOnly: mode === "FIXED",
-                    useDefaultClassifications: mode === "DEFAULT",
+                    useDefaultClassifications: mode !== "FIXED",
                   }));
                 }}
                 className={superadminFormControlClass}
               >
                 <option value="DEFAULT">Default size tiers (Micro to Large)</option>
-                <option value="CUSTOM">Custom classifications</option>
                 <option value="FIXED">Fixed fee only</option>
               </select>
             </FormField>
-
-            {!categoryForm.useFixedFeeOnly && !categoryForm.useDefaultClassifications ? (
-              <div className="md:col-span-2 xl:col-span-3">
-                <FormField
-                  label="Size Classifications"
-                  required
-                  hint="One per line or comma-separated."
-                >
-                  <textarea
-                    aria-label="Size Classifications"
-                    rows={4}
-                    value={categoryForm.classifications}
-                    onChange={(e) => setCategoryForm((prev) => ({ ...prev, classifications: e.target.value }))}
-                    className={superadminFormControlClass}
-                    placeholder={"Micro\nSmall\nMedium\nLarge"}
-                  />
-                </FormField>
-              </div>
-            ) : null}
 
             <div className="md:col-span-2 xl:col-span-3 flex justify-end">
               <button
