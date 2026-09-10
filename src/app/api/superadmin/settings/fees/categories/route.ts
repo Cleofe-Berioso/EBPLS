@@ -3,6 +3,7 @@ import { logSettingsAction } from "@/lib/audit-log";
 import {
   createFeeConfigurationCategory,
   DEFAULT_CLASSIFICATIONS,
+  deleteFeeConfigurationCategory,
   getAllFeeCategoryOptions,
   slugifyFeeCategoryKey,
 } from "@/lib/fee-settings";
@@ -78,6 +79,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, category, categories });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to add fee category.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const session = await requireSuperAdminSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const { key } = body as Record<string, unknown>;
+  if (typeof key !== "string" || !key.trim()) {
+    return NextResponse.json({ error: "Category key is required." }, { status: 400 });
+  }
+
+  try {
+    const deleted = await deleteFeeConfigurationCategory(key);
+    void logSettingsAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "SUPER_ADMIN",
+      "FEE_CATEGORY",
+      deleted.key,
+      "DELETED",
+      `Fee category deleted: ${deleted.label} (${deleted.deletedFeeItems} fee entries removed)`,
+      deleted
+    );
+
+    const categories = await getAllFeeCategoryOptions();
+    return NextResponse.json({ success: true, deleted, categories });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to delete fee category.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

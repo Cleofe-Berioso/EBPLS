@@ -160,13 +160,13 @@ export function SuperAdminFeeSettingsManager() {
     category: "",
     classification: "",
     amount: "",
-    isActive: true,
   });
 
   const [feePage, setFeePage] = useState(1);
   const [feePageSize, setFeePageSize] = useState<PaginationPageSize>(25);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
   const [categoryForm, setCategoryForm] = useState({
     label: "",
     key: "",
@@ -296,7 +296,7 @@ export function SuperAdminFeeSettingsManager() {
   }, [feeItems.length, feePage, feePageSize]);
 
   const summary = useMemo(() => {
-    const activeCategories = new Set(feeItems.filter((item) => item.isActive).map((item) => item.category)).size;
+    const activeCategories = new Set(feeItems.map((item) => item.category)).size;
     const activeExtension = extensions.find((item) => item.isActive) ?? null;
 
     return {
@@ -359,7 +359,6 @@ export function SuperAdminFeeSettingsManager() {
           category: feeForm.category,
           classification: feeForm.classification,
           amount,
-          isActive: feeForm.isActive,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -433,24 +432,81 @@ export function SuperAdminFeeSettingsManager() {
     }
   }
 
-  async function toggleFeeItem(item: FeeItem) {
+  async function deleteFeeItem(item: FeeItem) {
+    const categoryLabel = categoryLabelMap.get(item.category) ?? item.category;
+    const confirmed = window.confirm(
+      `Delete fee entry "${categoryLabel} / ${item.classification}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
     setFlash(null);
     try {
       const res = await fetch("/api/superadmin/settings/fees", {
-        method: "PATCH",
+        method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, isActive: !item.isActive }),
+        body: JSON.stringify({ id: item.id }),
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setFlash({ type: "danger", message: json.error ?? "Failed to update fee item status." });
+        setFlash({ type: "danger", message: json.error ?? "Failed to delete fee entry." });
         return;
       }
 
-      setFlash({ type: "success", message: `Updated fee item status: ${item.classification}.` });
+      setFlash({ type: "success", message: `Deleted fee entry: ${item.classification}.` });
       await loadSettings();
     } catch {
-      setFlash({ type: "danger", message: "Failed to update fee item status." });
+      setFlash({ type: "danger", message: "Failed to delete fee entry." });
+    }
+  }
+
+  async function deleteCustomCategory(category: FeeCategoryOption) {
+    if (!(category.isCustom || category.key.startsWith("CUSTOM_"))) {
+      setFlash({ type: "danger", message: "Built-in business categories cannot be deleted." });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete business category "${category.label}"?\n\nThis removes it from Line of Business on applications and deletes all fee table entries for this category.`
+    );
+    if (!confirmed) return;
+
+    setFlash(null);
+    setIsDeletingCategory(true);
+    try {
+      const res = await fetch("/api/superadmin/settings/fees/categories", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: category.key }),
+      });
+      const json = (await res.json()) as CategoryResponse & {
+        deleted?: { label: string; deletedFeeItems: number };
+      };
+      if (!res.ok) {
+        setFlash({ type: "danger", message: json.error ?? "Failed to delete business category." });
+        return;
+      }
+
+      const nextCategories = json.categories ?? categories.filter((item) => item.key !== category.key);
+      setCategories(nextCategories);
+      setFeeForm((prev) => {
+        if (prev.category !== category.key) return prev;
+        const nextCategory = nextCategories[0]?.key ?? "";
+        const nextOption = nextCategories.find((item) => item.key === nextCategory);
+        return {
+          ...prev,
+          category: nextCategory,
+          classification: nextOption?.classifications[0] ?? "",
+        };
+      });
+      setFlash({
+        type: "success",
+        message: `Deleted category "${json.deleted?.label ?? category.label}" and removed it from Line of Business.`,
+      });
+      await loadSettings();
+    } catch {
+      setFlash({ type: "danger", message: "Failed to delete business category." });
+    } finally {
+      setIsDeletingCategory(false);
     }
   }
 
@@ -806,21 +862,20 @@ export function SuperAdminFeeSettingsManager() {
             />
           </FormField>
 
-          <FormField label="Status" required>
-            <select
-              value={feeForm.isActive ? "ACTIVE" : "INACTIVE"}
-              onChange={(e) => setFeeForm((prev) => ({ ...prev, isActive: e.target.value === "ACTIVE" }))}
-              className={superadminFormControlClass}
-            >
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
-          </FormField>
-
-          <div className="flex items-end">
-            <button type="submit" className={actionButtonStyles("primary", "sm", "w-full")} disabled={isLoading}>
+          <div className="flex flex-wrap items-end gap-2 xl:col-span-2">
+            <button type="submit" className={actionButtonStyles("primary", "sm")} disabled={isLoading}>
               Save Fee Entry
             </button>
+            {selectedCategory && (selectedCategory.isCustom || selectedCategory.key.startsWith("CUSTOM_")) ? (
+              <button
+                type="button"
+                className={actionButtonStyles("danger", "sm")}
+                disabled={isLoading || isDeletingCategory}
+                onClick={() => void deleteCustomCategory(selectedCategory)}
+              >
+                {isDeletingCategory ? "Deleting…" : "Delete Category"}
+              </button>
+            ) : null}
           </div>
         </form>
 
@@ -845,7 +900,6 @@ export function SuperAdminFeeSettingsManager() {
                       <th className="px-4 py-3.5 font-semibold">Category</th>
                       <th className="px-4 py-3.5 font-semibold">Classification</th>
                       <th className="px-4 py-3.5 font-semibold">Amount</th>
-                      <th className="px-4 py-3.5 font-semibold">Status</th>
                       <th className="px-4 py-3.5 font-semibold">Updated At</th>
                       <th className="px-4 py-3.5 font-semibold">Action</th>
                     </tr>
@@ -856,21 +910,14 @@ export function SuperAdminFeeSettingsManager() {
                         <td className="px-4 py-3.5 font-medium text-[var(--foreground)]">{categoryLabelMap.get(item.category) ?? item.category}</td>
                         <td className="px-4 py-3.5 text-[var(--ink-muted)]">{item.classification}</td>
                         <td className="px-4 py-3.5 text-[var(--ink-muted)]">{formatAmount(item.amount)}</td>
-                        <td className="px-4 py-3.5">
-                          {item.isActive ? (
-                            <span className="inline-flex rounded-full border border-[var(--success)] bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--success)]">Active</span>
-                          ) : (
-                            <span className={`${superadminAuditPillClass} uppercase tracking-wide`}>Inactive</span>
-                          )}
-                        </td>
                         <td className="px-4 py-3.5 text-[var(--ink-muted)]">{formatDate(item.updatedAt)}</td>
                         <td className="px-4 py-3.5">
                           <button
                             type="button"
-                            className={actionButtonStyles(item.isActive ? "warning" : "secondary", "sm")}
-                            onClick={() => void toggleFeeItem(item)}
+                            className={actionButtonStyles("danger", "sm")}
+                            onClick={() => void deleteFeeItem(item)}
                           >
-                            {item.isActive ? "Deactivate" : "Activate"}
+                            Delete
                           </button>
                         </td>
                       </tr>
@@ -892,20 +939,13 @@ export function SuperAdminFeeSettingsManager() {
                       <p className="ui-caption">{item.classification}</p>
                       <p className="mt-1 text-sm text-[var(--ink-muted)]">{formatAmount(item.amount)}</p>
                       <p className="mt-1 ui-caption">Updated: {formatDate(item.updatedAt)}</p>
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <div>
-                          {item.isActive ? (
-                            <span className="inline-flex rounded-full border border-[var(--success)] bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--success)]">Active</span>
-                          ) : (
-                            <span className={`${superadminAuditPillClass} uppercase tracking-wide`}>Inactive</span>
-                          )}
-                        </div>
+                      <div className="mt-3 flex justify-end">
                         <button
                           type="button"
-                          className={actionButtonStyles(item.isActive ? "warning" : "secondary", "sm")}
-                          onClick={() => void toggleFeeItem(item)}
+                          className={actionButtonStyles("danger", "sm")}
+                          onClick={() => void deleteFeeItem(item)}
                         >
-                          {item.isActive ? "Deactivate" : "Activate"}
+                          Delete
                         </button>
                       </div>
                     </article>

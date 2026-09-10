@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminSession } from "@/lib/superadmin-api";
 import {
+  deleteFeeConfigurationItem,
   getAllFeeCategoryOptions,
   isValidClassificationForOptions,
   listFeeConfigurationItems,
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { category, classification, amount, isActive } = body as Record<string, unknown>;
+  const { category, classification, amount } = body as Record<string, unknown>;
   const categories = await getAllFeeCategoryOptions();
 
   if (typeof category !== "string" || !categories.some((item) => item.key === category)) {
@@ -57,16 +58,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Fee amount must be a non-negative number." }, { status: 400 });
   }
 
-  if (typeof isActive !== "boolean") {
-    return NextResponse.json({ error: "Active status is required." }, { status: 400 });
-  }
-
   try {
     const item = await upsertFeeConfigurationItem({
       category,
       classification,
       amount,
-      isActive,
+      isActive: true,
       updatedById: session.user.id,
     });
 
@@ -78,7 +75,7 @@ export async function POST(req: Request) {
       item.id,
       "CREATED",
       `Fee configuration: ${category} / ${classification} = PHP ${amount}`,
-      { category, classification, amount, isActive }
+      { category, classification, amount, isActive: true }
     );
 
     return NextResponse.json({ success: true, item });
@@ -100,7 +97,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { id, amount, isActive } = body as Record<string, unknown>;
+  const { id, amount } = body as Record<string, unknown>;
 
   if (typeof id !== "string" || !id) {
     return NextResponse.json({ error: "Configuration item ID is required." }, { status: 400 });
@@ -112,20 +109,52 @@ export async function PATCH(req: Request) {
     }
   }
 
-  if (typeof isActive !== "undefined" && typeof isActive !== "boolean") {
-    return NextResponse.json({ error: "Active status must be true or false." }, { status: 400 });
-  }
-
   try {
     const item = await updateFeeConfigurationItemById({
       id,
       ...(typeof amount === "number" ? { amount } : {}),
-      ...(typeof isActive === "boolean" ? { isActive } : {}),
       updatedById: session.user.id,
     });
 
     return NextResponse.json({ success: true, item });
   } catch {
     return NextResponse.json({ error: "Failed to update fee configuration item." }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const session = await requireSuperAdminSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const { id } = body as Record<string, unknown>;
+  if (typeof id !== "string" || !id.trim()) {
+    return NextResponse.json({ error: "Configuration item ID is required." }, { status: 400 });
+  }
+
+  try {
+    const item = await deleteFeeConfigurationItem(id.trim());
+    void logSettingsAction(
+      session.user.id,
+      session.user.name ?? session.user.email ?? null,
+      "SUPER_ADMIN",
+      "FEE_CONFIGURATION",
+      item.id,
+      "DELETED",
+      `Fee configuration deleted: ${item.category} / ${item.classification}`,
+      { category: item.category, classification: item.classification }
+    );
+    return NextResponse.json({ success: true, item });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to delete fee configuration item.";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -640,6 +640,62 @@ export async function updateFeeConfigurationItemById(input: {
   };
 }
 
+export async function deleteFeeConfigurationItem(id: string): Promise<FeeConfigurationItemDto> {
+  const existing = await prisma.feeConfigurationItem.findUnique({ where: { id } });
+  if (!existing) {
+    throw new Error("Fee configuration item not found.");
+  }
+
+  const row = await prisma.feeConfigurationItem.delete({ where: { id } });
+  return {
+    id: row.id,
+    category: row.category as FeeCategoryKey,
+    classification: row.classification,
+    amount: toMoneyNumber(row.amount),
+    isActive: row.isActive,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** Permanently delete a custom fee category and all of its fee table entries. */
+export async function deleteFeeConfigurationCategory(key: string): Promise<{
+  key: string;
+  label: string;
+  deletedFeeItems: number;
+}> {
+  const normalizedKey = key.trim().toUpperCase();
+  if (!normalizedKey) {
+    throw new Error("Category key is required.");
+  }
+
+  if (FEE_CATEGORY_OPTIONS.some((item) => item.key === normalizedKey)) {
+    throw new Error("Built-in business categories cannot be deleted.");
+  }
+
+  const existing = await prisma.feeConfigurationCategory.findUnique({
+    where: { key: normalizedKey },
+  });
+  if (!existing) {
+    throw new Error("Custom business category not found.");
+  }
+
+  const deleted = await prisma.$transaction(async (tx) => {
+    const feeItems = await tx.feeConfigurationItem.deleteMany({
+      where: { category: normalizedKey },
+    });
+    await tx.feeConfigurationCategory.delete({
+      where: { key: normalizedKey },
+    });
+    return feeItems.count;
+  });
+
+  return {
+    key: existing.key,
+    label: existing.label,
+    deletedFeeItems: deleted,
+  };
+}
+
 export async function getOrCreateSystemFeeSetting(): Promise<SystemFeeSettingDto> {
   const existing = await prisma.systemFeeSetting.findFirst({
     orderBy: { updatedAt: "desc" },
