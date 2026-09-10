@@ -529,7 +529,10 @@ export function RenewalApplicationForm() {
   const selectedRecord = records.find((item) => item.id === selectedBusinessId);
   const selectedBusinessActivity = readBusinessActivitySelection(info.businessActivity);
   const selectedRecordLineOfBusiness = (selectedRecord?.businessInfo.lineOfBusiness ?? "").trim();
-  const hasLockedRecordLineOfBusiness = isValidLineOfBusiness(selectedRecordLineOfBusiness);
+  const hasLockedRecordLineOfBusiness =
+    selectedRecordLineOfBusiness.length > 0 &&
+    (isValidLineOfBusiness(selectedRecordLineOfBusiness) ||
+      lineOfBusinessOptions.includes(selectedRecordLineOfBusiness));
   const renewalLineOfBusinessLocked = hasLockedRecordLineOfBusiness || isReadOnly;
 
   useEffect(() => {
