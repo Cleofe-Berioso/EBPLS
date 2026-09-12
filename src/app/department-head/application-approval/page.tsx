@@ -288,12 +288,6 @@ export default function DepartmentHeadApplicationApprovalPage() {
         badge={<RoleBadge roleType="VIEW_ONLY" label="Department Head" />}
       />
 
-      <InfoBanner
-        title="Scope Guardrail"
-        description="This module handles approval decisions only. Fees, TOP, payment verification, permit issuance, revocation, and inspection actions are not available here."
-        variant="readOnly"
-      />
-
       <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <SectionCard
           title="Pending Application Approvals"

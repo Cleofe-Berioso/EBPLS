@@ -7,7 +7,6 @@ import {
 } from "@/components/superadmin/superadmin-ui-styles";
 import { PageHeader } from "@/components/ui/page-header";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -40,12 +39,6 @@ export default async function SuperAdminApplicationsPage({ searchParams }: PageP
         title="All Applications"
         description="Read-only directory of application records across the full applicant-to-BPLO workflow."
         badge={<RoleBadge roleType="VIEW_ONLY" label="View-Only Oversight" />}
-      />
-
-      <InfoBanner
-        title="Operational actions are not available"
-        description="This screen is limited to search and detail viewing for monitoring, auditing, and read-only oversight."
-        variant="readOnly"
       />
 
       <FilterBar title="Search Filters" description="Search application records by number or applicant email.">

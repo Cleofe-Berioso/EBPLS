@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Activity, ClipboardList, MessageSquareWarning, Users } from "lucide-react";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -70,12 +69,6 @@ export default async function SuperAdminDashboard() {
             Open Reports Hub
           </Link>
         }
-      />
-
-      <InfoBanner
-        title="Audit view only"
-        description="This dashboard cannot approve, reject, assess, verify payments, release permits, verify inspections, or mutate records. Use it to understand system load and where offices may need support."
-        variant="readOnly"
       />
 
       <SectionCard

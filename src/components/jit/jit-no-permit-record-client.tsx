@@ -186,12 +186,6 @@ export function JitNoPermitRecordClient() {
 
   return (
     <section className="ui-page-stack">
-      <InfoBanner
-        title="No Permit Record"
-        description="Record businesses found during JIT inspections that do not have an existing business permit record. A printable notice with a reference ticket number is generated for each new record."
-        variant="info"
-      />
-
       {lastPrintPath ? (
         <InfoBanner
           title="Notice saved"

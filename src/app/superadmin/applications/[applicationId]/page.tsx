@@ -10,7 +10,6 @@ import {
 } from "@/components/superadmin/superadmin-ui-styles";
 import { DetailHeader } from "@/components/ui/detail-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -60,12 +59,6 @@ export default async function SuperAdminApplicationDetailPage({ params }: PagePr
             Back to Applications
           </Link>
         }
-      />
-
-      <InfoBanner
-        title="Audit View Only"
-        description="IT Administrator can view this application but cannot approve, reject, assess fees, verify payments, or release permits."
-        variant="readOnly"
       />
 
       <SectionCard

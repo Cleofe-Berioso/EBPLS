@@ -41,12 +41,6 @@ export default async function ApplicantDashboard() {
         showHeroWatermark
       />
 
-      <InfoBanner
-        title="Read-only dashboard"
-        description="This page shows your own application records only. Viewing it does not change any application, permit, payment, or business data."
-        variant="readOnly"
-      />
-
       <SectionCard title="Action Required Now" description="Items that may need your attention.">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <DashboardQueueCard

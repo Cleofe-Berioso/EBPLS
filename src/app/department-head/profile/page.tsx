@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { requireDepartmentHeadSession } from "@/lib/department-head-api";
 import { prisma } from "@/lib/prisma";
@@ -55,12 +54,6 @@ export default async function DepartmentHeadProfilePage() {
         title="Profile"
         description="Update your display name and profile picture. Email, role, and account ID remain read-only."
         badge={<RoleBadge roleType="DEPARTMENT_HEAD" />}
-      />
-
-      <InfoBanner
-        title="Editable profile fields"
-        description="You can update your name and profile picture here. Email, role, and user ID are managed by the system and cannot be changed from this page."
-        variant="info"
       />
 
       <DepartmentHeadProfileSettingsClient

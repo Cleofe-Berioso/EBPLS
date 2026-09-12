@@ -880,7 +880,9 @@ async function resolveLatestInspectionsByBusinessRecord(
     string,
     {
       status: string;
-          revocationSettledAt: Date | null;
+      isSettled: boolean;
+      complianceCaseStatus: string | null;
+      revocationSettledAt: Date | null;
     }
   >
 > {
@@ -901,7 +903,9 @@ async function resolveLatestInspectionsByBusinessRecord(
       businessRecordId: true,
       status: true,
       createdAt: true,
-       revocationSettledAt: true,
+      isSettled: true,
+      complianceCaseStatus: true,
+      revocationSettledAt: true,
     },
     orderBy: {
       createdAt: "desc",
@@ -913,7 +917,9 @@ async function resolveLatestInspectionsByBusinessRecord(
     {
       status: string;
       createdAt: Date;
-       revocationSettledAt: Date | null;
+      isSettled: boolean;
+      complianceCaseStatus: string | null;
+      revocationSettledAt: Date | null;
     }
   >();
 
@@ -922,7 +928,9 @@ async function resolveLatestInspectionsByBusinessRecord(
       latestByRecord.set(inspection.businessRecordId, {
         status: inspection.status,
         createdAt: inspection.createdAt,
-         revocationSettledAt: inspection.revocationSettledAt,
+        isSettled: Boolean(inspection.isSettled),
+        complianceCaseStatus: inspection.complianceCaseStatus ?? null,
+        revocationSettledAt: inspection.revocationSettledAt,
       });
     }
   }
@@ -932,7 +940,7 @@ async function resolveLatestInspectionsByBusinessRecord(
 
 /**
  * List business locations with JIT inspection status and marker colors.
- * Includes revoked businesses as red markers.
+ * Settled compliance / revocation cases render as green (COMPLIANT).
  */
 export async function listJitBusinessMapLocations(
   filters: BusinessMapFilters = {}
@@ -945,7 +953,11 @@ export async function listJitBusinessMapLocations(
   return rows.map((row) => {
     const inspection = inspectionsByRecord.get(row.businessRecordId);
     const inspectionStatus = inspection?.status ?? null;
-    const markerStatus = getJitMapMarkerStatus(inspectionStatus);
+    const markerStatus = getJitMapMarkerStatus(inspectionStatus, {
+      isSettled: inspection?.isSettled,
+      complianceCaseStatus: inspection?.complianceCaseStatus,
+      revocationSettledAt: inspection?.revocationSettledAt,
+    });
     const markerColor = getJitMapMarkerColor(markerStatus);
 
     return {
@@ -954,15 +966,6 @@ export async function listJitBusinessMapLocations(
       mapMarkerStatus: markerStatus,
       mapMarkerColor: markerColor,
     } satisfies JitBusinessMapRow;
-  }).filter((row) => {
-    // Exclude settled revoked businesses from JIT map
-    if (row.mapMarkerStatus === "REVOKED") {
-      const inspection = inspectionsByRecord.get(row.businessRecordId);
-      if (inspection?.revocationSettledAt) {
-        return false;
-      }
-    }
-    return true;
   });
 }
 

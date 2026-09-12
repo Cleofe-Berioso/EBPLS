@@ -8,7 +8,6 @@ import { StatusBadge } from "@/components/applicant/status-badge";
 import { applicantMobileRecordCardClass, applicantTableClass } from "@/components/applicant/applicant-ui-styles";
 import { StatusTracker } from "@/components/applicant/status-tracker";
 import { EmptyState } from "@/components/ui/empty-state";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
@@ -54,12 +53,6 @@ export default async function MyApplicationsPage({ searchParams }: PageProps) {
             New filing
           </Link>
         }
-      />
-
-      <InfoBanner
-        title="Status-first tracking"
-        description="Each record shows workflow status, current stage, and available route actions using the existing application links."
-        variant="info"
       />
 
       {latest ? (

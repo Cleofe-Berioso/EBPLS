@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { superadminSummaryRowClass } from "@/components/superadmin/superadmin-ui-styles";
 import { EmptyState } from "@/components/ui/empty-state";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -92,12 +91,6 @@ export default async function SuperAdminReportsPage() {
             </span>
           </div>
         }
-      />
-
-      <InfoBanner
-        title="How to use this hub"
-        description="Start with the executive brief below for what the numbers mean today. Use printable reports when you need filtered evidence for audits, meetings, or archival printouts. Location monitoring stays view-only."
-        variant="info"
       />
 
       <SectionCard

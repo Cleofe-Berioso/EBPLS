@@ -343,12 +343,6 @@ export function SuperAdminUsersManager({ currentUserId }: { currentUserId: strin
         }
       />
 
-      <InfoBanner
-        title="IT Administrator scope"
-        description="Password reset is limited to JIT and Department Head accounts. Applicant, BPLO, and IT Administrator passwords cannot be changed from this screen."
-        variant="readOnly"
-      />
-
       {flash ? <InfoBanner title={flash.message} variant={flashVariant} /> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">

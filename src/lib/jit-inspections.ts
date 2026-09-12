@@ -37,6 +37,12 @@ interface CreateInspectionInput {
 
 export type JitMapMarkerStatus = "UNINSPECTED" | "PENDING_INSPECTION" | "COMPLIANT" | "REVOKED";
 
+export type JitMapMarkerSettlementHints = {
+  isSettled?: boolean | null;
+  complianceCaseStatus?: string | null;
+  revocationSettledAt?: Date | string | null;
+};
+
 export interface JitInspectableBusinessRow extends BusinessLocationMapRow {
   latestInspection: {
     complianceStatus: ComplianceStatus;
@@ -50,11 +56,24 @@ export interface JitInspectableBusinessRow extends BusinessLocationMapRow {
  * - No inspection record = UNINSPECTED (gray)
  * - Pending verification/review states = PENDING_INSPECTION (yellow)
  * - VERIFIED_COMPLIANT = COMPLIANT (green)
- * - REVOKED = REVOKED (red)
+ * - Settled compliance / revocation settlement = COMPLIANT (green)
+ * - REVOKED (unsettled) = REVOKED (red)
  */
 export function getJitMapMarkerStatus(
-  inspectionStatus: string | null
+  inspectionStatus: string | null,
+  settlement?: JitMapMarkerSettlementHints | null
 ): JitMapMarkerStatus {
+  const isSettledCase =
+    settlement?.isSettled === true ||
+    settlement?.complianceCaseStatus === "SETTLED" ||
+    Boolean(settlement?.revocationSettledAt);
+
+  // Settlement restores map readiness: settled cases show as green even when the
+  // inspection row still carries VERIFIED_NON_COMPLIANT / REVOKED for audit history.
+  if (isSettledCase) {
+    return "COMPLIANT";
+  }
+
   if (!inspectionStatus) {
     return "UNINSPECTED";
   }
@@ -78,7 +97,7 @@ export function getJitMapMarkerStatus(
     return "REVOKED";
   }
 
-  // Default to UNINSPECTED for other statuses (VERIFIED_NON_COMPLIANT, REVOCATION_REVIEW, etc)
+  // Default to UNINSPECTED for other statuses
   return "UNINSPECTED";
 }
 

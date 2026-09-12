@@ -724,12 +724,6 @@ export function SuperAdminFeeSettingsManager() {
         badge={<RoleBadge roleType="VIEW_ONLY" label="Configuration Scope" />}
       />
 
-      <InfoBanner
-        title="IT Administrator scope"
-        description="This module updates global fee configuration only. Workflow actions for applications, payments, permits, and business location remain unavailable to IT Administrator."
-        variant="readOnly"
-      />
-
       {flash ? <InfoBanner title={flash.message} variant={flashVariant} /> : null}
 
       {isLoading ? <LoadingState message="Loading fee settings…" compact /> : null}

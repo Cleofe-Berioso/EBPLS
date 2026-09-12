@@ -5,14 +5,12 @@ import {
   FlagTriangleRight,
   ShieldCheck,
   TriangleAlert,
-  Activity,
   ArrowRight,
   MapPinned,
   ClipboardList,
 } from "lucide-react";
 import { DashboardSummaryCard } from "@/components/applicant/dashboard-summary-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
@@ -50,18 +48,6 @@ export default async function JitDashboardPage() {
               View Business Map
             </Link>
           </>
-        }
-      />
-
-      <InfoBanner
-        title="Read-only dashboard"
-        description="Metrics below are derived from active released businesses and JIT inspection records only. No dashboard actions mutate data."
-        variant="readOnly"
-        action={
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--foreground)]">
-            <Activity className="h-3.5 w-3.5" />
-            {summary.visibleBusinessCount} visible businesses
-          </span>
         }
       />
 

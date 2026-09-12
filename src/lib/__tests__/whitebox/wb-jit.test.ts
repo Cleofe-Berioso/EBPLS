@@ -90,6 +90,18 @@ describe("WB-JIT — compliance, checklist, map markers", () => {
     expect(getJitMapMarkerStatus("DH_VERIFICATION_PENDING")).toBe("PENDING_INSPECTION");
     expect(getJitMapMarkerStatus("VERIFIED_COMPLIANT")).toBe("COMPLIANT");
     expect(getJitMapMarkerStatus("REVOKED")).toBe("REVOKED");
+    expect(getJitMapMarkerStatus("VERIFIED_NON_COMPLIANT")).toBe("PENDING_INSPECTION");
+    expect(
+      getJitMapMarkerStatus("VERIFIED_NON_COMPLIANT", {
+        isSettled: true,
+        complianceCaseStatus: "SETTLED",
+      })
+    ).toBe("COMPLIANT");
+    expect(
+      getJitMapMarkerStatus("REVOKED", {
+        revocationSettledAt: new Date().toISOString(),
+      })
+    ).toBe("COMPLIANT");
     expect(getJitMapMarkerColor("UNINSPECTED")).toBe("#9ca3af");
     expect(getJitMapMarkerColor("PENDING_INSPECTION")).toBe("#fbbf24");
     expect(getJitMapMarkerColor("COMPLIANT")).toBe("#10b981");

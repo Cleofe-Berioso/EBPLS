@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { requireBploSession } from "@/lib/bplo-api";
 import { listPermitIssuanceBucketPaginated } from "@/lib/bplo-permit-issuance";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { RoleBadge } from "@/components/ui/role-badge";
@@ -67,12 +66,6 @@ export default async function BploPermitIssuancePage({ searchParams }: PageProps
         title="Permit Issuance"
         description="Prepare and release business permits or closure certificates for paid applications using the existing issuance flow."
         badge={<RoleBadge roleType="BPLO" />}
-      />
-
-      <InfoBanner
-        title="Issuance stages"
-        description="Paid -> For Release -> Released. Existing prepare and release behavior remains unchanged."
-        variant="info"
       />
 
       <div className="space-y-4">

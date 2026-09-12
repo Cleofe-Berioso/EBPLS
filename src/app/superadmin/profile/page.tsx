@@ -1,6 +1,5 @@
 import { Eye, Mail, Shield, UserCircle2 } from "lucide-react";
 import { AccountDetailsPanel } from "@/components/ui/account-details-panel";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { SectionCard } from "@/components/ui/section-card";
@@ -16,12 +15,6 @@ export default async function SuperAdminProfilePage() {
         title="Profile"
         description="Account overview for the read-only oversight role."
         badge={<RoleBadge roleType="SUPER_ADMIN" label="IT Administrator" />}
-      />
-
-      <InfoBanner
-        title="View-only monitoring"
-        description="Account settings, password updates, and profile editing are outside the current UI scope. No action is required right now."
-        variant="readOnly"
       />
 
       <SectionCard

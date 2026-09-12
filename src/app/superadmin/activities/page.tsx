@@ -8,7 +8,6 @@ import {
 } from "@/components/superadmin/superadmin-ui-styles";
 import { PageHeader } from "@/components/ui/page-header";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { ResponsiveDataTable } from "@/components/ui/responsive-data-table";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -199,12 +198,6 @@ export default async function SuperAdminActivitiesPage({ searchParams }: PagePro
         title="Audit Trail"
         description="Read-only system-wide audit log for monitoring actions across application, payment, permit, inspection, settings, user management, document, revocation, and SMS modules."
         badge={<RoleBadge roleType="VIEW_ONLY" label="Audit Viewer" />}
-      />
-
-      <InfoBanner
-        title="IT Administrator access only"
-        description="This page is read-only. Sensitive metadata, private document URLs, passwords, tokens, secrets, IP addresses, and user-agent strings are not shown in the audit viewer output."
-        variant="readOnly"
       />
 
       <FilterBar

@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
-import { InfoBanner } from "@/components/ui/info-banner";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { requireBploSession } from "@/lib/bplo-api";
 import { prisma } from "@/lib/prisma";
@@ -55,12 +54,6 @@ export default async function BploProfilePage() {
         title="Profile"
         description="Set your BPLO staff display name and profile picture for multi-staff identity."
         badge={<RoleBadge roleType="BPLO" />}
-      />
-
-      <InfoBanner
-        title="Per-staff identity"
-        description="Each BPLO account can keep its own name and photo. Updates appear in the BPLO top bar profile area."
-        variant="info"
       />
 
       <BploProfileSettingsClient
