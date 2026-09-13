@@ -1,6 +1,6 @@
 /**
  * One-shot cleanup: remove smoke-test seed data (SMOKE-* apps/records + smoke applicant users).
- * Keeps staff demo accounts (bplo@, superadmin@, dept-head@, jit@, jit-disabled@).
+ * Keeps staff demo accounts (bplo@, bpossuperadmin@, dept-head@, jit@, jit-disabled@).
  *
  * Usage: npx tsx scripts/cleanup-smoke-seed-data.ts
  */

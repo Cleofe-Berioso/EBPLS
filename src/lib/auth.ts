@@ -12,6 +12,7 @@ import {
   isRememberMeValue,
   sessionMaxAgeSeconds,
 } from "@/lib/session-policy";
+import { consumeSuperAdminLoginOtp } from "@/lib/superadmin-login-otp";
 
 type AuthUser = {
   id: string;
@@ -45,10 +46,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         rememberMe: { label: "Remember me", type: "text" },
+        otp: { label: "OTP", type: "text" },
       },
       async authorize(credentials) {
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
+        const otp = typeof credentials?.otp === "string" ? credentials.otp.trim() : "";
         const rememberMe = isRememberMeValue(credentials?.rememberMe);
 
         if (!email || !password) return null;
@@ -67,6 +70,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           const passwordMatch = await bcrypt.compare(password, user.passwordHash);
           if (!passwordMatch) return null;
+
+          // Every SUPER_ADMIN credentials login requires a consumed login OTP.
+          if (user.role === "SUPER_ADMIN") {
+            if (!otp || !(await consumeSuperAdminLoginOtp(normalizedEmail, otp))) {
+              return null;
+            }
+          }
 
           return {
             id: user.id,
@@ -108,6 +118,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       });
 
       if (existingUser && !existingUser.isActive) {
+        return false;
+      }
+
+      // IT Administrator must use email/password + OTP — never Google OAuth.
+      if (existingUser?.role === "SUPER_ADMIN") {
         return false;
       }
 

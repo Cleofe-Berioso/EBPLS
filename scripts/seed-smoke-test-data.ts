@@ -530,8 +530,25 @@ async function main() {
     name: "BPLO Officer",
     role: "BPLO",
   });
+  // Prefer the production IT Admin login; migrate any leftover demo email first.
+  const legacySuperAdmin = await prisma.user.findUnique({
+    where: { email: "superadmin@example.com" },
+    select: { id: true },
+  });
+  if (legacySuperAdmin) {
+    const conflict = await prisma.user.findUnique({
+      where: { email: "bpossuperadmin@gmail.com" },
+      select: { id: true },
+    });
+    if (!conflict) {
+      await prisma.user.update({
+        where: { id: legacySuperAdmin.id },
+        data: { email: "bpossuperadmin@gmail.com" },
+      });
+    }
+  }
   const superadmin = await ensureUser({
-    email: "superadmin@example.com",
+    email: "bpossuperadmin@gmail.com",
     name: "IT Administrator",
     role: "SUPER_ADMIN",
   });

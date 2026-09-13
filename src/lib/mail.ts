@@ -419,6 +419,130 @@ export function generateRegistrationOtpEmailHtml(
   `;
 }
 
+/**
+ * Generate Super Admin / IT Administrator login OTP email HTML
+ */
+export function generateSuperAdminLoginOtpEmailHtml(
+  otp: string,
+  expirationMinutes: number
+): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+          }
+          .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+          }
+          .card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #0b8754;
+            padding-bottom: 15px;
+          }
+          .header h1 {
+            margin: 0;
+            color: #0b8754;
+            font-size: 22px;
+          }
+          .otp-box {
+            background-color: #e8f5e9;
+            border: 2px solid #0b8754;
+            border-radius: 6px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+          }
+          .otp-code {
+            font-size: 36px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            color: #0b8754;
+            font-family: 'Courier New', monospace;
+          }
+          .info {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+          }
+          .warning {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+          }
+          .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="card">
+            <div class="header">
+              <h1>Business Permit Online System — IT Administrator Login</h1>
+            </div>
+
+            <p>Hello,</p>
+
+            <p>A sign-in attempt was made for the IT Administrator account. Use the one-time password (OTP) below to complete login:</p>
+
+            <div class="otp-box">
+              <div class="otp-code">${otp}</div>
+            </div>
+
+            <div class="info">
+              <strong>Valid for ${expirationMinutes} minutes</strong>
+            </div>
+
+            <p style="margin: 15px 0;">
+              <strong>Important security notes:</strong>
+            </p>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+              <li>Never share this code with anyone</li>
+              <li>Business Permit Online System staff will never ask for this code</li>
+              <li>After ${expirationMinutes} minutes, this code will expire</li>
+              <li>If you did not attempt to sign in, change your password immediately</li>
+            </ul>
+
+            <div class="warning">
+              <strong>Did not request this?</strong><br>
+              If you did not attempt to sign in as IT Administrator, secure the account and contact municipal IT support.
+            </div>
+
+            <div class="footer">
+              <p>&copy; 2026 Municipality of Enrique B. Magalona - BPLO. All rights reserved.</p>
+              <p>This is an automated message - please do not reply to this email.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")

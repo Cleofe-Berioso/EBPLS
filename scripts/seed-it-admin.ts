@@ -18,8 +18,25 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  const email = "superadmin@example.com";
+  const email = "bpossuperadmin@gmail.com";
+  const legacyEmail = "superadmin@example.com";
   const passwordHash = await bcrypt.hash("password123", 12);
+
+  const legacy = await prisma.user.findUnique({ where: { email: legacyEmail } });
+  if (legacy) {
+    const user = await prisma.user.update({
+      where: { id: legacy.id },
+      data: {
+        email,
+        name: "IT Administrator",
+        role: "SUPER_ADMIN",
+        passwordHash,
+        isActive: true,
+      },
+    });
+    console.log(`Migrated IT Admin ${legacyEmail} → ${user.email} (${user.id})`);
+    return;
+  }
 
   const user = await prisma.user.upsert({
     where: { email },
@@ -38,14 +55,13 @@ async function main() {
     },
   });
 
-  console.log(`IT Administrator ready: ${user.email} (${user.role})`);
-  console.log("Password: password123");
+  console.log(`IT Admin ready: ${user.email} (${user.id})`);
 }
 
 main()
   .catch((error) => {
     console.error(error);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();
